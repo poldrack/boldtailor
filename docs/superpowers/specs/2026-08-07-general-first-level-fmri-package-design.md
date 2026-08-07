@@ -110,6 +110,12 @@ Loading and writing are explicit. `fit()` performs no implicit file I/O and has
 no hidden fitted state. Run containers, compiled designs, spatial helpers,
 Nilearn regression objects, and PyBIDS objects remain internal.
 
+Immutability is a strict public guarantee, not only a read-only flag. A caller
+may not mutate stored analysis or result state through an array returned by a
+public accessor, even by attempting to re-enable NumPy writeability. Tabular
+accessors provide defensive copies, and numerical storage or accessors prevent
+returned arrays from exposing a mutable internal buffer.
+
 There are no public base classes, factories, registries, or backend interfaces.
 Built-in scientific choices use small frozen configuration values. Narrowly
 specified callables are accepted only where genuine customization is already a
@@ -133,7 +139,10 @@ than being ignored.
 ### Nilearn
 
 Nilearn is a required dependency and the sole conventional GLM backend in the
-first release. Standard design construction uses
+first release. Development targets the latest stable Nilearn release available
+when a phase begins, and the uv lockfile records the exact tested version.
+Compatibility with older Nilearn releases is not a Phase 1 requirement.
+Standard design construction uses
 `make_first_level_design_matrix`. Array-level fitting uses `run_glm`, and
 contrast computation uses Nilearn's contrast functions.
 
@@ -149,8 +158,11 @@ and reconstructs results but does not implement either file format.
 ## Representation-neutral data
 
 All scientific code receives a sequence of arrays with shape
-`time x features`. An internal spatial record preserves the information needed
-to reconstruct maps:
+`time x features`. Array callers provide either one positive TR shared by the
+runs or explicit frame times for every run, but not both. Explicit frame times
+must be finite, strictly increasing, and match the corresponding number of time
+points. An internal spatial record preserves the information needed to
+reconstruct maps:
 
 - NIfTI inputs preserve the mask, spatial shape, affine, and header geometry.
 - CIFTI inputs preserve the `SeriesAxis` and `BrainModelAxis`.
@@ -169,10 +181,23 @@ the same `ModelSpec`. It contains:
 - event transformations and condition definitions;
 - fixed, FIR, custom, or cross-validated HRF configuration;
 - drift and explicitly selected confound terms;
+- the earliest modeled event onset relative to the first frame;
 - optional denoising configuration;
 - OLS or AR(N) temporal-noise configuration;
 - conventional or GLMsingle estimation configuration; and
 - named t or F contrasts with semantic regressor references.
+
+Symbolic contrast expressions and mappings from regressor names to numeric
+weights are semantic contrast forms. Positional numeric vectors are not part of
+the public model because independent run designs may have different columns or
+column orders.
+
+Event tables follow BIDS and Nilearn timing semantics. Negative onsets are
+accepted. `ModelSpec` exposes the Nilearn `min_onset` cutoff, and events earlier
+than that cutoff are excluded only after a run-specific warning identifies the
+cutoff and number of affected events; the exclusion is retained in design
+provenance. `trial_type` and `modulation` remain optional where Nilearn permits
+them.
 
 Compiled run designs are internal and retain semantic column identities.
 Contrast definitions never rely on undocumented positional ordering.
@@ -185,12 +210,24 @@ For a conventional model, `fit()`:
 2. compiles one design matrix per run with Nilearn;
 3. adds selected confounds, drift terms, and any generated nuisance regressors;
 4. fits each run with Nilearn using OLS or AR(N);
-5. computes named contrasts; and
-6. combines corresponding run/session contrast effects with fixed effects.
+5. resolves and validates every named contrast against each run's semantic
+   design columns;
+6. computes the run-wise contrasts; and
+7. combines corresponding run/session contrast effects with the same
+   equal-weight fixed-effects arithmetic used by Nilearn's `FirstLevelModel`.
+
+Run designs need not have identical columns or column order. Every nonzero term
+referenced by a contrast must exist and be estimable in each contributing run;
+otherwise fitting fails with the run and contrast name. Fixed-effects parity is
+tested directly against `FirstLevelModel`, while fitting continues to use the
+array-level Nilearn API internally.
 
 The result retains contrast effects, variances, available Nilearn statistics,
 design provenance, and residual diagnostics. Conventional inferential outputs
 are inexpensive to retain, but group inference is outside the package scope.
+Directional p-values and signed z-scores preserve Nilearn's one-sided
+convention and are labeled and documented explicitly; the package does not
+silently convert them to two-sided values.
 
 ## Cross-validated voxelwise HRFs
 
@@ -306,7 +343,9 @@ estimates.
 ### Nilearn parity tests
 
 Conventional results are compared directly with Nilearn design matrices,
-`run_glm`, contrast functions, and `FirstLevelModel` reference outputs.
+`run_glm`, contrast functions, and `FirstLevelModel` reference outputs. The
+suite includes multi-run designs with different nuisance columns or column
+orders and verifies `FirstLevelModel` fixed-effects parity.
 
 ### Cross-validation tests
 
@@ -332,11 +371,15 @@ results from the existing package.
 The fast suite is offline. Larger real-data validation and 91k-grayordinate
 memory/performance checks are separate integration tests.
 
+Immutability tests attempt to re-enable NumPy writeability and mutate every
+publicly returned numerical array, then verify that stored analysis and result
+state is unchanged.
+
 ## Implementation sequence
 
 The project is delivered in independently useful phases:
 
-1. array-based conventional Nilearn GLM;
+1. array-based conventional Nilearn GLM with OLS and AR(1);
 2. Python and BIDS Stats Models compilation;
 3. PyBIDS loading plus NIfTI and CIFTI adapters and writers;
 4. cross-validated voxelwise HRF selection; and
