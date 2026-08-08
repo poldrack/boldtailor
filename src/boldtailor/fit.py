@@ -115,6 +115,7 @@ def _model_provenance(model: ModelSpec) -> _ModelProvenance:
         "hrf_model": hrf_model,
         "drift_model": model.drift_model,
         "high_pass": model.high_pass,
+        "drift_order": model.drift_order,
         "oversampling": model.oversampling,
         "min_onset": model.min_onset,
         "noise_model": model.noise_model,
