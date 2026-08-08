@@ -143,12 +143,9 @@ def test_fit_aggregates_r2_from_sums_not_run_means():
         from_arrays(signals, events, frame_times=frame_times),
         model,
     )
-    run_total = [
-        np.sum((run - run.mean(axis=0)) ** 2, axis=0) for run in signals
-    ]
+    run_total = [np.sum((run - run.mean(axis=0)) ** 2, axis=0) for run in signals]
     run_residual = [
-        (1.0 - score) * total
-        for score, total in zip(result.run_r2, run_total)
+        (1.0 - score) * total for score, total in zip(result.run_r2, run_total)
     ]
     expected = 1.0 - np.sum(run_residual, axis=0) / np.sum(run_total, axis=0)
 
