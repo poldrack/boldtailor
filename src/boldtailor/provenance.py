@@ -11,6 +11,7 @@ from types import MappingProxyType
 from uuid import UUID
 
 SCHEMA_ID = "boldtailor.provenance/1"
+_FORBIDDEN_TOP_LEVEL_FIELDS = frozenset({"digest"})
 _QUALITY_WARNING = {
     "code": "provenance_quality",
     "message": "source metadata incomplete or anonymous; metadata fingerprint unavailable",
@@ -153,7 +154,7 @@ class ProvenanceRecord:
             "warnings": [_thaw(warning) for warning in self.warnings],
             "metadata_fingerprint": self.metadata_fingerprint,
         }
-        data.update(_thaw(self._extra))
+        data.update(_thaw(_reject_forbidden_top_level_fields(self._extra)))
         return data
 
     def canonical_json(self) -> str:
@@ -185,14 +186,17 @@ class ProvenanceRecord:
             activities=_mapping_items(data.get("activities", ()), "activities"),
             events=_mapping_items(data.get("events", ()), "events"),
             warnings=_mapping_items(data.get("warnings", ()), "warnings"),
-            _extra={key: value for key, value in data.items() if key not in known},
+            _extra=_extra_fields(data, known),
         )
 
 
 def _copy_source_ref(value: SourceRef, name: str) -> SourceRef:
     if not isinstance(value, SourceRef):
         raise ValueError(f"{name} must be a SourceRef")
-    return SourceRef.from_dict(value.to_dict())
+    source = SourceRef.from_dict(value.to_dict())
+    if source.role != name:
+        raise ValueError(f"{name} source must have role {name!r}")
+    return source
 
 
 def _copy_run_sources(value: RunSources) -> RunSources:
@@ -271,6 +275,8 @@ def _validate_uri(value: object) -> str | None:
         raise ValueError("uri must be a non-empty string")
     if value.startswith("bids:"):
         return _validate_bids_uri(value)
+    if _has_non_bids_scheme(value):
+        raise ValueError("uri must be dataset-relative POSIX text or a valid BIDS URI")
     return _validate_relative_uri(value)
 
 
@@ -299,6 +305,16 @@ def _validate_relative_path(value: str) -> None:
         raise ValueError("uri must not contain traversal")
     if not path.parts:
         raise ValueError("uri must be dataset-relative")
+
+
+def _has_non_bids_scheme(value: str) -> bool:
+    head = value.split("/", 1)[0]
+    scheme, separator, _ = head.partition(":")
+    if not separator:
+        return False
+    if not scheme or not scheme[0].isalpha():
+        return False
+    return all(character.isalnum() or character in "+-." for character in scheme)
 
 
 def _validate_uuid(value: object) -> str:
@@ -419,3 +435,19 @@ def _source_complete(source: SourceRef) -> bool:
         and source.byte_size is not None
         and source.modified_at is not None
     )
+
+
+def _extra_fields(
+    data: Mapping[str, object], known: set[str]
+) -> Mapping[str, object]:
+    extra = {key: value for key, value in data.items() if key not in known}
+    return _reject_forbidden_top_level_fields(extra)
+
+
+def _reject_forbidden_top_level_fields(
+    data: Mapping[str, object],
+) -> Mapping[str, object]:
+    for key in data:
+        if key.lower() in _FORBIDDEN_TOP_LEVEL_FIELDS:
+            raise ValueError(f"forbidden top-level field: {key}")
+    return data
