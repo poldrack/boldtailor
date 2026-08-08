@@ -146,15 +146,18 @@ def stop_signal_bids_dataset(tmp_path):
 Create `tests/test_stop_signal_demo.py` with a namespace-package import and focused function tests:
 
 ```python
+import importlib
 from pathlib import Path
 
 import pytest
 
-from examples.stop_signal_demo import RunInputs, discover_run_inputs
+
+def _demo_module():
+    return importlib.import_module("examples.stop_signal_demo")
 
 
 def _discover(root, session="ses-02"):
-    return discover_run_inputs(
+    return _demo_module().discover_run_inputs(
         root,
         root / "derivatives" / "fmri_25.2.0",
         subject="sub-s4",
@@ -169,7 +172,7 @@ def _discover(root, session="ses-02"):
 def test_discover_run_inputs_matches_all_entities(stop_signal_bids_dataset):
     inputs = _discover(stop_signal_bids_dataset)
 
-    assert isinstance(inputs, RunInputs)
+    assert isinstance(inputs, _demo_module().RunInputs)
     assert inputs.session == "ses-02"
     assert inputs.events.name.endswith("run-01_events.tsv")
     assert "space-MNI152NLin2009cAsym_res-2" in inputs.bold.name
@@ -201,7 +204,8 @@ Run:
 uv run pytest tests/test_stop_signal_demo.py -q
 ```
 
-Expected: collection fails with `ModuleNotFoundError: No module named 'examples.stop_signal_demo'`.
+Expected: the three tests are collected and fail from their test bodies with
+`ModuleNotFoundError: No module named 'examples.stop_signal_demo'`.
 
 - [ ] **Step 4: Commit the RED tests**
 
@@ -656,6 +660,9 @@ def test_result_artifacts_are_deterministic_valid_metadata(example_result, tmp_p
         "reports/sub-s4_task-stopSignal_desc-example_config.json",
     }
     assert all(isinstance(item.payload, bytes) for item in first)
+    published = publish_artifact_set(tmp_path / "published", first)
+    assert len(published) == len(first)
+    assert all(path.is_file() for path in published)
 
 
 def test_publication_destination_defaults_to_temp(stop_signal_bids_dataset, tmp_path):
@@ -775,16 +782,7 @@ def protected_source_paths(inputs):
 
 - [ ] **Step 5: Verify metadata preflight and commit GREEN**
 
-Extend the deterministic-artifact test with an actual publication preflight and
-promotion:
-
-```python
-published = publish_artifact_set(tmp_path / "published", first)
-assert len(published) == len(first)
-assert all(path.is_file() for path in published)
-```
-
-Then run:
+Run the RED-authored publication assertion with the full focused test file:
 
 ```bash
 uv run black examples/stop_signal_demo.py tests/test_stop_signal_demo.py
