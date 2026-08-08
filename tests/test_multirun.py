@@ -11,6 +11,7 @@ from nilearn.glm.first_level import (
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
+from boldtailor.provenance import RunSources, SourceRef
 
 
 def _problem():
@@ -65,6 +66,43 @@ def _problem():
         noise_model="ols",
     )
     return tuple(signals), events, frame_times, designs, model
+
+
+def _complete_sources() -> tuple[RunSources, ...]:
+    return (
+        RunSources(
+            signal=SourceRef(
+                role="signal",
+                uri="sub-01/func/sub-01_task-localizer_run-01_bold.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=2048,
+                modified_at="2026-08-08T12:00:00Z",
+            ),
+            events=SourceRef(
+                role="events",
+                uri="sub-01/func/sub-01_task-localizer_run-01_events.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=512,
+                modified_at="2026-08-08T12:01:00Z",
+            ),
+        ),
+        RunSources(
+            signal=SourceRef(
+                role="signal",
+                uri="sub-01/func/sub-01_task-localizer_run-02_bold.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=4096,
+                modified_at="2026-08-08T12:02:00Z",
+            ),
+            events=SourceRef(
+                role="events",
+                uri="sub-01/func/sub-01_task-localizer_run-02_events.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=768,
+                modified_at="2026-08-08T12:03:00Z",
+            ),
+        ),
+    )
 
 
 def _as_image(signals):
@@ -203,6 +241,40 @@ def test_fit_warns_for_rank_deficient_design():
     assert "Matrix is singular at working precision, regularizing..." in messages
 
 
+def test_fit_records_run_diagnostics_without_serializing_design_values():
+    signals, events, frame_times, designs, model = _problem()
+
+    result = fit(
+        from_arrays(
+            signals,
+            events,
+            frame_times=frame_times,
+            sources=_complete_sources(),
+        ),
+        model,
+    )
+    runs = result.provenance.activities[-1]["runs"]
+    serialized = result.provenance.canonical_json()
+
+    assert len(runs) == 2
+    for index, run in enumerate(runs):
+        assert run["timing_source"] == "frame_times"
+        assert run["n_scans"] == signals[index].shape[0]
+        assert run["n_features"] == signals[index].shape[1]
+        assert run["design_columns"] == list(result.design_matrices[index].columns)
+        assert run["design_rank"] == int(
+            np.linalg.matrix_rank(result.design_matrices[index].to_numpy())
+        )
+        assert run["residual_dof"] == designs[index].shape[0] - run["design_rank"]
+        assert run["excluded_event_count"] == 0
+        assert run["min_onset_cutoff"] == -24.0
+
+    assert "design_matrix" not in serialized
+    assert "residual_sum" not in serialized
+    assert "total_sum" not in serialized
+    assert "r2" not in serialized
+
+
 def test_fit_rejects_non_estimable_contrast():
     signals, events, frame_times, designs, _ = _problem()
     confound = pd.DataFrame({"duplicate": designs[0]["face"].to_numpy()})
@@ -231,6 +303,34 @@ def test_fit_rejects_non_estimable_contrast():
 
     assert any("design rank" in message for message in messages)
     assert "Matrix is singular at working precision, regularizing..." in messages
+
+
+def test_fit_records_rank_deficiency_warning_in_provenance():
+    signals, events, frame_times, _, _ = _problem()
+    confound = pd.DataFrame({"duplicate": np.ones(len(signals[0]))})
+    model = ModelSpec(
+        contrasts={"face": {"face": 1.0}},
+        confounds=("duplicate",),
+        drift_model=None,
+        noise_model="ols",
+    )
+
+    with pytest.warns(UserWarning):
+        result = fit(
+            from_arrays(
+                signals[0],
+                events[0],
+                frame_times=frame_times[0],
+                confounds=confound,
+                sources=_complete_sources()[:1],
+            ),
+            model,
+        )
+
+    run = result.provenance.activities[-1]["runs"][0]
+
+    assert run["design_rank"] < len(run["design_columns"])
+    assert any("design rank" in warning for warning in run["warnings"])
 
 
 def test_fit_rejects_contrast_term_missing_from_one_run():

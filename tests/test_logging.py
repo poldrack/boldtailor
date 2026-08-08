@@ -5,9 +5,12 @@ import socket
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from boldtailor.data import from_arrays
+from boldtailor.fit import fit
 from boldtailor.logging import bind_context, emit_event
+from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 
 
@@ -166,3 +169,80 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
     assert records[1]["error"] == "run 0 event durations must be non-negative"
     assert records[2].get("execution_id") is None
     assert records[2].get("data_id") is None
+
+
+def test_fit_logs_structured_records_with_correlated_ids(caplog):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    events = pd.DataFrame(
+        {
+            "onset": [0.0, 8.0, 16.0, 24.0],
+            "duration": [1.0, 1.0, 1.0, 1.0],
+            "trial_type": ["face", "house", "face", "house"],
+        }
+    )
+    frame_times = np.arange(20) * 2.0
+    design = np.column_stack(
+        [
+            np.sin(frame_times / 6.0),
+            np.cos(frame_times / 7.0),
+        ]
+    )
+    signals = design + 0.1
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+
+    result = fit(data, model)
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_completed",
+    ]
+    assert fit_records[0]["execution_id"] == result.provenance.execution_id
+    assert fit_records[1]["execution_id"] == result.provenance.execution_id
+    assert fit_records[0]["data_id"] == data.provenance.metadata_fingerprint
+    assert fit_records[1]["data_id"] == data.provenance.metadata_fingerprint
+    assert fit_records[0]["analysis_id"] == result.provenance.analysis_fingerprint
+    assert fit_records[1]["analysis_id"] == result.provenance.analysis_fingerprint
+
+
+def test_fit_logs_failure_and_resets_context_after_exception(caplog):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    events = pd.DataFrame(
+        {
+            "onset": [0.0, 8.0, 16.0, 24.0],
+            "duration": [1.0, 1.0, 1.0, 1.0],
+            "trial_type": ["face", "house", "face", "house"],
+        }
+    )
+    signals = np.ones((20, 2))
+    model = ModelSpec(
+        contrasts={"missing": {"missing": 1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+
+    with pytest.raises(ValueError, match="contrast 'missing'"):
+        fit(data, model)
+
+    emit_event("after_fit_failure", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert fit_records[0]["execution_id"] == fit_records[1]["execution_id"]
+    assert fit_records[0]["data_id"] == data.provenance.metadata_fingerprint
+    assert fit_records[1]["level"] == "ERROR"
+    assert fit_records[1]["error"].startswith("run 0 contrast 'missing'")
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
