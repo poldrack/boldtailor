@@ -92,6 +92,7 @@ def test_source_ref_accepts_dataset_relative_and_bids_uris(uri):
         ({"role": ""}, "role"),
         ({"uri": "/tmp/secret.tsv"}, "relative"),
         ({"uri": "../secret.tsv"}, "traversal"),
+        ({"uri": "http://example.com/file.tsv"}, "BIDS"),
         ({"byte_size": -1}, "non-negative"),
         ({"byte_size": 1.5}, "integer"),
         ({"modified_at": "2026-08-08T12:00:00"}, "UTC"),
@@ -132,6 +133,24 @@ def test_run_sources_requires_exactly_one_signal_and_events_source():
             events=_complete_source(
                 "events", "sub-01/func/sub-01_task-rest_events.tsv"
             ),
+        )
+
+
+def test_run_sources_rejects_role_mismatches_for_named_slots():
+    with pytest.raises(ValueError, match="signal"):
+        RunSources(
+            signal=_complete_source(
+                "events", "sub-01/func/sub-01_task-rest_events.tsv"
+            ),
+            events=_complete_source(
+                "events", "sub-01/func/sub-01_task-rest_events.tsv"
+            ),
+        )
+
+    with pytest.raises(ValueError, match="events"):
+        RunSources(
+            signal=_complete_source("signal", "sub-01/func/sub-01_task-rest_bold.tsv"),
+            events=_complete_source("signal", "sub-01/func/sub-01_task-rest_bold.tsv"),
         )
 
 
@@ -198,6 +217,11 @@ def test_provenance_record_accepts_additive_version_one_fields():
     )
 
     assert loaded.to_dict()["future_field"] == {"status": "kept", "count": 2}
+
+
+def test_provenance_record_rejects_top_level_digest_field():
+    with pytest.raises(ValueError, match="digest"):
+        ProvenanceRecord.from_dict(_record_payload(digest="abc123"))
 
 
 def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order():
