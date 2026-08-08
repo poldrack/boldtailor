@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-
 SESSIONS = ("ses-02", "ses-04")
 AFFINE = np.array(
     [
@@ -68,9 +67,7 @@ def stop_signal_bids_dataset(tmp_path):
         raw_func.mkdir(parents=True)
         derivative_func.mkdir(parents=True)
         stem = f"sub-s4_{session}_task-stopSignal_run-01"
-        _events(session).to_csv(
-            raw_func / f"{stem}_events.tsv", sep="\t", index=False
-        )
+        _events(session).to_csv(raw_func / f"{stem}_events.tsv", sep="\t", index=False)
         shape = (7, 7, 7, n_scans)
         signal = rng.normal(1000.0, 3.0, shape).astype(np.float32)
         image = nib.Nifti1Image(signal, AFFINE)
