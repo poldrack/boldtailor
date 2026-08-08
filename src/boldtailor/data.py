@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+import logging
 from numbers import Real
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import immutable_float_array
+from boldtailor.logging import append_event_history, bind_context, emit_event
+from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
 
 _EVENT_COLUMNS = ("onset", "duration")
 
@@ -20,6 +24,7 @@ class AnalysisData:
     _confounds: tuple[pd.DataFrame, ...]
     _frame_times: tuple[np.ndarray, ...]
     _timing_source: str
+    _provenance: ProvenanceRecord
 
     @property
     def n_runs(self) -> int:
@@ -49,6 +54,10 @@ class AnalysisData:
     def timing_source(self) -> str:
         return self._timing_source
 
+    @property
+    def provenance(self) -> ProvenanceRecord:
+        return self._provenance
+
 
 def from_arrays(
     signals: np.ndarray | Sequence[np.ndarray],
@@ -57,25 +66,86 @@ def from_arrays(
     tr: float | None = None,
     frame_times: np.ndarray | Sequence[np.ndarray] | None = None,
     confounds: pd.DataFrame | Sequence[pd.DataFrame] | None = None,
+    sources: Sequence[RunSources] | None = None,
+    provenance_metadata: Mapping[str, object] | None = None,
 ) -> AnalysisData:
-    run_signals = _as_signal_runs(signals)
-    run_events = _as_table_runs(events)
-    _validate_run_count(run_signals, run_events, "events")
-    prepared_signals = tuple(
-        _prepare_signal(values, run) for run, values in enumerate(run_signals)
-    )
-    _validate_feature_counts(prepared_signals)
-    prepared_events = tuple(
-        _prepare_events(frame, run) for run, frame in enumerate(run_events)
-    )
-    prepared_confounds = _prepare_confounds(confounds, prepared_signals)
-    prepared_times, timing_source = _prepare_timing(tr, frame_times, prepared_signals)
+    execution_id = str(uuid4())
+    history = ()
+    with bind_context(execution_id=execution_id):
+        history = append_event_history(
+            history,
+            emit_event("normalization_started", stage="data"),
+        )
+        try:
+            run_signals = _as_signal_runs(signals)
+            run_events = _as_table_runs(events)
+            _validate_run_count(run_signals, run_events, "events")
+            prepared_sources = _prepare_sources(
+                run_count=len(run_signals),
+                sources=sources,
+                include_confounds=confounds is not None,
+            )
+            data_id = _data_id(execution_id, prepared_sources)
+        except ValueError as error:
+            emit_event(
+                "normalization_failed",
+                stage="data",
+                level=logging.ERROR,
+                error=str(error),
+            )
+            raise
+        with bind_context(data_id=data_id):
+            try:
+                prepared_signals = tuple(
+                    _prepare_signal(values, run) for run, values in enumerate(run_signals)
+                )
+                _validate_feature_counts(prepared_signals)
+                prepared_events = tuple(
+                    _prepare_events(frame, run) for run, frame in enumerate(run_events)
+                )
+                prepared_confounds = _prepare_confounds(confounds, prepared_signals)
+                prepared_times, timing_source = _prepare_timing(
+                    tr,
+                    frame_times,
+                    prepared_signals,
+                )
+                activity = _normalization_activity(
+                    timing_source=timing_source,
+                    n_runs=len(prepared_signals),
+                    n_features=prepared_signals[0].shape[1],
+                    provenance_metadata=provenance_metadata,
+                )
+                ProvenanceRecord(
+                    execution_id=execution_id,
+                    sources=prepared_sources,
+                    activities=(activity,),
+                    events=history,
+                )
+            except ValueError as error:
+                emit_event(
+                    "normalization_failed",
+                    stage="data",
+                    level=logging.ERROR,
+                    error=str(error),
+                )
+                raise
+            history = append_event_history(
+                history,
+                emit_event("normalization_completed", stage="data"),
+            )
+            provenance = ProvenanceRecord(
+                execution_id=execution_id,
+                sources=prepared_sources,
+                activities=(activity,),
+                events=history,
+            )
     return AnalysisData(
         _signals=prepared_signals,
         _events=prepared_events,
         _confounds=prepared_confounds,
         _frame_times=prepared_times,
         _timing_source=timing_source,
+        _provenance=provenance,
     )
 
 
@@ -160,6 +230,54 @@ def _prepare_confounds(
             raise ValueError(f"run {index} confounds must contain {run.shape[0]} rows")
         prepared.append(_owned_table(frame).reset_index(drop=True))
     return tuple(prepared)
+
+
+def _prepare_sources(
+    *,
+    run_count: int,
+    sources: Sequence[RunSources] | None,
+    include_confounds: bool,
+) -> tuple[RunSources, ...]:
+    if sources is None:
+        return tuple(_anonymous_sources(include_confounds) for _ in range(run_count))
+    run_sources = tuple(sources)
+    if len(run_sources) != run_count:
+        raise ValueError("sources must contain one value per signal run")
+    return tuple(RunSources.from_dict(source.to_dict()) for source in run_sources)
+
+
+def _anonymous_sources(include_confounds: bool) -> RunSources:
+    return RunSources(
+        signal=SourceRef(role="signal"),
+        events=SourceRef(role="events"),
+        confounds=SourceRef(role="confounds") if include_confounds else None,
+    )
+
+
+def _data_id(execution_id: str, sources: Sequence[RunSources]) -> str | None:
+    return ProvenanceRecord(
+        execution_id=execution_id,
+        sources=sources,
+    ).metadata_fingerprint
+
+
+def _normalization_activity(
+    *,
+    timing_source: str,
+    n_runs: int,
+    n_features: int,
+    provenance_metadata: Mapping[str, object] | None,
+) -> Mapping[str, object]:
+    activity: dict[str, object] = {
+        "name": "normalize",
+        "stage": "data",
+        "timing_source": timing_source,
+        "run_count": n_runs,
+        "feature_count": n_features,
+    }
+    if provenance_metadata is not None:
+        activity["metadata"] = provenance_metadata
+    return activity
 
 
 def _owned_table(frame: pd.DataFrame) -> pd.DataFrame:
