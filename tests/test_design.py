@@ -105,9 +105,7 @@ def test_compile_designs_warns_and_records_early_event_exclusion(inputs):
     ("option", "value"),
     [("hrf_model", "bogus"), ("drift_model", "bogus")],
 )
-def test_compile_designs_contextualizes_invalid_nilearn_options(
-    inputs, option, value
-):
+def test_compile_designs_contextualizes_invalid_nilearn_options(inputs, option, value):
     events, _ = inputs
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0)
     model = ModelSpec(contrasts={"face": "face"}, **{option: value})
