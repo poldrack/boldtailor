@@ -38,17 +38,7 @@ def _compile_run(
     modeled_events, excluded_count, cutoff = _select_modeled_events(
         events, frame_times, model.min_onset, run
     )
-    design = make_first_level_design_matrix(
-        frame_times,
-        events=modeled_events,
-        hrf_model=model.hrf_model,
-        drift_model=model.drift_model,
-        high_pass=model.high_pass,
-        drift_order=model.drift_order,
-        add_regs=selected,
-        min_onset=model.min_onset,
-        oversampling=model.oversampling,
-    )
+    design = _make_design_matrix(frame_times, modeled_events, selected, model, run)
     if design.columns.has_duplicates:
         duplicates = design.columns[design.columns.duplicated()].tolist()
         raise ValueError(f"run {run} design has duplicate columns: {duplicates}")
@@ -59,6 +49,29 @@ def _compile_run(
         excluded_event_count=excluded_count,
         min_onset_cutoff=cutoff,
     )
+
+
+def _make_design_matrix(
+    frame_times: np.ndarray,
+    events: pd.DataFrame,
+    confounds: pd.DataFrame | None,
+    model: ModelSpec,
+    run: int,
+) -> pd.DataFrame:
+    try:
+        return make_first_level_design_matrix(
+            frame_times,
+            events=events,
+            hrf_model=model.hrf_model,
+            drift_model=model.drift_model,
+            high_pass=model.high_pass,
+            drift_order=model.drift_order,
+            add_regs=confounds,
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+    except (NotImplementedError, ValueError) as error:
+        raise ValueError(f"run {run} design compilation failed: {error}") from error
 
 
 def _select_modeled_events(
