@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from numbers import Real
 from types import MappingProxyType
 
 import numpy as np
@@ -76,6 +77,8 @@ def _prepare_weights(values: Mapping[str, float], name: str) -> ContrastWeights:
     for regressor, value in values.items():
         if not isinstance(regressor, str) or not regressor:
             raise ValueError(f"contrast {name!r} has an invalid regressor name")
+        if _is_boolean(value):
+            raise ValueError(f"contrast {name!r} weights must be numeric")
         try:
             weight = float(value)
         except (TypeError, ValueError) as error:
@@ -108,11 +111,23 @@ def _validate_design_options(
     oversampling: int,
     min_onset: float,
 ) -> None:
-    if not np.isfinite(high_pass) or high_pass <= 0:
+    if not _is_real_number(high_pass) or not np.isfinite(high_pass) or high_pass <= 0:
         raise ValueError("high_pass must be positive and finite")
-    if not isinstance(drift_order, int) or drift_order < 0:
+    if not _is_integer(drift_order) or drift_order < 0:
         raise ValueError("drift_order must be a non-negative integer")
-    if not isinstance(oversampling, int) or oversampling < 1:
+    if not _is_integer(oversampling) or oversampling < 1:
         raise ValueError("oversampling must be a positive integer")
-    if not np.isfinite(min_onset):
+    if not _is_real_number(min_onset) or not np.isfinite(min_onset):
         raise ValueError("min_onset must be finite")
+
+
+def _is_boolean(value: object) -> bool:
+    return isinstance(value, (bool, np.bool_))
+
+
+def _is_real_number(value: object) -> bool:
+    return isinstance(value, Real) and not _is_boolean(value)
+
+
+def _is_integer(value: object) -> bool:
+    return isinstance(value, int) and not _is_boolean(value)
