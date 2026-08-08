@@ -146,7 +146,7 @@ def test_fit_warns_for_rank_deficient_design():
         noise_model="ols",
     )
 
-    with pytest.warns(UserWarning, match="design rank"):
+    with pytest.warns(UserWarning) as caught:
         fit(
             from_arrays(
                 signals[0],
@@ -156,6 +156,10 @@ def test_fit_warns_for_rank_deficient_design():
             ),
             model,
         )
+    messages = {str(warning.message) for warning in caught}
+
+    assert any("design rank" in message for message in messages)
+    assert "Matrix is singular at working precision, regularizing..." in messages
 
 
 def test_fit_rejects_non_estimable_contrast():
@@ -168,7 +172,7 @@ def test_fit_rejects_non_estimable_contrast():
         noise_model="ols",
     )
 
-    with pytest.warns(UserWarning, match="design rank"):
+    with pytest.warns(UserWarning) as caught:
         with pytest.raises(
             ValueError,
             match="run 0.*contrast 'difference'.*not estimable",
@@ -182,6 +186,10 @@ def test_fit_rejects_non_estimable_contrast():
                 ),
                 model,
             )
+    messages = {str(warning.message) for warning in caught}
+
+    assert any("design rank" in message for message in messages)
+    assert "Matrix is singular at working precision, regularizing..." in messages
 
 
 def test_fit_rejects_contrast_term_missing_from_one_run():
