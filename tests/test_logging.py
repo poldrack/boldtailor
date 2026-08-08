@@ -96,7 +96,7 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(caplog):
         }
     )
     confounds = pd.DataFrame(
-        {"noise_label": [["raw-secret-confound"]] for _ in range(10)}
+        {"noise_label": [["raw-secret-confound"] for _ in range(10)]}
     )
     signals = np.full((10, 2), 987654.5)
 
