@@ -1,5 +1,4 @@
 import importlib
-from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -12,7 +11,6 @@ from examples.stop_signal_demo import (
     roi_image,
     run_sources,
 )
-
 
 TRIAL_TYPES = (
     "go_success",
@@ -79,17 +77,19 @@ def test_discover_run_inputs_rejects_duplicate_file(stop_signal_bids_dataset):
 
 def _loaded_runs(root):
     inputs = tuple(_discover(root, session) for session in ("ses-02", "ses-04"))
-    voxels = common_roi_voxels(
-        inputs, center_mni=(48.0, 16.0, 20.0), radius_mm=6.0
-    )
-    return inputs, voxels, tuple(
-        load_run(
-            item,
-            voxels,
-            trial_types=TRIAL_TYPES,
-            confound_names=CONFOUNDS,
-        )
-        for item in inputs
+    voxels = common_roi_voxels(inputs, center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
+    return (
+        inputs,
+        voxels,
+        tuple(
+            load_run(
+                item,
+                voxels,
+                trial_types=TRIAL_TYPES,
+                confound_names=CONFOUNDS,
+            )
+            for item in inputs
+        ),
     )
 
 
@@ -122,14 +122,10 @@ def test_load_run_rejects_confound_length_mismatch(stop_signal_bids_dataset):
     inputs = _discover(stop_signal_bids_dataset)
     frame = pd.read_csv(inputs.confounds, sep="\t").iloc[:-1]
     frame.to_csv(inputs.confounds, sep="\t", index=False)
-    voxels = common_roi_voxels(
-        (inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0
-    )
+    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
 
     with pytest.raises(ValueError, match="confounds.*80 rows"):
-        load_run(
-            inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS
-        )
+        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
 
 
 def test_load_run_rejects_unexpected_nonfinite_confound(stop_signal_bids_dataset):
@@ -137,14 +133,10 @@ def test_load_run_rejects_unexpected_nonfinite_confound(stop_signal_bids_dataset
     frame = pd.read_csv(inputs.confounds, sep="\t")
     frame.loc[3, "trans_x"] = np.nan
     frame.to_csv(inputs.confounds, sep="\t", index=False)
-    voxels = common_roi_voxels(
-        (inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0
-    )
+    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
 
     with pytest.raises(ValueError, match="non-finite.*trans_x"):
-        load_run(
-            inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS
-        )
+        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
 
 
 def test_run_sources_records_dataset_relative_inputs(stop_signal_bids_dataset):
@@ -164,9 +156,7 @@ def test_common_roi_rejects_nonoverlap(stop_signal_bids_dataset):
     inputs = (_discover(stop_signal_bids_dataset),)
 
     with pytest.raises(ValueError, match="ROI does not overlap"):
-        common_roi_voxels(
-            inputs, center_mni=(500.0, 500.0, 500.0), radius_mm=1.0
-        )
+        common_roi_voxels(inputs, center_mni=(500.0, 500.0, 500.0), radius_mm=1.0)
 
 
 def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
@@ -174,11 +164,7 @@ def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
     frame = pd.read_csv(inputs.events, sep="\t")
     frame.loc[0, ["onset", "duration"]] = [119.5, 1.0]
     frame.to_csv(inputs.events, sep="\t", index=False)
-    voxels = common_roi_voxels(
-        (inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0
-    )
+    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
 
     with pytest.raises(ValueError, match="event timing exceeds acquisition"):
-        load_run(
-            inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS
-        )
+        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
