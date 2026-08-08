@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 import warnings
 
 import numpy as np
@@ -15,63 +16,87 @@ from boldtailor.model import ContrastValue, ModelSpec
 from boldtailor.results import AnalysisResult, contrast_result, make_result
 
 
+@dataclass(frozen=True)
+class _RunFit:
+    contrasts: dict[str, object]
+    r2: np.ndarray
+    residual_sum: np.ndarray
+    total_sum: np.ndarray
+
+
 def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
-    if data.n_runs != 1:
-        raise NotImplementedError("multi-run fitting is added in Task 6")
-    compiled = compile_designs(data, model)[0]
-    labels, regression_results = _fit_run(data.signals[0], compiled.matrix, model)
-    contrasts = _compute_contrasts(
-        labels,
-        regression_results,
-        compiled.matrix,
-        model.contrasts,
+    compiled = compile_designs(data, model)
+    run_fits = tuple(
+        _fit_run(signals, design, model, run)
+        for run, (signals, design) in enumerate(
+            zip(data.signals, compiled, strict=True)
+        )
     )
-    prediction = _prediction(
-        labels,
-        regression_results,
-        data.signals[0].shape,
+    combined = _combine_contrasts(run_fits, model.contrast_names)
+    aggregate_r2 = _r2_from_sums(
+        np.sum([run.residual_sum for run in run_fits], axis=0),
+        np.sum([run.total_sum for run in run_fits], axis=0),
     )
-    run_r2 = _r2(data.signals[0], prediction)
     return make_result(
-        contrasts,
-        (compiled.matrix,),
-        (_design_provenance(compiled),),
-        (run_r2,),
-        run_r2,
+        combined,
+        tuple(design.matrix for design in compiled),
+        tuple(_design_provenance(design) for design in compiled),
+        tuple(run.r2 for run in run_fits),
+        aggregate_r2,
     )
 
 
 def _fit_run(
     signals: np.ndarray,
-    design: pd.DataFrame,
+    compiled: CompiledDesign,
     model: ModelSpec,
-) -> tuple[np.ndarray, dict]:
+    run: int,
+) -> _RunFit:
+    design = compiled.matrix
     matrix = design.to_numpy()
-    _warn_if_rank_deficient(matrix, 0)
-    return run_glm(signals, matrix, noise_model=model.noise_model)
-
-
-def _compute_contrasts(
-    labels: np.ndarray,
-    regression_results: dict,
-    design: pd.DataFrame,
-    contrasts: Mapping[str, ContrastValue],
-) -> dict:
-    matrix = design.to_numpy()
-    return {
-        name: contrast_result(
-            _compute_contrast(
-                labels,
-                regression_results,
-                value,
-                design.columns,
-                matrix,
-                name,
-                0,
-            )
+    _warn_if_rank_deficient(matrix, run)
+    labels, regression_results = run_glm(
+        signals,
+        matrix,
+        noise_model=model.noise_model,
+    )
+    prediction = _prediction(labels, regression_results, signals.shape)
+    residual_sum, total_sum = _sums_of_squares(signals, prediction)
+    contrasts = {
+        name: _compute_contrast(
+            labels,
+            regression_results,
+            value,
+            design.columns,
+            matrix,
+            name,
+            run,
         )
-        for name, value in contrasts.items()
+        for name, value in model.contrasts.items()
     }
+    return _RunFit(
+        contrasts=contrasts,
+        r2=_r2_from_sums(residual_sum, total_sum),
+        residual_sum=residual_sum,
+        total_sum=total_sum,
+    )
+
+
+def _combine_contrasts(
+    run_fits: tuple[_RunFit, ...],
+    names: tuple[str, ...],
+) -> dict[str, object]:
+    return {
+        name: contrast_result(_fixed_effects([run.contrasts[name] for run in run_fits]))
+        for name in names
+    }
+
+
+def _fixed_effects(contrasts: list[object]) -> object:
+    combined = contrasts[0]
+    for contrast in contrasts[1:]:
+        combined = combined + contrast
+    return (1.0 / len(contrasts)) * combined
 
 
 def _design_provenance(compiled: CompiledDesign) -> dict[str, int | float]:
@@ -165,9 +190,19 @@ def _prediction(
     return prediction
 
 
-def _r2(observed: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+def _sums_of_squares(
+    observed: np.ndarray,
+    predicted: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
     residual_sum = np.sum((observed - predicted) ** 2, axis=0)
     total_sum = np.sum((observed - observed.mean(axis=0)) ** 2, axis=0)
-    values = np.full(observed.shape[1], np.nan, dtype=float)
-    np.divide(residual_sum, total_sum, out=values, where=total_sum > 0)
-    return 1.0 - values
+    return residual_sum, total_sum
+
+
+def _r2_from_sums(
+    residual_sum: np.ndarray,
+    total_sum: np.ndarray,
+) -> np.ndarray:
+    ratio = np.full(residual_sum.shape, np.nan, dtype=float)
+    np.divide(residual_sum, total_sum, out=ratio, where=total_sum > 0)
+    return 1.0 - ratio
