@@ -117,8 +117,8 @@ def _draft_artifacts(
     graph = _draft_graph(record, code_url=code_url)
     prefix = f"prov/prov-{label}"
     artifacts = {
-        "prov/provenance.tsv": _provenance_tsv(label),
-        "prov/provenance.json": _pretty_json(_provenance_sidecar()),
+        "provenance.tsv": _provenance_tsv(label),
+        "provenance.json": _pretty_json(_provenance_sidecar()),
         f"{prefix}_act.json": _pretty_json({"Activities": graph["activities"]}),
         f"{prefix}_ent.json": _pretty_json(graph["entities"]),
         f"{prefix}_env.json": _pretty_json({"Environments": graph["environments"]}),
