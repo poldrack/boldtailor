@@ -110,6 +110,12 @@ Loading and writing are explicit. `fit()` performs no implicit file I/O and has
 no hidden fitted state. Run containers, compiled designs, spatial helpers,
 Nilearn regression objects, and PyBIDS objects remain internal.
 
+The current array release implements `from_arrays()`, conventional `fit()`,
+canonical provenance, in-memory BIDS provenance projection, and transactional
+artifact publication. It does not yet implement BIDS discovery or a NIfTI or
+CIFTI writer. The `from_bids()`, `model_from_json()`, and
+`write_derivatives()` calls above remain later-phase architecture.
+
 Immutability is a strict public guarantee, not only a read-only flag. A caller
 may not mutate stored analysis or result state through an array returned by a
 public accessor, even by attempting to re-enable NumPy writeability. Tabular
@@ -120,6 +126,53 @@ There are no public base classes, factories, registries, or backend interfaces.
 Built-in scientific choices use small frozen configuration values. Narrowly
 specified callables are accepted only where genuine customization is already a
 requirement, such as a custom HRF function or denoising function.
+
+## Provenance, identity, logging, and privacy
+
+The versioned `boldtailor.provenance/1` record is the canonical provenance
+source. BIDS metadata and the pinned BEP028 files are projections of that
+record, not parallel sources of truth. `AnalysisData` owns the normalization
+record and `AnalysisResult` extends it immutably with the fit model and bounded
+run diagnostics.
+
+Array callers may supply one `RunSources` value per run. It contains a signal
+and events `SourceRef` and, when used, a confounds `SourceRef`. A source records
+its role, a dataset-relative POSIX URI or valid BIDS URI, optional media type,
+optional non-negative byte size, optional UTC modification time, and curated
+JSON-safe annotations. Boldtailor never opens a source to compute provenance
+and never calculates a content digest. Artifact identity is metadata-only:
+canonical source metadata, including any curated annotations, determines the
+data fingerprint. URI, byte size, and modification time must be present for
+every source before that fingerprint is available.
+
+When callers omit descriptors, `from_arrays()` creates anonymous in-memory
+descriptors. Anonymous or incomplete sources remain valid inputs but produce no
+deterministic data fingerprint and add a provenance-quality warning. A complete
+and reproducible `ModelSpec` combines with the data fingerprint to produce the
+deterministic analysis fingerprint. A local or lambda callable has only a
+partial identity, adds a reproducibility warning, and leaves the analysis
+fingerprint unavailable. Neither deterministic fingerprint identifies an
+individual attempt.
+
+Normalization, fit, and publication attempts use fresh UUID execution IDs.
+Normalization and fit events are emitted as structured JSON through
+`logging.getLogger("boldtailor")`; the package does not configure handlers,
+levels, propagation, or the root logger. Context-local bindings correlate each
+start, completion, or failure with its execution ID and available deterministic
+IDs, then reset after success or failure. The canonical record retains only a
+bounded lifecycle history. Publication transaction IDs identify failures and
+retained recovery bundles; publication failures also use the separate redacted
+control log described below.
+
+Provenance and lifecycle events contain curated configuration and aggregate
+diagnostics only. They exclude signal, event, confound, and design values;
+estimates and statistics; content digests; command-line arguments; environment
+variables; working directories; usernames; hostnames; and source code, reprs,
+or addresses for unstable callables. Absolute paths and path-like caller
+metadata are rejected. Publication failure messages are reduced to sanitized
+categories without tracebacks or input paths. Valid dataset-relative URIs and
+free-form safe annotations can still carry identifying text, so dataset owners
+remain responsible for de-identification.
 
 ## Dependency boundaries
 
@@ -311,6 +364,25 @@ with `GeneratedBy` metadata.
 The first release does not introduce a custom result container. Array users
 receive arrays and may save them independently.
 
+The current release stops before spatial reconstruction: it provides neither a
+BIDS discovery adapter nor a NIfTI/CIFTI writer. Its pure
+`project_bids_provenance()` function emits stable BIDS 1.11.1 metadata and the
+canonical provenance/log artifacts in memory. By default it also emits the
+tested subset of draft
+`BEP028@02172700aac8d1bdd67b45191f43533f426848dc`: Activities, Files,
+Environments, Software, the provenance label table, and file `GeneratedBy` and
+`Sources` relationships. The generated metadata labels this snapshot as a
+draft and does not claim final-standard conformance. Setting
+`export_bids_prov=False` omits only the BEP028 draft files; stable BIDS metadata
+and canonical provenance remain.
+
+Every future output adapter must assemble its complete primary outputs,
+sidecars, dataset metadata, canonical provenance, and selected BEP028 projection
+as one in-memory `Artifact` set. The adapter must submit that entire set to
+`publish_artifact_set()` and must not open, replace, rename, or otherwise write
+derivative files directly. This keeps every future write path behind the same
+collision, locking, staging, rollback, and failure-record boundary.
+
 ## Errors and publication safety
 
 Validation happens before expensive fitting and again at each boundary. Errors
@@ -324,9 +396,23 @@ be estimated is an error. Negative cross-validated R-squared is ordinary output.
 There is no silent fallback between noise models, HRFs, denoisers, or estimation
 methods.
 
-Writing checks all collisions before publication, writes through temporary
-files, and refuses replacement unless `overwrite=True`. A failed write cannot
-leave a partially replaced output file.
+`publish_artifact_set()` checks the complete artifact set and source/output
+overlap before publication, refuses collisions unless `overwrite=True`, locks
+the destination across processes, stages on the destination filesystem, fsyncs
+staged data, and promotes the set through no-follow anchored operations. A
+failed promotion removes new outputs and restores overwritten originals before
+raising `PublicationError`.
+
+By default, every publication failure attempts to append a sanitized record to
+the single `.boldtailor/publication_failures.jsonl` stream. Ordinary rollback
+debris is removed. If an original cannot be restored, the publication core
+automatically copies the last recoverable backup to
+`.boldtailor/failed/<execution-id>/recovery/` and records that it is failed and
+unpublished; this last-copy safeguard does not require an opt-in. Separately,
+`retain_incomplete=True` retains the requested failed artifact set under
+`.boldtailor/failed/<execution-id>/artifacts/` and marks retained canonical
+provenance as failed and unpublished. Control files, backups, and retained
+failure bundles are never reported as successfully published artifacts.
 
 ## Testing strategy
 
