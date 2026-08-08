@@ -60,7 +60,7 @@ def _fit_run(
         matrix,
         noise_model=model.noise_model,
     )
-    prediction = _prediction(labels, regression_results, signals.shape)
+    prediction = _prediction(labels, regression_results, matrix, signals.shape)
     residual_sum, total_sum = _sums_of_squares(signals, prediction)
     contrasts = {
         name: _compute_contrast(
@@ -182,11 +182,12 @@ def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
 def _prediction(
     labels: np.ndarray,
     regression_results: dict,
+    design: np.ndarray,
     shape: tuple[int, int],
 ) -> np.ndarray:
     prediction = np.empty(shape, dtype=float)
     for label, result in regression_results.items():
-        prediction[:, labels == label] = result.predicted
+        prediction[:, labels == label] = design @ result.theta
     return prediction
 
 
