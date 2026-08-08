@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -53,6 +55,21 @@ def _nilearn_contrast(signals, design, noise_model):
     )
 
 
+def _nilearn_original_space_r2(signals, design, noise_model):
+    matrix = design.to_numpy()
+    labels, regression_results = run_glm(
+        signals,
+        matrix,
+        noise_model=noise_model,
+    )
+    prediction = np.empty_like(signals)
+    for label, result in regression_results.items():
+        prediction[:, labels == label] = matrix @ result.theta
+    residual_sum = np.sum((signals - prediction) ** 2, axis=0)
+    total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
+    return 1.0 - residual_sum / total_sum
+
+
 def test_fit_matches_nilearn_ols_contrast(single_run_problem):
     signals, events, design, model = single_run_problem
 
@@ -88,6 +105,93 @@ def test_fit_matches_nilearn_ar1_contrast(single_run_problem):
         result.variance("face_gt_house"), expected.effect_variance()
     )
     np.testing.assert_allclose(result.stat("face_gt_house"), expected.stat())
+
+
+@pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+def test_fit_accepts_zero_sst_features_without_inference_warnings(
+    single_run_problem,
+    noise_model,
+):
+    signals, events, design, _ = single_run_problem
+    varying = signals[:, :1]
+    mixed = np.column_stack(
+        (
+            varying[:, 0],
+            np.zeros(len(signals)),
+            np.full(len(signals), 5.0),
+        )
+    )
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model=noise_model,
+    )
+    expected = _nilearn_contrast(varying, design, noise_model)
+    expected_r2 = _nilearn_original_space_r2(varying, design, noise_model)[0]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = fit(from_arrays(mixed, events, tr=2.0), model)
+
+    name = "face_gt_house"
+    np.testing.assert_allclose(result.effect(name)[0], expected.effect_size()[0])
+    np.testing.assert_allclose(
+        result.variance(name)[0],
+        expected.effect_variance()[0],
+    )
+    np.testing.assert_allclose(result.stat(name)[0], expected.stat()[0])
+    np.testing.assert_allclose(result.z_score(name)[0], expected.z_score()[0])
+    np.testing.assert_allclose(
+        result.one_sided_p_value(name)[0],
+        expected.p_value()[0],
+    )
+    for values in (result.run_r2[0], result.r2):
+        np.testing.assert_allclose(values[0], expected_r2)
+        assert np.isnan(values[1:]).all()
+
+
+def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
+    single_run_problem,
+):
+    signals, events, _, _ = single_run_problem
+    saturated_times = np.array([0.0, 2.0])
+    saturated_events = pd.DataFrame(
+        {
+            "onset": [0.0],
+            "duration": [1.0],
+            "trial_type": ["face"],
+        }
+    )
+    saturated_design = make_first_level_design_matrix(
+        saturated_times,
+        events=saturated_events,
+        hrf_model="glover",
+        drift_model=None,
+        min_onset=-24.0,
+    )
+    saturated_signals = saturated_design.to_numpy() @ np.array([[1.0], [2.0]])
+    model = ModelSpec(
+        contrasts={"face": {"face": 1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+
+    assert saturated_design.shape == (2, 2)
+    assert np.linalg.matrix_rank(saturated_design) == 2
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(
+            ValueError,
+            match="run 1.*residual degrees of freedom.*0",
+        ):
+            fit(
+                from_arrays(
+                    (signals[:, :1], saturated_signals),
+                    (events, saturated_events),
+                    frame_times=(np.arange(30) * 2.0, saturated_times),
+                ),
+                model,
+            )
 
 
 def test_fit_returns_strictly_immutable_arrays(single_run_problem):
