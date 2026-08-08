@@ -357,7 +357,7 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
             },
             "face_only": {
                 "kind": "weights",
-                "weights": {"face": 1.0},
+                "weights": {"face_glover_hrf": 1.0},
             },
         },
         "confounds": ["motion_x"],
@@ -414,7 +414,7 @@ def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_probl
     assert any(
         "callable" in warning["message"] for warning in result.provenance.warnings
     )
-    assert "local_hrf" not in serialized
+    assert "local_hrf" not in str(activity["model"]["hrf_model"])
     assert "<function" not in serialized
     assert "0x" not in serialized
 
