@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
+from types import MappingProxyType
 
 from boldtailor.data import from_arrays
+from boldtailor.provenance import RunSources, SourceRef
 
 
 @pytest.fixture
@@ -13,6 +15,33 @@ def events():
             "duration": [1.0, 1.0],
             "trial_type": ["face", "house"],
         }
+    )
+
+
+def _complete_sources(run_index: int) -> RunSources:
+    stem = f"sub-01_task-localizer_run-{run_index:02d}"
+    return RunSources(
+        signal=SourceRef(
+            role="signal",
+            uri=f"sub-01/func/{stem}_bold.tsv",
+            media_type="text/tab-separated-values",
+            byte_size=1024 + run_index,
+            modified_at="2026-08-08T12:00:00Z",
+        ),
+        events=SourceRef(
+            role="events",
+            uri=f"sub-01/func/{stem}_events.tsv",
+            media_type="text/tab-separated-values",
+            byte_size=256 + run_index,
+            modified_at="2026-08-08T12:01:00Z",
+        ),
+        confounds=SourceRef(
+            role="confounds",
+            uri=f"sub-01/func/{stem}_confounds.tsv",
+            media_type="text/tab-separated-values",
+            byte_size=512 + run_index,
+            modified_at="2026-08-08T12:02:00Z",
+        ),
     )
 
 
@@ -27,6 +56,17 @@ def test_from_arrays_normalizes_one_run_from_tr(events):
     np.testing.assert_array_equal(data.signals[0], signals)
     np.testing.assert_array_equal(data.frame_times[0], np.arange(10) * 2.0)
     assert list(data.confounds[0].columns) == []
+    assert data.provenance.execution_id
+    assert data.provenance.metadata_fingerprint is None
+    assert data.provenance.sources[0].signal.role == "signal"
+    assert data.provenance.sources[0].signal.uri is None
+    assert tuple(event["event"] for event in data.provenance.events) == (
+        "normalization_started",
+        "normalization_completed",
+    )
+    assert any(
+        warning["code"] == "provenance_quality" for warning in data.provenance.warnings
+    )
 
 
 def test_from_arrays_accepts_run_wise_frame_times(events):
@@ -188,3 +228,70 @@ def test_from_arrays_rejects_invalid_event_timing(events):
 
     with pytest.raises(ValueError, match="durations must be non-negative"):
         from_arrays(np.ones((10, 2)), events, tr=2.0)
+
+
+def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(events):
+    signals = [np.ones((10, 2)), np.ones((10, 2)) * 2.0]
+    run_events = [events, events.copy()]
+    run_confounds = [
+        pd.DataFrame({"motion": np.linspace(0.0, 1.0, 10)}),
+        pd.DataFrame({"motion": np.linspace(1.0, 2.0, 10)}),
+    ]
+    metadata = {"labels": ["face", "house"], "details": {"task": "localizer"}}
+    sources = [_complete_sources(1), _complete_sources(2)]
+
+    first = from_arrays(
+        signals,
+        run_events,
+        tr=2.0,
+        confounds=run_confounds,
+        sources=sources,
+        provenance_metadata=metadata,
+    )
+    second = from_arrays(
+        signals,
+        [events.copy(), events.copy()],
+        tr=2.0,
+        confounds=run_confounds,
+        sources=sources,
+        provenance_metadata=metadata,
+    )
+    metadata["labels"].append("source-mutated")
+    metadata["details"]["task"] = "mutated"
+
+    assert first.provenance.execution_id != second.provenance.execution_id
+    assert first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
+    assert first.provenance.metadata_fingerprint is not None
+    assert len(first.provenance.sources) == 2
+    assert first.provenance.sources[0].signal.uri == "sub-01/func/sub-01_task-localizer_run-01_bold.tsv"
+    activity = first.provenance.activities[0]
+    assert activity["name"] == "normalize"
+    assert activity["stage"] == "data"
+    assert activity["metadata"]["labels"] == ("face", "house")
+    assert activity["metadata"]["details"]["task"] == "localizer"
+    assert isinstance(activity["metadata"], MappingProxyType)
+    assert isinstance(activity["metadata"]["details"], MappingProxyType)
+    with pytest.raises(TypeError):
+        activity["metadata"]["details"]["task"] = "changed"
+
+
+def test_from_arrays_rejects_source_count_mismatch(events):
+    signals = [np.ones((10, 2)), np.ones((10, 2))]
+
+    with pytest.raises(ValueError, match="sources must contain one value per signal run"):
+        from_arrays(
+            signals,
+            [events, events.copy()],
+            tr=2.0,
+            sources=[_complete_sources(1)],
+        )
+
+
+def test_from_arrays_rejects_path_like_provenance_metadata(events):
+    with pytest.raises(ValueError, match="path-like"):
+        from_arrays(
+            np.ones((10, 2)),
+            events,
+            tr=2.0,
+            provenance_metadata={"cwd": "./secret"},
+        )
