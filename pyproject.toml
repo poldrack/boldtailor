@@ -9,6 +9,7 @@ description = "Composable first-level fMRI modeling"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "filelock",
   "nilearn>=0.14.0,<0.15",
   "numpy",
   "pandas",
