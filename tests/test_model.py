@@ -56,6 +56,30 @@ def test_model_spec_rejects_invalid_weight_mapping(weights):
         ModelSpec(contrasts={"invalid": weights})
 
 
+@pytest.mark.parametrize("weight", [True, False])
+def test_model_spec_rejects_boolean_weight(weight):
+    with pytest.raises(ValueError, match="contrast"):
+        ModelSpec(contrasts={"invalid": {"face": weight}})
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("high_pass", True),
+        ("high_pass", False),
+        ("drift_order", True),
+        ("drift_order", False),
+        ("oversampling", True),
+        ("oversampling", False),
+        ("min_onset", True),
+        ("min_onset", False),
+    ],
+)
+def test_model_spec_rejects_boolean_design_option(option, value):
+    with pytest.raises(ValueError, match=option):
+        ModelSpec(contrasts={"face": "face"}, **{option: value})
+
+
 def test_model_spec_rejects_empty_contrasts():
     with pytest.raises(ValueError, match="at least one contrast"):
         ModelSpec(contrasts={})
