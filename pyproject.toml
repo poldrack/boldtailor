@@ -31,3 +31,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+target-version = ["py312"]

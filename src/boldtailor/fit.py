@@ -138,10 +138,7 @@ def _analysis_id(
 def _serialize_contrasts(
     contrasts: Mapping[str, ContrastValue],
 ) -> dict[str, object]:
-    return {
-        name: _serialize_contrast(value)
-        for name, value in contrasts.items()
-    }
+    return {name: _serialize_contrast(value) for name, value in contrasts.items()}
 
 
 def _serialize_contrast(value: ContrastValue) -> dict[str, object]:
@@ -189,8 +186,7 @@ def _fit_activity(
     compiled: tuple[CompiledDesign, ...],
 ) -> dict[str, object]:
     runs = tuple(
-        _run_diagnostic(data, design, run)
-        for run, design in enumerate(compiled)
+        _run_diagnostic(data, design, run) for run, design in enumerate(compiled)
     )
     return {"name": "fit", "stage": "fit", "model": model, "runs": runs}
 

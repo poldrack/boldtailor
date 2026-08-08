@@ -260,10 +260,15 @@ def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(events):
     metadata["details"]["task"] = "mutated"
 
     assert first.provenance.execution_id != second.provenance.execution_id
-    assert first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
+    assert (
+        first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
+    )
     assert first.provenance.metadata_fingerprint is not None
     assert len(first.provenance.sources) == 2
-    assert first.provenance.sources[0].signal.uri == "sub-01/func/sub-01_task-localizer_run-01_bold.tsv"
+    assert (
+        first.provenance.sources[0].signal.uri
+        == "sub-01/func/sub-01_task-localizer_run-01_bold.tsv"
+    )
     activity = first.provenance.activities[0]
     assert activity["name"] == "normalize"
     assert activity["stage"] == "data"
@@ -278,7 +283,9 @@ def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(events):
 def test_from_arrays_rejects_source_count_mismatch(events):
     signals = [np.ones((10, 2)), np.ones((10, 2))]
 
-    with pytest.raises(ValueError, match="sources must contain one value per signal run"):
+    with pytest.raises(
+        ValueError, match="sources must contain one value per signal run"
+    ):
         from_arrays(
             signals,
             [events, events.copy()],

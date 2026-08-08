@@ -490,9 +490,7 @@ def _source_complete(source: SourceRef) -> bool:
     )
 
 
-def _extra_fields(
-    data: Mapping[str, object], known: set[str]
-) -> Mapping[str, object]:
+def _extra_fields(data: Mapping[str, object], known: set[str]) -> Mapping[str, object]:
     extra = {key: value for key, value in data.items() if key not in known}
     return _reject_forbidden_top_level_fields(extra)
 

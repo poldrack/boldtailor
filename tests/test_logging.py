@@ -124,7 +124,9 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(caplog):
     assert {record["level"] for record in records} == {"INFO"}
     assert {record["stage"] for record in records} == {"data"}
     assert all(record["timestamp"].endswith("Z") for record in records)
-    assert all(record["execution_id"] == data.provenance.execution_id for record in records)
+    assert all(
+        record["execution_id"] == data.provenance.execution_id for record in records
+    )
     assert data.provenance.metadata_fingerprint is not None
     assert records[1]["data_id"] == data.provenance.metadata_fingerprint
     assert (root.level, tuple(root.handlers)) == root_state

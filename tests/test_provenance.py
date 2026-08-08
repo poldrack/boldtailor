@@ -167,7 +167,10 @@ def test_provenance_record_owns_nested_inputs_and_preserves_order():
         )
     ]
     activities = [{"name": "normalize", "runs": [0]}]
-    events = [{"event": "started", "sequence": 1}, {"event": "completed", "sequence": 2}]
+    events = [
+        {"event": "started", "sequence": 1},
+        {"event": "completed", "sequence": 2},
+    ]
     warnings = [{"code": "quality", "message": "stable"}]
 
     record = ProvenanceRecord(
@@ -261,7 +264,10 @@ def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order
                         "media_type": "text/tab-separated-values",
                         "byte_size": 10,
                         "modified_at": "2026-08-08T12:00:00Z",
-                        "annotations": {"beta": {"second": "y", "first": "x"}, "alpha": 1},
+                        "annotations": {
+                            "beta": {"second": "y", "first": "x"},
+                            "alpha": 1,
+                        },
                     },
                     "events": {
                         "role": "events",
@@ -269,7 +275,10 @@ def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order
                         "media_type": "text/tab-separated-values",
                         "byte_size": 11,
                         "modified_at": "2026-08-08T12:01:00Z",
-                        "annotations": {"alpha": 1, "beta": {"first": "x", "second": "y"}},
+                        "annotations": {
+                            "alpha": 1,
+                            "beta": {"first": "x", "second": "y"},
+                        },
                     },
                 }
             ],

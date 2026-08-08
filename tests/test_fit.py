@@ -313,8 +313,13 @@ def test_fit_analysis_fingerprint_depends_on_data_and_model(single_run_problem):
     anonymous = fit(from_arrays(signals, events, tr=2.0), model)
 
     assert same.provenance.analysis_fingerprint is not None
-    assert same.provenance.analysis_fingerprint == fit(data, model).provenance.analysis_fingerprint
-    assert changed.provenance.analysis_fingerprint != same.provenance.analysis_fingerprint
+    assert (
+        same.provenance.analysis_fingerprint
+        == fit(data, model).provenance.analysis_fingerprint
+    )
+    assert (
+        changed.provenance.analysis_fingerprint != same.provenance.analysis_fingerprint
+    )
     assert anonymous.provenance.analysis_fingerprint is None
     assert any(
         warning["code"] == "provenance_quality"
@@ -342,7 +347,9 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
     )
 
     result = fit(
-        from_arrays(signals, events, tr=2.0, confounds=confounds, sources=_complete_sources()),
+        from_arrays(
+            signals, events, tr=2.0, confounds=confounds, sources=_complete_sources()
+        ),
         model,
     )
     activity = result.provenance.activities[-1]
@@ -377,8 +384,12 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
     assert run["n_scans"] == signals.shape[0]
     assert run["n_features"] == signals.shape[1]
     assert run["design_columns"] == list(result.design_matrices[0].columns)
-    assert run["design_rank"] == int(np.linalg.matrix_rank(result.design_matrices[0].to_numpy()))
-    assert run["residual_dof"] == result.design_matrices[0].shape[0] - run["design_rank"]
+    assert run["design_rank"] == int(
+        np.linalg.matrix_rank(result.design_matrices[0].to_numpy())
+    )
+    assert (
+        run["residual_dof"] == result.design_matrices[0].shape[0] - run["design_rank"]
+    )
     assert run["excluded_event_count"] == 0
     assert run["min_onset_cutoff"] == -10.0
     assert "987654.5" not in serialized

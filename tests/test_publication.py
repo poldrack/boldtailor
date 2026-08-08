@@ -168,7 +168,8 @@ def test_publication_writes_real_files_and_returns_only_artifact_paths(
     assert set(published) == {destination / artifact.path for artifact in artifact_set}
     assert all(path.is_file() for path in published)
     assert {
-        path.relative_to(destination).as_posix(): path.read_bytes() for path in published
+        path.relative_to(destination).as_posix(): path.read_bytes()
+        for path in published
     } == {artifact.path: artifact.payload for artifact in artifact_set}
     assert all(".boldtailor" not in path.parts for path in published)
     _assert_no_transaction_debris(destination)
@@ -407,7 +408,9 @@ def test_retain_incomplete_keeps_staged_artifacts_and_failed_provenance(
     _assert_no_transaction_debris(destination)
 
 
-def test_source_files_are_read_only_inputs_on_success_and_failure(tmp_path, monkeypatch):
+def test_source_files_are_read_only_inputs_on_success_and_failure(
+    tmp_path, monkeypatch
+):
     import boldtailor.publication as publication
 
     source = tmp_path / "raw" / "source.tsv"

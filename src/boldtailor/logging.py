@@ -145,7 +145,11 @@ def _history_entry(event: Mapping[str, object]) -> Mapping[str, object]:
 
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
-        "+00:00",
-        "Z",
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace(
+            "+00:00",
+            "Z",
+        )
     )

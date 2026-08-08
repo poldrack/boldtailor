@@ -8,7 +8,6 @@ import pytest
 from boldtailor.bids_provenance import project_bids_provenance
 from boldtailor.provenance import ProvenanceRecord
 
-
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "bep028" / "expected"
 
 
@@ -184,9 +183,7 @@ def test_draft_records_form_semantic_activity_source_graph(
     environments = json.loads(projected["prov/prov-boldtailor_env.json"])[
         "Environments"
     ]
-    sidecar = json.loads(
-        projected["sub-01/func/sub-01_task-rest_desc-model_bold.json"]
-    )
+    sidecar = json.loads(projected["sub-01/func/sub-01_task-rest_desc-model_bold.json"])
 
     activity_ids = {activity["Id"] for activity in activities}
     entity_ids = {entity["Id"] for entity in entities}
@@ -242,7 +239,9 @@ def test_logs_are_deterministic_newline_terminated_and_exclude_sensitive_runtime
         assert forbidden not in combined
 
 
-@pytest.mark.parametrize("label", ["../escape", "bad/name", "bad\\name", "bad-label", ""])
+@pytest.mark.parametrize(
+    "label", ["../escape", "bad/name", "bad\\name", "bad-label", ""]
+)
 def test_projection_rejects_invalid_bids_provenance_labels(provenance_record, label):
     with pytest.raises(ValueError, match="label"):
         project_bids_provenance(provenance_record, label=label)

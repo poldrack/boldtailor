@@ -97,7 +97,8 @@ def from_arrays(
         with bind_context(data_id=data_id):
             try:
                 prepared_signals = tuple(
-                    _prepare_signal(values, run) for run, values in enumerate(run_signals)
+                    _prepare_signal(values, run)
+                    for run, values in enumerate(run_signals)
                 )
                 _validate_feature_counts(prepared_signals)
                 prepared_events = tuple(
