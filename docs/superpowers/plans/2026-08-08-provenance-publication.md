@@ -266,24 +266,20 @@ production separately.
 
 - Modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-08-07-general-first-level-fmri-package-design.md`
-- Modify: `tests/test_repository_contracts.py`
 
-**RED:** Add and commit behavioral repository-contract tests proving all package
-`__init__.py` files are zero bytes and that the required runtime dependency and
-packaged provenance modules are present in an installed wheel. Do not test human
-prose by grepping exact wording.
-
-**GREEN/DOCS:** Document source descriptors, anonymous-source limitations,
+**DOCS:** This task changes human-facing prose only; it adds no production
+behavior and therefore does not manufacture a RED test for behavior already
+covered by Tasks 1-5. Document source descriptors, anonymous-source limitations,
 metadata-only identity, deterministic versus execution IDs, logger integration,
 privacy/redaction, default and retained failure behavior, the pinned BEP028
 draft/opt-out, and the rule that future adapters cannot write directly and must
 route complete artifact sets through the publication core. State explicitly that
 no BIDS discovery or NIfTI/CIFTI writer is included yet.
 
-Verify the repository-contract tests, complete suite, warnings-as-errors,
+Verify the existing repository-contract tests, complete suite, warnings-as-errors,
 `uv run black --check src tests`, `uv lock --check`, `uv build`, initializer
 zero-byte checks, and `git diff --check`. Commit docs/production separately from
-the preceding RED commit.
+all preceding RED and implementation commits.
 
 ## Final review and completion
 
