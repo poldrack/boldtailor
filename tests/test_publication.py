@@ -502,3 +502,135 @@ def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
     assert results.get(timeout=1)[0] == "ok"
     assert (destination / "held.bin").read_bytes() == b"holder"
     _assert_no_transaction_debris(destination)
+
+
+def test_restore_replace_failure_uses_safe_fallback_to_restore_original(
+    tmp_path,
+    monkeypatch,
+):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "derivatives"
+    destination.mkdir()
+    original = destination / "existing.bin"
+    original.write_bytes(b"irreplaceable-original")
+    real_replace = publication.os.replace
+    calls = 0
+
+    def fail_promotion_and_first_restore(source, target, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls in {3, 4}:
+            raise OSError("injected promotion or restore failure")
+        return real_replace(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(publication.os, "replace", fail_promotion_and_first_restore)
+
+    with pytest.raises(PublicationError, match="publication failed"):
+        publish_artifact_set(
+            destination,
+            (
+                Artifact("existing.bin", b"replacement"),
+                Artifact("new.bin", b"must-not-remain"),
+            ),
+            overwrite=True,
+        )
+
+    assert original.read_bytes() == b"irreplaceable-original"
+    assert not (destination / "new.bin").exists()
+    assert not (destination / ".boldtailor" / "failed").exists()
+    _assert_no_transaction_debris(destination)
+
+
+def test_unrestorable_original_is_retained_in_failed_recovery_by_default(
+    tmp_path,
+    monkeypatch,
+):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "derivatives"
+    destination.mkdir()
+    original = destination / "existing.bin"
+    original.write_bytes(b"only-recoverable-original")
+    real_replace = publication.os.replace
+    real_rename = publication.os.rename
+    calls = 0
+
+    def fail_promotion_and_restore(source, target, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls >= 3:
+            raise OSError("injected persistent replace failure")
+        return real_replace(source, target, *args, **kwargs)
+
+    def fail_restore_rename(source, target, *args, **kwargs):
+        if str(target).endswith("existing.bin"):
+            raise OSError("injected persistent restore failure")
+        return real_rename(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(publication.os, "replace", fail_promotion_and_restore)
+    monkeypatch.setattr(publication.os, "rename", fail_restore_rename)
+
+    with pytest.raises(PublicationError, match="publication failed"):
+        publish_artifact_set(
+            destination,
+            (
+                Artifact("existing.bin", b"replacement"),
+                Artifact("new.bin", b"must-not-remain"),
+            ),
+            overwrite=True,
+        )
+
+    recoveries = tuple((destination / ".boldtailor" / "failed").iterdir())
+    assert len(recoveries) == 1
+    UUID(recoveries[0].name)
+    assert (recoveries[0] / "recovery" / "existing.bin").read_bytes() == (
+        b"only-recoverable-original"
+    )
+    recovery_record = json.loads((recoveries[0] / "recovery.json").read_text())
+    assert recovery_record["status"] == "failed"
+    assert recovery_record["published"] is False
+    assert recovery_record["execution_id"] == recoveries[0].name
+    assert not (recoveries[0] / "artifacts").exists()
+    assert not original.exists()
+    assert not (destination / "new.bin").exists()
+    _assert_no_transaction_debris(destination)
+
+
+def test_parent_symlink_swap_at_promotion_boundary_cannot_escape_destination(
+    tmp_path,
+    monkeypatch,
+):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "derivatives"
+    parent = destination / "nested"
+    parent.mkdir(parents=True)
+    (parent / "original.txt").write_bytes(b"original-parent-data")
+    displaced = destination / "nested-displaced"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    real_replace = publication.os.replace
+    real_rename = publication.os.rename
+    swapped = False
+
+    def swap_parent_then_replace(source, target, *args, **kwargs):
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            real_rename(parent, displaced)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_replace(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(publication.os, "replace", swap_parent_then_replace)
+
+    with pytest.raises(PublicationError, match="publication failed"):
+        publish_artifact_set(
+            destination,
+            (Artifact("nested/result.bin", b"must-stay-contained"),),
+        )
+
+    assert not (outside / "result.bin").exists()
+    assert not (displaced / "result.bin").exists()
+    assert (displaced / "original.txt").read_bytes() == b"original-parent-data"
+    assert parent.is_symlink()
