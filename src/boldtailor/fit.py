@@ -55,6 +55,7 @@ def _fit_run(
     design = compiled.matrix
     matrix = design.to_numpy()
     _warn_if_rank_deficient(matrix, run)
+    _validate_residual_dof(matrix, run)
     labels, regression_results = run_glm(
         signals,
         matrix,
@@ -119,7 +120,27 @@ def _compute_contrast(
     if not np.any(vector):
         raise ValueError(f"run {run} contrast {name!r} resolves to all zeros")
     _validate_estimable(vector, design, name, run)
-    return compute_contrast(labels, regression_results, vector, stat_type="t")
+    return _nilearn_t_contrast(labels, regression_results, vector)
+
+
+def _nilearn_t_contrast(
+    labels: np.ndarray,
+    regression_results: dict,
+    vector: np.ndarray,
+) -> object:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"^divide by zero encountered in divide$",
+            category=RuntimeWarning,
+            module=r"^nilearn\.glm\._utils$",
+        )
+        return compute_contrast(
+            labels,
+            regression_results,
+            vector,
+            stat_type="t",
+        )
 
 
 def _contrast_vector(
@@ -176,6 +197,15 @@ def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
             f"run {run} design rank is {rank} for {design.shape[1]} columns",
             UserWarning,
             stacklevel=2,
+        )
+
+
+def _validate_residual_dof(design: np.ndarray, run: int) -> None:
+    residual_dof = design.shape[0] - np.linalg.matrix_rank(design)
+    if residual_dof <= 0:
+        raise ValueError(
+            f"run {run} has residual degrees of freedom {residual_dof}; "
+            "contrast inference requires a positive value"
         )
 
 

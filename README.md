@@ -40,3 +40,9 @@ fit_quality = result.r2
 adapters are added in later phases. Contrast p-values are directional and
 one-sided, matching Nilearn. For nonuniform or nonzero acquisition times, pass
 one frame-time array per run instead of `tr`.
+
+Features with zero centered sum of squares, including all-zero and constant
+features, are accepted. Their per-run and aggregate R-squared values are NaN;
+varying features in the same fit retain their ordinary estimates and
+inference. Every run must have positive residual degrees of freedom for
+contrast inference, otherwise `fit()` raises a run-specific `ValueError`.
