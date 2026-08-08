@@ -91,13 +91,19 @@ def test_fit_matches_nilearn_ar1_contrast(single_run_problem):
 
 
 def test_fit_returns_strictly_immutable_arrays(single_run_problem):
-    signals, events, _, model = single_run_problem
+    signals, events, design, model = single_run_problem
 
     result = fit(from_arrays(signals, events, tr=2.0), model)
+    coefficients = np.linalg.lstsq(design.to_numpy(), signals, rcond=None)[0]
+    prediction = design.to_numpy() @ coefficients
+    residual_sum = np.sum((signals - prediction) ** 2, axis=0)
+    total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
+    expected_r2 = 1.0 - residual_sum / total_sum
 
     assert result.r2.shape == (2,)
-    assert np.all(result.r2 > 0.99)
+    np.testing.assert_allclose(result.r2, expected_r2)
     assert len(result.run_r2) == 1
+    np.testing.assert_allclose(result.run_r2[0], expected_r2)
     arrays = (
         result.r2,
         result.run_r2[0],
