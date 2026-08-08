@@ -69,13 +69,14 @@ def project_bids_provenance(
         dataset_links=_normalize_dataset_links(dataset_links),
     )
     if export_bids_prov:
-        artifacts.update(
+        _extend_artifacts(
+            artifacts,
             _draft_artifacts(
                 record,
                 label=safe_label,
                 code_url=code_url,
                 sidecars=normalized_sidecars,
-            )
+            ),
         )
     return _freeze_artifacts(artifacts)
 
@@ -123,7 +124,7 @@ def _draft_artifacts(
         f"{prefix}_env.json": _pretty_json({"Environments": graph["environments"]}),
         f"{prefix}_soft.json": _pretty_json({"Software": graph["software"]}),
     }
-    artifacts.update(_relationship_sidecars(sidecars, graph))
+    _extend_artifacts(artifacts, _relationship_sidecars(sidecars, graph))
     return artifacts
 
 
@@ -470,6 +471,19 @@ def _check_case_collision(value: str, seen: dict[str, str], name: str) -> None:
     if previous is not None and previous != value:
         raise ValueError(f"case-folded {name} collision: {previous!r} and {value!r}")
     seen[folded] = value
+
+
+def _extend_artifacts(
+    artifacts: dict[str, bytes],
+    additions: Mapping[str, bytes],
+) -> None:
+    seen = {path.casefold(): path for path in artifacts}
+    for path, payload in additions.items():
+        previous = seen.get(path.casefold())
+        if previous is not None:
+            raise ValueError(f"artifact path collision: {previous!r} and {path!r}")
+        seen[path.casefold()] = path
+        artifacts[path] = payload
 
 
 def _safe_json(value: object) -> object:
