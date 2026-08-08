@@ -368,6 +368,7 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
         },
         "drift_model": "cosine",
         "high_pass": 0.02,
+        "drift_order": 1,
         "oversampling": 20,
         "min_onset": -10.0,
         "noise_model": "ols",
@@ -385,6 +386,23 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
     assert "design_values" not in serialized
     assert "feature_diagnostics" not in serialized
     assert "effect_size" not in serialized
+
+
+def test_fit_serializes_nondefault_drift_order(single_run_problem):
+    signals, events, _, _ = single_run_problem
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model="polynomial",
+        drift_order=3,
+        noise_model="ols",
+    )
+
+    result = fit(
+        from_arrays(signals, events, tr=2.0, sources=_complete_sources()),
+        model,
+    )
+
+    assert result.provenance.activities[-1]["model"]["drift_order"] == 3
 
 
 def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_problem):
