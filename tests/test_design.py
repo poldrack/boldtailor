@@ -99,3 +99,18 @@ def test_compile_designs_warns_and_records_early_event_exclusion(inputs):
     assert compiled.excluded_event_count == 1
     assert compiled.min_onset_cutoff == -24.0
     assert "training" not in compiled.matrix.columns
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [("hrf_model", "bogus"), ("drift_model", "bogus")],
+)
+def test_compile_designs_contextualizes_invalid_nilearn_options(
+    inputs, option, value
+):
+    events, _ = inputs
+    data = from_arrays(np.zeros((20, 2)), events, tr=2.0)
+    model = ModelSpec(contrasts={"face": "face"}, **{option: value})
+
+    with pytest.raises(ValueError, match=r"run 0.*design compilation"):
+        compile_designs(data, model)
