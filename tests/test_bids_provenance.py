@@ -279,6 +279,18 @@ def test_projection_rejects_case_folded_output_collisions(provenance_record):
         )
 
 
+@pytest.mark.parametrize("path", ["dataset_description.json", "prov/provenance.json"])
+def test_projection_rejects_sidecars_that_overwrite_reserved_artifacts(
+    provenance_record,
+    path,
+):
+    with pytest.raises(ValueError, match="collision"):
+        project_bids_provenance(
+            provenance_record,
+            derivative_sidecars={path: ()},
+        )
+
+
 def test_projection_rejects_relationship_sources_absent_from_record(provenance_record):
     with pytest.raises(ValueError, match="record source"):
         project_bids_provenance(
