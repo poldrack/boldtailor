@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass
+from numbers import Real
 
 import numpy as np
 import pandas as pd
@@ -33,11 +35,11 @@ class AnalysisData:
 
     @property
     def events(self) -> tuple[pd.DataFrame, ...]:
-        return tuple(frame.copy(deep=True) for frame in self._events)
+        return tuple(_owned_table(frame) for frame in self._events)
 
     @property
     def confounds(self) -> tuple[pd.DataFrame, ...]:
-        return tuple(frame.copy(deep=True) for frame in self._confounds)
+        return tuple(_owned_table(frame) for frame in self._confounds)
 
     @property
     def frame_times(self) -> tuple[np.ndarray, ...]:
@@ -129,7 +131,7 @@ def _prepare_events(frame: pd.DataFrame, run: int) -> pd.DataFrame:
     missing = [name for name in _EVENT_COLUMNS if name not in frame]
     if missing:
         raise ValueError(f"run {run} events missing columns: {', '.join(missing)}")
-    copied = frame.copy(deep=True).reset_index(drop=True)
+    copied = _owned_table(frame).reset_index(drop=True)
     try:
         onset = copied["onset"].to_numpy(dtype=float)
         duration = copied["duration"].to_numpy(dtype=float)
@@ -156,8 +158,18 @@ def _prepare_confounds(
             raise ValueError(f"run {index} confounds must be a pandas DataFrame")
         if len(frame) != run.shape[0]:
             raise ValueError(f"run {index} confounds must contain {run.shape[0]} rows")
-        prepared.append(frame.copy(deep=True).reset_index(drop=True))
+        prepared.append(_owned_table(frame).reset_index(drop=True))
     return tuple(prepared)
+
+
+def _owned_table(frame: pd.DataFrame) -> pd.DataFrame:
+    copied = frame.copy(deep=True)
+    for column, dtype in copied.dtypes.items():
+        if dtype != object:
+            continue
+        payloads = [deepcopy(value) for value in copied[column]]
+        copied[column] = pd.Series(payloads, index=copied.index, dtype=object)
+    return copied
 
 
 def _prepare_timing(
@@ -168,9 +180,9 @@ def _prepare_timing(
     if (tr is None) == (frame_times is None):
         raise ValueError("provide exactly one of tr or frame_times")
     if tr is not None:
-        _validate_tr(tr)
+        tr_value = _prepare_tr(tr)
         times = tuple(
-            immutable_float_array(np.arange(run.shape[0]) * tr) for run in signals
+            immutable_float_array(np.arange(run.shape[0]) * tr_value) for run in signals
         )
         return times, "tr"
     run_times = _as_frame_time_runs(frame_times)
@@ -182,9 +194,13 @@ def _prepare_timing(
     return times, "frame_times"
 
 
-def _validate_tr(tr: float) -> None:
-    if not np.isfinite(tr) or tr <= 0:
+def _prepare_tr(tr: object) -> float:
+    if not isinstance(tr, Real) or isinstance(tr, (bool, np.bool_)):
         raise ValueError("TR must be positive and finite")
+    value = float(tr)
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError("TR must be positive and finite")
+    return value
 
 
 def _as_frame_time_runs(
