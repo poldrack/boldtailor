@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import immutable_float_array
+from boldtailor.provenance import ProvenanceRecord
 
 DesignProvenance = Mapping[str, int | float]
 
@@ -41,6 +42,7 @@ class AnalysisResult:
     _design_provenance: tuple[DesignProvenance, ...]
     _run_r2: tuple[np.ndarray, ...]
     _r2: np.ndarray
+    _provenance: ProvenanceRecord
 
     @property
     def contrast_names(self) -> tuple[str, ...]:
@@ -61,6 +63,10 @@ class AnalysisResult:
     @property
     def r2(self) -> np.ndarray:
         return self._r2
+
+    @property
+    def provenance(self) -> ProvenanceRecord:
+        return self._provenance
 
     def effect(self, name: str) -> np.ndarray:
         return self._contrast(name).effect
@@ -90,6 +96,7 @@ def make_result(
     design_provenance: tuple[DesignProvenance, ...],
     run_r2: tuple[np.ndarray, ...],
     r2: np.ndarray,
+    provenance: ProvenanceRecord,
 ) -> AnalysisResult:
     return AnalysisResult(
         _contrasts=MappingProxyType(dict(contrasts)),
@@ -99,6 +106,7 @@ def make_result(
         ),
         _run_r2=tuple(immutable_float_array(values) for values in run_r2),
         _r2=immutable_float_array(r2),
+        _provenance=provenance,
     )
 
 

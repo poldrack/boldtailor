@@ -18,6 +18,18 @@ _QUALITY_WARNING = {
 }
 
 
+class _FrozenSequence(tuple):
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Sequence) and not isinstance(
+            other,
+            (str, bytes, bytearray),
+        ):
+            return tuple(self) == tuple(other)
+        return False
+
+    __hash__ = tuple.__hash__
+
+
 @dataclass(frozen=True)
 class SourceRef:
     role: str
@@ -144,6 +156,11 @@ class ProvenanceRecord:
     def metadata_fingerprint(self) -> str | None:
         return self._metadata_fingerprint
 
+    @property
+    def analysis_fingerprint(self) -> str | None:
+        value = self._extra.get("analysis_fingerprint")
+        return value if isinstance(value, str) else None
+
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
             "schema": self.schema,
@@ -188,6 +205,40 @@ class ProvenanceRecord:
             warnings=_mapping_items(data.get("warnings", ()), "warnings"),
             _extra=_extra_fields(data, known),
         )
+
+
+def analysis_fingerprint(
+    metadata_fingerprint: str | None,
+    model: Mapping[str, object],
+) -> str | None:
+    if metadata_fingerprint is None:
+        return None
+    payload = {
+        "data_fingerprint": metadata_fingerprint,
+        "model": _thaw(_freeze_mapping(model, path_safe=True)),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def extend_provenance(
+    record: ProvenanceRecord,
+    *,
+    execution_id: str,
+    activity: Mapping[str, object],
+    events: Sequence[Mapping[str, object]],
+    warnings: Sequence[Mapping[str, object]],
+    analysis_id: str | None,
+) -> ProvenanceRecord:
+    payload = record.to_dict()
+    payload.update(
+        execution_id=execution_id,
+        activities=[*payload["activities"], activity],
+        events=list(events),
+        warnings=[*payload["warnings"], *warnings],
+        analysis_fingerprint=analysis_id,
+    )
+    return ProvenanceRecord.from_dict(payload)
 
 
 def _copy_source_ref(value: SourceRef, name: str) -> SourceRef:
@@ -374,7 +425,9 @@ def _freeze_json(value: object, *, path_safe: bool) -> object:
     if isinstance(value, Mapping):
         return _freeze_mapping(value, path_safe=path_safe)
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return tuple(_freeze_json(item, path_safe=path_safe) for item in value)
+        return _FrozenSequence(
+            _freeze_json(item, path_safe=path_safe) for item in value
+        )
     raise ValueError("values must be JSON-safe")
 
 
