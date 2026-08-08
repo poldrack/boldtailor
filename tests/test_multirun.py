@@ -2,7 +2,11 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
-from nilearn.glm.first_level import FirstLevelModel, make_first_level_design_matrix
+from nilearn.glm.first_level import (
+    FirstLevelModel,
+    make_first_level_design_matrix,
+    run_glm,
+)
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit
@@ -72,6 +76,21 @@ def _flat_values(image):
     return image.get_fdata().reshape(-1)
 
 
+def _original_space_ar1_diagnostics(signals, design):
+    matrix = design.to_numpy()
+    labels, regression_results = run_glm(
+        signals,
+        matrix,
+        noise_model="ar1",
+    )
+    prediction = np.empty_like(signals)
+    for label, result in regression_results.items():
+        prediction[:, labels == label] = matrix @ result.theta
+    residual_sum = np.sum((signals - prediction) ** 2, axis=0)
+    total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
+    return 1.0 - residual_sum / total_sum, residual_sum, total_sum
+
+
 def test_fit_allows_run_specific_designs_and_matches_first_level_model():
     signals, events, frame_times, designs, model = _problem()
     data = from_arrays(signals, events, frame_times=frame_times)
@@ -134,6 +153,31 @@ def test_fit_aggregates_r2_from_sums_not_run_means():
     expected = 1.0 - np.sum(run_residual, axis=0) / np.sum(run_total, axis=0)
 
     np.testing.assert_allclose(result.r2, expected)
+
+
+def test_fit_ar1_r2_uses_original_signal_space_across_runs():
+    signals, events, frame_times, designs, _ = _problem()
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model="cosine",
+        noise_model="ar1",
+    )
+
+    result = fit(
+        from_arrays(signals, events, frame_times=frame_times),
+        model,
+    )
+    diagnostics = tuple(
+        _original_space_ar1_diagnostics(run, design)
+        for run, design in zip(signals, designs, strict=True)
+    )
+    residual_sum = np.sum([values[1] for values in diagnostics], axis=0)
+    total_sum = np.sum([values[2] for values in diagnostics], axis=0)
+    aggregate_r2 = 1.0 - residual_sum / total_sum
+
+    for actual, expected in zip(result.run_r2, diagnostics, strict=True):
+        np.testing.assert_allclose(actual, expected[0])
+    np.testing.assert_allclose(result.r2, aggregate_r2)
 
 
 def test_fit_warns_for_rank_deficient_design():
