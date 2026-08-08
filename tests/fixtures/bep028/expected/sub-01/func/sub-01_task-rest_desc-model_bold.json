@@ -1,0 +1,9 @@
+{
+  "GeneratedBy": [
+    "bids::prov#fit-12345678123456781234567812345678-1"
+  ],
+  "Sources": [
+    "bids::sub-01/func/sub-01_task-rest_bold.tsv",
+    "bids:raw:sub-01/func/sub-01_task-rest_events.tsv"
+  ]
+}

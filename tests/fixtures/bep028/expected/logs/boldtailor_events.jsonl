@@ -1,0 +1,2 @@
+{"event":"normalization_started","execution_id":"12345678-1234-5678-1234-567812345678","level":"INFO","sequence":1,"stage":"data","timestamp":"2026-08-08T12:00:00.000Z"}
+{"analysis_id":"analysis-abc","event":"fit_completed","execution_id":"12345678-1234-5678-1234-567812345678","level":"INFO","sequence":2,"stage":"fit","timestamp":"2026-08-08T12:00:01.000Z"}

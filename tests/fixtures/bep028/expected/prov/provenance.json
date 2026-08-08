@@ -1,0 +1,24 @@
+{
+  "BEP028Draft": {
+    "Identifier": "BEP028",
+    "Snapshot": "bids-standard/bids-specification@02172700aac8d1bdd67b45191f43533f426848dc",
+    "Status": "draft",
+    "SupportedSubset": [
+      "Activities",
+      "Files",
+      "Environments",
+      "Software",
+      "provenance label table",
+      "file GeneratedBy and Sources relationships"
+    ]
+  },
+  "bep028_draft": {
+    "Description": "Pinned BEP028 draft snapshot used for this projection."
+  },
+  "description": {
+    "Description": "Human-readable description of the provenance entity."
+  },
+  "provenance_id": {
+    "Description": "Identifier of the prov entity described by this row."
+  }
+}

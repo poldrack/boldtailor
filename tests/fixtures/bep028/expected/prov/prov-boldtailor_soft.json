@@ -1,0 +1,12 @@
+{
+  "Software": [
+    {
+      "AlternativeIdentifier": [
+        "https://github.com/example/boldtailor"
+      ],
+      "Id": "bids::prov#boldtailor-12345678123456781234567812345678",
+      "Label": "Boldtailor",
+      "Version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "BIDSVersion": "1.11.1",
+  "DatasetLinks": {
+    "raw": "https://example.org/raw",
+    "template": "https://example.org/template"
+  },
+  "DatasetType": "derivative",
+  "GeneratedBy": [
+    {
+      "CodeURL": "https://github.com/example/boldtailor",
+      "Container": {
+        "Tag": "example/boldtailor:0.1.0",
+        "Type": "docker",
+        "URI": "docker://example/boldtailor:0.1.0"
+      },
+      "Name": "Boldtailor",
+      "Version": "0.1.0"
+    }
+  ],
+  "Name": "Boldtailor example derivatives",
+  "SourceDatasets": [
+    {
+      "DOI": "doi:10.1234/example",
+      "Version": "1.0.0"
+    },
+    {
+      "URL": "https://example.org/raw",
+      "Version": "2.0.0"
+    }
+  ]
+}

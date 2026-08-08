@@ -1,0 +1,13 @@
+{
+  "Files": [
+    {
+      "AtLocation": "sub-01/func/sub-01_task-rest_bold.tsv",
+      "Id": "bids::sub-01/func/sub-01_task-rest_bold.tsv",
+      "Label": "sub-01_task-rest_bold.tsv"
+    },
+    {
+      "Id": "bids:raw:sub-01/func/sub-01_task-rest_events.tsv",
+      "Label": "sub-01_task-rest_events.tsv"
+    }
+  ]
+}
