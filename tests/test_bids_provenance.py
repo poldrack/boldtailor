@@ -279,7 +279,7 @@ def test_projection_rejects_case_folded_output_collisions(provenance_record):
         )
 
 
-@pytest.mark.parametrize("path", ["dataset_description.json", "prov/provenance.json"])
+@pytest.mark.parametrize("path", ["dataset_description.json", "provenance.json"])
 def test_projection_rejects_sidecars_that_overwrite_reserved_artifacts(
     provenance_record,
     path,
