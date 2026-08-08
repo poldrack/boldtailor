@@ -102,16 +102,18 @@ def test_source_ref_accepts_dataset_relative_and_bids_uris(uri):
     ],
 )
 def test_source_ref_rejects_invalid_values(kwargs, message):
+    payload = {
+        "role": "events",
+        "uri": "sub-01/func/sub-01_task-rest_events.tsv",
+        "media_type": "text/tab-separated-values",
+        "byte_size": 10,
+        "modified_at": "2026-08-08T12:00:00Z",
+        "annotations": {"kind": "events"},
+    }
+    payload.update(kwargs)
+
     with pytest.raises(ValueError, match=message):
-        SourceRef(
-            role="events",
-            uri="sub-01/func/sub-01_task-rest_events.tsv",
-            media_type="text/tab-separated-values",
-            byte_size=10,
-            modified_at="2026-08-08T12:00:00Z",
-            annotations={"kind": "events"},
-            **kwargs,
-        )
+        SourceRef(**payload)
 
 
 def test_run_sources_requires_exactly_one_signal_and_events_source():
