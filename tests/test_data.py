@@ -100,6 +100,25 @@ def test_from_arrays_owns_strictly_immutable_copies(events):
             values.setflags(write=True)
 
 
+def test_from_arrays_owns_nested_tabular_payloads(events):
+    events["metadata"] = [["event"], ["other-event"]]
+    confounds = pd.DataFrame({"unselected": [["confound"] for _ in range(10)]})
+
+    data = from_arrays(np.ones((10, 2)), events, tr=2.0, confounds=confounds)
+
+    events.at[0, "metadata"].append("source-mutated")
+    confounds.at[0, "unselected"].append("source-mutated")
+
+    assert data.events[0].at[0, "metadata"] == ["event"]
+    assert data.confounds[0].at[0, "unselected"] == ["confound"]
+
+    data.events[0].at[0, "metadata"].append("accessor-mutated")
+    data.confounds[0].at[0, "unselected"].append("accessor-mutated")
+
+    assert data.events[0].at[0, "metadata"] == ["event"]
+    assert data.confounds[0].at[0, "unselected"] == ["confound"]
+
+
 def test_from_arrays_accepts_negative_onsets_without_trial_type():
     events = pd.DataFrame({"onset": [-2.0, 4.0], "duration": [1.0, 0.0]})
 
@@ -119,6 +138,32 @@ def test_from_arrays_accepts_negative_onsets_without_trial_type():
 def test_from_arrays_rejects_invalid_signals(events, signals, tr, message):
     with pytest.raises(ValueError, match=message):
         from_arrays(signals, events.iloc[:1], tr=tr)
+
+
+@pytest.mark.parametrize(
+    "tr",
+    [
+        True,
+        False,
+        np.bool_(True),
+        np.bool_(False),
+        np.array(2.0),
+        np.array([2.0, 2.0]),
+        "2.0",
+        1 + 0j,
+        object(),
+    ],
+)
+def test_from_arrays_rejects_nonreal_tr_values(events, tr):
+    with pytest.raises(ValueError, match="TR must be positive"):
+        from_arrays(np.ones((10, 2)), events, tr=tr)
+
+
+@pytest.mark.parametrize("tr", [2, 2.5, np.int64(3), np.float64(1.5)])
+def test_from_arrays_accepts_real_scalar_tr_values(events, tr):
+    data = from_arrays(np.ones((10, 2)), events, tr=tr)
+
+    assert data.frame_times[0][1] == float(tr)
 
 
 def test_from_arrays_rejects_incompatible_runs(events):
