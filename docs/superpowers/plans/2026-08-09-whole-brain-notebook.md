@@ -346,6 +346,10 @@ manifest only from those ten image artifacts, then return design TSVs, the
 whole-brain contrast TSV, shareable JSON configuration, image artifacts, and
 manifest in stable order.
 
+Until Task 3 migrates the notebook call site, retain the old artifact behavior
+only when all four new spatial-context arguments are omitted. Reject every
+partial combination. Task 3 deletes this narrow sequencing bridge.
+
 - [ ] **Step 5: Verify focused and warning-strict GREEN**
 
 ```bash
@@ -443,8 +447,9 @@ least 32 GiB and does not chunk features.
 After the notebook has migrated to the masker-backed interface, delete the
 temporary ROI dispatch, `common_roi_voxels`, `roi_image`, ROI-only extraction
 helpers, and the legacy `LoadedRun` spatial fields from
-`examples/stop_signal_demo.py`. No compatibility aliases remain in the final
-workflow.
+`examples/stop_signal_demo.py`. Also make the whole-brain `result_artifacts`
+spatial context mandatory and delete its all-omitted legacy branch. No
+compatibility aliases or legacy publication paths remain in the final workflow.
 
 - [ ] **Step 5: Replace model, result, and plotting cells**
 
