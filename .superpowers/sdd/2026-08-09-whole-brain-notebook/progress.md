@@ -10,5 +10,5 @@
 
 - [x] Task 1: Common-mask extraction and reconstruction — `e0cef16`; review PASS, 217 tests
 - [x] Task 2: Whole-brain image derivatives — `a418080`; review PASS, 218 tests
-- [ ] Task 3: Executable whole-brain notebook
+- [x] Task 3: Executable whole-brain notebook — `5dac551`; re-review PASS, 219 tests
 - [ ] Task 4: Real-data and repository verification
