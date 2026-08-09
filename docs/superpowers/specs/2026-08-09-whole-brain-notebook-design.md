@@ -107,8 +107,9 @@ deterministic image-manifest TSV with each NIfTI artifact's relative path,
 
 ## Provenance and logging
 
-Both source brain masks remain first-class input sources. Analysis provenance
-also records:
+Both source brain masks remain explicit dataset-relative metadata attached to
+their corresponding signal sources, and therefore remain part of the data
+fingerprint. Analysis provenance also records:
 
 - the `intersection` mask-combination rule;
 - common mask shape, affine, and voxel count;
