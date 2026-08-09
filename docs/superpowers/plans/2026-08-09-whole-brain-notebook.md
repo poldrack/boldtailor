@@ -196,7 +196,7 @@ def make_masker(mask_image: nib.Nifti1Image) -> NiftiMasker:
     ).fit()
 ```
 
-Add `_require_same_geometry(images, message)` and `_require_bold_geometry(image, masker)`. The latter compares `image.shape[:3]` and `image.affine` to `masker.mask_img_` before transforming. Change `LoadedRun` to remove ROI indices/shape/affine and retain only inputs, signals, events, confounds, frame times, and TR. Make `load_run` call `masker.transform(image)`, require a finite two-dimensional `n_scans x n_voxels` result, and return an owned immutable array.
+Add `_require_same_geometry(images, message)` and `_require_bold_geometry(image, masker)`. The latter compares `image.shape[:3]` and `image.affine` to `masker.mask_img_` before transforming. Add the masker-backed `load_run` path, require a finite two-dimensional `n_scans x n_voxels` result, and return an owned immutable array. Retain the existing ROI dispatch and `LoadedRun` spatial fields only as a temporary sequencing bridge so the unchanged notebook remains executable; Task 3 removes them in the same RED-GREEN cycle that migrates the notebook.
 
 Implement reconstruction and memory estimation:
 
@@ -219,7 +219,7 @@ def estimate_signal_memory_gib(
     return float(sum(scan_counts) * voxel_count * 8 / 2**30)
 ```
 
-Delete `_validated_voxels`, `_extract_signals`, `common_roi_voxels`, and `roi_image`. Do not add compatibility aliases because the ROI workflow is intentionally removed.
+Do not add compatibility aliases or expand the legacy ROI behavior. Its temporary bridge is deleted in Task 3 because the final workflow intentionally removes ROI analysis.
 
 - [ ] **Step 5: Run focused and full tests to verify GREEN**
 
@@ -366,6 +366,7 @@ uv run git commit -m "feat: serialize whole-brain result maps"
 
 **Files:**
 - Modify: `tests/test_stop_signal_demo.py`
+- Modify: `examples/stop_signal_demo.py`
 - Modify: `examples/stop_signal_demo.ipynb`
 - Modify: `README.md`
 
@@ -400,6 +401,9 @@ Change the configuration test to assert `MASK_STRATEGY == "intersection"`,
 the README test to require the phrase `whole-brain` near the notebook link.
 Replace the old source-phrase contract with behavior assertions from the
 executed notebook; do not add tests that merely grep implementation source.
+Also assert that loaded whole-brain signals are owned, write-protected float64
+arrays and that applying the shared masker to the same spatial pattern in both
+runs yields identical feature ordering.
 
 - [ ] **Step 2: Run notebook tests and verify RED**
 
@@ -435,6 +439,12 @@ runs through that masker. Display a compact table/dictionary containing
 `mask_shape`, `common_voxel_count`, run scan counts, signal shapes, and
 `estimated_signal_memory_gib`. State in Markdown that the analysis assumes at
 least 32 GiB and does not chunk features.
+
+After the notebook has migrated to the masker-backed interface, delete the
+temporary ROI dispatch, `common_roi_voxels`, `roi_image`, ROI-only extraction
+helpers, and the legacy `LoadedRun` spatial fields from
+`examples/stop_signal_demo.py`. No compatibility aliases remain in the final
+workflow.
 
 - [ ] **Step 5: Replace model, result, and plotting cells**
 
