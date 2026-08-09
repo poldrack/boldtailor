@@ -43,6 +43,92 @@ CONFOUNDS = (
     "framewise_displacement",
 )
 NOTEBOOK = Path(__file__).parents[1] / "examples" / "stop_signal_demo.ipynb"
+CONTRAST_EXPRESSIONS = {
+    "successful_inhibition": "stop_success - stop_failure",
+    "stop_vs_go": "(stop_success + stop_failure) - go_success",
+    "go_success_vs_baseline": "go_success",
+}
+MASK_METADATA = {
+    "strategy": "intersection",
+    "shape": [7, 7, 7],
+    "affine": [
+        [2.0, 0.0, 0.0, 42.0],
+        [0.0, 2.0, 0.0, 10.0],
+        [0.0, 0.0, 2.0, 14.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ],
+    "voxel_count": 343,
+}
+MASKER_SETTINGS = {
+    "standardize": False,
+    "detrend": False,
+    "smoothing_fwhm": None,
+    "low_pass": None,
+    "high_pass": None,
+    "reports": False,
+}
+RESOURCE_ASSUMPTIONS = {
+    "minimum_memory_gib": 32,
+    "feature_chunking": False,
+    "estimated_signal_memory_gib": 0.00042933225631713867,
+}
+TRANSFORMED_SIGNALS = [
+    {"session": "ses-02", "shape": [80, 343], "dtype": "float64"},
+    {"session": "ses-04", "shape": [88, 343], "dtype": "float64"},
+]
+PLOT_AUDIT_PREFIX = "BOLDTAILOR_PLOT_AUDIT="
+PLOT_AUDIT_SETUP = """
+import inspect as _inspect
+import json as _json
+
+_plot_stat_map_records = []
+_real_plot_stat_map = plotting.plot_stat_map
+
+
+def _record_plot_stat_map(stat_map_img, *args, **kwargs):
+    call = _inspect.signature(_real_plot_stat_map).bind(
+        stat_map_img, *args, **kwargs
+    )
+    call.apply_defaults()
+    _plot_stat_map_records.append(
+        {"image": stat_map_img, "arguments": call.arguments}
+    )
+    return _real_plot_stat_map(stat_map_img, *args, **kwargs)
+
+
+plotting.plot_stat_map = _record_plot_stat_map
+"""
+PLOT_AUDIT_REPORT = f"""
+_plot_audit = []
+_common_mask_values = (
+    np.asarray(common_mask.dataobj, dtype=bool)
+    if "common_mask" in globals()
+    else None
+)
+for _record in _plot_stat_map_records:
+    _arguments = _record["arguments"]
+    _matches = []
+    _matches_aggregate = False
+    if _common_mask_values is not None:
+        _values = np.asarray(_record["image"].dataobj)[_common_mask_values]
+        _matches = [
+            _name
+            for _name in result.contrast_names
+            if np.allclose(_values, result.z_score(_name))
+        ]
+        _matches_aggregate = bool(np.allclose(_values, result.r2))
+    _plot_audit.append(
+        {{
+            "matched_z_scores": _matches,
+            "matched_aggregate_r2": _matches_aggregate,
+            "threshold": _arguments["threshold"],
+            "colorbar": _arguments["colorbar"],
+            "cmap": _arguments["cmap"],
+            "symmetric_cbar": _arguments["symmetric_cbar"],
+        }}
+    )
+print("{PLOT_AUDIT_PREFIX}" + _json.dumps(_plot_audit, sort_keys=True))
+"""
 
 
 def _demo_module():
@@ -57,6 +143,140 @@ def _notebook_configuration():
     namespace = {}
     exec(compile(configuration_cell.source, NOTEBOOK.name, "exec"), namespace)
     return namespace
+
+
+def _instrument_notebook_plots(notebook):
+    results_index = next(
+        index for index, cell in enumerate(notebook.cells) if cell.id == "results"
+    )
+    notebook.cells.insert(
+        results_index,
+        nbformat.v4.new_code_cell(PLOT_AUDIT_SETUP),
+    )
+    notebook.cells.insert(
+        results_index + 2,
+        nbformat.v4.new_code_cell(PLOT_AUDIT_REPORT),
+    )
+
+
+def _plot_audit(executed):
+    audit_lines = [
+        line
+        for cell in executed.cells
+        for output in cell.get("outputs", ())
+        if output.get("output_type") == "stream"
+        for line in output.get("text", "").splitlines()
+        if line.startswith(PLOT_AUDIT_PREFIX)
+    ]
+    assert len(audit_lines) == 1
+    return json.loads(audit_lines[0].removeprefix(PLOT_AUDIT_PREFIX))
+
+
+def _assert_plot_contract(executed):
+    audit = _plot_audit(executed)
+
+    assert len(audit) == 4
+    for call, contrast_name in zip(audit[:3], CONTRAST_EXPRESSIONS, strict=True):
+        assert call["matched_z_scores"] == [contrast_name]
+        assert call["matched_aggregate_r2"] is False
+        assert call["threshold"] is None
+        assert call["colorbar"] is True
+
+    aggregate = audit[3]
+    assert aggregate["matched_z_scores"] == []
+    assert aggregate["matched_aggregate_r2"] is True
+    assert aggregate["threshold"] is None
+    assert aggregate["colorbar"] is True
+    assert aggregate["cmap"] == "viridis"
+    assert aggregate["symmetric_cbar"] is False
+
+
+def _assert_published_metadata(published, bids_root):
+    configuration_path = (
+        published / "reports/sub-s4_task-stopSignal_desc-example_config.json"
+    )
+    configuration = json.loads(configuration_path.read_text())
+    expected_shared = {
+        "mask": MASK_METADATA,
+        "masker": MASKER_SETTINGS,
+        "resources": RESOURCE_ASSUMPTIONS,
+        "transformed_signals": TRANSFORMED_SIGNALS,
+        "contrasts": CONTRAST_EXPRESSIONS,
+    }
+    assert configuration == {
+        "subject": "sub-s4",
+        "task": "stopSignal",
+        "sessions": ["ses-02", "ses-04"],
+        **expected_shared,
+    }
+
+    provenance = json.loads((published / "logs/boldtailor_provenance.json").read_text())
+    normalized = next(
+        activity
+        for activity in provenance["activities"]
+        if activity["name"] == "normalize"
+    )
+    assert normalized["metadata"] == {
+        "example": "two-session stop-signal whole-brain",
+        "sessions": ["ses-02", "ses-04"],
+        **expected_shared,
+    }
+    fitted = next(
+        activity for activity in provenance["activities"] if activity["name"] == "fit"
+    )
+    assert fitted["model"]["contrasts"] == {
+        name: {"kind": "expression", "value": expression}
+        for name, expression in CONTRAST_EXPRESSIONS.items()
+    }
+    assert fitted["model"]["noise_model"] == "ar1"
+
+    shareable_text = "\n".join(
+        path.read_text()
+        for path in sorted(published.rglob("*"))
+        if path.is_file() and path.suffix != ".gz" and ".boldtailor" not in path.parts
+    )
+    assert str(bids_root.resolve()) not in shareable_text
+
+
+def _execute_notebook(
+    bids_root,
+    temporary_root,
+    monkeypatch,
+    working_directory,
+    *,
+    instrument_plots=False,
+):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(bids_root))
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
+    monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(temporary_root))
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    if instrument_plots:
+        _instrument_notebook_plots(notebook)
+    client = NotebookClient(
+        notebook,
+        timeout=180,
+        kernel_name="python3",
+        resources={"metadata": {"path": str(working_directory)}},
+    )
+
+    try:
+        executed = client.execute()
+    except CellExecutionError as error:
+        pytest.fail(str(error))
+
+    assert all(
+        output.get("output_type") != "error"
+        for cell in executed.cells
+        for output in cell.get("outputs", ())
+    )
+    rendered = "\n".join(
+        str(output.get("text", output.get("data", {}).get("text/plain", "")))
+        for cell in executed.cells
+        for output in cell.get("outputs", ())
+    )
+    published = next(temporary_root.glob("boldtailor-*"))
+    return executed, rendered, published
 
 
 def _discover(root, session="ses-02"):
@@ -199,6 +419,39 @@ def test_masker_preserves_whole_brain_values(stop_signal_bids_dataset):
     assert tuple(runs[0].confounds) == CONFOUNDS
     assert runs[0].confounds.iloc[0].framewise_displacement == 0.0
     assert np.isfinite(runs[0].signals).all()
+    for run in runs:
+        assert run.signals.dtype == np.float64
+        assert run.signals.flags.owndata
+        assert not run.signals.flags.writeable
+
+
+def test_shared_masker_preserves_feature_order_across_runs(
+    stop_signal_bids_dataset,
+):
+    inputs = tuple(
+        _discover(stop_signal_bids_dataset, session)
+        for session in ("ses-02", "ses-04")
+    )
+    spatial_pattern = np.arange(343, dtype=np.float32).reshape((7, 7, 7))
+    for item in inputs:
+        image = nib.load(item.bold)
+        values = np.asarray(image.dataobj).copy()
+        values[..., 0] = spatial_pattern
+        nib.save(nib.Nifti1Image(values, image.affine, image.header), item.bold)
+
+    masker = make_masker(common_brain_mask(inputs))
+    runs = tuple(
+        load_run(
+            item,
+            masker,
+            trial_types=TRIAL_TYPES,
+            confound_names=CONFOUNDS,
+        )
+        for item in inputs
+    )
+
+    np.testing.assert_array_equal(runs[0].signals[0], np.arange(343))
+    np.testing.assert_array_equal(runs[1].signals[0], runs[0].signals[0])
 
 
 def test_load_run_rejects_bold_mask_geometry_mismatch(stop_signal_bids_dataset):
@@ -522,26 +775,15 @@ def test_persistent_destination_rejects_symlink_components(tmp_path, symlink_pat
         publication_destination(bids_root, persistent=True)
 
 
-def test_notebook_contains_the_complete_feature_story():
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    source = "\n".join(cell.source for cell in notebook.cells)
-
-    for phrase in (
-        "Run-specific designs",
-        "Structured logging and provenance",
-        "BIDS provenance projection",
-        "Transactional publication",
-        "stop_success - stop_failure",
-    ):
-        assert phrase in source
-
-
 def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch):
     monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
 
     configuration = _notebook_configuration()
 
     assert configuration["SESSIONS"] == ("ses-06", "ses-08")
+    assert configuration["MASK_STRATEGY"] == "intersection"
+    assert configuration["MINIMUM_MEMORY_GIB"] == 32
+    assert not any("ROI" in name.upper() for name in configuration)
 
 
 def test_notebook_configuration_normalizes_session_override(monkeypatch):
@@ -573,34 +815,54 @@ def test_notebook_configuration_rejects_invalid_session_override(
 def test_notebook_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
 ):
-    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(stop_signal_bids_dataset))
-    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
-    monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(tmp_path))
-    monkeypatch.setenv("MPLBACKEND", "Agg")
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    client = NotebookClient(
-        notebook,
-        timeout=180,
-        kernel_name="python3",
-        resources={"metadata": {"path": str(working_directory)}},
+    executed, rendered, published = _execute_notebook(
+        stop_signal_bids_dataset,
+        tmp_path,
+        monkeypatch,
+        working_directory,
+        instrument_plots=True,
     )
 
-    try:
-        executed = client.execute()
-    except CellExecutionError as error:
-        pytest.fail(str(error))
+    _assert_plot_contract(executed)
+    assert "successful_inhibition" in rendered
+    assert "stop_vs_go" in rendered
+    assert "go_success_vs_baseline" in rendered
+    assert "common_voxel_count" in rendered
+    assert "estimated_signal_memory_gib" in rendered
+    assert (
+        "Maps are descriptive, unthresholded, and do not imply "
+        "multiple-comparison-corrected inference."
+    ) in rendered
+    assert "published_count" in rendered
+    assert str(stop_signal_bids_dataset.resolve()) not in rendered
+    assert len(tuple(published.glob("images/*.nii.gz"))) == 10
+    assert (
+        published / "reports/sub-s4_task-stopSignal_desc-image_manifest.tsv"
+    ).is_file()
+    assert not any("roi" in path.name.lower() for path in published.rglob("*"))
 
-    assert all(
-        output.get("output_type") != "error"
-        for cell in executed.cells
-        for output in cell.get("outputs", ())
+
+def test_notebook_publishes_complete_private_metadata(
+    stop_signal_bids_dataset, tmp_path, monkeypatch
+):
+    _, rendered, published = _execute_notebook(
+        stop_signal_bids_dataset,
+        tmp_path,
+        monkeypatch,
+        NOTEBOOK.parents[1],
     )
-    assert tuple(tmp_path.glob("boldtailor-*"))
+
+    _assert_published_metadata(published, stop_signal_bids_dataset)
+    assert str(stop_signal_bids_dataset.resolve()) not in rendered
 
 
 def test_readme_links_real_data_notebook():
     readme = (Path(__file__).parents[1] / "README.md").read_text()
-    assert "examples/stop_signal_demo.ipynb" in readme
+    notebook_line = next(
+        line for line in readme.splitlines() if "examples/stop_signal_demo.ipynb" in line
+    )
+
+    assert "whole-brain" in notebook_line.lower()
 
 
 def test_protected_source_paths_include_all_inputs(stop_signal_bids_dataset):
