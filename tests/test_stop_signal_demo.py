@@ -1,10 +1,16 @@
+import io
 import importlib
+import json
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
 
+from boldtailor.data import from_arrays
+from boldtailor.fit import fit
+from boldtailor.model import ModelSpec
+from boldtailor.publication import Artifact, publish_artifact_set
 from examples.stop_signal_demo import (
     common_roi_voxels,
     load_run,
@@ -93,6 +99,35 @@ def _loaded_runs(root):
     )
 
 
+@pytest.fixture
+def example_result(stop_signal_bids_dataset):
+    inputs, _, runs = _loaded_runs(stop_signal_bids_dataset)
+    rng = np.random.default_rng(20260808)
+    confounds = []
+    for run in runs:
+        values, _ = np.linalg.qr(
+            rng.standard_normal((len(run.frame_times), len(CONFOUNDS)))
+        )
+        confounds.append(pd.DataFrame(values, columns=CONFOUNDS))
+    data = from_arrays(
+        [run.signals for run in runs],
+        [run.events for run in runs],
+        frame_times=[run.frame_times for run in runs],
+        confounds=confounds,
+        sources=[run_sources(item, stop_signal_bids_dataset) for item in inputs],
+        provenance_metadata={"example": "stop-signal"},
+    )
+    model = ModelSpec(
+        contrasts={
+            "successful_inhibition": "stop_success - stop_failure",
+            "stop_vs_go": "stop_success - go_success",
+        },
+        confounds=CONFOUNDS,
+        noise_model="ols",
+    )
+    return inputs, fit(data, model)
+
+
 def test_load_run_extracts_common_bounded_roi(stop_signal_bids_dataset):
     _, voxels, runs = _loaded_runs(stop_signal_bids_dataset)
 
@@ -168,3 +203,158 @@ def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
 
     with pytest.raises(ValueError, match="event timing exceeds acquisition"):
         load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+
+
+def test_result_artifacts_are_deterministic_valid_metadata(
+    example_result, stop_signal_bids_dataset, tmp_path
+):
+    _, result = example_result
+    options = {
+        "subject": "sub-s4",
+        "task": "stopSignal",
+        "sessions": ["ses-02", "ses-04"],
+        "roi": {"center_mni": [48.0, 16.0, 20.0], "radius_mm": 6.0},
+    }
+    result_artifacts = _demo_module().result_artifacts
+
+    first = result_artifacts(
+        result,
+        subject="sub-s4",
+        task="stopSignal",
+        sessions=("ses-02", "ses-04"),
+        configuration=options,
+    )
+    second = result_artifacts(
+        result,
+        subject="sub-s4",
+        task="stopSignal",
+        sessions=("ses-02", "ses-04"),
+        configuration=options,
+    )
+
+    assert first == second
+    assert {item.path for item in first} == {
+        "reports/sub-s4_ses-02_task-stopSignal_desc-design_matrix.tsv",
+        "reports/sub-s4_ses-04_task-stopSignal_desc-design_matrix.tsv",
+        "reports/sub-s4_task-stopSignal_desc-roi_contrasts.tsv",
+        "reports/sub-s4_task-stopSignal_desc-example_config.json",
+    }
+    assert all(isinstance(item.payload, bytes) for item in first)
+    artifacts = {item.path: item for item in first}
+    for index, session in enumerate(("ses-02", "ses-04")):
+        path = f"reports/sub-s4_{session}_task-stopSignal_desc-design_matrix.tsv"
+        design = pd.read_csv(io.BytesIO(artifacts[path].payload), sep="\t")
+        expected = result.design_matrices[index]
+        assert design.columns[0] == "frame_time"
+        assert list(design.columns[1:]) == list(expected.columns)
+        np.testing.assert_allclose(design.frame_time, expected.index)
+        np.testing.assert_allclose(design.iloc[:, 1:], expected)
+
+    contrasts = pd.read_csv(
+        io.BytesIO(
+            artifacts["reports/sub-s4_task-stopSignal_desc-roi_contrasts.tsv"].payload
+        ),
+        sep="\t",
+    )
+    assert list(contrasts.columns) == [
+        "contrast",
+        "n_features",
+        "mean_effect",
+        "mean_z",
+        "max_abs_z",
+        "min_one_sided_p",
+    ]
+    assert list(contrasts.contrast) == list(result.contrast_names)
+    np.testing.assert_array_equal(
+        contrasts.n_features,
+        [result.effect(name).size for name in result.contrast_names],
+    )
+    np.testing.assert_allclose(
+        contrasts.mean_effect,
+        [np.mean(result.effect(name)) for name in result.contrast_names],
+    )
+    np.testing.assert_allclose(
+        contrasts.mean_z,
+        [np.mean(result.z_score(name)) for name in result.contrast_names],
+    )
+    np.testing.assert_allclose(
+        contrasts.max_abs_z,
+        [np.max(np.abs(result.z_score(name))) for name in result.contrast_names],
+    )
+    np.testing.assert_allclose(
+        contrasts.min_one_sided_p,
+        [np.min(result.one_sided_p_value(name)) for name in result.contrast_names],
+    )
+
+    config_text = artifacts[
+        "reports/sub-s4_task-stopSignal_desc-example_config.json"
+    ].payload.decode("utf-8")
+    assert json.loads(config_text) == options
+    assert str(stop_signal_bids_dataset.resolve()) not in config_text
+
+    published = publish_artifact_set(tmp_path / "published", first)
+    assert len(published) == len(first)
+    assert all(path.is_file() for path in published)
+
+
+def test_publication_destination_defaults_to_temp(stop_signal_bids_dataset, tmp_path):
+    publication_destination = _demo_module().publication_destination
+
+    destination = publication_destination(
+        stop_signal_bids_dataset,
+        persistent=False,
+        temporary_parent=tmp_path,
+    )
+
+    assert destination.parent == tmp_path
+    assert destination.name.startswith("boldtailor-")
+
+
+def test_persistent_destination_is_restricted(stop_signal_bids_dataset, tmp_path):
+    publication_destination = _demo_module().publication_destination
+    expected = stop_signal_bids_dataset / "derivatives" / "boldtailor"
+
+    assert (
+        publication_destination(stop_signal_bids_dataset, persistent=True)
+        == expected.resolve()
+    )
+
+    with pytest.raises(ValueError, match="derivatives/boldtailor"):
+        publication_destination(
+            stop_signal_bids_dataset,
+            persistent=True,
+            requested=tmp_path / "outside",
+        )
+
+
+def test_protected_source_paths_include_all_inputs(stop_signal_bids_dataset):
+    protected_source_paths = _demo_module().protected_source_paths
+    inputs = tuple(
+        _discover(stop_signal_bids_dataset, session) for session in ("ses-02", "ses-04")
+    )
+
+    protected = protected_source_paths(inputs)
+
+    assert set(protected) == {
+        path
+        for item in inputs
+        for path in (item.events, item.bold, item.mask, item.confounds)
+    }
+
+
+def test_publication_refuses_overlap_with_protected_source(
+    stop_signal_bids_dataset,
+):
+    protected_source_paths = _demo_module().protected_source_paths
+    inputs = (_discover(stop_signal_bids_dataset),)
+    artifact = Artifact(
+        inputs[0].events.name,
+        b"onset\tduration\ttrial_type\n0\t1\tgo_success\n",
+    )
+
+    with pytest.raises(ValueError, match="source"):
+        publish_artifact_set(
+            inputs[0].events.parent,
+            (artifact,),
+            source_paths=protected_source_paths(inputs),
+        )
