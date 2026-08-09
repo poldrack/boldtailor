@@ -1,5 +1,7 @@
-import io
+import gzip
+import hashlib
 import importlib
+import io
 import json
 from pathlib import Path
 import warnings
@@ -117,7 +119,7 @@ def _loaded_runs(root):
 
 @pytest.fixture
 def example_result(stop_signal_bids_dataset):
-    inputs, _, _, runs = _loaded_runs(stop_signal_bids_dataset)
+    inputs, mask_image, masker, runs = _loaded_runs(stop_signal_bids_dataset)
     rng = np.random.default_rng(20260808)
     confounds = []
     for run in runs:
@@ -142,13 +144,12 @@ def example_result(stop_signal_bids_dataset):
         confounds=CONFOUNDS,
         noise_model="ols",
     )
-    return inputs, fit(data, model)
+    return inputs, mask_image, masker, fit(data, model)
 
 
 def test_common_brain_mask_intersects_runs(stop_signal_bids_dataset):
     inputs = tuple(
-        _discover(stop_signal_bids_dataset, session)
-        for session in ("ses-02", "ses-04")
+        _discover(stop_signal_bids_dataset, session) for session in ("ses-02", "ses-04")
     )
     second = nib.load(inputs[1].mask)
     values = np.asarray(second.dataobj).copy()
@@ -167,8 +168,7 @@ def test_common_brain_mask_intersects_runs(stop_signal_bids_dataset):
 
 def test_common_brain_mask_rejects_mismatched_affine(stop_signal_bids_dataset):
     inputs = tuple(
-        _discover(stop_signal_bids_dataset, session)
-        for session in ("ses-02", "ses-04")
+        _discover(stop_signal_bids_dataset, session) for session in ("ses-02", "ses-04")
     )
     second = nib.load(inputs[1].mask)
     affine = second.affine.copy()
@@ -203,8 +203,7 @@ def test_masker_preserves_whole_brain_values(stop_signal_bids_dataset):
 
 def test_load_run_rejects_bold_mask_geometry_mismatch(stop_signal_bids_dataset):
     inputs = tuple(
-        _discover(stop_signal_bids_dataset, session)
-        for session in ("ses-02", "ses-04")
+        _discover(stop_signal_bids_dataset, session) for session in ("ses-02", "ses-04")
     )
     masker = make_masker(common_brain_mask(inputs))
     image = nib.load(inputs[1].bold)
@@ -245,9 +244,7 @@ def test_whole_brain_image_round_trips_mask_values(stop_signal_bids_dataset):
 def test_signal_memory_estimate_uses_float64_storage():
     estimate = estimate_signal_memory_gib((80, 88), 343)
 
-    assert estimate == pytest.approx(
-        80 * 343 * 8 / 2**30 + 88 * 343 * 8 / 2**30
-    )
+    assert estimate == pytest.approx(80 * 343 * 8 / 2**30 + 88 * 343 * 8 / 2**30)
 
 
 def test_load_run_rejects_confound_length_mismatch(stop_signal_bids_dataset):
@@ -298,37 +295,62 @@ def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
 def test_result_artifacts_are_deterministic_valid_metadata(
     example_result, stop_signal_bids_dataset, tmp_path
 ):
-    _, result = example_result
+    _, mask_image, masker, result = example_result
     options = {
         "subject": "sub-s4",
         "task": "stopSignal",
         "sessions": ["ses-02", "ses-04"],
-        "roi": {"center_mni": [48.0, 16.0, 20.0], "radius_mm": 6.0},
+        "space": "MNI152NLin2009cAsym",
+        "resolution": 2,
     }
     result_artifacts = _demo_module().result_artifacts
 
     first = result_artifacts(
         result,
+        masker,
+        mask_image,
         subject="sub-s4",
         task="stopSignal",
         sessions=("ses-02", "ses-04"),
+        space="MNI152NLin2009cAsym",
+        resolution=2,
         configuration=options,
     )
     second = result_artifacts(
         result,
+        masker,
+        mask_image,
         subject="sub-s4",
         task="stopSignal",
         sessions=("ses-02", "ses-04"),
+        space="MNI152NLin2009cAsym",
+        resolution=2,
         configuration=options,
     )
 
     assert first == second
-    assert {item.path for item in first} == {
+    expected_images = (
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-common_mask.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-successfulInhibition_stat-effect_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-successfulInhibition_stat-z_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-stopVsGo_stat-effect_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-stopVsGo_stat-z_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-goSuccessVsBaseline_stat-effect_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_contrast-goSuccessVsBaseline_stat-z_statmap.nii.gz",
+        "images/sub-s4_ses-02_task-stopSignal_space-MNI152NLin2009cAsym_res-2_stat-r2_statmap.nii.gz",
+        "images/sub-s4_ses-04_task-stopSignal_space-MNI152NLin2009cAsym_res-2_stat-r2_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-aggregate_stat-r2_statmap.nii.gz",
+    )
+    expected_paths = {
         "reports/sub-s4_ses-02_task-stopSignal_desc-design_matrix.tsv",
         "reports/sub-s4_ses-04_task-stopSignal_desc-design_matrix.tsv",
-        "reports/sub-s4_task-stopSignal_desc-roi_contrasts.tsv",
+        "reports/sub-s4_task-stopSignal_desc-wholebrain_contrasts.tsv",
         "reports/sub-s4_task-stopSignal_desc-example_config.json",
+        "reports/sub-s4_task-stopSignal_desc-image_manifest.tsv",
+        *expected_images,
     }
+    assert {item.path for item in first} == expected_paths
+    assert not any("roi" in item.path for item in first)
     assert all(isinstance(item.payload, bytes) for item in first)
     artifacts = {item.path: item for item in first}
     for index, session in enumerate(("ses-02", "ses-04")):
@@ -342,7 +364,9 @@ def test_result_artifacts_are_deterministic_valid_metadata(
 
     contrasts = pd.read_csv(
         io.BytesIO(
-            artifacts["reports/sub-s4_task-stopSignal_desc-roi_contrasts.tsv"].payload
+            artifacts[
+                "reports/sub-s4_task-stopSignal_desc-wholebrain_contrasts.tsv"
+            ].payload
         ),
         sep="\t",
     )
@@ -381,6 +405,51 @@ def test_result_artifacts_are_deterministic_valid_metadata(
     ].payload.decode("utf-8")
     assert json.loads(config_text) == options
     assert str(stop_signal_bids_dataset.resolve()) not in config_text
+
+    expected_values = {
+        expected_images[1]: result.effect("successful_inhibition"),
+        expected_images[2]: result.z_score("successful_inhibition"),
+        expected_images[3]: result.effect("stop_vs_go"),
+        expected_images[4]: result.z_score("stop_vs_go"),
+        expected_images[5]: result.effect("go_success_vs_baseline"),
+        expected_images[6]: result.z_score("go_success_vs_baseline"),
+        expected_images[7]: result.run_r2[0],
+        expected_images[8]: result.run_r2[1],
+        expected_images[9]: result.r2,
+    }
+    common = np.asarray(mask_image.dataobj, dtype=bool)
+    for path in expected_images:
+        image = nib.Nifti1Image.from_bytes(gzip.decompress(artifacts[path].payload))
+        assert image.shape == (7, 7, 7)
+        np.testing.assert_allclose(image.affine, mask_image.affine)
+        if path == expected_images[0]:
+            np.testing.assert_array_equal(image.dataobj, mask_image.dataobj)
+        else:
+            np.testing.assert_allclose(
+                np.asarray(image.dataobj)[common], expected_values[path]
+            )
+
+    manifest = pd.read_csv(
+        io.BytesIO(
+            artifacts["reports/sub-s4_task-stopSignal_desc-image_manifest.tsv"].payload
+        ),
+        sep="\t",
+    )
+    assert list(manifest.columns) == [
+        "relative_path",
+        "media_type",
+        "byte_size",
+        "sha256",
+    ]
+    assert tuple(manifest.relative_path) == expected_images
+    assert set(manifest.media_type) == {"application/gzip"}
+    np.testing.assert_array_equal(
+        manifest.byte_size,
+        [len(artifacts[path].payload) for path in expected_images],
+    )
+    assert list(manifest.sha256) == [
+        hashlib.sha256(artifacts[path].payload).hexdigest() for path in expected_images
+    ]
 
     published = publish_artifact_set(tmp_path / "published", first)
     assert len(published) == len(first)
