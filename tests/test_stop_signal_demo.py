@@ -404,8 +404,13 @@ def test_notebook_configuration_rejects_invalid_session_override(
         _notebook_configuration()
 
 
+@pytest.mark.parametrize(
+    "working_directory",
+    (NOTEBOOK.parents[1], NOTEBOOK.parent),
+    ids=("repository-root", "notebook-directory"),
+)
 def test_notebook_executes_against_fixture(
-    stop_signal_bids_dataset, tmp_path, monkeypatch
+    stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(stop_signal_bids_dataset))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
@@ -416,7 +421,7 @@ def test_notebook_executes_against_fixture(
         notebook,
         timeout=180,
         kernel_name="python3",
-        resources={"metadata": {"path": str(NOTEBOOK.parents[1])}},
+        resources={"metadata": {"path": str(working_directory)}},
     )
 
     try:
