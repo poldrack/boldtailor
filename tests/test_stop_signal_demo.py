@@ -342,6 +342,25 @@ def test_persistent_destination_is_restricted(stop_signal_bids_dataset, tmp_path
         )
 
 
+@pytest.mark.parametrize(
+    "symlink_path",
+    ("derivatives", "derivatives/boldtailor"),
+)
+def test_persistent_destination_rejects_symlink_components(tmp_path, symlink_path):
+    publication_destination = _demo_module().publication_destination
+    bids_root = tmp_path / "dataset"
+    outside = tmp_path / "outside"
+    bids_root.mkdir()
+    outside.mkdir()
+
+    target = bids_root / symlink_path
+    target.parent.mkdir(exist_ok=True)
+    target.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        publication_destination(bids_root, persistent=True)
+
+
 def test_notebook_contains_the_complete_feature_story():
     notebook = nbformat.read(NOTEBOOK, as_version=4)
     source = "\n".join(cell.source for cell in notebook.cells)
