@@ -199,7 +199,10 @@ def publication_destination(
     if not persistent:
         parent = None if temporary_parent is None else Path(temporary_parent)
         return Path(tempfile.mkdtemp(prefix="boldtailor-", dir=parent)).resolve()
-    expected = (root / "derivatives" / "boldtailor").resolve()
+    expected = root / "derivatives" / "boldtailor"
+    if expected.parent.is_symlink() or expected.is_symlink():
+        raise ValueError("persistent output must not contain a symlink")
+    expected = expected.resolve()
     destination = expected if requested is None else Path(requested).resolve()
     if destination != expected:
         raise ValueError("persistent output must be dataset derivatives/boldtailor")
