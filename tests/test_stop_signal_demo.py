@@ -1,11 +1,15 @@
 import io
 import importlib
 import json
+from pathlib import Path
 
 import nibabel as nib
+import nbformat
 import numpy as np
 import pandas as pd
 import pytest
+from nbclient import NotebookClient
+from nbclient.exceptions import CellExecutionError
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit
@@ -33,6 +37,7 @@ CONFOUNDS = (
     "rot_z",
     "framewise_displacement",
 )
+NOTEBOOK = Path(__file__).parents[1] / "examples" / "stop_signal_demo.ipynb"
 
 
 def _demo_module():
@@ -325,6 +330,52 @@ def test_persistent_destination_is_restricted(stop_signal_bids_dataset, tmp_path
             persistent=True,
             requested=tmp_path / "outside",
         )
+
+
+def test_notebook_contains_the_complete_feature_story():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    source = "\n".join(cell.source for cell in notebook.cells)
+
+    for phrase in (
+        "Run-specific designs",
+        "Structured logging and provenance",
+        "BIDS provenance projection",
+        "Transactional publication",
+        "stop_success - stop_failure",
+    ):
+        assert phrase in source
+
+
+def test_notebook_executes_against_fixture(
+    stop_signal_bids_dataset, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(stop_signal_bids_dataset))
+    monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(tmp_path))
+    monkeypatch.setenv("MPLBACKEND", "Agg")
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    client = NotebookClient(
+        notebook,
+        timeout=180,
+        kernel_name="python3",
+        resources={"metadata": {"path": str(NOTEBOOK.parents[1])}},
+    )
+
+    try:
+        executed = client.execute()
+    except CellExecutionError as error:
+        pytest.fail(str(error))
+
+    assert all(
+        output.get("output_type") != "error"
+        for cell in executed.cells
+        for output in cell.get("outputs", ())
+    )
+    assert tuple(tmp_path.glob("boldtailor-*"))
+
+
+def test_readme_links_real_data_notebook():
+    readme = (Path(__file__).parents[1] / "README.md").read_text()
+    assert "examples/stop_signal_demo.ipynb" in readme
 
 
 def test_protected_source_paths_include_all_inputs(stop_signal_bids_dataset):
