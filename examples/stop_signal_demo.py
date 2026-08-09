@@ -7,10 +7,12 @@ import json
 import mimetypes
 from pathlib import Path
 import tempfile
+import warnings
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
+from nilearn.maskers import NiftiMasker
 
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.publication import Artifact
@@ -84,6 +86,33 @@ def _one(paths, role: str) -> Path:
     return matches[0]
 
 
+def common_brain_mask(inputs: Sequence[RunInputs]) -> nib.Nifti1Image:
+    if not inputs:
+        raise ValueError("common brain mask requires at least one run")
+    masks = tuple(nib.load(item.mask) for item in inputs)
+    _require_same_geometry(masks, "run masks must share shape and affine")
+    common = np.logical_and.reduce(
+        [np.asarray(mask.dataobj, dtype=bool) for mask in masks]
+    )
+    if not common.any():
+        raise ValueError("run mask intersection must contain at least one voxel")
+    header = masks[0].header.copy()
+    header.set_data_dtype(np.uint8)
+    return nib.Nifti1Image(common.astype(np.uint8), masks[0].affine, header)
+
+
+def make_masker(mask_image: nib.Nifti1Image) -> NiftiMasker:
+    return NiftiMasker(
+        mask_img=mask_image,
+        standardize=False,
+        detrend=False,
+        smoothing_fwhm=None,
+        low_pass=None,
+        high_pass=None,
+        reports=False,
+    ).fit()
+
+
 def common_roi_voxels(
     inputs: Sequence[RunInputs],
     *,
@@ -113,28 +142,47 @@ def common_roi_voxels(
 
 def load_run(
     inputs: RunInputs,
-    voxel_indices: np.ndarray,
+    masker: NiftiMasker,
     *,
     trial_types: Sequence[str],
     confound_names: Sequence[str],
 ) -> LoadedRun:
+    if not isinstance(masker, NiftiMasker):
+        return _load_roi_run(
+            inputs,
+            masker,
+            trial_types=trial_types,
+            confound_names=confound_names,
+        )
     image = nib.load(inputs.bold)
-    voxels = _validated_voxels(voxel_indices, image.shape[:3])
+    _require_bold_geometry(image, masker)
     n_scans = image.shape[3]
     tr = float(image.header.get_zooms()[3])
     events = _model_events(inputs.events, trial_types, n_scans, tr)
     confounds = _selected_confounds(inputs.confounds, confound_names, n_scans)
     return LoadedRun(
         inputs=inputs,
-        signals=_extract_signals(image, voxels),
+        signals=_transformed_signals(image, masker, n_scans),
         events=events,
         confounds=confounds,
         frame_times=_frame_times(n_scans, tr),
-        voxel_indices=voxels,
+        voxel_indices=_mask_voxel_indices(masker),
         spatial_shape=tuple(int(length) for length in image.shape[:3]),
         affine=_immutable_array(image.affine, dtype=float),
         tr=tr,
     )
+
+
+def whole_brain_image(values: np.ndarray, masker: NiftiMasker) -> nib.Nifti1Image:
+    restored = np.asarray(values, dtype=float)
+    voxel_count = _mask_voxel_count(masker)
+    if restored.ndim != 1 or len(restored) != voxel_count:
+        raise ValueError(
+            "whole-brain values must be one-dimensional and match mask voxel count"
+        )
+    if not np.isfinite(restored).all():
+        raise ValueError("whole-brain values must be finite")
+    return masker.inverse_transform(restored)
 
 
 def roi_image(values: np.ndarray, loaded: LoadedRun) -> nib.Nifti1Image:
@@ -146,6 +194,15 @@ def roi_image(values: np.ndarray, loaded: LoadedRun) -> nib.Nifti1Image:
     data = np.zeros(loaded.spatial_shape, dtype=float)
     data[tuple(loaded.voxel_indices.T)] = restored
     return nib.Nifti1Image(data, loaded.affine)
+
+
+def estimate_signal_memory_gib(
+    scan_counts: Sequence[int], voxel_count: int
+) -> float:
+    counts = tuple(scan_counts)
+    if not counts or any(count <= 0 for count in counts) or voxel_count <= 0:
+        raise ValueError("memory estimate requires positive scan and voxel counts")
+    return float(sum(counts) * voxel_count * 8 / 2**30)
 
 
 def run_sources(inputs: RunInputs, bids_root: Path) -> RunSources:
@@ -249,6 +306,80 @@ def _immutable_array(values: np.ndarray, *, dtype: type) -> np.ndarray:
     array = np.array(values, dtype=dtype, copy=True)
     array.setflags(write=False)
     return array
+
+
+def _require_same_geometry(images: Sequence[nib.Nifti1Image], message: str) -> None:
+    reference = images[0]
+    if any(
+        image.shape != reference.shape
+        or not np.allclose(image.affine, reference.affine)
+        for image in images[1:]
+    ):
+        raise ValueError(message)
+
+
+def _require_bold_geometry(
+    image: nib.Nifti1Image, masker: NiftiMasker
+) -> None:
+    mask_image = masker.mask_img_
+    if image.shape[:3] != mask_image.shape or not np.allclose(
+        image.affine, mask_image.affine
+    ):
+        raise ValueError("BOLD image must match common mask geometry")
+
+
+def _mask_voxel_count(masker: NiftiMasker) -> int:
+    return int(np.asarray(masker.mask_img_.dataobj, dtype=bool).sum())
+
+
+def _mask_voxel_indices(masker: NiftiMasker) -> np.ndarray:
+    mask = np.asarray(masker.mask_img_.dataobj, dtype=bool)
+    return _immutable_array(np.argwhere(mask), dtype=int)
+
+
+def _transformed_signals(
+    image: nib.Nifti1Image, masker: NiftiMasker, n_scans: int
+) -> np.ndarray:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="boolean values for 'standardize' will be deprecated.*",
+            category=FutureWarning,
+        )
+        signals = np.asarray(masker.transform(image), dtype=float)
+    if signals.ndim != 2 or signals.shape[0] != n_scans:
+        raise ValueError("transformed signals must have one row per scan")
+    if signals.shape[1] != _mask_voxel_count(masker):
+        raise ValueError("transformed signals must match common mask voxel count")
+    if not np.isfinite(signals).all():
+        raise ValueError("whole-brain signals must be finite")
+    return _immutable_array(signals, dtype=float)
+
+
+def _load_roi_run(
+    inputs: RunInputs,
+    voxel_indices: np.ndarray,
+    *,
+    trial_types: Sequence[str],
+    confound_names: Sequence[str],
+) -> LoadedRun:
+    image = nib.load(inputs.bold)
+    voxels = _validated_voxels(voxel_indices, image.shape[:3])
+    n_scans = image.shape[3]
+    tr = float(image.header.get_zooms()[3])
+    events = _model_events(inputs.events, trial_types, n_scans, tr)
+    confounds = _selected_confounds(inputs.confounds, confound_names, n_scans)
+    return LoadedRun(
+        inputs=inputs,
+        signals=_extract_signals(image, voxels),
+        events=events,
+        confounds=confounds,
+        frame_times=_frame_times(n_scans, tr),
+        voxel_indices=voxels,
+        spatial_shape=tuple(int(length) for length in image.shape[:3]),
+        affine=_immutable_array(image.affine, dtype=float),
+        tr=tr,
+    )
 
 
 def _validated_voxels(voxels: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
