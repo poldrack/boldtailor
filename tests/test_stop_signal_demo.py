@@ -2,6 +2,7 @@ import io
 import importlib
 import json
 from pathlib import Path
+import warnings
 
 import nibabel as nib
 import nbformat
@@ -228,7 +229,13 @@ def test_whole_brain_image_round_trips_mask_values(stop_signal_bids_dataset):
     values = np.arange(343, dtype=float)
 
     image = whole_brain_image(values, masker)
-    restored = masker.transform(image)[0]
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="boolean values for 'standardize' will be deprecated.*",
+            category=FutureWarning,
+        )
+        restored = masker.transform(image)
 
     np.testing.assert_array_equal(restored, values)
     assert image.shape == mask_image.shape
