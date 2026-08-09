@@ -16,10 +16,12 @@ from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
 from boldtailor.publication import Artifact, publish_artifact_set
 from examples.stop_signal_demo import (
-    common_roi_voxels,
+    common_brain_mask,
+    estimate_signal_memory_gib,
     load_run,
-    roi_image,
+    make_masker,
     run_sources,
+    whole_brain_image,
 )
 
 TRIAL_TYPES = (
@@ -98,25 +100,23 @@ def test_discover_run_inputs_rejects_duplicate_file(stop_signal_bids_dataset):
 
 def _loaded_runs(root):
     inputs = tuple(_discover(root, session) for session in ("ses-02", "ses-04"))
-    voxels = common_roi_voxels(inputs, center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
-    return (
-        inputs,
-        voxels,
-        tuple(
-            load_run(
-                item,
-                voxels,
-                trial_types=TRIAL_TYPES,
-                confound_names=CONFOUNDS,
-            )
-            for item in inputs
-        ),
+    mask_image = common_brain_mask(inputs)
+    masker = make_masker(mask_image)
+    runs = tuple(
+        load_run(
+            item,
+            masker,
+            trial_types=TRIAL_TYPES,
+            confound_names=CONFOUNDS,
+        )
+        for item in inputs
     )
+    return inputs, mask_image, masker, runs
 
 
 @pytest.fixture
 def example_result(stop_signal_bids_dataset):
-    inputs, _, runs = _loaded_runs(stop_signal_bids_dataset)
+    inputs, _, _, runs = _loaded_runs(stop_signal_bids_dataset)
     rng = np.random.default_rng(20260808)
     confounds = []
     for run in runs:
@@ -135,7 +135,8 @@ def example_result(stop_signal_bids_dataset):
     model = ModelSpec(
         contrasts={
             "successful_inhibition": "stop_success - stop_failure",
-            "stop_vs_go": "stop_success - go_success",
+            "stop_vs_go": "(stop_success + stop_failure) - go_success",
+            "go_success_vs_baseline": "go_success",
         },
         confounds=CONFOUNDS,
         noise_model="ols",
@@ -143,13 +144,55 @@ def example_result(stop_signal_bids_dataset):
     return inputs, fit(data, model)
 
 
-def test_load_run_extracts_common_bounded_roi(stop_signal_bids_dataset):
-    _, voxels, runs = _loaded_runs(stop_signal_bids_dataset)
+def test_common_brain_mask_intersects_runs(stop_signal_bids_dataset):
+    inputs = tuple(
+        _discover(stop_signal_bids_dataset, session)
+        for session in ("ses-02", "ses-04")
+    )
+    second = nib.load(inputs[1].mask)
+    values = np.asarray(second.dataobj).copy()
+    values[0, 0, 0] = 0
+    nib.save(
+        nib.Nifti1Image(values, second.affine, second.header),
+        inputs[1].mask,
+    )
 
-    assert voxels.ndim == 2 and voxels.shape[1] == 3
-    assert len(voxels) > 1
-    assert runs[0].signals.shape == (80, len(voxels))
-    assert runs[1].signals.shape == (88, len(voxels))
+    mask_image = common_brain_mask(inputs)
+
+    assert mask_image.shape == (7, 7, 7)
+    assert int(np.asarray(mask_image.dataobj).sum()) == 342
+    np.testing.assert_allclose(mask_image.affine, nib.load(inputs[0].mask).affine)
+
+
+def test_common_brain_mask_rejects_mismatched_affine(stop_signal_bids_dataset):
+    inputs = tuple(
+        _discover(stop_signal_bids_dataset, session)
+        for session in ("ses-02", "ses-04")
+    )
+    second = nib.load(inputs[1].mask)
+    affine = second.affine.copy()
+    affine[0, 3] += 1.0
+    nib.save(
+        nib.Nifti1Image(np.asarray(second.dataobj), affine, second.header),
+        inputs[1].mask,
+    )
+
+    with pytest.raises(ValueError, match="masks must share shape and affine"):
+        common_brain_mask(inputs)
+
+
+def test_masker_preserves_whole_brain_values(stop_signal_bids_dataset):
+    _, mask_image, masker, runs = _loaded_runs(stop_signal_bids_dataset)
+
+    assert int(np.asarray(mask_image.dataobj).sum()) == 343
+    assert runs[0].signals.shape == (80, 343)
+    assert runs[1].signals.shape == (88, 343)
+    assert masker.standardize is False
+    assert masker.detrend is False
+    assert masker.smoothing_fwhm is None
+    assert masker.low_pass is None
+    assert masker.high_pass is None
+    assert masker.reports is False
     np.testing.assert_allclose(np.diff(runs[0].frame_times), 1.5)
     assert set(runs[0].events.trial_type) <= set(TRIAL_TYPES)
     assert tuple(runs[0].confounds) == CONFOUNDS
@@ -157,25 +200,57 @@ def test_load_run_extracts_common_bounded_roi(stop_signal_bids_dataset):
     assert np.isfinite(runs[0].signals).all()
 
 
-def test_roi_image_restores_values_to_spatial_coordinates(stop_signal_bids_dataset):
-    _, voxels, runs = _loaded_runs(stop_signal_bids_dataset)
-    values = np.arange(len(voxels), dtype=float)
+def test_load_run_rejects_bold_mask_geometry_mismatch(stop_signal_bids_dataset):
+    inputs = tuple(
+        _discover(stop_signal_bids_dataset, session)
+        for session in ("ses-02", "ses-04")
+    )
+    masker = make_masker(common_brain_mask(inputs))
+    image = nib.load(inputs[1].bold)
+    affine = image.affine.copy()
+    affine[1, 3] += 1.0
+    nib.save(
+        nib.Nifti1Image(np.asarray(image.dataobj), affine, image.header),
+        inputs[1].bold,
+    )
 
-    image = roi_image(values, runs[0])
+    with pytest.raises(ValueError, match="BOLD image must match common mask geometry"):
+        load_run(
+            inputs[1],
+            masker,
+            trial_types=TRIAL_TYPES,
+            confound_names=CONFOUNDS,
+        )
 
-    restored = image.get_fdata()[tuple(voxels.T)]
+
+def test_whole_brain_image_round_trips_mask_values(stop_signal_bids_dataset):
+    _, mask_image, masker, _ = _loaded_runs(stop_signal_bids_dataset)
+    values = np.arange(343, dtype=float)
+
+    image = whole_brain_image(values, masker)
+    restored = masker.transform(image)[0]
+
     np.testing.assert_array_equal(restored, values)
-    assert image.shape == runs[0].spatial_shape
+    assert image.shape == mask_image.shape
+    np.testing.assert_allclose(image.affine, mask_image.affine)
+
+
+def test_signal_memory_estimate_uses_float64_storage():
+    estimate = estimate_signal_memory_gib((80, 88), 343)
+
+    assert estimate == pytest.approx(
+        80 * 343 * 8 / 2**30 + 88 * 343 * 8 / 2**30
+    )
 
 
 def test_load_run_rejects_confound_length_mismatch(stop_signal_bids_dataset):
     inputs = _discover(stop_signal_bids_dataset)
     frame = pd.read_csv(inputs.confounds, sep="\t").iloc[:-1]
     frame.to_csv(inputs.confounds, sep="\t", index=False)
-    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
+    masker = make_masker(common_brain_mask((inputs,)))
 
     with pytest.raises(ValueError, match="confounds.*80 rows"):
-        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+        load_run(inputs, masker, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
 
 
 def test_load_run_rejects_unexpected_nonfinite_confound(stop_signal_bids_dataset):
@@ -183,10 +258,10 @@ def test_load_run_rejects_unexpected_nonfinite_confound(stop_signal_bids_dataset
     frame = pd.read_csv(inputs.confounds, sep="\t")
     frame.loc[3, "trans_x"] = np.nan
     frame.to_csv(inputs.confounds, sep="\t", index=False)
-    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
+    masker = make_masker(common_brain_mask((inputs,)))
 
     with pytest.raises(ValueError, match="non-finite.*trans_x"):
-        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+        load_run(inputs, masker, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
 
 
 def test_run_sources_records_dataset_relative_inputs(stop_signal_bids_dataset):
@@ -202,22 +277,15 @@ def test_run_sources_records_dataset_relative_inputs(stop_signal_bids_dataset):
     assert sources.signal.modified_at.endswith("Z")
 
 
-def test_common_roi_rejects_nonoverlap(stop_signal_bids_dataset):
-    inputs = (_discover(stop_signal_bids_dataset),)
-
-    with pytest.raises(ValueError, match="ROI does not overlap"):
-        common_roi_voxels(inputs, center_mni=(500.0, 500.0, 500.0), radius_mm=1.0)
-
-
 def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
     inputs = _discover(stop_signal_bids_dataset)
     frame = pd.read_csv(inputs.events, sep="\t")
     frame.loc[0, ["onset", "duration"]] = [119.5, 1.0]
     frame.to_csv(inputs.events, sep="\t", index=False)
-    voxels = common_roi_voxels((inputs,), center_mni=(48.0, 16.0, 20.0), radius_mm=6.0)
+    masker = make_masker(common_brain_mask((inputs,)))
 
     with pytest.raises(ValueError, match="event timing exceeds acquisition"):
-        load_run(inputs, voxels, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+        load_run(inputs, masker, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
 
 
 def test_result_artifacts_are_deterministic_valid_metadata(
