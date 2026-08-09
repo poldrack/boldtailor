@@ -429,8 +429,7 @@ def test_shared_masker_preserves_feature_order_across_runs(
     stop_signal_bids_dataset,
 ):
     inputs = tuple(
-        _discover(stop_signal_bids_dataset, session)
-        for session in ("ses-02", "ses-04")
+        _discover(stop_signal_bids_dataset, session) for session in ("ses-02", "ses-04")
     )
     spatial_pattern = np.arange(343, dtype=np.float32).reshape((7, 7, 7))
     for item in inputs:
@@ -859,7 +858,9 @@ def test_notebook_publishes_complete_private_metadata(
 def test_readme_links_real_data_notebook():
     readme = (Path(__file__).parents[1] / "README.md").read_text()
     notebook_line = next(
-        line for line in readme.splitlines() if "examples/stop_signal_demo.ipynb" in line
+        line
+        for line in readme.splitlines()
+        if "examples/stop_signal_demo.ipynb" in line
     )
 
     assert "whole-brain" in notebook_line.lower()

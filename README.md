@@ -8,7 +8,7 @@ phases described by the package design.
 
 ## Examples
 
-[Two-session stop-signal real-data notebook](examples/stop_signal_demo.ipynb)
+[Two-session common-mask whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb)
 uses a local dataset path by default; override it with `BOLDTAILOR_BIDS_ROOT`.
 
 ## Array-based conventional GLM
