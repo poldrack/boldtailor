@@ -27,7 +27,11 @@ The first code cell contains the user-facing configuration:
 
 - Dataset root, read from `BOLDTAILOR_BIDS_ROOT` when set and otherwise defaulting to
   `/Users/poldrack/data_unsynced/rdoc_fmri`.
-- Subject `sub-s4`, task `stopSignal`, and sessions `ses-02` and `ses-04`.
+- Subject `sub-s4`, task `stopSignal`, and default real-data sessions `ses-06` and
+  `ses-08`.
+- Optional `BOLDTAILOR_SESSIONS` override containing exactly two non-empty,
+  comma-separated session labels; surrounding whitespace is ignored. The synthetic
+  smoke test selects its `ses-02` and `ses-04` fixture through this override.
 - fMRIPrep derivative directory and MNI152NLin2009cAsym resolution-2 space.
 - The illustrative ROI definition.
 - `PERSIST_DERIVATIVES`, false by default.
@@ -58,7 +62,8 @@ The helper remains under `examples/`; it is not installed as a supported public 
 
 ## Data Flow
 
-For each of sessions 02 and 04, the notebook discovers matching `run-01` inputs:
+For each of the configured sessions, defaulting to real-data sessions 06 and 08, the
+notebook discovers matching `run-01` inputs:
 
 - Raw BIDS `events.tsv`.
 - fMRIPrep MNI preprocessed BOLD image.
@@ -165,8 +170,8 @@ Completion requires:
 - The full pytest suite passes normally and with warnings treated as errors.
 - Black, lockfile, repository-contract, and empty-initializer checks pass.
 - The notebook executes successfully against the synthetic fixture.
-- A separate execution against real sessions 02 and 04 completes successfully and
-  publishes only to a temporary directory.
+- A separate execution against default real sessions 06 and 08 completes
+  successfully and publishes only to a temporary directory.
 - The repository contains no executed real-data copy or generated derivative output.
 
 ## Out of Scope

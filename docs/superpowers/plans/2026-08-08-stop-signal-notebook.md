@@ -16,7 +16,11 @@
 - Every `__init__.py` must remain completely empty; do not add an initializer under `examples/`.
 - The installed package gains no public BIDS-loading API; all adapter code remains under `examples/`.
 - Default dataset root: `/Users/poldrack/data_unsynced/rdoc_fmri`.
-- Default real-data selection: `sub-s4`, `ses-02` and `ses-04`, task `stopSignal`, run `run-01`, MNI152NLin2009cAsym resolution 2.
+- Default real-data selection: `sub-s4`, `ses-06` and `ses-08`, task `stopSignal`,
+  run `run-01`, MNI152NLin2009cAsym resolution 2.
+- `BOLDTAILOR_SESSIONS` may override the default with exactly two non-empty,
+  comma-separated session labels after trimming surrounding whitespace. The
+  synthetic notebook smoke test sets it to `ses-02,ses-04` for its fixture.
 - Default publication is temporary. Persistent publication is restricted to `<dataset>/derivatives/boldtailor` and refuses collisions unless overwrite is explicitly enabled.
 - Notebook tests must not require outputs to be absent; an executed notebook with outputs may later be committed.
 - Do not silently truncate BOLD, events, confounds, or mismatched runs.
@@ -847,6 +851,7 @@ def test_notebook_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(stop_signal_bids_dataset))
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
     monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(tmp_path))
     monkeypatch.setenv("MPLBACKEND", "Agg")
     notebook = nbformat.read(NOTEBOOK, as_version=4)
@@ -906,7 +911,22 @@ BIDS_ROOT = Path(
 )
 FMRIPREP_ROOT = BIDS_ROOT / "derivatives" / "fmri_25.2.0"
 SUBJECT = "sub-s4"
-SESSIONS = ("ses-02", "ses-04")
+DEFAULT_SESSIONS = ("ses-06", "ses-08")
+
+
+def _configured_sessions():
+    selection = os.environ.get("BOLDTAILOR_SESSIONS")
+    if selection is None:
+        return DEFAULT_SESSIONS
+    sessions = tuple(value.strip() for value in selection.split(","))
+    if len(sessions) != 2 or not all(sessions):
+        raise ValueError(
+            "BOLDTAILOR_SESSIONS must select exactly two non-empty sessions"
+        )
+    return sessions
+
+
+SESSIONS = _configured_sessions()
 TASK = "stopSignal"
 RUN = "run-01"
 SPACE = "MNI152NLin2009cAsym"
@@ -968,8 +988,8 @@ model_spec = model.ModelSpec(
 result = fit.fit(analysis_data, model_spec)
 ```
 
-Show that the two design column tuples differ because `go_failure` is absent from
-session 04. Plot both design matrices with Nilearn.
+Show each run's design-column tuple without requiring the tuples to differ. Plot
+both design matrices with Nilearn.
 
 6. **Results and diagnostics** — show `contrast_names`; compact summaries of effect,
 variance, stat, z-score, one-sided p-value, `run_r2`, and `r2`; design provenance;
