@@ -44,6 +44,16 @@ def _demo_module():
     return importlib.import_module("examples.stop_signal_demo")
 
 
+def _notebook_configuration():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    configuration_cell = next(
+        cell for cell in notebook.cells if cell.cell_type == "code"
+    )
+    namespace = {}
+    exec(compile(configuration_cell.source, NOTEBOOK.name, "exec"), namespace)
+    return namespace
+
+
 def _discover(root, session="ses-02"):
     return _demo_module().discover_run_inputs(
         root,
@@ -346,10 +356,40 @@ def test_notebook_contains_the_complete_feature_story():
         assert phrase in source
 
 
+def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch):
+    monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
+
+    configuration = _notebook_configuration()
+
+    assert configuration["SESSIONS"] == ("ses-06", "ses-08")
+
+
+def test_notebook_configuration_normalizes_session_override(monkeypatch):
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", " ses-02, ses-04 ")
+
+    configuration = _notebook_configuration()
+
+    assert configuration["SESSIONS"] == ("ses-02", "ses-04")
+
+
+@pytest.mark.parametrize(
+    "selection",
+    ("", "ses-02", "ses-02,,ses-04", "ses-02,ses-04,ses-06"),
+)
+def test_notebook_configuration_rejects_invalid_session_override(
+    monkeypatch, selection
+):
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", selection)
+
+    with pytest.raises(ValueError, match="exactly two non-empty sessions"):
+        _notebook_configuration()
+
+
 def test_notebook_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(stop_signal_bids_dataset))
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
     monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(tmp_path))
     monkeypatch.setenv("MPLBACKEND", "Agg")
     notebook = nbformat.read(NOTEBOOK, as_version=4)
