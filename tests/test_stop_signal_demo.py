@@ -456,6 +456,23 @@ def test_result_artifacts_are_deterministic_valid_metadata(
     assert all(path.is_file() for path in published)
 
 
+def test_result_artifacts_rejects_incomplete_spatial_context(example_result):
+    _, _, masker, result = example_result
+
+    with pytest.raises(ValueError, match="masker, common mask, space, and resolution"):
+        _demo_module().result_artifacts(
+            result,
+            masker,
+            None,
+            subject="sub-s4",
+            task="stopSignal",
+            sessions=("ses-02", "ses-04"),
+            space="MNI152NLin2009cAsym",
+            resolution=2,
+            configuration={},
+        )
+
+
 def test_publication_destination_defaults_to_temp(stop_signal_bids_dataset, tmp_path):
     publication_destination = _demo_module().publication_destination
 
