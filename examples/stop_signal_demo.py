@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import gzip
+import hashlib
 import json
 import mimetypes
 from pathlib import Path
@@ -17,6 +19,12 @@ from nilearn.maskers import NiftiMasker
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.publication import Artifact
 from boldtailor.results import AnalysisResult
+
+_CONTRAST_LABELS = (
+    ("successful_inhibition", "successfulInhibition"),
+    ("stop_vs_go", "stopVsGo"),
+    ("go_success_vs_baseline", "goSuccessVsBaseline"),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,10 +227,14 @@ def run_sources(inputs: RunInputs, bids_root: Path) -> RunSources:
 
 def result_artifacts(
     result: AnalysisResult,
+    masker: NiftiMasker | None = None,
+    common_mask: nib.Nifti1Image | None = None,
     *,
     subject: str,
     task: str,
     sessions: Sequence[str],
+    space: str | None = None,
+    resolution: int | None = None,
     configuration: Mapping[str, object],
 ) -> tuple[Artifact, ...]:
     designs = tuple(
@@ -232,9 +244,50 @@ def result_artifacts(
         )
         for session, design in zip(sessions, result.design_matrices, strict=True)
     )
-    reports = (
+    if _legacy_artifact_context(masker, common_mask, space, resolution):
+        return designs + _result_reports(
+            result,
+            subject=subject,
+            task=task,
+            configuration=configuration,
+            contrast_description="roi",
+        )
+    reports = _result_reports(
+        result,
+        subject=subject,
+        task=task,
+        configuration=configuration,
+        contrast_description="wholebrain",
+    )
+    images = _result_images(
+        result,
+        masker,
+        common_mask,
+        subject=subject,
+        task=task,
+        sessions=sessions,
+        space=space,
+        resolution=resolution,
+    )
+    return (
+        designs
+        + reports
+        + images
+        + (_image_manifest(images, subject=subject, task=task),)
+    )
+
+
+def _result_reports(
+    result: AnalysisResult,
+    *,
+    subject: str,
+    task: str,
+    configuration: Mapping[str, object],
+    contrast_description: str,
+) -> tuple[Artifact, ...]:
+    return (
         Artifact(
-            f"reports/{subject}_task-{task}_desc-roi_contrasts.tsv",
+            f"reports/{subject}_task-{task}_desc-{contrast_description}_contrasts.tsv",
             _tsv_bytes(_contrast_summary(result)),
         ),
         Artifact(
@@ -242,7 +295,22 @@ def result_artifacts(
             _json_bytes(configuration),
         ),
     )
-    return designs + reports
+
+
+def _legacy_artifact_context(
+    masker: NiftiMasker | None,
+    common_mask: nib.Nifti1Image | None,
+    space: str | None,
+    resolution: int | None,
+) -> bool:
+    context = (masker, common_mask, space, resolution)
+    if all(value is None for value in context):
+        return True
+    if any(value is None for value in context):
+        raise ValueError(
+            "image artifacts require masker, common mask, space, and resolution"
+        )
+    return False
 
 
 def publication_destination(
@@ -290,6 +358,112 @@ def _contrast_summary(result: AnalysisResult) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows)
+
+
+def _result_images(
+    result: AnalysisResult,
+    masker: NiftiMasker,
+    common_mask: nib.Nifti1Image,
+    *,
+    subject: str,
+    task: str,
+    sessions: Sequence[str],
+    space: str,
+    resolution: int,
+) -> tuple[Artifact, ...]:
+    stem = _image_stem(subject, task, space, resolution)
+    mask = _image_artifact(f"{stem}_desc-common_mask.nii.gz", common_mask)
+    contrasts = _contrast_images(result, masker, stem)
+    run_r2 = _run_r2_images(
+        result,
+        masker,
+        subject=subject,
+        task=task,
+        sessions=sessions,
+        space=space,
+        resolution=resolution,
+    )
+    aggregate = _image_artifact(
+        f"{stem}_desc-aggregate_stat-r2_statmap.nii.gz",
+        whole_brain_image(result.r2, masker),
+    )
+    return (mask,) + contrasts + run_r2 + (aggregate,)
+
+
+def _contrast_images(
+    result: AnalysisResult, masker: NiftiMasker, stem: str
+) -> tuple[Artifact, ...]:
+    images = []
+    for name, label in _CONTRAST_LABELS:
+        images.extend(
+            (
+                _image_artifact(
+                    f"{stem}_contrast-{label}_stat-effect_statmap.nii.gz",
+                    whole_brain_image(result.effect(name), masker),
+                ),
+                _image_artifact(
+                    f"{stem}_contrast-{label}_stat-z_statmap.nii.gz",
+                    whole_brain_image(result.z_score(name), masker),
+                ),
+            )
+        )
+    return tuple(images)
+
+
+def _run_r2_images(
+    result: AnalysisResult,
+    masker: NiftiMasker,
+    *,
+    subject: str,
+    task: str,
+    sessions: Sequence[str],
+    space: str,
+    resolution: int,
+) -> tuple[Artifact, ...]:
+    return tuple(
+        _image_artifact(
+            f"{_image_stem(subject, task, space, resolution, session)}_stat-r2_statmap.nii.gz",
+            whole_brain_image(values, masker),
+        )
+        for session, values in zip(sessions, result.run_r2, strict=True)
+    )
+
+
+def _image_stem(
+    subject: str,
+    task: str,
+    space: str,
+    resolution: int,
+    session: str | None = None,
+) -> str:
+    subject_entities = subject if session is None else f"{subject}_{session}"
+    return f"images/{subject_entities}_task-{task}_space-{space}_res-{resolution}"
+
+
+def _nifti_bytes(image: nib.Nifti1Image) -> bytes:
+    return gzip.compress(image.to_bytes(), compresslevel=9, mtime=0)
+
+
+def _image_artifact(path: str, image: nib.Nifti1Image) -> Artifact:
+    return Artifact(path, _nifti_bytes(image))
+
+
+def _image_manifest(images: Sequence[Artifact], *, subject: str, task: str) -> Artifact:
+    frame = pd.DataFrame(
+        [
+            {
+                "relative_path": image.path,
+                "media_type": "application/gzip",
+                "byte_size": len(image.payload),
+                "sha256": hashlib.sha256(image.payload).hexdigest(),
+            }
+            for image in images
+        ]
+    )
+    return Artifact(
+        f"reports/{subject}_task-{task}_desc-image_manifest.tsv",
+        _tsv_bytes(frame),
+    )
 
 
 def _tsv_bytes(frame: pd.DataFrame) -> bytes:
