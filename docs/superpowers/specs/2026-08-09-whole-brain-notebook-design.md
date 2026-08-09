@@ -100,7 +100,10 @@ Contrast filenames use stable alphanumeric labels
 `successfulInhibition`, `stopVsGo`, and `goSuccessVsBaseline`. NIfTI payloads
 use the explicit media type `application/gzip`; TSV and JSON media types remain
 explicit. Image payloads must round-trip through nibabel with the common mask's
-shape and affine.
+shape and affine. Because the existing `Artifact` API intentionally contains
+only a relative path and immutable bytes, the example also publishes a
+deterministic image-manifest TSV with each NIfTI artifact's relative path,
+`application/gzip` media type, byte size, and SHA-256 digest.
 
 ## Provenance and logging
 
@@ -113,8 +116,8 @@ also records:
 - transformed signal shapes and dtype;
 - the 32 GiB execution assumption and estimated signal-array memory;
 - the three contrast definitions;
-- every published image's relative path, media type, size, and digest through
-  the existing publication machinery.
+- every published image's relative path, media type, size, and digest in the
+  image-manifest derivative that is included in the transactional artifact set.
 
 Notebook displays and shareable configuration must not expose the absolute
 dataset root. Normalization, fit, publication, warning, and failure events
