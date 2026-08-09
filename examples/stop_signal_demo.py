@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 import mimetypes
 from pathlib import Path
-from typing import Sequence
+import tempfile
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
 
 from boldtailor.provenance import RunSources, SourceRef
+from boldtailor.publication import Artifact
+from boldtailor.results import AnalysisResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +158,88 @@ def run_sources(inputs: RunInputs, bids_root: Path) -> RunSources:
         events=_source_ref(inputs.events, bids_root, role="events"),
         confounds=_source_ref(inputs.confounds, bids_root, role="confounds"),
     )
+
+
+def result_artifacts(
+    result: AnalysisResult,
+    *,
+    subject: str,
+    task: str,
+    sessions: Sequence[str],
+    configuration: Mapping[str, object],
+) -> tuple[Artifact, ...]:
+    designs = tuple(
+        Artifact(
+            f"reports/{subject}_{session}_task-{task}_desc-design_matrix.tsv",
+            _tsv_bytes(design.rename_axis("frame_time").reset_index()),
+        )
+        for session, design in zip(sessions, result.design_matrices, strict=True)
+    )
+    reports = (
+        Artifact(
+            f"reports/{subject}_task-{task}_desc-roi_contrasts.tsv",
+            _tsv_bytes(_contrast_summary(result)),
+        ),
+        Artifact(
+            f"reports/{subject}_task-{task}_desc-example_config.json",
+            _json_bytes(configuration),
+        ),
+    )
+    return designs + reports
+
+
+def publication_destination(
+    bids_root: Path,
+    *,
+    persistent: bool,
+    requested: Path | None = None,
+    temporary_parent: Path | None = None,
+) -> Path:
+    root = Path(bids_root).resolve()
+    if not persistent:
+        parent = None if temporary_parent is None else Path(temporary_parent)
+        return Path(tempfile.mkdtemp(prefix="boldtailor-", dir=parent)).resolve()
+    expected = (root / "derivatives" / "boldtailor").resolve()
+    destination = expected if requested is None else Path(requested).resolve()
+    if destination != expected:
+        raise ValueError("persistent output must be dataset derivatives/boldtailor")
+    return destination
+
+
+def protected_source_paths(inputs: Sequence[RunInputs]) -> tuple[Path, ...]:
+    return tuple(
+        path
+        for item in inputs
+        for path in (item.events, item.bold, item.mask, item.confounds)
+    )
+
+
+def _contrast_summary(result: AnalysisResult) -> pd.DataFrame:
+    rows = []
+    for name in result.contrast_names:
+        effect = result.effect(name)
+        z_score = result.z_score(name)
+        rows.append(
+            {
+                "contrast": name,
+                "n_features": len(effect),
+                "mean_effect": np.mean(effect),
+                "mean_z": np.mean(z_score),
+                "max_abs_z": np.max(np.abs(z_score)),
+                "min_one_sided_p": np.min(result.one_sided_p_value(name)),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _tsv_bytes(frame: pd.DataFrame) -> bytes:
+    return frame.to_csv(
+        sep="\t", index=False, float_format="%.10g", lineterminator="\n"
+    ).encode("utf-8")
+
+
+def _json_bytes(value: Mapping[str, object]) -> bytes:
+    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
 def _immutable_array(values: np.ndarray, *, dtype: type) -> np.ndarray:
