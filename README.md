@@ -6,6 +6,11 @@ Phase 1 provides an array-based conventional GLM backed by Nilearn. BIDS,
 NIfTI, CIFTI, adaptive HRFs, and the GLMsingle recipe are delivered in later
 phases described by the package design.
 
+## Examples
+
+[Two-session stop-signal real-data notebook](examples/stop_signal_demo.ipynb)
+uses a local dataset path by default; override it with `BOLDTAILOR_BIDS_ROOT`.
+
 ## Array-based conventional GLM
 
 ```python

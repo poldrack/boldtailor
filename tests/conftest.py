@@ -39,18 +39,12 @@ def _events(session):
 
 
 def _confounds(n_scans):
-    values = np.linspace(-0.1, 0.1, n_scans)
+    rng = np.random.default_rng(20260808 + n_scans)
     frame = pd.DataFrame(
-        {
-            "trans_x": values,
-            "trans_y": values[::-1],
-            "trans_z": values * 0.5,
-            "rot_x": values * 0.1,
-            "rot_y": values * 0.2,
-            "rot_z": values * 0.3,
-            "framewise_displacement": np.abs(values),
-        }
+        rng.normal(0.0, 0.05, size=(n_scans, 6)),
+        columns=("trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"),
     )
+    frame["framewise_displacement"] = np.abs(rng.normal(0.1, 0.02, size=n_scans))
     frame.loc[0, "framewise_displacement"] = np.nan
     return frame
 
