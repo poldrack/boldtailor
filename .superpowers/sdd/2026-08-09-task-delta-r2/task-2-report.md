@@ -5,7 +5,9 @@
 - Production commit: `447be31` (`feat: compare task and nuisance model r-squared`)
 - Review-fix test commit: `b0cd90d` (`test: cover delta r-squared result invariants`)
 - Review-fix production commit: `86f9f27` (`fix: enforce delta r-squared result invariants`)
-- Production head: `86f9f27`
+- Review-fix round 2 test commit: `79ee789` (`test: require completed delta r-squared provenance`)
+- Review-fix round 2 production commit: `2f9074d` (`fix: retain completed delta r-squared event`)
+- Production head: `2f9074d`
 
 ## RED
 
@@ -119,3 +121,43 @@ was committed as `b0cd90d` before production changes.
 
 No notebook tests, helpers, caches, or the externally modified `progress.md`
 were changed.
+
+## Review Fix Round 2
+
+The remaining Important provenance-history finding was addressed. The deferred
+Minor multi-run/zero-SST coverage finding remains unchanged.
+
+### RED
+
+Command:
+
+```text
+uv run --no-cache --no-sync pytest tests/test_logging.py::test_task_delta_r2_logs_structured_records_with_comparison_id -q -W error
+```
+
+Result: one failure. Captured structured logs ended in
+`task_delta_r2_completed`, while the returned provenance ended in
+`fit_completed`, `task_delta_r2_started`. The test-only RED was committed as
+`79ee789` before the production change.
+
+### GREEN
+
+- Success and forced-provenance-failure lifecycle tests — 2 passed, 6 deselected in 0.84s.
+- `uv run --no-cache --no-sync pytest tests/test_fit.py tests/test_logging.py -k delta_r2 -q -W error` — 17 passed, 21 deselected in 0.86s.
+- `uv run --no-cache --no-sync pytest tests/test_fit.py tests/test_logging.py -q -W error` — 38 passed in 0.95s.
+- `uv run --no-cache --no-sync pytest -q -W error -k "not notebook"` — 230 passed, 10 deselected in 3.12s.
+- `uv run --no-cache --no-sync black --check src tests` — 23 files unchanged.
+- `git diff --check` — clean.
+
+The full suite was not repeated locally because round 1 confirmed that this
+sandbox denies the localhost port binding required by the same three notebook
+executions. Notebook tests and helpers were not changed.
+
+### Changes
+
+The success path first validates the complete activity and provisional
+provenance inside the guarded failure lifecycle. It then emits and appends the
+trusted completion record and rebuilds only the provenance event sequence from
+the already-validated provenance. The returned provenance now ends with the
+same started/completed records captured in structured logs. Forced provenance
+validation failure continues to emit only started/failed and restores context.
