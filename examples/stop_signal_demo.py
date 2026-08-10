@@ -350,7 +350,7 @@ def _result_images(
     )
     delta = _image_artifact(
         f"{stem}_desc-taskDelta_stat-r2_statmap.nii.gz",
-        whole_brain_image(task_delta.raw_delta_r2, masker),
+        whole_brain_image(task_delta.delta_r2, masker),
     )
     return (mask,) + contrasts + run_r2 + (aggregate, delta)
 
