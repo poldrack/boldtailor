@@ -18,6 +18,7 @@ from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.publication import Artifact, publish_artifact_set
+from boldtailor.results import make_task_delta_r2_result
 from examples.stop_signal_demo import (
     common_brain_mask,
     estimate_signal_memory_gib,
@@ -715,12 +716,54 @@ def test_result_artifacts_are_deterministic_valid_metadata(
     assert all(path.is_file() for path in published)
 
 
-@pytest.mark.parametrize("alteration", ("voxel_support", "affine"))
+def test_result_artifacts_serializes_clipped_task_delta_values(example_result):
+    _, mask_image, masker, result, comparison = example_result
+    nuisance_r2 = comparison.nuisance_r2.copy()
+    nuisance_r2[0] = comparison.full_r2[0] + 0.25
+    negative_comparison = make_task_delta_r2_result(
+        full_r2=comparison.full_r2,
+        nuisance_r2=nuisance_r2,
+        nuisance_designs=comparison.nuisance_design_matrices,
+        provenance=comparison.provenance,
+    )
+
+    artifacts = _demo_module().result_artifacts(
+        result,
+        masker,
+        mask_image,
+        subject="sub-s4",
+        task="stopSignal",
+        sessions=("ses-02", "ses-04"),
+        space="MNI152NLin2009cAsym",
+        resolution=2,
+        configuration={},
+        task_delta=negative_comparison,
+    )
+
+    path = (
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_"
+        "desc-taskDelta_stat-r2_statmap.nii.gz"
+    )
+    image = nib.Nifti1Image.from_bytes(
+        gzip.decompress(
+            {artifact.path: artifact for artifact in artifacts}[path].payload
+        )
+    )
+    serialized = np.asarray(image.dataobj)[np.asarray(mask_image.dataobj, dtype=bool)]
+    assert negative_comparison.raw_delta_r2[0] == pytest.approx(-0.25)
+    assert serialized[0] == 0.0
+    assert np.all(serialized >= 0.0)
+    np.testing.assert_allclose(serialized, negative_comparison.delta_r2)
+
+
+@pytest.mark.parametrize("alteration", ("shape", "voxel_support", "affine"))
 def test_result_artifacts_rejects_common_mask_mismatch(example_result, alteration):
     _, mask_image, masker, result, comparison = example_result
     values = np.asarray(mask_image.dataobj).copy()
     affine = mask_image.affine.copy()
-    if alteration == "voxel_support":
+    if alteration == "shape":
+        values = values[:-1]
+    elif alteration == "voxel_support":
         values[0, 0, 0] = 0
     else:
         affine[0, 3] += 1.0
@@ -738,6 +781,32 @@ def test_result_artifacts_rejects_common_mask_mismatch(example_result, alteratio
             resolution=2,
             configuration={},
             task_delta=comparison,
+        )
+
+
+def test_result_artifacts_rejects_task_delta_length_mismatch(example_result):
+    _, mask_image, masker, result, comparison = example_result
+    short_comparison = make_task_delta_r2_result(
+        full_r2=np.zeros(comparison.delta_r2.size - 1),
+        nuisance_r2=np.zeros(comparison.delta_r2.size - 1),
+        nuisance_designs=comparison.nuisance_design_matrices,
+        provenance=comparison.provenance,
+    )
+
+    with pytest.raises(
+        ValueError, match="task delta r-squared values must match mask voxel count"
+    ):
+        _demo_module().result_artifacts(
+            result,
+            masker,
+            mask_image,
+            subject="sub-s4",
+            task="stopSignal",
+            sessions=("ses-02", "ses-04"),
+            space="MNI152NLin2009cAsym",
+            resolution=2,
+            configuration={},
+            task_delta=short_comparison,
         )
 
 
