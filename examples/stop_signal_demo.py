@@ -18,7 +18,7 @@ from nilearn.maskers import NiftiMasker
 
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.publication import Artifact
-from boldtailor.results import AnalysisResult
+from boldtailor.results import AnalysisResult, TaskDeltaR2Result
 
 _CONTRAST_LABELS = (
     ("successful_inhibition", "successfulInhibition"),
@@ -183,8 +183,10 @@ def result_artifacts(
     space: str,
     resolution: int,
     configuration: Mapping[str, object],
+    task_delta: TaskDeltaR2Result,
 ) -> tuple[Artifact, ...]:
     _require_spatial_context(masker, common_mask, space, resolution)
+    _require_task_delta_dimensions(task_delta, masker)
     designs = tuple(
         Artifact(
             f"reports/{subject}_{session}_task-{task}_desc-design_matrix.tsv",
@@ -207,6 +209,7 @@ def result_artifacts(
         sessions=sessions,
         space=space,
         resolution=resolution,
+        task_delta=task_delta,
     )
     return (
         designs
@@ -226,6 +229,29 @@ def _require_spatial_context(
         raise ValueError(
             "image artifacts require masker, common mask, space, and resolution"
         )
+    _require_common_mask_matches_masker(common_mask, masker)
+
+
+def _require_common_mask_matches_masker(
+    common_mask: nib.Nifti1Image, masker: NiftiMasker
+) -> None:
+    masker_mask = masker.mask_img_
+    common_values = np.asarray(common_mask.dataobj, dtype=bool)
+    masker_values = np.asarray(masker_mask.dataobj, dtype=bool)
+    if (
+        common_mask.shape != masker_mask.shape
+        or not np.allclose(common_mask.affine, masker_mask.affine)
+        or not np.array_equal(common_values, masker_values)
+    ):
+        raise ValueError("common mask must match fitted masker")
+
+
+def _require_task_delta_dimensions(
+    task_delta: TaskDeltaR2Result, masker: NiftiMasker
+) -> None:
+    values = task_delta.delta_r2
+    if values.ndim != 1 or values.size != _mask_voxel_count(masker):
+        raise ValueError("task delta r-squared values must match mask voxel count")
 
 
 def _result_reports(
@@ -304,6 +330,7 @@ def _result_images(
     sessions: Sequence[str],
     space: str,
     resolution: int,
+    task_delta: TaskDeltaR2Result,
 ) -> tuple[Artifact, ...]:
     stem = _image_stem(subject, task, space, resolution)
     mask = _image_artifact(f"{stem}_desc-common_mask.nii.gz", common_mask)
@@ -321,7 +348,11 @@ def _result_images(
         f"{stem}_desc-aggregate_stat-r2_statmap.nii.gz",
         whole_brain_image(result.r2, masker),
     )
-    return (mask,) + contrasts + run_r2 + (aggregate,)
+    delta = _image_artifact(
+        f"{stem}_desc-taskDelta_stat-r2_statmap.nii.gz",
+        whole_brain_image(task_delta.raw_delta_r2, masker),
+    )
+    return (mask,) + contrasts + run_r2 + (aggregate, delta)
 
 
 def _contrast_images(
