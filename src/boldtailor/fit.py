@@ -135,6 +135,22 @@ def task_delta_r2(
                 nuisance_designs=tuple(design.matrix for design in compiled),
                 provenance=full_result.provenance,
             )
+            activity = _task_delta_r2_activity(
+                data,
+                model,
+                compiled,
+                comparison,
+                expected_parent_id,
+            )
+            provenance = extend_provenance(
+                full_result.provenance,
+                execution_id=execution_id,
+                activity=activity,
+                events=history,
+                warnings=(),
+                analysis_id=comparison_id,
+            )
+            comparison = replace(comparison, _provenance=provenance)
         except Exception as error:
             emit_event(
                 "task_delta_r2_failed",
@@ -143,25 +159,8 @@ def task_delta_r2(
                 error=str(error),
             )
             raise
-        history = append_event_history(
-            history,
-            emit_event("task_delta_r2_completed", stage="fit"),
-        )
-    provenance = extend_provenance(
-        full_result.provenance,
-        execution_id=execution_id,
-        activity=_task_delta_r2_activity(
-            data,
-            model,
-            compiled,
-            comparison,
-            expected_parent_id,
-        ),
-        events=history,
-        warnings=(),
-        analysis_id=comparison_id,
-    )
-    return replace(comparison, _provenance=provenance)
+        emit_event("task_delta_r2_completed", stage="fit")
+    return comparison
 
 
 def _fit_analysis(

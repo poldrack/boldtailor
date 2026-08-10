@@ -7,6 +7,7 @@ from typing import Protocol
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from boldtailor._arrays import immutable_float_array
 from boldtailor.provenance import ProvenanceRecord
@@ -162,8 +163,7 @@ def make_task_delta_r2_result(
     provenance: ProvenanceRecord,
 ) -> TaskDeltaR2Result:
     full, nuisance = _validate_r2_pair(full_r2, nuisance_r2)
-    raw = immutable_float_array(full - nuisance)
-    clipped = immutable_float_array(np.maximum(raw, 0.0))
+    raw, clipped = _delta_r2_arrays(full, nuisance)
     return TaskDeltaR2Result(
         _full_r2=immutable_float_array(full),
         _nuisance_r2=immutable_float_array(nuisance),
@@ -197,13 +197,41 @@ def _validate_r2_array(values: object, name: str) -> np.ndarray:
     return array
 
 
+def _delta_r2_arrays(
+    full: np.ndarray,
+    nuisance: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    with np.errstate(over="ignore", invalid="ignore"):
+        raw_values = full - nuisance
+        clipped_values = np.maximum(raw_values, 0.0)
+    if not np.isfinite(raw_values).all() or not np.isfinite(clipped_values).all():
+        raise ValueError("derived delta r-squared values must be finite")
+    return immutable_float_array(raw_values), immutable_float_array(clipped_values)
+
+
 def _copy_nuisance_designs(
     designs: tuple[pd.DataFrame, ...],
 ) -> tuple[pd.DataFrame, ...]:
     copied = tuple(designs)
     if not copied or any(not isinstance(frame, pd.DataFrame) for frame in copied):
         raise ValueError("nuisance_designs must contain pandas DataFrames")
+    if any(not _is_finite_numeric_design(frame) for frame in copied):
+        raise ValueError("nuisance designs must be finite numeric matrices")
     return tuple(frame.copy(deep=True) for frame in copied)
+
+
+def _is_finite_numeric_design(frame: pd.DataFrame) -> bool:
+    if 0 in frame.shape:
+        return False
+    if any(
+        not is_numeric_dtype(dtype) or is_bool_dtype(dtype) or is_complex_dtype(dtype)
+        for dtype in frame.dtypes
+    ):
+        return False
+    try:
+        return bool(np.isfinite(frame.to_numpy(dtype=float)).all())
+    except (TypeError, ValueError):
+        return False
 
 
 def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
