@@ -1,3 +1,4 @@
+import ast
 import gzip
 import hashlib
 import importlib
@@ -83,16 +84,25 @@ DISPLAY_AUDIT_PREFIX = "BOLDTAILOR_DISPLAY_AUDIT="
 DISPLAY_AUDIT_SETUP = """
 _display_audit_records = []
 _real_display = display
-_signal_shapes = {tuple(run.signals.shape) for run in loaded_runs}
+
+
+def _shares_raw_signal_memory(value):
+    if isinstance(value, np.ndarray):
+        array = value
+    elif isinstance(value, (pd.DataFrame, pd.Series)):
+        array = value.to_numpy(copy=False)
+    else:
+        return False
+    return any(
+        np.shares_memory(array, run.signals) for run in loaded_runs
+    )
 
 
 def _display_footprint(value):
     if isinstance(value, np.ndarray):
-        shape = tuple(value.shape)
-        return int(value.size), shape in _signal_shapes
+        return int(value.size), _shares_raw_signal_memory(value)
     if isinstance(value, (pd.DataFrame, pd.Series)):
-        shape = tuple(value.shape)
-        return int(value.size), shape in _signal_shapes
+        return int(value.size), _shares_raw_signal_memory(value)
     if isinstance(value, dict):
         children = tuple(value.values())
     elif isinstance(value, (list, tuple)):
@@ -186,12 +196,15 @@ _delta_audit = {{
     "max_delta_r2": float(task_delta.delta_r2.max()),
 }}
 print("{DELTA_AUDIT_PREFIX}" + _json.dumps(_delta_audit, sort_keys=True))
+_analysis_display_count = len(_display_audit_records)
+"""
+DISPLAY_AUDIT_REPORT = f"""
 _display_audit = {{
-    "display_count": len(_display_audit_records),
+    "display_count": _analysis_display_count,
     "max_array_or_table_elements": max(
         (size for size, _ in _display_audit_records), default=0
     ),
-    "contains_raw_signal_shape": any(
+    "contains_raw_signal_memory": any(
         is_raw_signal for _, is_raw_signal in _display_audit_records
     ),
 }}
@@ -232,6 +245,7 @@ def _instrument_notebook_plots(notebook):
         results_index + 2,
         nbformat.v4.new_code_cell(PLOT_AUDIT_REPORT),
     )
+    notebook.cells.append(nbformat.v4.new_code_cell(DISPLAY_AUDIT_REPORT))
 
 
 def _plot_audit(executed):
@@ -261,21 +275,66 @@ def _runtime_audit(executed, prefix):
 
 def _assert_display_contract(executed):
     audit = _display_audit(executed)
-    assert audit["display_count"] <= 12
+    assert audit["display_count"] == 11
     assert audit["max_array_or_table_elements"] <= 256
-    assert audit["contains_raw_signal_shape"] is False
+    assert audit["contains_raw_signal_memory"] is False
 
     relevant_cells = {
         cell.id: cell for cell in executed.cells if cell.id in {"design-fit", "results"}
     }
     assert set(relevant_cells) == {"design-fit", "results"}
-    for cell in relevant_cells.values():
-        rendered_text_size = sum(
-            len(str(output.get("text", "")))
-            + len(str(output.get("data", {}).get("text/plain", "")))
-            for output in cell.get("outputs", ())
-        )
+    rendered_cells = {
+        cell_id: _rendered_cell_text(cell) for cell_id, cell in relevant_cells.items()
+    }
+    for rendered_text in rendered_cells.values():
+        rendered_text_size = len(rendered_text)
         assert rendered_text_size <= 20_000
+    design_rendered = rendered_cells["design-fit"]
+    assert "nuisance_design_columns" in design_rendered
+    for field in (
+        "raw_min_delta_r2",
+        "negative_voxel_count",
+        "mean_delta_r2",
+        "max_delta_r2",
+    ):
+        assert field in design_rendered
+
+
+def _rendered_cell_text(cell):
+    return "\n".join(
+        str(output.get("text", "")) + str(output.get("data", {}).get("text/plain", ""))
+        for output in cell.get("outputs", ())
+    )
+
+
+def _assert_compact_variance_display_source():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    source = next(cell.source for cell in notebook.cells if cell.id == "design-fit")
+    display_calls = [
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "display"
+    ]
+    assert any(
+        len(call.args) == 1
+        and not call.keywords
+        and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "variance_partition"
+        for call in display_calls
+    )
+    for call in display_calls:
+        displayed_nodes = (
+            *call.args,
+            *(keyword.value for keyword in call.keywords),
+        )
+        assert not any(
+            (isinstance(node, ast.Attribute) and node.attr == "signals")
+            or (isinstance(node, ast.Name) and node.id == "signals")
+            for displayed in displayed_nodes
+            for node in ast.walk(displayed)
+        )
 
 
 def _assert_plot_contract(executed):
@@ -1064,6 +1123,10 @@ def test_notebook_configuration_rejects_invalid_session_override(
         _notebook_configuration()
 
 
+def test_notebook_design_fit_displays_compact_variance_summary():
+    _assert_compact_variance_display_source()
+
+
 @pytest.mark.parametrize(
     "working_directory",
     (NOTEBOOK.parents[1], NOTEBOOK.parent),
@@ -1087,11 +1150,6 @@ def test_notebook_executes_against_fixture(
     assert "go_success_vs_baseline" in rendered
     assert "common_voxel_count" in rendered
     assert "estimated_signal_memory_gib" in rendered
-    assert "mean_delta_r2" in rendered
-    assert "max_delta_r2" in rendered
-    assert "raw_min_delta_r2" in rendered
-    assert "negative_voxel_count" in rendered
-    assert "nuisance_design_columns" in rendered
     assert "clipped at zero" in rendered
     assert "descriptive variance accounting" in rendered
     assert (
