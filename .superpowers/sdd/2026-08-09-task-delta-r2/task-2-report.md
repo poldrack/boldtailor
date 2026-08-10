@@ -3,7 +3,9 @@
 - Base: `1a8b6f47b23b83ca91b5ecac9efb1a439302177f`
 - Test commit: `db38bcd` (`test: specify task delta r-squared comparison`)
 - Production commit: `447be31` (`feat: compare task and nuisance model r-squared`)
-- Production head: `447be31`
+- Review-fix test commit: `b0cd90d` (`test: cover delta r-squared result invariants`)
+- Review-fix production commit: `86f9f27` (`fix: enforce delta r-squared result invariants`)
+- Production head: `86f9f27`
 
 ## RED
 
@@ -74,3 +76,46 @@ Pre-existing untracked generated directories (`examples/__pycache__`,
 `tests/__pycache__`) remain untouched as instructed. No implementation concern
 or provenance-semantics conflict was found. The final notebook-only failure is
 environmental and occurred before notebook execution.
+
+## Review Fix Round 1
+
+The two Important findings in `task-2-review.md` were addressed. The deferred
+Minor multi-run/zero-SST coverage finding was not changed.
+
+### RED
+
+Command:
+
+```text
+uv run --no-cache --no-sync pytest tests/test_fit.py tests/test_logging.py -k "overflow or nonfinite_or_nonnumeric_nuisance_designs or provenance_failure" -q -W error
+```
+
+Result: four failures. Opposite-sign finite float64 maxima raised an overflow
+warning instead of the required ValueError; nested-object and nonfinite design
+matrices were accepted; and an injected provenance-freeze failure logged
+`task_delta_r2_completed` instead of `task_delta_r2_failed`. The test-only RED
+was committed as `b0cd90d` before production changes.
+
+### GREEN
+
+- The same focused review command — 4 passed, 34 deselected in 0.86s.
+- `uv run --no-cache --no-sync pytest tests/test_fit.py tests/test_logging.py -k delta_r2 -q -W error` — 17 passed, 21 deselected in 0.86s.
+- `uv run --no-cache --no-sync pytest tests/test_fit.py tests/test_logging.py -q -W error` — 38 passed in 0.96s.
+- `uv run --no-cache --no-sync pytest -q -W error -k "not notebook"` — 230 passed, 10 deselected in 3.12s.
+- Full warning-strict suite with writable temporary Jupyter/IPython directories — 237 passed; the same three notebook cases failed before execution because localhost port binding is sandbox-denied.
+- `uv run --no-cache --no-sync black --check src tests` — 23 files unchanged.
+- `git diff --check` — clean.
+
+### Changes
+
+- Derived raw/clipped values are checked for finiteness under a narrow NumPy
+  error-state boundary, producing a clear ValueError without an overflow
+  warning.
+- The public result factory now accepts only nonempty, real, finite numeric
+  nuisance design matrices; valid numeric designs retain defensive copies.
+- Comparison activity and provenance are frozen inside the guarded lifecycle
+  before completion is emitted, so comparison/provenance failures log only
+  started/failed and context is restored.
+
+No notebook tests, helpers, caches, or the externally modified `progress.md`
+were changed.
