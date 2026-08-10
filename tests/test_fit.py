@@ -657,6 +657,52 @@ def test_make_task_delta_r2_result_rejects_invalid_inputs(
         )
 
 
+def test_make_task_delta_r2_result_rejects_overflow_without_warning(
+    delta_r2_problem,
+):
+    _, _, full_result = delta_r2_problem
+    maximum = np.finfo(np.float64).max
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(
+            ValueError,
+            match="derived delta r-squared values must be finite",
+        ):
+            make_task_delta_r2_result(
+                full_r2=np.array([maximum]),
+                nuisance_r2=np.array([-maximum]),
+                nuisance_designs=(pd.DataFrame({"constant": [1.0]}),),
+                provenance=full_result.provenance,
+            )
+
+
+@pytest.mark.parametrize(
+    "nuisance_design",
+    [
+        pd.DataFrame({"payload": [{"nested": [1.0]}]}),
+        pd.DataFrame({"constant": [np.nan]}),
+    ],
+    ids=("nested-object", "nonfinite"),
+)
+def test_make_task_delta_r2_result_rejects_nonfinite_or_nonnumeric_nuisance_designs(
+    delta_r2_problem,
+    nuisance_design,
+):
+    _, _, full_result = delta_r2_problem
+
+    with pytest.raises(
+        ValueError,
+        match="nuisance designs must be finite numeric matrices",
+    ):
+        make_task_delta_r2_result(
+            full_r2=np.array([0.4]),
+            nuisance_r2=np.array([0.2]),
+            nuisance_designs=(nuisance_design,),
+            provenance=full_result.provenance,
+        )
+
+
 def test_task_delta_r2_rejects_full_result_for_changed_model(delta_r2_problem):
     data, model, full_result = delta_r2_problem
     changed_model = ModelSpec(

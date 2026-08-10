@@ -335,3 +335,34 @@ def test_task_delta_r2_logs_failure_and_resets_context(caplog):
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
     assert records[-1].get("analysis_id") is None
+
+
+def test_task_delta_r2_logs_provenance_failure_before_completion(
+    caplog,
+    monkeypatch,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    data, model, full_result = _delta_r2_logging_problem()
+
+    def reject_provenance(*args, **kwargs):
+        raise ValueError("comparison provenance cannot be frozen")
+
+    monkeypatch.setattr("boldtailor.fit.extend_provenance", reject_provenance)
+
+    with pytest.raises(ValueError, match="comparison provenance cannot be frozen"):
+        task_delta_r2(data, model, full_result)
+    emit_event("after_task_delta_r2_provenance_failure", stage="test")
+
+    records = _structured_records(caplog)
+    comparison_records = [
+        record for record in records if record["event"].startswith("task_delta_r2_")
+    ]
+    assert [record["event"] for record in comparison_records] == [
+        "task_delta_r2_started",
+        "task_delta_r2_failed",
+    ]
+    assert comparison_records[1]["error"] == ("comparison provenance cannot be frozen")
+    assert records[-1]["event"] == "after_task_delta_r2_provenance_failure"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
