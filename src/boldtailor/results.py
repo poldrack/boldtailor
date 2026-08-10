@@ -90,6 +90,50 @@ class AnalysisResult:
             raise KeyError(f"unknown contrast {name!r}") from error
 
 
+@dataclass(frozen=True)
+class TaskDeltaR2Result:
+    _full_r2: np.ndarray
+    _nuisance_r2: np.ndarray
+    _raw_delta_r2: np.ndarray
+    _delta_r2: np.ndarray
+    _negative_voxel_count: int
+    _raw_min: float
+    _nuisance_design_matrices: tuple[pd.DataFrame, ...]
+    _provenance: ProvenanceRecord
+
+    @property
+    def full_r2(self) -> np.ndarray:
+        return self._full_r2
+
+    @property
+    def nuisance_r2(self) -> np.ndarray:
+        return self._nuisance_r2
+
+    @property
+    def raw_delta_r2(self) -> np.ndarray:
+        return self._raw_delta_r2
+
+    @property
+    def delta_r2(self) -> np.ndarray:
+        return self._delta_r2
+
+    @property
+    def negative_voxel_count(self) -> int:
+        return self._negative_voxel_count
+
+    @property
+    def raw_min(self) -> float:
+        return self._raw_min
+
+    @property
+    def nuisance_design_matrices(self) -> tuple[pd.DataFrame, ...]:
+        return tuple(frame.copy(deep=True) for frame in self._nuisance_design_matrices)
+
+    @property
+    def provenance(self) -> ProvenanceRecord:
+        return self._provenance
+
+
 def make_result(
     contrasts: Mapping[str, _ContrastResult],
     designs: tuple[pd.DataFrame, ...],
@@ -108,6 +152,58 @@ def make_result(
         _r2=immutable_float_array(r2),
         _provenance=provenance,
     )
+
+
+def make_task_delta_r2_result(
+    *,
+    full_r2: np.ndarray,
+    nuisance_r2: np.ndarray,
+    nuisance_designs: tuple[pd.DataFrame, ...],
+    provenance: ProvenanceRecord,
+) -> TaskDeltaR2Result:
+    full, nuisance = _validate_r2_pair(full_r2, nuisance_r2)
+    raw = immutable_float_array(full - nuisance)
+    clipped = immutable_float_array(np.maximum(raw, 0.0))
+    return TaskDeltaR2Result(
+        _full_r2=immutable_float_array(full),
+        _nuisance_r2=immutable_float_array(nuisance),
+        _raw_delta_r2=raw,
+        _delta_r2=clipped,
+        _negative_voxel_count=int(np.count_nonzero(raw < 0.0)),
+        _raw_min=float(raw.min()),
+        _nuisance_design_matrices=_copy_nuisance_designs(nuisance_designs),
+        _provenance=provenance,
+    )
+
+
+def _validate_r2_pair(
+    full_r2: object,
+    nuisance_r2: object,
+) -> tuple[np.ndarray, np.ndarray]:
+    full = _validate_r2_array(full_r2, "full_r2")
+    nuisance = _validate_r2_array(nuisance_r2, "nuisance_r2")
+    if full.shape != nuisance.shape:
+        raise ValueError("full_r2 and nuisance_r2 must have equal shapes")
+    return full, nuisance
+
+
+def _validate_r2_array(values: object, name: str) -> np.ndarray:
+    try:
+        array = np.asarray(values, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must be a finite nonempty 1-D array") from error
+    if array.ndim != 1 or array.size == 0 or not np.isfinite(array).all():
+        raise ValueError(f"{name} must be a finite nonempty 1-D array")
+    return array
+
+
+def _copy_nuisance_designs(
+    designs: tuple[pd.DataFrame, ...],
+) -> tuple[pd.DataFrame, ...]:
+    copied = tuple(designs)
+    if not copied or any(not isinstance(frame, pd.DataFrame) for frame in copied):
+        raise ValueError("nuisance_designs must contain pandas DataFrames")
+    return tuple(frame.copy(deep=True) for frame in copied)
 
 
 def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:

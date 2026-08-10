@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 import sys
 import warnings
@@ -14,17 +14,39 @@ from nilearn.glm.contrasts import expression_to_contrast_vector
 from nilearn.glm.first_level import run_glm
 
 from boldtailor.data import AnalysisData
-from boldtailor.design import CompiledDesign, compile_designs
+from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.model import ContrastValue, ModelSpec
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
-from boldtailor.results import AnalysisResult, contrast_result, make_result
+from boldtailor.results import (
+    AnalysisResult,
+    TaskDeltaR2Result,
+    contrast_result,
+    make_result,
+    make_task_delta_r2_result,
+)
+
+_TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
 
 
 @dataclass(frozen=True)
 class _RunFit:
     contrasts: dict[str, object]
     r2: np.ndarray
+    residual_sum: np.ndarray
+    total_sum: np.ndarray
+
+
+@dataclass(frozen=True)
+class _GLMFit:
+    labels: np.ndarray
+    regression_results: dict
+    residual_sum: np.ndarray
+    total_sum: np.ndarray
+
+
+@dataclass(frozen=True)
+class _R2Fit:
     residual_sum: np.ndarray
     total_sum: np.ndarray
 
@@ -83,6 +105,65 @@ def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
     )
 
 
+def task_delta_r2(
+    data: AnalysisData,
+    model: ModelSpec,
+    full_result: AnalysisResult,
+) -> TaskDeltaR2Result:
+    execution_id = str(uuid4())
+    model_provenance = _model_provenance(model)
+    data_id = data.provenance.metadata_fingerprint
+    expected_parent_id = _analysis_id(data_id, model_provenance.fingerprint)
+    comparison_id = _comparison_id(expected_parent_id, model)
+    history = full_result.provenance.events
+    with bind_context(
+        execution_id=execution_id,
+        data_id=data_id,
+        analysis_id=comparison_id,
+    ):
+        history = append_event_history(
+            history,
+            emit_event("task_delta_r2_started", stage="fit"),
+        )
+        try:
+            _validate_parent_analysis(expected_parent_id, full_result)
+            _validate_full_result_dimensions(data, full_result)
+            compiled, nuisance_r2 = _fit_nuisance_analysis(data, model)
+            comparison = make_task_delta_r2_result(
+                full_r2=full_result.r2,
+                nuisance_r2=nuisance_r2,
+                nuisance_designs=tuple(design.matrix for design in compiled),
+                provenance=full_result.provenance,
+            )
+        except Exception as error:
+            emit_event(
+                "task_delta_r2_failed",
+                stage="fit",
+                level=logging.ERROR,
+                error=str(error),
+            )
+            raise
+        history = append_event_history(
+            history,
+            emit_event("task_delta_r2_completed", stage="fit"),
+        )
+    provenance = extend_provenance(
+        full_result.provenance,
+        execution_id=execution_id,
+        activity=_task_delta_r2_activity(
+            data,
+            model,
+            compiled,
+            comparison,
+            expected_parent_id,
+        ),
+        events=history,
+        warnings=(),
+        analysis_id=comparison_id,
+    )
+    return replace(comparison, _provenance=provenance)
+
+
 def _fit_analysis(
     data: AnalysisData,
     model: ModelSpec,
@@ -105,6 +186,85 @@ def _fit_analysis(
         np.sum([run.total_sum for run in run_fits], axis=0),
     )
     return compiled, run_fits, combined, aggregate_r2
+
+
+def _fit_nuisance_analysis(
+    data: AnalysisData,
+    model: ModelSpec,
+) -> tuple[tuple[CompiledDesign, ...], np.ndarray]:
+    compiled = compile_nuisance_designs(data, model)
+    run_fits = tuple(
+        _fit_r2_run(signals, design, model, run)
+        for run, (signals, design) in enumerate(
+            zip(data.signals, compiled, strict=True)
+        )
+    )
+    nuisance_r2 = _r2_from_sums(
+        np.sum([run.residual_sum for run in run_fits], axis=0),
+        np.sum([run.total_sum for run in run_fits], axis=0),
+    )
+    if not np.isfinite(nuisance_r2).all():
+        raise ValueError("nuisance fit produced nonfinite r-squared values")
+    return compiled, nuisance_r2
+
+
+def _validate_parent_analysis(
+    expected_parent_id: str | None,
+    full_result: AnalysisResult,
+) -> None:
+    if expected_parent_id is None:
+        raise ValueError(
+            "task delta r-squared requires fingerprintable data and model provenance"
+        )
+    if full_result.provenance.analysis_fingerprint != expected_parent_id:
+        raise ValueError("full result does not match data and model")
+
+
+def _validate_full_result_dimensions(
+    data: AnalysisData,
+    full_result: AnalysisResult,
+) -> None:
+    designs = full_result.design_matrices
+    run_r2 = full_result.run_r2
+    if len(designs) != data.n_runs or len(run_r2) != data.n_runs:
+        raise ValueError("full result run dimensions do not match data")
+    for run, (signals, design, values) in enumerate(
+        zip(data.signals, designs, run_r2, strict=True)
+    ):
+        if design.shape[0] != signals.shape[0]:
+            raise ValueError(f"full result run {run} dimensions do not match data")
+        if values.shape != (data.n_features,):
+            raise ValueError(
+                f"full result run {run} feature dimensions do not match data"
+            )
+    if full_result.r2.shape != (data.n_features,):
+        raise ValueError("full result feature dimensions do not match data")
+    if not np.isfinite(full_result.r2).all():
+        raise ValueError("full result r-squared values must be finite")
+
+
+def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
+    return _analysis_id(parent_id, _task_delta_r2_settings(model))
+
+
+def _task_delta_r2_settings(model: ModelSpec) -> dict[str, object]:
+    return {
+        "name": "task_delta_r2",
+        "definition": _TASK_DELTA_R2_DEFINITION,
+        "clip_below_zero": True,
+        "nuisance_model": _nuisance_model_settings(model),
+    }
+
+
+def _nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
+    return {
+        "events": False,
+        "confounds": list(model.confounds),
+        "drift_model": model.drift_model,
+        "high_pass": model.high_pass,
+        "drift_order": model.drift_order,
+        "noise_model": model.noise_model,
+    }
 
 
 def _model_provenance(model: ModelSpec) -> _ModelProvenance:
@@ -191,6 +351,33 @@ def _fit_activity(
     return {"name": "fit", "stage": "fit", "model": model, "runs": runs}
 
 
+def _task_delta_r2_activity(
+    data: AnalysisData,
+    model: ModelSpec,
+    compiled: tuple[CompiledDesign, ...],
+    comparison: TaskDeltaR2Result,
+    parent_id: str | None,
+) -> dict[str, object]:
+    runs = tuple(
+        _run_diagnostic(data, design, run) for run, design in enumerate(compiled)
+    )
+    return {
+        "name": "task_delta_r2",
+        "stage": "fit",
+        "parent_analysis_id": parent_id,
+        "definition": _TASK_DELTA_R2_DEFINITION,
+        "clip_below_zero": True,
+        "nuisance_model": _nuisance_model_settings(model),
+        "runs": runs,
+        "diagnostics": {
+            "raw_min": comparison.raw_min,
+            "negative_voxel_count": comparison.negative_voxel_count,
+            "mean_delta_r2": float(comparison.delta_r2.mean()),
+            "max_delta_r2": float(comparison.delta_r2.max()),
+        },
+    }
+
+
 def _run_diagnostic(
     data: AnalysisData,
     compiled: CompiledDesign,
@@ -226,19 +413,11 @@ def _fit_run(
 ) -> _RunFit:
     design = compiled.matrix
     matrix = design.to_numpy()
-    _warn_if_rank_deficient(matrix, run)
-    _validate_residual_dof(matrix, run)
-    labels, regression_results = run_glm(
-        signals,
-        matrix,
-        noise_model=model.noise_model,
-    )
-    prediction = _prediction(labels, regression_results, matrix, signals.shape)
-    residual_sum, total_sum = _sums_of_squares(signals, prediction)
+    glm_fit = _fit_glm(signals, matrix, model.noise_model, run)
     contrasts = {
         name: _compute_contrast(
-            labels,
-            regression_results,
+            glm_fit.labels,
+            glm_fit.regression_results,
             value,
             design.columns,
             matrix,
@@ -249,10 +428,43 @@ def _fit_run(
     }
     return _RunFit(
         contrasts=contrasts,
-        r2=_r2_from_sums(residual_sum, total_sum),
-        residual_sum=residual_sum,
-        total_sum=total_sum,
+        r2=_r2_from_sums(glm_fit.residual_sum, glm_fit.total_sum),
+        residual_sum=glm_fit.residual_sum,
+        total_sum=glm_fit.total_sum,
     )
+
+
+def _fit_r2_run(
+    signals: np.ndarray,
+    compiled: CompiledDesign,
+    model: ModelSpec,
+    run: int,
+) -> _R2Fit:
+    glm_fit = _fit_glm(
+        signals,
+        compiled.matrix.to_numpy(),
+        model.noise_model,
+        run,
+    )
+    return _R2Fit(glm_fit.residual_sum, glm_fit.total_sum)
+
+
+def _fit_glm(
+    signals: np.ndarray,
+    design: np.ndarray,
+    noise_model: str,
+    run: int,
+) -> _GLMFit:
+    _warn_if_rank_deficient(design, run)
+    _validate_residual_dof(design, run)
+    labels, regression_results = run_glm(
+        signals,
+        design,
+        noise_model=noise_model,
+    )
+    prediction = _prediction(labels, regression_results, design, signals.shape)
+    residual_sum, total_sum = _sums_of_squares(signals, prediction)
+    return _GLMFit(labels, regression_results, residual_sum, total_sum)
 
 
 def _combine_contrasts(
