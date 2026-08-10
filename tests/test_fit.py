@@ -597,6 +597,7 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     for values in arrays:
         assert values.ndim == 1
         assert values.dtype == np.dtype("float64")
+        assert values.flags.owndata is True
         assert not np.shares_memory(values, full_result.r2)
         with pytest.raises(ValueError, match="WRITEABLE"):
             values.setflags(write=True)
