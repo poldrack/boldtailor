@@ -110,6 +110,7 @@ for _record in _plot_stat_map_records:
     _arguments = _record["arguments"]
     _matches = []
     _matches_aggregate = False
+    _matches_task_delta = False
     if _common_mask_values is not None:
         _values = np.asarray(_record["image"].dataobj)[_common_mask_values]
         _matches = [
@@ -118,14 +119,21 @@ for _record in _plot_stat_map_records:
             if np.allclose(_values, result.z_score(_name))
         ]
         _matches_aggregate = bool(np.allclose(_values, result.r2))
+        if "task_delta" in globals():
+            _matches_task_delta = bool(
+                np.allclose(_values, task_delta.delta_r2)
+            )
     _plot_audit.append(
         {{
             "matched_z_scores": _matches,
             "matched_aggregate_r2": _matches_aggregate,
+            "matched_task_delta_r2": _matches_task_delta,
             "threshold": _arguments["threshold"],
+            "vmin": _arguments["vmin"],
             "colorbar": _arguments["colorbar"],
             "cmap": _arguments["cmap"],
             "symmetric_cbar": _arguments["symmetric_cbar"],
+            "title": _arguments["title"],
         }}
     )
 print("{PLOT_AUDIT_PREFIX}" + _json.dumps(_plot_audit, sort_keys=True))
@@ -176,20 +184,34 @@ def _plot_audit(executed):
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
-    assert len(audit) == 4
+    assert len(audit) == 5
     for call, contrast_name in zip(audit[:3], CONTRAST_EXPRESSIONS, strict=True):
         assert call["matched_z_scores"] == [contrast_name]
         assert call["matched_aggregate_r2"] is False
+        assert call["matched_task_delta_r2"] is False
         assert call["threshold"] is None
         assert call["colorbar"] is True
 
     aggregate = audit[3]
     assert aggregate["matched_z_scores"] == []
     assert aggregate["matched_aggregate_r2"] is True
+    assert aggregate["matched_task_delta_r2"] is False
     assert aggregate["threshold"] is None
     assert aggregate["colorbar"] is True
     assert aggregate["cmap"] == "viridis"
     assert aggregate["symmetric_cbar"] is False
+
+    delta = audit[4]
+    assert delta["matched_z_scores"] == []
+    assert delta["matched_aggregate_r2"] is False
+    assert delta["matched_task_delta_r2"] is True
+    assert delta["threshold"] is None
+    assert delta["vmin"] == 0
+    assert delta["colorbar"] is True
+    assert delta["cmap"] == "magma"
+    assert delta["symmetric_cbar"] is False
+    assert "delta" in delta["title"].lower()
+    assert "clipped at zero" in delta["title"].lower()
 
 
 def _assert_published_metadata(published, bids_root):
@@ -204,11 +226,25 @@ def _assert_published_metadata(published, bids_root):
         "transformed_signals": TRANSFORMED_SIGNALS,
         "contrasts": CONTRAST_EXPRESSIONS,
     }
+    variance = configuration.pop("variance_partition")
     assert configuration == {
         "subject": "sub-s4",
         "task": "stopSignal",
         "sessions": ["ses-02", "ses-04"],
         **expected_shared,
+    }
+    assert variance["definition"] == "full_r2 - nuisance_r2"
+    assert variance["clip_below_zero"] is True
+    assert variance["nuisance_model"]["events"] is False
+    assert variance["nuisance_model"]["noise_model"] == "ar1"
+    assert set(variance) == {
+        "definition",
+        "clip_below_zero",
+        "nuisance_model",
+        "raw_min_delta_r2",
+        "negative_voxel_count",
+        "mean_delta_r2",
+        "max_delta_r2",
     }
 
     provenance = json.loads((published / "logs/boldtailor_provenance.json").read_text())
@@ -230,6 +266,14 @@ def _assert_published_metadata(published, bids_root):
         for name, expression in CONTRAST_EXPRESSIONS.items()
     }
     assert fitted["model"]["noise_model"] == "ar1"
+    assert provenance["activities"][-1]["name"] == "task_delta_r2"
+
+    images = tuple(sorted(published.glob("images/*.nii.gz")))
+    assert len(images) == 11
+    assert (
+        published
+        / "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-taskDelta_stat-r2_statmap.nii.gz"
+    ).is_file()
 
     shareable_text = "\n".join(
         path.read_text()
@@ -931,13 +975,23 @@ def test_notebook_executes_against_fixture(
     assert "go_success_vs_baseline" in rendered
     assert "common_voxel_count" in rendered
     assert "estimated_signal_memory_gib" in rendered
+    assert "mean_delta_r2" in rendered
+    assert "max_delta_r2" in rendered
+    assert "raw_min_delta_r2" in rendered
+    assert "negative_voxel_count" in rendered
+    assert "clipped at zero" in rendered
+    assert "descriptive variance accounting" in rendered
     assert (
         "Maps are descriptive, unthresholded, and do not imply "
         "multiple-comparison-corrected inference."
     ) in rendered
     assert "published_count" in rendered
     assert str(stop_signal_bids_dataset.resolve()) not in rendered
-    assert len(tuple(published.glob("images/*.nii.gz"))) == 10
+    assert len(tuple(published.glob("images/*.nii.gz"))) == 11
+    assert (
+        published
+        / "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-taskDelta_stat-r2_statmap.nii.gz"
+    ).is_file()
     assert (
         published / "reports/sub-s4_task-stopSignal_desc-image_manifest.tsv"
     ).is_file()
