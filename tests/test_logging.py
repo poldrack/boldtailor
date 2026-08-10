@@ -288,6 +288,12 @@ def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
         "task_delta_r2_started",
         "task_delta_r2_completed",
     ]
+    provenance_records = comparison.provenance.events[-2:]
+    assert [record["event"] for record in provenance_records] == [
+        "task_delta_r2_started",
+        "task_delta_r2_completed",
+    ]
+    assert provenance_records[-1]["sequence"] == comparison_records[-1]["sequence"]
     assert all(
         record["execution_id"] == comparison.provenance.execution_id
         for record in comparison_records
