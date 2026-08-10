@@ -12,7 +12,7 @@
 - [x] Task 2: Delta-R-squared result, fit, logging, and provenance
 - [x] Task 3: Deterministic delta-R-squared image
 - [x] Task 4: Notebook display and shareable provenance
-- [ ] Task 5: Real-data and whole-branch verification
+- [x] Task 5: Real-data and whole-branch verification
 
 Task 1: complete (commits 6fc4cc7..d844742, review clean)
 Task 2: minor (deferred): add direct multi-run pooled-R² and task-level zero-SST regression coverage
@@ -24,3 +24,5 @@ Task 3: complete (commits 5050e93..0a40135, review clean)
 Task 4: fix round 1/5 (runtime diagnostics, nuisance metadata, and nonnegative plot coverage addressed; commits 5bac286..d86b117)
 Task 4: fix round 2/5 (compact display and raw-signal slice audit addressed; commits eb14c86..a3c4928)
 Task 4: complete (commits 7db1323..a3c4928, review clean)
+Task 5: final review fix round 1/5 (literal owned-storage invariant addressed; commits d8a0480..b46147c)
+Task 5: complete (real-data and repository gates green; final review ready to merge with 2 deferred minors)
