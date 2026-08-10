@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.data import from_arrays
-from boldtailor.fit import fit
+from boldtailor.fit import fit, task_delta_r2
 from boldtailor.logging import bind_context, emit_event
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
@@ -245,6 +245,93 @@ def test_fit_logs_failure_and_resets_context_after_exception(caplog):
     assert fit_records[0]["data_id"] == data.provenance.metadata_fingerprint
     assert fit_records[1]["level"] == "ERROR"
     assert fit_records[1]["error"].startswith("run 0 contrast 'missing'")
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
+
+
+def _delta_r2_logging_problem():
+    events = pd.DataFrame(
+        {
+            "onset": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0],
+            "duration": np.ones(6),
+            "trial_type": ["face", "house", "face", "house", "face", "house"],
+        }
+    )
+    frame_times = np.arange(30) * 2.0
+    signals = np.column_stack(
+        (
+            np.sin(frame_times / 6.0) + np.cos(frame_times / 11.0),
+            np.cos(frame_times / 7.0) - np.sin(frame_times / 13.0),
+        )
+    )
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    return data, model, fit(data, model)
+
+
+def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    data, model, full_result = _delta_r2_logging_problem()
+
+    comparison = task_delta_r2(data, model, full_result)
+    records = _structured_records(caplog)
+    comparison_records = [
+        record for record in records if record["event"].startswith("task_delta_r2_")
+    ]
+
+    assert [record["event"] for record in comparison_records] == [
+        "task_delta_r2_started",
+        "task_delta_r2_completed",
+    ]
+    assert all(
+        record["execution_id"] == comparison.provenance.execution_id
+        for record in comparison_records
+    )
+    assert all(
+        record["data_id"] == data.provenance.metadata_fingerprint
+        for record in comparison_records
+    )
+    assert all(
+        record["analysis_id"] == comparison.provenance.analysis_fingerprint
+        for record in comparison_records
+    )
+
+
+def test_task_delta_r2_logs_failure_and_resets_context(caplog):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    data, model, full_result = _delta_r2_logging_problem()
+    changed_model = ModelSpec(
+        contrasts=model.contrasts,
+        drift_model=model.drift_model,
+        noise_model="ar1",
+    )
+
+    with pytest.raises(ValueError, match="full result does not match data and model"):
+        task_delta_r2(data, changed_model, full_result)
+    emit_event("after_task_delta_r2_failure", stage="test")
+
+    records = _structured_records(caplog)
+    comparison_records = [
+        record for record in records if record["event"].startswith("task_delta_r2_")
+    ]
+    assert [record["event"] for record in comparison_records] == [
+        "task_delta_r2_started",
+        "task_delta_r2_failed",
+    ]
+    assert (
+        comparison_records[0]["execution_id"] == comparison_records[1]["execution_id"]
+    )
+    assert comparison_records[0]["analysis_id"] == comparison_records[1]["analysis_id"]
+    assert comparison_records[1]["level"] == "ERROR"
+    assert comparison_records[1]["error"] == (
+        "full result does not match data and model"
+    )
+    assert records[-1]["event"] == "after_task_delta_r2_failure"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
     assert records[-1].get("analysis_id") is None

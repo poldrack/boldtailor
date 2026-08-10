@@ -10,9 +10,10 @@ from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
 from nilearn.glm.first_level.hemodynamic_models import glover_hrf
 
 from boldtailor.data import from_arrays
-from boldtailor.fit import fit
+from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
+from boldtailor.results import make_task_delta_r2_result
 
 
 @pytest.fixture
@@ -62,6 +63,85 @@ def _complete_sources() -> tuple[RunSources, ...]:
             ),
         ),
     )
+
+
+def _delta_r2_sources(*, signal_byte_size=4096) -> tuple[RunSources, ...]:
+    return (
+        RunSources(
+            signal=SourceRef(
+                role="signal",
+                uri="sub-01/func/sub-01_task-delta_run-01_bold.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=signal_byte_size,
+                modified_at="2026-08-09T12:00:00Z",
+            ),
+            events=SourceRef(
+                role="events",
+                uri="sub-01/func/sub-01_task-delta_run-01_events.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=1024,
+                modified_at="2026-08-09T12:01:00Z",
+            ),
+            confounds=SourceRef(
+                role="confounds",
+                uri="sub-01/func/sub-01_task-delta_run-01_confounds.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=2048,
+                modified_at="2026-08-09T12:02:00Z",
+            ),
+        ),
+    )
+
+
+@pytest.fixture(scope="module")
+def delta_r2_problem():
+    rng = np.random.default_rng(20260809)
+    n_scans = 100
+    frame_times = np.arange(n_scans) * 1.5
+    onsets = np.arange(3.0, 138.0, 6.0)
+    events = pd.DataFrame(
+        {
+            "onset": onsets,
+            "duration": np.full(onsets.shape, 1.5),
+            "trial_type": np.resize(["face", "house"], onsets.shape),
+        }
+    )
+    confounds = pd.DataFrame(
+        {"motion_x": np.sin(np.linspace(0.0, 4.0 * np.pi, n_scans))}
+    )
+    model = ModelSpec(
+        contrasts={"face_gt_house": "face - house"},
+        confounds=("motion_x",),
+        drift_model="cosine",
+        high_pass=0.01,
+        noise_model="ar1",
+    )
+    design = make_first_level_design_matrix(
+        frame_times,
+        events=events,
+        hrf_model=model.hrf_model,
+        drift_model=model.drift_model,
+        high_pass=model.high_pass,
+        drift_order=model.drift_order,
+        add_regs=confounds,
+        min_onset=model.min_onset,
+        oversampling=model.oversampling,
+    )
+    coefficients = np.zeros((design.shape[1], 4))
+    coefficients[design.columns.get_loc("face")] = [2.5, 2.0, 3.0, 2.2]
+    coefficients[design.columns.get_loc("house")] = [-1.5, -2.0, -1.0, -2.5]
+    coefficients[design.columns.get_loc("motion_x")] = [0.5, -0.4, 0.3, -0.2]
+    coefficients[design.columns.get_loc("constant")] = [10.0, 12.0, 8.0, 9.0]
+    signals = design.to_numpy() @ coefficients
+    signals += rng.normal(0.0, 0.15, signals.shape)
+    data = from_arrays(
+        signals,
+        events,
+        frame_times=frame_times,
+        confounds=confounds,
+        sources=_delta_r2_sources(),
+    )
+    return data, model, fit(data, model)
 
 
 def _nilearn_contrast(signals, design, noise_model):
@@ -486,3 +566,157 @@ def test_fit_rejects_unknown_semantic_contrast(single_run_problem, contrast):
 
     with pytest.raises(ValueError, match="run 0.*contrast 'missing'"):
         fit(from_arrays(signals, events, tr=2.0), model)
+
+
+def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
+    data, model, full_result = delta_r2_problem
+
+    comparison = task_delta_r2(data, model, full_result)
+
+    np.testing.assert_allclose(
+        comparison.raw_delta_r2,
+        comparison.full_r2 - comparison.nuisance_r2,
+    )
+    np.testing.assert_allclose(
+        comparison.delta_r2,
+        np.maximum(comparison.raw_delta_r2, 0.0),
+    )
+    assert np.all(comparison.full_r2 > comparison.nuisance_r2)
+    assert comparison.negative_voxel_count == int(
+        np.count_nonzero(comparison.raw_delta_r2 < 0.0)
+    )
+    assert comparison.raw_min == pytest.approx(comparison.raw_delta_r2.min())
+
+    arrays = (
+        comparison.full_r2,
+        comparison.nuisance_r2,
+        comparison.raw_delta_r2,
+        comparison.delta_r2,
+    )
+    assert {values.shape for values in arrays} == {(data.n_features,)}
+    for values in arrays:
+        assert values.ndim == 1
+        assert values.dtype == np.dtype("float64")
+        assert not np.shares_memory(values, full_result.r2)
+        with pytest.raises(ValueError, match="WRITEABLE"):
+            values.setflags(write=True)
+
+    returned = comparison.nuisance_design_matrices[0]
+    returned.iloc[0, 0] = -99.0
+    assert comparison.nuisance_design_matrices[0].iloc[0, 0] != -99.0
+
+
+def test_make_task_delta_r2_result_clips_and_owns_values(delta_r2_problem):
+    _, _, full_result = delta_r2_problem
+    full = np.array([0.25, 0.4, 0.8])
+    nuisance = np.array([0.5, 0.4, 0.5])
+    nuisance_design = pd.DataFrame({"constant": [1.0, 1.0]})
+
+    result = make_task_delta_r2_result(
+        full_r2=full,
+        nuisance_r2=nuisance,
+        nuisance_designs=(nuisance_design,),
+        provenance=full_result.provenance,
+    )
+    full[0] = 99.0
+    nuisance[0] = 99.0
+    nuisance_design.iloc[0, 0] = 99.0
+
+    np.testing.assert_allclose(result.raw_delta_r2, [-0.25, 0.0, 0.3])
+    np.testing.assert_allclose(result.delta_r2, [0.0, 0.0, 0.3])
+    np.testing.assert_allclose(result.full_r2, [0.25, 0.4, 0.8])
+    np.testing.assert_allclose(result.nuisance_r2, [0.5, 0.4, 0.5])
+    assert result.negative_voxel_count == 1
+    assert result.raw_min == -0.25
+    assert result.nuisance_design_matrices[0].iloc[0, 0] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("full", "nuisance"),
+    [
+        (np.array([]), np.array([])),
+        (np.ones((1, 1)), np.ones(1)),
+        (np.ones(2), np.ones(1)),
+        (np.array([np.nan]), np.zeros(1)),
+        (np.zeros(1), np.array([np.inf])),
+    ],
+)
+def test_make_task_delta_r2_result_rejects_invalid_inputs(
+    delta_r2_problem,
+    full,
+    nuisance,
+):
+    _, _, full_result = delta_r2_problem
+
+    with pytest.raises(ValueError):
+        make_task_delta_r2_result(
+            full_r2=full,
+            nuisance_r2=nuisance,
+            nuisance_designs=(pd.DataFrame({"constant": [1.0]}),),
+            provenance=full_result.provenance,
+        )
+
+
+def test_task_delta_r2_rejects_full_result_for_changed_model(delta_r2_problem):
+    data, model, full_result = delta_r2_problem
+    changed_model = ModelSpec(
+        contrasts=model.contrasts,
+        confounds=model.confounds,
+        drift_model=model.drift_model,
+        high_pass=model.high_pass,
+        noise_model="ols",
+    )
+
+    with pytest.raises(ValueError, match="full result does not match data and model"):
+        task_delta_r2(data, changed_model, full_result)
+
+
+def test_task_delta_r2_rejects_full_result_for_changed_data(delta_r2_problem):
+    data, model, full_result = delta_r2_problem
+    changed_data = from_arrays(
+        data.signals,
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+        sources=_delta_r2_sources(signal_byte_size=4097),
+    )
+
+    with pytest.raises(ValueError, match="full result does not match data and model"):
+        task_delta_r2(changed_data, model, full_result)
+
+
+def test_task_delta_r2_requires_fingerprintable_provenance(delta_r2_problem):
+    data, model, _ = delta_r2_problem
+    anonymous = from_arrays(
+        data.signals,
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+    )
+    anonymous_result = fit(anonymous, model)
+
+    with pytest.raises(ValueError, match="requires fingerprintable"):
+        task_delta_r2(anonymous, model, anonymous_result)
+
+
+def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
+    data, model, full_result = delta_r2_problem
+
+    comparison = task_delta_r2(data, model, full_result)
+    activity = comparison.provenance.activities[-1]
+
+    assert activity["name"] == "task_delta_r2"
+    assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
+    assert activity["definition"] == "full_r2 - nuisance_r2"
+    assert activity["clip_below_zero"] is True
+    assert activity["nuisance_model"]["events"] is False
+    assert activity["nuisance_model"]["noise_model"] == "ar1"
+    assert activity["diagnostics"]["negative_voxel_count"] == (
+        comparison.negative_voxel_count
+    )
+    assert activity["runs"][0]["design_columns"] == list(
+        comparison.nuisance_design_matrices[0].columns
+    )
+    serialized = comparison.provenance.canonical_json()
+    assert "design_values" not in serialized
+    assert "signals" not in serialized
