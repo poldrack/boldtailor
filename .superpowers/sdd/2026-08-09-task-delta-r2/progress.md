@@ -11,7 +11,7 @@
 - [x] Task 1: Nuisance-only design compilation
 - [x] Task 2: Delta-R-squared result, fit, logging, and provenance
 - [x] Task 3: Deterministic delta-R-squared image
-- [ ] Task 4: Notebook display and shareable provenance
+- [x] Task 4: Notebook display and shareable provenance
 - [ ] Task 5: Real-data and whole-branch verification
 
 Task 1: complete (commits 6fc4cc7..d844742, review clean)
@@ -21,3 +21,6 @@ Task 2: fix round 2/5 (1 addressed, 0 open — completion retained in returned p
 Task 2: complete (commits 1a8b6f4..9659c7f, review clean; 1 deferred minor)
 Task 3: fix round 1/5 (raw-versus-clipped and negative validation coverage addressed; commits 53f47de..0a40135)
 Task 3: complete (commits 5050e93..0a40135, review clean)
+Task 4: fix round 1/5 (runtime diagnostics, nuisance metadata, and nonnegative plot coverage addressed; commits 5bac286..d86b117)
+Task 4: fix round 2/5 (compact display and raw-signal slice audit addressed; commits eb14c86..a3c4928)
+Task 4: complete (commits 7db1323..a3c4928, review clean)
