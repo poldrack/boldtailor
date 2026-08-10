@@ -15,7 +15,7 @@ from nbclient import NotebookClient
 from nbclient.exceptions import CellExecutionError
 
 from boldtailor.data import from_arrays
-from boldtailor.fit import fit
+from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.publication import Artifact, publish_artifact_set
 from examples.stop_signal_demo import (
@@ -364,7 +364,8 @@ def example_result(stop_signal_bids_dataset):
         confounds=CONFOUNDS,
         noise_model="ols",
     )
-    return inputs, mask_image, masker, fit(data, model)
+    result = fit(data, model)
+    return inputs, mask_image, masker, result, task_delta_r2(data, model, result)
 
 
 def test_common_brain_mask_intersects_runs(stop_signal_bids_dataset):
@@ -547,7 +548,7 @@ def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
 def test_result_artifacts_are_deterministic_valid_metadata(
     example_result, stop_signal_bids_dataset, tmp_path
 ):
-    _, mask_image, masker, result = example_result
+    _, mask_image, masker, result, comparison = example_result
     options = {
         "subject": "sub-s4",
         "task": "stopSignal",
@@ -567,6 +568,7 @@ def test_result_artifacts_are_deterministic_valid_metadata(
         space="MNI152NLin2009cAsym",
         resolution=2,
         configuration=options,
+        task_delta=comparison,
     )
     second = result_artifacts(
         result,
@@ -578,6 +580,7 @@ def test_result_artifacts_are_deterministic_valid_metadata(
         space="MNI152NLin2009cAsym",
         resolution=2,
         configuration=options,
+        task_delta=comparison,
     )
 
     assert first == second
@@ -592,7 +595,9 @@ def test_result_artifacts_are_deterministic_valid_metadata(
         "images/sub-s4_ses-02_task-stopSignal_space-MNI152NLin2009cAsym_res-2_stat-r2_statmap.nii.gz",
         "images/sub-s4_ses-04_task-stopSignal_space-MNI152NLin2009cAsym_res-2_stat-r2_statmap.nii.gz",
         "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-aggregate_stat-r2_statmap.nii.gz",
+        "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-taskDelta_stat-r2_statmap.nii.gz",
     )
+    assert len(expected_images) == 11
     expected_paths = {
         "reports/sub-s4_ses-02_task-stopSignal_desc-design_matrix.tsv",
         "reports/sub-s4_ses-04_task-stopSignal_desc-design_matrix.tsv",
@@ -668,8 +673,10 @@ def test_result_artifacts_are_deterministic_valid_metadata(
         expected_images[7]: result.run_r2[0],
         expected_images[8]: result.run_r2[1],
         expected_images[9]: result.r2,
+        expected_images[10]: comparison.delta_r2,
     }
     common = np.asarray(mask_image.dataobj, dtype=bool)
+    assert np.all(comparison.delta_r2 >= 0.0)
     for path in expected_images:
         image = nib.Nifti1Image.from_bytes(gzip.decompress(artifacts[path].payload))
         assert image.shape == (7, 7, 7)
@@ -708,8 +715,34 @@ def test_result_artifacts_are_deterministic_valid_metadata(
     assert all(path.is_file() for path in published)
 
 
+@pytest.mark.parametrize("alteration", ("voxel_support", "affine"))
+def test_result_artifacts_rejects_common_mask_mismatch(example_result, alteration):
+    _, mask_image, masker, result, comparison = example_result
+    values = np.asarray(mask_image.dataobj).copy()
+    affine = mask_image.affine.copy()
+    if alteration == "voxel_support":
+        values[0, 0, 0] = 0
+    else:
+        affine[0, 3] += 1.0
+    changed_mask = nib.Nifti1Image(values, affine, mask_image.header)
+
+    with pytest.raises(ValueError, match="common mask must match fitted masker"):
+        _demo_module().result_artifacts(
+            result,
+            masker,
+            changed_mask,
+            subject="sub-s4",
+            task="stopSignal",
+            sessions=("ses-02", "ses-04"),
+            space="MNI152NLin2009cAsym",
+            resolution=2,
+            configuration={},
+            task_delta=comparison,
+        )
+
+
 def test_result_artifacts_rejects_incomplete_spatial_context(example_result):
-    _, _, masker, result = example_result
+    _, _, masker, result, comparison = example_result
 
     with pytest.raises(ValueError, match="masker, common mask, space, and resolution"):
         _demo_module().result_artifacts(
@@ -722,6 +755,7 @@ def test_result_artifacts_rejects_incomplete_spatial_context(example_result):
             space="MNI152NLin2009cAsym",
             resolution=2,
             configuration={},
+            task_delta=comparison,
         )
 
 
