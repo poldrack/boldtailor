@@ -116,9 +116,7 @@ def test_compile_nuisance_designs_matches_nilearn_without_events(inputs):
     assert_frame_equal(actual, expected)
 
 
-@pytest.mark.parametrize(
-    "compiler", [compile_designs, compile_nuisance_designs]
-)
+@pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
 def test_compile_designs_rejects_missing_selected_confound(inputs, compiler):
     events, confounds = inputs
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
@@ -128,9 +126,7 @@ def test_compile_designs_rejects_missing_selected_confound(inputs, compiler):
         compiler(data, model)
 
 
-@pytest.mark.parametrize(
-    "compiler", [compile_designs, compile_nuisance_designs]
-)
+@pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
 def test_compile_designs_rejects_nonfinite_selected_confound(inputs, compiler):
     events, confounds = inputs
     confounds.loc[3, "trans_x"] = np.nan
