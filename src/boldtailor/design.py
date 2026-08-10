@@ -27,6 +27,15 @@ def compile_designs(data: AnalysisData, model: ModelSpec) -> tuple[CompiledDesig
     )
 
 
+def compile_nuisance_designs(
+    data: AnalysisData, model: ModelSpec
+) -> tuple[CompiledDesign, ...]:
+    return tuple(
+        _compile_nuisance_run(data.frame_times[run], data.confounds[run], model, run)
+        for run in range(data.n_runs)
+    )
+
+
 def _compile_run(
     frame_times: np.ndarray,
     events: pd.DataFrame,
@@ -39,15 +48,27 @@ def _compile_run(
         events, frame_times, model.min_onset, run
     )
     design = _make_design_matrix(frame_times, modeled_events, selected, model, run)
-    if design.columns.has_duplicates:
-        duplicates = design.columns[design.columns.duplicated()].tolist()
-        raise ValueError(f"run {run} design has duplicate columns: {duplicates}")
-    if not np.isfinite(design.to_numpy()).all():
-        raise ValueError(f"run {run} design must be finite")
+    _validate_design_matrix(design, run)
     return CompiledDesign(
         matrix=design,
         excluded_event_count=excluded_count,
         min_onset_cutoff=cutoff,
+    )
+
+
+def _compile_nuisance_run(
+    frame_times: np.ndarray,
+    confounds: pd.DataFrame,
+    model: ModelSpec,
+    run: int,
+) -> CompiledDesign:
+    selected = _select_confounds(confounds, model.confounds, run)
+    matrix = _make_nuisance_matrix(frame_times, selected, model, run)
+    _validate_design_matrix(matrix, run)
+    return CompiledDesign(
+        matrix=matrix,
+        excluded_event_count=0,
+        min_onset_cutoff=float(frame_times[0] + model.min_onset),
     )
 
 
@@ -72,6 +93,38 @@ def _make_design_matrix(
         )
     except (NotImplementedError, ValueError) as error:
         raise ValueError(f"run {run} design compilation failed: {error}") from error
+
+
+def _make_nuisance_matrix(
+    frame_times: np.ndarray,
+    confounds: pd.DataFrame | None,
+    model: ModelSpec,
+    run: int,
+) -> pd.DataFrame:
+    try:
+        return make_first_level_design_matrix(
+            frame_times,
+            events=None,
+            hrf_model=None,
+            drift_model=model.drift_model,
+            high_pass=model.high_pass,
+            drift_order=model.drift_order,
+            add_regs=confounds,
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+    except (NotImplementedError, ValueError) as error:
+        raise ValueError(
+            f"run {run} nuisance design compilation failed: {error}"
+        ) from error
+
+
+def _validate_design_matrix(design: pd.DataFrame, run: int) -> None:
+    if design.columns.has_duplicates:
+        duplicates = design.columns[design.columns.duplicated()].tolist()
+        raise ValueError(f"run {run} design has duplicate columns: {duplicates}")
+    if not np.isfinite(design.to_numpy()).all():
+        raise ValueError(f"run {run} design must be finite")
 
 
 def _select_modeled_events(
