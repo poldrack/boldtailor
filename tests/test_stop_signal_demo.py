@@ -78,6 +78,42 @@ TRANSFORMED_SIGNALS = [
     {"session": "ses-04", "shape": [88, 343], "dtype": "float64"},
 ]
 PLOT_AUDIT_PREFIX = "BOLDTAILOR_PLOT_AUDIT="
+DELTA_AUDIT_PREFIX = "BOLDTAILOR_DELTA_AUDIT="
+DISPLAY_AUDIT_PREFIX = "BOLDTAILOR_DISPLAY_AUDIT="
+DISPLAY_AUDIT_SETUP = """
+_display_audit_records = []
+_real_display = display
+_signal_shapes = {tuple(run.signals.shape) for run in loaded_runs}
+
+
+def _display_footprint(value):
+    if isinstance(value, np.ndarray):
+        shape = tuple(value.shape)
+        return int(value.size), shape in _signal_shapes
+    if isinstance(value, (pd.DataFrame, pd.Series)):
+        shape = tuple(value.shape)
+        return int(value.size), shape in _signal_shapes
+    if isinstance(value, dict):
+        children = tuple(value.values())
+    elif isinstance(value, (list, tuple)):
+        children = tuple(value)
+    else:
+        return 0, False
+    footprints = tuple(_display_footprint(child) for child in children)
+    nested_sizes = tuple(size for size, _ in footprints)
+    return (
+        max((len(children), *nested_sizes), default=0),
+        any(is_raw_signal for _, is_raw_signal in footprints),
+    )
+
+
+def _record_display(*objects, **kwargs):
+    _display_audit_records.extend(_display_footprint(value) for value in objects)
+    return _real_display(*objects, **kwargs)
+
+
+display = _record_display
+"""
 PLOT_AUDIT_SETUP = """
 import inspect as _inspect
 import json as _json
@@ -111,8 +147,12 @@ for _record in _plot_stat_map_records:
     _matches = []
     _matches_aggregate = False
     _matches_task_delta = False
+    _minimum = None
+    _all_nonnegative = False
     if _common_mask_values is not None:
         _values = np.asarray(_record["image"].dataobj)[_common_mask_values]
+        _minimum = float(_values.min())
+        _all_nonnegative = bool(np.all(_values >= 0.0))
         _matches = [
             _name
             for _name in result.contrast_names
@@ -128,6 +168,8 @@ for _record in _plot_stat_map_records:
             "matched_z_scores": _matches,
             "matched_aggregate_r2": _matches_aggregate,
             "matched_task_delta_r2": _matches_task_delta,
+            "minimum": _minimum,
+            "all_nonnegative": _all_nonnegative,
             "threshold": _arguments["threshold"],
             "vmin": _arguments["vmin"],
             "colorbar": _arguments["colorbar"],
@@ -137,6 +179,23 @@ for _record in _plot_stat_map_records:
         }}
     )
 print("{PLOT_AUDIT_PREFIX}" + _json.dumps(_plot_audit, sort_keys=True))
+_delta_audit = {{
+    "raw_min_delta_r2": float(task_delta.raw_min),
+    "negative_voxel_count": int(task_delta.negative_voxel_count),
+    "mean_delta_r2": float(task_delta.delta_r2.mean()),
+    "max_delta_r2": float(task_delta.delta_r2.max()),
+}}
+print("{DELTA_AUDIT_PREFIX}" + _json.dumps(_delta_audit, sort_keys=True))
+_display_audit = {{
+    "display_count": len(_display_audit_records),
+    "max_array_or_table_elements": max(
+        (size for size, _ in _display_audit_records), default=0
+    ),
+    "contains_raw_signal_shape": any(
+        is_raw_signal for _, is_raw_signal in _display_audit_records
+    ),
+}}
+print("{DISPLAY_AUDIT_PREFIX}" + _json.dumps(_display_audit, sort_keys=True))
 """
 
 
@@ -155,6 +214,13 @@ def _notebook_configuration():
 
 
 def _instrument_notebook_plots(notebook):
+    design_index = next(
+        index for index, cell in enumerate(notebook.cells) if cell.id == "design-fit"
+    )
+    notebook.cells.insert(
+        design_index,
+        nbformat.v4.new_code_cell(DISPLAY_AUDIT_SETUP),
+    )
     results_index = next(
         index for index, cell in enumerate(notebook.cells) if cell.id == "results"
     )
@@ -169,16 +235,47 @@ def _instrument_notebook_plots(notebook):
 
 
 def _plot_audit(executed):
+    return _runtime_audit(executed, PLOT_AUDIT_PREFIX)
+
+
+def _delta_audit(executed):
+    return _runtime_audit(executed, DELTA_AUDIT_PREFIX)
+
+
+def _display_audit(executed):
+    return _runtime_audit(executed, DISPLAY_AUDIT_PREFIX)
+
+
+def _runtime_audit(executed, prefix):
     audit_lines = [
         line
         for cell in executed.cells
         for output in cell.get("outputs", ())
         if output.get("output_type") == "stream"
         for line in output.get("text", "").splitlines()
-        if line.startswith(PLOT_AUDIT_PREFIX)
+        if line.startswith(prefix)
     ]
     assert len(audit_lines) == 1
-    return json.loads(audit_lines[0].removeprefix(PLOT_AUDIT_PREFIX))
+    return json.loads(audit_lines[0].removeprefix(prefix))
+
+
+def _assert_display_contract(executed):
+    audit = _display_audit(executed)
+    assert audit["display_count"] <= 12
+    assert audit["max_array_or_table_elements"] <= 256
+    assert audit["contains_raw_signal_shape"] is False
+
+    relevant_cells = {
+        cell.id: cell for cell in executed.cells if cell.id in {"design-fit", "results"}
+    }
+    assert set(relevant_cells) == {"design-fit", "results"}
+    for cell in relevant_cells.values():
+        rendered_text_size = sum(
+            len(str(output.get("text", "")))
+            + len(str(output.get("data", {}).get("text/plain", "")))
+            for output in cell.get("outputs", ())
+        )
+        assert rendered_text_size <= 20_000
 
 
 def _assert_plot_contract(executed):
@@ -205,6 +302,8 @@ def _assert_plot_contract(executed):
     assert delta["matched_z_scores"] == []
     assert delta["matched_aggregate_r2"] is False
     assert delta["matched_task_delta_r2"] is True
+    assert delta["minimum"] >= 0.0
+    assert delta["all_nonnegative"] is True
     assert delta["threshold"] is None
     assert delta["vmin"] == 0
     assert delta["colorbar"] is True
@@ -214,7 +313,7 @@ def _assert_plot_contract(executed):
     assert "clipped at zero" in delta["title"].lower()
 
 
-def _assert_published_metadata(published, bids_root):
+def _assert_published_metadata(published, bids_root, expected_delta):
     configuration_path = (
         published / "reports/sub-s4_task-stopSignal_desc-example_config.json"
     )
@@ -235,8 +334,20 @@ def _assert_published_metadata(published, bids_root):
     }
     assert variance["definition"] == "full_r2 - nuisance_r2"
     assert variance["clip_below_zero"] is True
-    assert variance["nuisance_model"]["events"] is False
-    assert variance["nuisance_model"]["noise_model"] == "ar1"
+    assert variance["nuisance_model"] == {
+        "events": False,
+        "confounds": list(CONFOUNDS),
+        "drift_model": "cosine",
+        "high_pass": 0.01,
+        "drift_order": 1,
+        "noise_model": "ar1",
+    }
+    assert variance["raw_min_delta_r2"] == pytest.approx(
+        expected_delta["raw_min_delta_r2"]
+    )
+    assert variance["negative_voxel_count"] == expected_delta["negative_voxel_count"]
+    assert variance["mean_delta_r2"] == pytest.approx(expected_delta["mean_delta_r2"])
+    assert variance["max_delta_r2"] == pytest.approx(expected_delta["max_delta_r2"])
     assert set(variance) == {
         "definition",
         "clip_below_zero",
@@ -970,6 +1081,7 @@ def test_notebook_executes_against_fixture(
     )
 
     _assert_plot_contract(executed)
+    _assert_display_contract(executed)
     assert "successful_inhibition" in rendered
     assert "stop_vs_go" in rendered
     assert "go_success_vs_baseline" in rendered
@@ -979,6 +1091,7 @@ def test_notebook_executes_against_fixture(
     assert "max_delta_r2" in rendered
     assert "raw_min_delta_r2" in rendered
     assert "negative_voxel_count" in rendered
+    assert "nuisance_design_columns" in rendered
     assert "clipped at zero" in rendered
     assert "descriptive variance accounting" in rendered
     assert (
@@ -1001,14 +1114,19 @@ def test_notebook_executes_against_fixture(
 def test_notebook_publishes_complete_private_metadata(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):
-    _, rendered, published = _execute_notebook(
+    executed, rendered, published = _execute_notebook(
         stop_signal_bids_dataset,
         tmp_path,
         monkeypatch,
         NOTEBOOK.parents[1],
+        instrument_plots=True,
     )
 
-    _assert_published_metadata(published, stop_signal_bids_dataset)
+    _assert_published_metadata(
+        published,
+        stop_signal_bids_dataset,
+        _delta_audit(executed),
+    )
     assert str(stop_signal_bids_dataset.resolve()) not in rendered
 
 
