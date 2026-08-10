@@ -150,7 +150,6 @@ def task_delta_r2(
                 warnings=(),
                 analysis_id=comparison_id,
             )
-            comparison = replace(comparison, _provenance=provenance)
         except Exception as error:
             emit_event(
                 "task_delta_r2_failed",
@@ -159,7 +158,12 @@ def task_delta_r2(
                 error=str(error),
             )
             raise
-        emit_event("task_delta_r2_completed", stage="fit")
+        history = append_event_history(
+            history,
+            emit_event("task_delta_r2_completed", stage="fit"),
+        )
+        provenance = replace(provenance, events=history)
+        comparison = replace(comparison, _provenance=provenance)
     return comparison
 
 
