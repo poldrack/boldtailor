@@ -38,10 +38,12 @@ This makes the boundary explicit:
 1. Discover the configured stop-signal runs and load the common-mask signals.
 2. Normalize signals, events, confounds, timing, and source descriptors with
    `data.from_arrays()`.
-3. Define the conventional model and semantic t contrasts with `ModelSpec`.
+3. Define the conventional model, semantic t contrasts, and the structural
+   role-classification policy.
 4. Compile full designs with `design.compile_designs()` and nuisance-only
    designs with `design.compile_nuisance_designs()`.
-5. Derive an explicit column-role mapping for each run.
+5. Resolve and validate an explicit column-role mapping for each run against
+   the concrete columns produced by both compilers.
 6. Construct `PreparedDesignAnalysis` from the normalized signals, full design
    matrices, frame times, sources, column roles, curated run metadata, and
    bounded provenance metadata.
@@ -55,8 +57,10 @@ This makes the boundary explicit:
 
 ## Column Roles
 
-Roles are derived by comparing the public full and nuisance-only compiled
-designs for each run:
+The role-classification policy is declared before compilation, but a concrete
+mapping cannot be materialized until the compiler has produced the labeled
+columns. Roles are then resolved by comparing the public full and nuisance-only
+compiled designs for each run:
 
 - `constant` is `intercept`.
 - Every other full-design column also present in the nuisance-only design is
@@ -70,7 +74,8 @@ column, and no column receives the incomplete `other` role. Failures identify
 the affected session/run.
 
 This structural rule avoids naming guesses and makes the prepared nuisance
-model identical to the public nuisance compiler's model.
+model identical to the public nuisance compiler's model. The roles interpret
+an already compiled matrix; they do not control design construction.
 
 ## Provenance and Display
 
