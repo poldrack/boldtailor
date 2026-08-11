@@ -80,8 +80,9 @@ result = fit_prepared(
 )
 ```
 
-The conventional prepared path supports semantic t contrasts and OLS or AR(1)
-inference. `task_delta_r2_prepared()` is a separate nested-OLS diagnostic when
+The conventional prepared path supports only semantic t contrasts and OLS or
+AR(1) inference. F contrasts are unsupported by the prepared path and remain
+deferred. `task_delta_r2_prepared()` is a separate nested-OLS diagnostic when
 column roles provide a complete task-versus-nuisance partition. This is not an
 optimized-HRF or GLMdenoise interface; those adaptive methods, fractional
 ridge, imaging/reconstruction, and FitLins integration remain separate future
