@@ -275,7 +275,7 @@ def test_fit_records_run_diagnostics_without_serializing_design_values():
     assert "r2" not in serialized
 
 
-def test_fit_rejects_non_estimable_contrast():
+def test_fit_rejects_non_estimable_contrast_before_glm(monkeypatch):
     signals, events, frame_times, designs, _ = _problem()
     confound = pd.DataFrame({"duplicate": designs[0]["face"].to_numpy()})
     model = ModelSpec(
@@ -284,6 +284,11 @@ def test_fit_rejects_non_estimable_contrast():
         drift_model="cosine",
         noise_model="ols",
     )
+
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
 
     with pytest.warns(UserWarning) as caught:
         with pytest.raises(
@@ -333,16 +338,43 @@ def test_fit_records_rank_deficiency_warning_in_provenance():
     assert any("design rank" in warning for warning in run["warnings"])
 
 
-def test_fit_rejects_contrast_term_missing_from_one_run():
+def test_fit_rejects_contrast_term_missing_from_one_run_before_glm(monkeypatch):
     signals, events, frame_times, _, _ = _problem()
     model = ModelSpec(
         contrasts={"button": {"button": 1.0}},
         noise_model="ols",
     )
 
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+
     with pytest.raises(
         ValueError,
         match="run 1.*contrast 'button'.*missing regressor 'button'",
+    ):
+        fit(
+            from_arrays(signals, events, frame_times=frame_times),
+            model,
+        )
+
+
+def test_fit_rejects_all_zero_semantic_contrast_before_glm(monkeypatch):
+    signals, events, frame_times, _, _ = _problem()
+    model = ModelSpec(
+        contrasts={"zero": "face - face"},
+        noise_model="ols",
+    )
+
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+
+    with pytest.raises(
+        ValueError,
+        match="run 0.*contrast 'zero'.*resolves to all zeros",
     ):
         fit(
             from_arrays(signals, events, frame_times=frame_times),

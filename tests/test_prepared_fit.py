@@ -251,7 +251,9 @@ def test_fit_prepared_rejects_invalid_semantic_contrasts(
         fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
 
 
-def test_fit_prepared_rejects_contrast_term_missing_from_one_run():
+def test_fit_prepared_rejects_contrast_term_missing_from_one_run_before_glm(
+    monkeypatch,
+):
     designs = (
         pd.DataFrame({"face": [0.0, 1.0, 0.0, 1.0], "constant": 1.0}),
         pd.DataFrame({"constant": 1.0, "house": [0.0, 1.0, 0.0, 1.0]}),
@@ -267,6 +269,11 @@ def test_fit_prepared_rejects_contrast_term_missing_from_one_run():
         ),
     )
 
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+
     with pytest.raises(
         ValueError,
         match="run 1.*contrast 'face'.*missing regressor 'face'",
@@ -278,7 +285,7 @@ def test_fit_prepared_rejects_contrast_term_missing_from_one_run():
         )
 
 
-def test_fit_prepared_rejects_non_estimable_contrast():
+def test_fit_prepared_rejects_non_estimable_contrast_before_glm(monkeypatch):
     design = pd.DataFrame(
         {
             "face": [0.0, 1.0, 0.0, 1.0, 0.0],
@@ -291,6 +298,11 @@ def test_fit_prepared_rejects_non_estimable_contrast():
         design,
     )
 
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+
     with pytest.warns(UserWarning, match="design rank"):
         with pytest.raises(ValueError, match="contrast 'difference'.*not estimable"):
             fit_prepared(
@@ -298,6 +310,28 @@ def test_fit_prepared_rejects_non_estimable_contrast():
                 contrasts={"difference": {"face": 1.0, "duplicate": -1.0}},
                 noise_model="ols",
             )
+
+
+def test_fit_prepared_rejects_all_zero_semantic_contrast_before_glm(
+    monkeypatch,
+    prepared_problem,
+):
+    prepared, _, _ = prepared_problem
+
+    def fail_glm(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+
+    with pytest.raises(
+        ValueError,
+        match="run 0.*contrast 'zero'.*resolves to all zeros",
+    ):
+        fit_prepared(
+            prepared,
+            contrasts={"zero": "face - face"},
+            noise_model="ols",
+        )
 
 
 def test_fit_prepared_rejects_nonpositive_residual_degrees_of_freedom():
