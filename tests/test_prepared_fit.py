@@ -1168,6 +1168,9 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
         noise_model="ar1",
         model_metadata=metadata,
     )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_prepared_comparison", stage="test")
 
     activity = comparison.provenance.activities[-1]
     assert activity["name"] == "task_delta_r2_prepared"
@@ -1188,10 +1191,120 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
         "max_delta_r2": pytest.approx(float(comparison.delta_r2.max())),
     }
     records = _structured_records(caplog)
-    assert [record["event"] for record in records if record["stage"] == "fit"] == [
+    fit_records = [record for record in records if record["stage"] == "fit"]
+    assert [record["event"] for record in fit_records] == [
         "task_delta_r2_prepared_started",
         "task_delta_r2_prepared_completed",
     ]
+    assert comparison.provenance.analysis_fingerprint is not None
+    assert all(
+        record["execution_id"] == comparison.provenance.execution_id
+        for record in fit_records
+    )
+    assert all(
+        record["data_id"] == prepared.provenance.metadata_fingerprint
+        for record in fit_records
+    )
+    assert all(
+        record["analysis_id"] == comparison.provenance.analysis_fingerprint
+        for record in fit_records
+    )
+    assert records[-1]["event"] == "after_prepared_comparison"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
+
+
+def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
+    caplog,
+    monkeypatch,
+    prepared_delta_problem,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    successful = task_delta_r2_prepared(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+    comparison_id = successful.provenance.analysis_fingerprint
+    caplog.clear()
+
+    def fail_diagnostic(*args, **kwargs):
+        raise ValueError("downstream diagnostic failure")
+
+    monkeypatch.setattr(
+        "boldtailor.prepared_fit._fit_prepared_r2",
+        fail_diagnostic,
+    )
+
+    with pytest.raises(ValueError, match="downstream diagnostic failure"):
+        task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata=metadata,
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_prepared_comparison_failure", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "task_delta_r2_prepared_started",
+        "task_delta_r2_prepared_failed",
+    ]
+    assert comparison_id is not None
+    assert all(record["analysis_id"] == comparison_id for record in fit_records)
+    assert all(
+        record["data_id"] == prepared.provenance.metadata_fingerprint
+        for record in fit_records
+    )
+    assert len({record["execution_id"] for record in fit_records}) == 1
+    assert records[-1]["event"] == "after_prepared_comparison_failure"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
+
+
+def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
+    caplog,
+    prepared_delta_problem,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, contrasts, _, full_result = prepared_delta_problem
+    private_key = "/private/secret/prepared-comparison.json"
+
+    with pytest.raises(ValueError, match="path-like"):
+        task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata={private_key: "redacted"},
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_preidentity_comparison_failure", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "task_delta_r2_prepared_started",
+        "task_delta_r2_prepared_failed",
+    ]
+    assert all(record.get("analysis_id") is None for record in fit_records)
+    assert private_key not in "\n".join(
+        record.getMessage() for record in caplog.records
+    )
+    assert records[-1]["event"] == "after_preidentity_comparison_failure"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
 
 
 def test_task_delta_r2_prepared_never_writes_to_the_filesystem(
