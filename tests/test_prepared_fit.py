@@ -1,4 +1,5 @@
 import builtins
+from dataclasses import replace
 import io
 import json
 import logging
@@ -15,7 +16,7 @@ from nilearn.glm.contrasts import expression_to_contrast_vector
 from nilearn.glm.first_level import run_glm
 
 from boldtailor.prepared import PreparedDesignAnalysis
-from boldtailor.prepared_fit import fit_prepared
+from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.provenance import RunSources, SourceRef
 
 
@@ -84,16 +85,18 @@ def _complete_sources() -> tuple[RunSources, ...]:
     )
 
 
-def _prepared_with_sources(signals, design):
+def _prepared_with_sources(signals, design, *, roles=None, sources=None):
+    if roles is None:
+        roles = {
+            name: "intercept" if name == "constant" else "task"
+            for name in design.columns
+        }
     return PreparedDesignAnalysis.from_arrays(
         signals=signals,
         design_matrices=design,
         tr=2.0,
-        column_roles={
-            name: "intercept" if name == "constant" else "task"
-            for name in design.columns
-        },
-        sources=_complete_sources(),
+        column_roles=roles,
+        sources=_complete_sources() if sources is None else sources,
     )
 
 
@@ -821,3 +824,356 @@ def test_fit_prepared_never_writes_to_the_filesystem(monkeypatch, prepared_probl
     result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
 
     assert result.contrast_names == ("face_gt_house",)
+
+
+@pytest.fixture
+def prepared_delta_problem():
+    rng = np.random.default_rng(20260817)
+    designs = (
+        pd.DataFrame(
+            {
+                "face": rng.normal(size=40),
+                "motion_first": rng.normal(size=40),
+                "constant": np.ones(40),
+                "house": rng.normal(size=40),
+            }
+        ),
+        pd.DataFrame(
+            {
+                "constant": np.ones(56),
+                "house": rng.normal(size=56),
+                "motion_second": rng.normal(size=56),
+                "face": rng.normal(size=56),
+            }
+        ),
+    )
+    coefficients = (
+        np.array([[2.0, 1.0], [0.5, -0.25], [10.0, 11.0], [-1.0, 0.5]]),
+        np.array([[10.0, 11.0], [-1.0, 0.5], [0.5, -0.25], [2.0, 1.0]]),
+    )
+    signals = tuple(
+        design.to_numpy() @ values + rng.normal(0.0, 0.1, (len(design), 2))
+        for design, values in zip(designs, coefficients, strict=True)
+    )
+    roles = (
+        {
+            "face": "task",
+            "motion_first": "nuisance",
+            "constant": "intercept",
+            "house": "task",
+        },
+        {
+            "constant": "intercept",
+            "house": "task",
+            "motion_second": "nuisance",
+            "face": "task",
+        },
+    )
+    prepared = PreparedDesignAnalysis.from_arrays(
+        signals=signals,
+        design_matrices=designs,
+        tr=2.0,
+        column_roles=roles,
+        sources=_complete_sources() * 2,
+    )
+    contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
+    metadata = {"origin": "fitlins", "node": "prepared-delta"}
+    full_result = fit_prepared(
+        prepared,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+    return prepared, contrasts, metadata, full_result
+
+
+def _ols_r2_oracle(signals, designs):
+    residual_sums = []
+    total_sums = []
+    for signal, design in zip(signals, designs, strict=True):
+        matrix = design.to_numpy()
+        labels, regression_results = run_glm(signal, matrix, noise_model="ols")
+        prediction = np.empty_like(signal)
+        for label, fit in regression_results.items():
+            prediction[:, labels == label] = matrix @ fit.theta
+        residual_sums.append(np.sum((signal - prediction) ** 2, axis=0))
+        total_sums.append(np.sum((signal - signal.mean(axis=0)) ** 2, axis=0))
+    return 1.0 - np.sum(residual_sums, axis=0) / np.sum(total_sums, axis=0)
+
+
+def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+
+    comparison = task_delta_r2_prepared(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+
+    nuisance_designs = comparison.nuisance_design_matrices
+    assert [list(design.columns) for design in nuisance_designs] == [
+        ["motion_first", "constant"],
+        ["constant", "motion_second"],
+    ]
+    expected_full = _ols_r2_oracle(prepared.signals, prepared.design_matrices)
+    expected_nuisance = _ols_r2_oracle(prepared.signals, nuisance_designs)
+    expected_raw = expected_full - expected_nuisance
+    np.testing.assert_allclose(comparison.full_r2, expected_full)
+    np.testing.assert_allclose(comparison.nuisance_r2, expected_nuisance)
+    np.testing.assert_allclose(comparison.raw_delta_r2, expected_raw)
+    assert np.all(comparison.raw_delta_r2 >= -1e-12)
+    np.testing.assert_allclose(
+        comparison.delta_r2,
+        np.maximum(comparison.raw_delta_r2, 0.0),
+    )
+    assert comparison.negative_voxel_count == np.count_nonzero(expected_raw < 0.0)
+    assert comparison.raw_min == pytest.approx(expected_raw.min())
+
+
+def test_task_delta_r2_prepared_returns_owned_immutable_arrays_and_copied_designs(
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    comparison = task_delta_r2_prepared(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+    returned_design = comparison.nuisance_design_matrices[0]
+    returned_design.iloc[0, 0] = -99.0
+
+    assert comparison.nuisance_design_matrices[0].iloc[0, 0] != -99.0
+    for values in (
+        comparison.full_r2,
+        comparison.nuisance_r2,
+        comparison.raw_delta_r2,
+        comparison.delta_r2,
+    ):
+        assert values.flags.owndata
+        assert values.flags.c_contiguous
+        assert values.dtype == np.float64
+        assert not values.flags.writeable
+        with pytest.raises(ValueError, match="WRITEABLE"):
+            values.setflags(write=True)
+
+
+@pytest.mark.parametrize(
+    ("roles", "message"),
+    [
+        (
+            {"face": "other", "motion": "nuisance", "constant": "intercept"},
+            "column roles are incomplete",
+        ),
+        (
+            {"face": "nuisance", "motion": "nuisance", "constant": "intercept"},
+            "requires at least one task column",
+        ),
+        (
+            {"face": "task", "motion": "task", "constant": "task"},
+            "requires a nuisance or intercept column",
+        ),
+    ],
+)
+def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(roles, message):
+    design = pd.DataFrame(
+        {"face": [0.0, 1.0] * 12, "motion": np.linspace(0, 1, 24), "constant": 1.0}
+    )
+    prepared = _prepared_with_sources(
+        design.to_numpy() @ np.array([[2.0], [0.5], [5.0]]),
+        design,
+        roles=roles,
+    )
+    full_result = fit_prepared(
+        prepared,
+        contrasts={"face": {"face": 1.0}},
+        noise_model="ols",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts={"face": {"face": 1.0}},
+            noise_model="ols",
+        )
+
+
+@pytest.mark.parametrize(
+    "changed",
+    ["sources", "design", "contrasts", "noise_model", "model_metadata"],
+)
+def test_task_delta_r2_prepared_rejects_changed_parent_identity(
+    prepared_delta_problem,
+    changed,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    supplied_prepared = prepared
+    supplied_contrasts = contrasts
+    supplied_noise_model = "ar1"
+    supplied_metadata = metadata
+    if changed == "sources":
+        changed_sources = (
+            RunSources(
+                signal=SourceRef(
+                    role="signal",
+                    uri="sub-02/func/sub-02_task-faces_run-01_bold.tsv",
+                    media_type="text/tab-separated-values",
+                    byte_size=2048,
+                    modified_at="2026-08-11T12:00:00Z",
+                ),
+                events=_complete_sources()[0].events,
+            ),
+            _complete_sources()[0],
+        )
+        supplied_prepared = PreparedDesignAnalysis.from_arrays(
+            signals=prepared.signals,
+            design_matrices=prepared.design_matrices,
+            tr=2.0,
+            column_roles=prepared.column_roles,
+            sources=changed_sources,
+        )
+    elif changed == "design":
+        designs = prepared.design_matrices
+        designs[0].iloc[0, 0] += 0.1
+        supplied_prepared = PreparedDesignAnalysis.from_arrays(
+            signals=prepared.signals,
+            design_matrices=designs,
+            tr=2.0,
+            column_roles=prepared.column_roles,
+            sources=_complete_sources() * 2,
+        )
+    elif changed == "contrasts":
+        supplied_contrasts = {"face": {"face": 1.0}}
+    elif changed == "noise_model":
+        supplied_noise_model = "ols"
+    else:
+        supplied_metadata = {"origin": "fitlins", "node": "changed"}
+
+    with pytest.raises(ValueError, match="full result does not match prepared input"):
+        task_delta_r2_prepared(
+            supplied_prepared,
+            full_result,
+            contrasts=supplied_contrasts,
+            noise_model=supplied_noise_model,
+            model_metadata=supplied_metadata,
+        )
+
+
+def test_task_delta_r2_prepared_rejects_invalid_parent_dimensions(
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    mismatched = replace(full_result, _r2=np.zeros(prepared.n_features + 1))
+
+    with pytest.raises(ValueError, match="feature dimensions do not match prepared"):
+        task_delta_r2_prepared(
+            prepared,
+            mismatched,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata=metadata,
+        )
+
+
+def test_task_delta_r2_prepared_requires_reliable_parent_identity(prepared_problem):
+    prepared, contrasts, _ = prepared_problem
+    full_result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+
+    with pytest.raises(ValueError, match="requires fingerprintable prepared sources"):
+        task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts=contrasts,
+            noise_model="ols",
+        )
+
+
+def test_task_delta_r2_prepared_rejects_materially_negative_nested_ols_difference(
+    monkeypatch,
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    calls = iter((np.array([0.1, 0.1]), np.array([0.2, 0.2])))
+    monkeypatch.setattr(
+        "boldtailor.prepared_fit.fit_r2_designs",
+        lambda *args: next(calls),
+    )
+
+    with pytest.raises(ValueError, match="nested OLS monotonicity violated"):
+        task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata=metadata,
+        )
+
+
+def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
+    caplog,
+    prepared_delta_problem,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+
+    comparison = task_delta_r2_prepared(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+
+    activity = comparison.provenance.activities[-1]
+    assert activity["name"] == "task_delta_r2_prepared"
+    assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
+    assert activity["definition"] == "full_r2 - nuisance_r2"
+    assert activity["diagnostic_noise_model"] == "ols"
+    assert activity["inferential_noise_model"] == "ar1"
+    assert activity["clip_policy"] == "numerical_roundoff_guard"
+    assert activity["nuisance_rule"] == "column roles nuisance or intercept"
+    assert [run["nuisance_columns"] for run in activity["runs"]] == [
+        ["motion_first", "constant"],
+        ["constant", "motion_second"],
+    ]
+    assert activity["diagnostics"] == {
+        "raw_min": comparison.raw_min,
+        "negative_voxel_count": comparison.negative_voxel_count,
+        "mean_delta_r2": pytest.approx(float(comparison.delta_r2.mean())),
+        "max_delta_r2": pytest.approx(float(comparison.delta_r2.max())),
+    }
+    records = _structured_records(caplog)
+    assert [record["event"] for record in records if record["stage"] == "fit"] == [
+        "task_delta_r2_prepared_started",
+        "task_delta_r2_prepared_completed",
+    ]
+
+
+def test_task_delta_r2_prepared_never_writes_to_the_filesystem(
+    monkeypatch,
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+
+    def fail_write(*args, **kwargs):
+        raise AssertionError("unexpected filesystem write")
+
+    monkeypatch.setattr(Path, "open", fail_write)
+    monkeypatch.setattr(Path, "write_text", fail_write)
+    monkeypatch.setattr(Path, "write_bytes", fail_write)
+
+    comparison = task_delta_r2_prepared(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+
+    assert comparison.delta_r2.shape == (prepared.n_features,)
