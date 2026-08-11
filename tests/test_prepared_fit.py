@@ -635,6 +635,52 @@ def test_fit_prepared_rejects_path_like_model_keys_without_logging_them(
 
 
 @pytest.mark.parametrize(
+    "model_metadata",
+    [
+        {"safe": [{"/private/task-5-sequence-key": "safe"}]},
+        {"safe": ({"nested": [{"/private/task-5-deep-key": "safe"}]},)},
+    ],
+)
+def test_fit_prepared_rejects_path_like_mapping_keys_inside_metadata_sequences(
+    caplog,
+    prepared_problem,
+    model_metadata,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, _, _ = prepared_problem
+    absolute_path = next(
+        value
+        for value in (
+            "/private/task-5-sequence-key",
+            "/private/task-5-deep-key",
+        )
+        if value in str(model_metadata)
+    )
+
+    with pytest.raises(ValueError, match="path-like"):
+        fit_prepared(
+            prepared,
+            contrasts={"face": {"face": 1.0}},
+            noise_model="ols",
+            model_metadata=model_metadata,
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_nested_metadata_failure", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert absolute_path not in "\n".join(
+        record.getMessage() for record in caplog.records
+    )
+    assert records[-1].get("execution_id") is None
+
+
+@pytest.mark.parametrize(
     ("contrasts", "noise_model", "model_metadata"),
     [
         ({}, "ols", None),
