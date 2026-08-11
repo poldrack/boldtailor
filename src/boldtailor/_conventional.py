@@ -43,9 +43,16 @@ def fit_designs(
     contrasts: Mapping[str, ContrastValue],
     noise_model: str,
 ) -> ConventionalFit:
+    resolved = _preflight_contrasts(designs, contrasts)
+    _validate_designs(designs)
     run_fits = tuple(
-        _fit_run(signal, design, contrasts, noise_model, run)
-        for run, (signal, design) in enumerate(zip(signals, designs, strict=True))
+        _fit_run(signal, design, run_contrasts, noise_model)
+        for signal, design, run_contrasts in zip(
+            signals,
+            designs,
+            resolved,
+            strict=True,
+        )
     )
     combined = _combine_contrasts(run_fits, tuple(contrasts))
     residual_sum = np.sum([run.residual_sum for run in run_fits], axis=0)
@@ -58,9 +65,10 @@ def fit_r2_designs(
     designs: Sequence[pd.DataFrame],
     noise_model: str,
 ) -> np.ndarray:
+    _validate_designs(designs)
     fits = tuple(
-        _fit_glm(signal, design.to_numpy(), noise_model, run)
-        for run, (signal, design) in enumerate(zip(signals, designs, strict=True))
+        _fit_glm(signal, design.to_numpy(), noise_model)
+        for signal, design in zip(signals, designs, strict=True)
     )
     residual_sum = np.sum([fit.residual_sum for fit in fits], axis=0)
     total_sum = np.sum([fit.total_sum for fit in fits], axis=0)
@@ -70,23 +78,18 @@ def fit_r2_designs(
 def _fit_run(
     signals: np.ndarray,
     design: pd.DataFrame,
-    contrasts: Mapping[str, ContrastValue],
+    contrasts: Mapping[str, np.ndarray],
     noise_model: str,
-    run: int,
 ) -> RunFit:
     matrix = design.to_numpy()
-    glm_fit = _fit_glm(signals, matrix, noise_model, run)
+    glm_fit = _fit_glm(signals, matrix, noise_model)
     results = {
-        name: _compute_contrast(
+        name: _nilearn_t_contrast(
             glm_fit.labels,
             glm_fit.regression_results,
-            value,
-            design.columns,
-            matrix,
-            name,
-            run,
+            vector,
         )
-        for name, value in contrasts.items()
+        for name, vector in contrasts.items()
     }
     return RunFit(
         contrasts=results,
@@ -100,10 +103,7 @@ def _fit_glm(
     signals: np.ndarray,
     design: np.ndarray,
     noise_model: str,
-    run: int,
 ) -> _GLMFit:
-    _warn_if_rank_deficient(design, run)
-    _validate_residual_dof(design, run)
     labels, regression_results = run_glm(
         signals,
         design,
@@ -131,20 +131,44 @@ def _fixed_effects(contrasts: list[object]) -> object:
     return (1.0 / len(contrasts)) * combined
 
 
-def _compute_contrast(
-    labels: np.ndarray,
-    regression_results: dict,
+def _preflight_contrasts(
+    designs: Sequence[pd.DataFrame],
+    contrasts: Mapping[str, ContrastValue],
+) -> tuple[Mapping[str, np.ndarray], ...]:
+    return tuple(
+        _resolve_run_contrasts(design, contrasts, run)
+        for run, design in enumerate(designs)
+    )
+
+
+def _resolve_run_contrasts(
+    design: pd.DataFrame,
+    contrasts: Mapping[str, ContrastValue],
+    run: int,
+) -> dict[str, np.ndarray]:
+    matrix = design.to_numpy()
+    return {
+        name: _resolve_contrast(value, design.columns, matrix, name, run)
+        for name, value in contrasts.items()
+    }
+
+
+def _resolve_contrast(
     value: ContrastValue,
     columns: pd.Index,
     design: np.ndarray,
     name: str,
     run: int,
-) -> object:
+) -> np.ndarray:
     vector = _contrast_vector(value, columns, name, run)
     if not np.any(vector):
         raise ValueError(f"run {run} contrast {name!r} resolves to all zeros")
-    _validate_estimable(vector, design, name, run)
-    return _nilearn_t_contrast(labels, regression_results, vector)
+    try:
+        _validate_estimable(vector, design, name, run)
+    except ValueError:
+        _warn_if_rank_deficient(design, run)
+        raise
+    return vector
 
 
 def _nilearn_t_contrast(
@@ -222,6 +246,13 @@ def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
             UserWarning,
             stacklevel=2,
         )
+
+
+def _validate_designs(designs: Sequence[pd.DataFrame]) -> None:
+    for run, design in enumerate(designs):
+        matrix = design.to_numpy()
+        _warn_if_rank_deficient(matrix, run)
+        _validate_residual_dof(matrix, run)
 
 
 def _validate_residual_dof(design: np.ndarray, run: int) -> None:
