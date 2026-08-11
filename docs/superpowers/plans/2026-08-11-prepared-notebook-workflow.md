@@ -262,7 +262,13 @@ _contrast_parity = {
             getattr(_event_result, field)(name),
             equal_nan=True,
         ))
-        for field in ("effect", "variance", "statistic", "z_score", "p_value")
+        for field in (
+            "effect",
+            "variance",
+            "stat",
+            "z_score",
+            "one_sided_p_value",
+        )
     }
     for name in result.contrast_names
 }
