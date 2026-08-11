@@ -45,4 +45,3 @@ notebook source-array additions. A temporary JSON indentation-only formatting
 noise issue was caught during self-review and removed before the final commit.
 The worktree still contains the pre-existing untracked generated directory
 `src/boldtailor.egg-info/`; it was not touched or staged.
-
