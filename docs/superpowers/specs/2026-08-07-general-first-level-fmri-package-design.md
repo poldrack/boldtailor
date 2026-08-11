@@ -4,6 +4,12 @@
 
 **Date:** 2026-08-07
 
+**Amended:** 2026-08-11 by the
+[Boldtailor–FitLins interoperability design](2026-08-11-fitlins-boldtailor-interoperability-design.md).
+That decision record supersedes the BIDS-facing ownership boundary and
+implementation sequence below where they differ; the scientific architecture
+remains in force.
+
 ## Context
 
 The existing GLMsingle Python package began as a close port of MATLAB code. Its
@@ -466,15 +472,18 @@ state is unchanged.
 The project is delivered in independently useful phases:
 
 1. array-based conventional Nilearn GLM with OLS and AR(1);
-2. Python and BIDS Stats Models compilation;
-3. PyBIDS loading plus NIfTI and CIFTI adapters and writers;
-4. cross-validated voxelwise HRF selection; and
-5. GLMsingle denoising and fractional-ridge recipe.
+2. prepared-design estimation through a representation-neutral API;
+3. conventional FitLins integration using PyBIDS-compiled designs;
+4. thin PyBIDS-backed standalone BIDS and spatial convenience adapters;
+5. cross-validated voxelwise HRF selection and its separate FitLins mode;
+6. an independent GLMdenoise component; and
+7. fractional-ridge estimation and the explicit GLMsingle recipe.
 
 Each phase is fully tested before the next begins. Because the phases are too
 large for one implementation plan, each receives its own focused specification
-and plan. After this design is reviewed and copied to the new repository, the
-first planning session covers only phase 1.
+and plan. FitLins retains BIDS application orchestration, hierarchical models,
+reporting, and derivative organization. Boldtailor does not implement a second
+BIDS Stats Models transformations engine or a parallel BIDS application.
 
 ## References
 
