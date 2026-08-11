@@ -232,8 +232,13 @@ def test_notebook_uses_prepared_design_estimation_boundary():
     assert "prepared_fit.fit_prepared" in calls
     assert "prepared_fit.task_delta_r2_prepared" in calls
     assert "fit.fit" not in calls
-    assert "fit.task_delta_r2" not in calls
+assert "fit.task_delta_r2" not in calls
 ```
+
+Build a separate `all_source` string from every Markdown and code cell when
+checking explanatory prose. Call-graph assertions remain restricted to parsed
+code cells; narrative assertions must not expect Markdown text to appear in a
+code-only concatenation.
 
 Also inspect imports and require direct module imports rather than package-root
 exports:
@@ -385,7 +390,7 @@ prepared_analysis = PreparedDesignAnalysis.from_arrays(
     design_matrices=full_designs,
     frame_times=analysis_data.frame_times,
     column_roles=column_roles,
-    sources=analysis_data.sources,
+    sources=analysis_data.provenance.sources,
     run_metadata=run_metadata,
     provenance_metadata={
         "boundary": "prepared_design",
