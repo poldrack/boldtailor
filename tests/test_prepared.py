@@ -1,0 +1,479 @@
+from copy import deepcopy
+from importlib.metadata import version
+import json
+import logging
+import re
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from boldtailor.prepared import PreparedDesignAnalysis
+from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
+
+
+@pytest.fixture
+def prepared_inputs():
+    signals = [
+        np.arange(24, dtype=float).reshape(8, 3),
+        np.arange(30, dtype=float).reshape(10, 3),
+    ]
+    designs = [
+        pd.DataFrame(
+            {
+                "face": [0, 1] * 4,
+                "motion": np.linspace(0, 1, 8),
+                "constant": 1.0,
+            }
+        ),
+        pd.DataFrame(
+            {
+                "constant": 1.0,
+                "motion": np.linspace(0, 1, 10),
+                "face": [0, 1] * 5,
+            }
+        ),
+    ]
+    roles = [
+        {"face": "task", "motion": "nuisance", "constant": "intercept"},
+        {"constant": "intercept", "motion": "nuisance", "face": "task"},
+    ]
+    metadata = [
+        {"subject": "01", "session": "01", "task": "faces", "run": "1"},
+        {"subject": "01", "session": "02", "task": "faces", "run": "1"},
+    ]
+    return signals, designs, roles, metadata
+
+
+def _make_prepared(
+    prepared_inputs,
+    *,
+    tr: float | None = 2.0,
+    frame_times: np.ndarray | list[np.ndarray] | None = None,
+    sources: tuple[RunSources, ...] | None = None,
+    provenance_metadata: dict[str, object] | None = None,
+):
+    signals, designs, roles, metadata = prepared_inputs
+    return PreparedDesignAnalysis.from_arrays(
+        signals=signals,
+        design_matrices=designs,
+        tr=tr,
+        frame_times=frame_times,
+        column_roles=roles,
+        run_metadata=metadata,
+        sources=sources,
+        provenance_metadata=provenance_metadata,
+    )
+
+
+def _replace_design_column(case, values):
+    design = case[1][0].copy()
+    design["face"] = values
+    case[1][0] = design
+
+
+def _complete_sources() -> tuple[RunSources, ...]:
+    return tuple(
+        RunSources(
+            signal=SourceRef(
+                role="signal",
+                uri=f"sub-01/func/sub-01_task-faces_run-0{run}_bold.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=1024 * run,
+                modified_at=f"2026-08-11T12:0{run}:00Z",
+            ),
+            events=SourceRef(
+                role="events",
+                uri=f"sub-01/func/sub-01_task-faces_run-0{run}_events.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=256 * run,
+                modified_at=f"2026-08-11T12:1{run}:00Z",
+            ),
+        )
+        for run in (1, 2)
+    )
+
+
+def _structured_records(caplog):
+    return [json.loads(record.getMessage()) for record in caplog.records]
+
+
+def test_prepared_analysis_owns_inputs_and_returns_defensive_state(prepared_inputs):
+    signals, designs, roles, metadata = prepared_inputs
+    original = deepcopy((signals, designs, roles, metadata))
+    prepared = PreparedDesignAnalysis.from_arrays(
+        signals=signals,
+        design_matrices=designs,
+        tr=2.0,
+        column_roles=roles,
+        run_metadata=metadata,
+    )
+
+    signals[0][:] = -1
+    designs[0].iloc[:, :] = -1
+    roles[0]["face"] = "other"
+    metadata[0]["subject"] = "changed"
+
+    assert prepared.n_runs == 2
+    assert prepared.n_features == 3
+    np.testing.assert_array_equal(prepared.signals[0], original[0][0])
+    pd.testing.assert_frame_equal(
+        prepared.design_matrices[0], original[1][0], check_dtype=False
+    )
+    assert all(dtype == np.float64 for dtype in prepared.design_matrices[0].dtypes)
+    assert prepared.column_roles[0]["face"] == "task"
+    assert prepared.run_metadata[0]["subject"] == "01"
+    assert isinstance(prepared.provenance, ProvenanceRecord)
+
+
+def test_prepared_analysis_accessors_return_defensive_copies(prepared_inputs):
+    prepared = _make_prepared(prepared_inputs)
+    designs = prepared.design_matrices
+    roles = prepared.column_roles
+    metadata = prepared.run_metadata
+
+    designs[0].loc[0, "face"] = -1
+    roles[0]["face"] = "other"
+    metadata[0]["subject"] = "changed"
+
+    assert prepared.design_matrices[0].loc[0, "face"] == 0.0
+    assert prepared.column_roles[0]["face"] == "task"
+    assert prepared.run_metadata[0]["subject"] == "01"
+
+
+def test_prepared_analysis_arrays_are_strictly_immutable(prepared_inputs):
+    prepared = _make_prepared(prepared_inputs)
+    for values in (*prepared.signals, *prepared.frame_times):
+        assert values.flags.owndata
+        assert values.dtype == np.float64
+        assert values.flags.c_contiguous
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.setflags(write=True)
+
+
+@pytest.mark.parametrize(
+    ("mutator", "message"),
+    [
+        (lambda case: case[1].__setitem__(0, np.ones((8, 3))), "pandas DataFrame"),
+        (
+            lambda case: case[1][0].rename(columns={"face": ""}, inplace=True),
+            "nonempty strings",
+        ),
+        (
+            lambda case: setattr(case[1][0], "columns", ["face", "face", "constant"]),
+            "duplicate",
+        ),
+        (
+            lambda case: _replace_design_column(case, [True] * 8),
+            "finite numeric",
+        ),
+        (
+            lambda case: _replace_design_column(case, [np.nan] * 8),
+            "finite numeric",
+        ),
+        (lambda case: case[2][0].pop("motion"), "one role per design column"),
+        (
+            lambda case: case[2][0].__setitem__("motion", "learned"),
+            "invalid column role",
+        ),
+        (
+            lambda case: case[3][0].__setitem__("path", "/private/data"),
+            "path-like",
+        ),
+    ],
+)
+def test_prepared_analysis_rejects_invalid_design_inputs(
+    prepared_inputs, mutator, message
+):
+    case = deepcopy(prepared_inputs)
+    mutator(case)
+
+    with pytest.raises(ValueError, match=message):
+        _make_prepared(case)
+
+
+def test_prepared_analysis_rejects_absolute_path_design_column(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[1][0] = case[1][0].rename(columns={"face": "/private/secret/design.tsv"})
+    case[2][0]["/private/secret/design.tsv"] = case[2][0].pop("face")
+
+    with pytest.raises(ValueError, match="path-like"):
+        _make_prepared(case)
+
+
+@pytest.mark.parametrize(
+    ("design", "message"),
+    [
+        (pd.DataFrame(columns=["face", "motion", "constant"]), "nonzero dimensions"),
+        (pd.DataFrame(index=range(8)), "nonzero dimensions"),
+    ],
+)
+def test_prepared_analysis_rejects_empty_design_dimensions(
+    prepared_inputs, design, message
+):
+    case = deepcopy(prepared_inputs)
+    case[1][0] = design
+
+    with pytest.raises(ValueError, match=message):
+        _make_prepared(case)
+
+
+def test_prepared_analysis_rejects_design_signal_row_mismatch(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[1][0] = case[1][0].iloc[:-1]
+
+    with pytest.raises(ValueError, match="8 rows"):
+        _make_prepared(case)
+
+
+def test_prepared_analysis_rejects_inconsistent_signal_feature_counts(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[0][1] = np.ones((10, 2))
+
+    with pytest.raises(ValueError, match="same number of features"):
+        _make_prepared(case)
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
+    [
+        (1, "design_matrices"),
+        (2, "column_roles"),
+        (3, "run_metadata"),
+    ],
+)
+def test_prepared_analysis_rejects_mismatched_run_counts(
+    prepared_inputs, item, message
+):
+    case = deepcopy(prepared_inputs)
+    case[item].pop()
+
+    with pytest.raises(ValueError, match=message):
+        _make_prepared(case)
+
+
+def test_prepared_analysis_rejects_nonmapping_run_metadata(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[3][0] = ["subject", "01"]
+
+    with pytest.raises(ValueError, match="run_metadata.*mapping"):
+        _make_prepared(case)
+
+
+@pytest.mark.parametrize(
+    ("tr", "frame_times"),
+    [(None, None), (2.0, [np.arange(8.0), np.arange(10.0)])],
+)
+def test_prepared_analysis_requires_exactly_one_timing_source(
+    prepared_inputs, tr, frame_times
+):
+    with pytest.raises(ValueError, match="exactly one of tr or frame_times"):
+        _make_prepared(prepared_inputs, tr=tr, frame_times=frame_times)
+
+
+def test_prepared_analysis_accepts_explicit_other_column_role(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[2][0]["motion"] = "other"
+
+    prepared = _make_prepared(case)
+
+    assert prepared.column_roles[0]["motion"] == "other"
+
+
+def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inputs):
+    first = _make_prepared(prepared_inputs)
+    reordered_metadata = deepcopy(prepared_inputs)
+    reordered_metadata[3][0] = dict(reversed(tuple(reordered_metadata[3][0].items())))
+    same = _make_prepared(reordered_metadata)
+    changed = deepcopy(prepared_inputs)
+    changed[1][0].loc[0, "motion"] += 0.25
+    different = _make_prepared(changed)
+
+    assert first.design_fingerprint == same.design_fingerprint
+    assert first.run_design_fingerprints == same.run_design_fingerprints
+    assert different.run_design_fingerprints[0] != first.run_design_fingerprints[0]
+    assert different.design_fingerprint != first.design_fingerprint
+    assert all(
+        re.fullmatch(r"[0-9a-f]{64}", fingerprint)
+        for fingerprint in (*first.run_design_fingerprints, first.design_fingerprint)
+    )
+
+
+def test_prepared_design_fingerprint_includes_structure_and_run_order(prepared_inputs):
+    original = _make_prepared(prepared_inputs)
+
+    reordered_columns = deepcopy(prepared_inputs)
+    reordered_columns[1][0] = reordered_columns[1][0][["motion", "face", "constant"]]
+    changed_roles = deepcopy(prepared_inputs)
+    changed_roles[2][0]["motion"] = "other"
+    changed_times = _make_prepared(
+        prepared_inputs,
+        tr=None,
+        frame_times=[
+            np.array([0.0, 2.0, 4.0, 6.0, 8.25, 10.0, 12.0, 14.0]),
+            np.arange(10.0) * 2.0,
+        ],
+    )
+    reordered_runs = deepcopy(prepared_inputs)
+    for values in reordered_runs:
+        values.reverse()
+
+    assert (
+        _make_prepared(reordered_columns).design_fingerprint
+        != original.design_fingerprint
+    )
+    assert (
+        _make_prepared(changed_roles).design_fingerprint != original.design_fingerprint
+    )
+    assert changed_times.design_fingerprint != original.design_fingerprint
+    assert (
+        _make_prepared(reordered_runs).design_fingerprint != original.design_fingerprint
+    )
+
+
+def test_prepared_design_normalization_records_lifecycle_and_provenance(
+    prepared_inputs, caplog
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    sources = _complete_sources()
+
+    first = _make_prepared(prepared_inputs, sources=sources)
+    second = _make_prepared(prepared_inputs, sources=sources)
+
+    records = _structured_records(caplog)
+    lifecycle = [
+        record
+        for record in records
+        if record["stage"] == "prepared_design"
+        and record["event"].startswith("normalization_")
+    ]
+    assert [record["event"] for record in lifecycle] == [
+        "normalization_started",
+        "normalization_completed",
+        "normalization_started",
+        "normalization_completed",
+    ]
+    assert {record["execution_id"] for record in lifecycle[:2]} == {
+        first.provenance.execution_id
+    }
+    assert {record["execution_id"] for record in lifecycle[2:]} == {
+        second.provenance.execution_id
+    }
+
+    activity = first.provenance.activities[-1]
+    assert activity == {
+        "name": "normalize_prepared_design",
+        "stage": "prepared_design",
+        "timing_source": "tr",
+        "run_count": 2,
+        "feature_count": 3,
+        "runs": [
+            {
+                "columns": ["face", "motion", "constant"],
+                "roles": ["task", "nuisance", "intercept"],
+            },
+            {
+                "columns": ["constant", "motion", "face"],
+                "roles": ["intercept", "nuisance", "task"],
+            },
+        ],
+        "run_design_fingerprints": list(first.run_design_fingerprints),
+        "design_fingerprint": first.design_fingerprint,
+        "run_metadata": prepared_inputs[3],
+        "software_versions": {
+            "boldtailor": version("boldtailor"),
+            "numpy": version("numpy"),
+            "pandas": version("pandas"),
+        },
+    }
+    assert first.provenance.execution_id != second.provenance.execution_id
+    assert (
+        first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
+    )
+    assert first.design_fingerprint == second.design_fingerprint
+
+
+def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
+    prepared_inputs,
+):
+    inputs = deepcopy(prepared_inputs)
+    provenance_metadata = {
+        "adapter": {"name": "fitlins", "settings": ["fixed", "prepared"]},
+        "node": "run",
+    }
+    first = _make_prepared(
+        inputs,
+        sources=_complete_sources(),
+        provenance_metadata=provenance_metadata,
+    )
+    reordered = deepcopy(prepared_inputs)
+    reordered[3][:] = [dict(reversed(tuple(item.items()))) for item in reordered[3]]
+    second = _make_prepared(
+        reordered,
+        sources=_complete_sources(),
+        provenance_metadata=dict(reversed(tuple(provenance_metadata.items()))),
+    )
+    changed_metadata = deepcopy(prepared_inputs)
+    changed_metadata[3][0]["subject"] = "99"
+    third = _make_prepared(
+        changed_metadata,
+        sources=_complete_sources(),
+        provenance_metadata=provenance_metadata,
+    )
+    inputs[3][0]["subject"] = "mutated"
+    provenance_metadata["adapter"]["name"] = "mutated"
+
+    activity = first.provenance.to_dict()["activities"][0]
+    assert activity["metadata"] == {
+        "adapter": {"name": "fitlins", "settings": ["fixed", "prepared"]},
+        "node": "run",
+    }
+    assert activity["run_metadata"] == prepared_inputs[3]
+    assert activity["software_versions"] == {
+        "boldtailor": version("boldtailor"),
+        "numpy": version("numpy"),
+        "pandas": version("pandas"),
+    }
+    assert activity == second.provenance.to_dict()["activities"][0]
+    assert first.design_fingerprint == second.design_fingerprint
+    assert first.design_fingerprint == third.design_fingerprint
+
+
+@pytest.mark.parametrize("metadata_kind", ["run", "provenance"])
+def test_prepared_design_provenance_rejects_nested_path_like_metadata_keys(
+    prepared_inputs,
+    metadata_kind,
+):
+    case = deepcopy(prepared_inputs)
+    provenance_metadata = None
+    nested = {"safe": [{"/private/secret/metadata.json": "redacted"}]}
+    if metadata_kind == "run":
+        case[3][0] = nested
+    else:
+        provenance_metadata = nested
+
+    with pytest.raises(ValueError, match="path-like"):
+        _make_prepared(case, provenance_metadata=provenance_metadata)
+
+
+def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
+    prepared_inputs,
+):
+    private_inputs = deepcopy(prepared_inputs)
+    private_inputs[0][0][0, 0] = 712345.5
+    private_inputs[1][0].loc[0, "motion"] = 9274.25
+    prepared = _make_prepared(private_inputs, sources=_complete_sources())
+    anonymous = _make_prepared(prepared_inputs)
+
+    canonical = prepared.provenance.canonical_json()
+    assert prepared.design_fingerprint in canonical
+    assert all(column in canonical for column in ["face", "motion", "constant"])
+    assert "712345.5" not in canonical
+    assert "9274.25" not in canonical
+    assert str(private_inputs[3][0]) not in canonical
+    assert anonymous.provenance.metadata_fingerprint is None
+    assert any(
+        warning["code"] == "provenance_quality"
+        for warning in anonymous.provenance.warnings
+    )

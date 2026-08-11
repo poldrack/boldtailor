@@ -378,8 +378,7 @@ def _assert_plot_contract(executed):
     assert delta["colorbar"] is True
     assert delta["cmap"] == "magma"
     assert delta["symmetric_cbar"] is False
-    assert "delta" in delta["title"].lower()
-    assert "clipped at zero" in delta["title"].lower()
+    assert delta["title"] == "Task-attributable delta R-squared (OLS diagnostic)"
 
 
 def _assert_published_metadata(published, bids_root, expected_delta):
@@ -403,13 +402,16 @@ def _assert_published_metadata(published, bids_root, expected_delta):
     }
     assert variance["definition"] == "full_r2 - nuisance_r2"
     assert variance["clip_below_zero"] is True
+    assert variance["diagnostic_noise_model"] == "ols"
+    assert variance["inferential_noise_model"] == "ar1"
+    assert variance["clip_policy"] == "numerical_roundoff_guard"
     assert variance["nuisance_model"] == {
         "events": False,
         "confounds": list(CONFOUNDS),
         "drift_model": "cosine",
         "high_pass": 0.01,
         "drift_order": 1,
-        "noise_model": "ar1",
+        "noise_model": "ols",
     }
     assert variance["raw_min_delta_r2"] == pytest.approx(
         expected_delta["raw_min_delta_r2"]
@@ -420,6 +422,9 @@ def _assert_published_metadata(published, bids_root, expected_delta):
     assert set(variance) == {
         "definition",
         "clip_below_zero",
+        "diagnostic_noise_model",
+        "inferential_noise_model",
+        "clip_policy",
         "nuisance_model",
         "raw_min_delta_r2",
         "negative_voxel_count",
@@ -1142,7 +1147,7 @@ def test_notebook_design_fit_displays_compact_variance_summary():
     (NOTEBOOK.parents[1], NOTEBOOK.parent),
     ids=("repository-root", "notebook-directory"),
 )
-def test_notebook_executes_against_fixture(
+def test_variance_partition_notebook_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
 ):
     executed, rendered, published = _execute_notebook(
@@ -1160,7 +1165,9 @@ def test_notebook_executes_against_fixture(
     assert "go_success_vs_baseline" in rendered
     assert "common_voxel_count" in rendered
     assert "estimated_signal_memory_gib" in rendered
-    assert "clipped at zero" in rendered
+    assert "OLS diagnostic" in rendered
+    assert "AR(1) inference" in rendered
+    assert "numerical roundoff guard" in rendered
     assert "descriptive variance accounting" in rendered
     assert (
         "Maps are descriptive, unthresholded, and do not imply "
@@ -1179,7 +1186,7 @@ def test_notebook_executes_against_fixture(
     assert not any("roi" in path.name.lower() for path in published.rglob("*"))
 
 
-def test_notebook_publishes_complete_private_metadata(
+def test_variance_partition_notebook_publishes_complete_private_metadata(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):
     executed, rendered, published = _execute_notebook(

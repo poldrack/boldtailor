@@ -81,7 +81,8 @@ Boldtailor owns:
 - OLS and AR(1) first-level estimation;
 - semantic contrast resolution and fixed-effects combination;
 - conventional inferential maps and model diagnostics;
-- task delta R-squared when design-column roles are sufficiently specified;
+- OLS task delta R-squared when design-column roles are sufficiently specified,
+  independent of the inferential OLS or AR(1) setting;
 - canonical estimator provenance and structured lifecycle logging; and
 - later voxelwise HRF, GLMdenoise, and fractional-ridge operations.
 
@@ -307,7 +308,7 @@ Tests cover:
 - OLS and AR(1) parity with the existing Boldtailor event-level path;
 - numerical parity with Nilearn for supported contrast outputs;
 - fixed-effects aggregation across runs;
-- R-squared and task delta R-squared with explicit column roles;
+- R-squared and nested OLS task delta R-squared with explicit column roles;
 - deterministic design fingerprints and privacy-safe logging; and
 - proof that `fit_prepared()` performs no file I/O.
 

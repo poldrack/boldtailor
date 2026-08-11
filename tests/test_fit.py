@@ -10,6 +10,7 @@ from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
 from nilearn.glm.first_level.hemodynamic_models import glover_hrf
 
 from boldtailor.data import from_arrays
+import boldtailor.fit as fit_module
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
@@ -172,6 +173,69 @@ def _nilearn_original_space_r2(signals, design, noise_model):
     residual_sum = np.sum((signals - prediction) ** 2, axis=0)
     total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
     return 1.0 - residual_sum / total_sum
+
+
+def _nilearn_pooled_ols_r2(signals, designs):
+    residual_sums = []
+    total_sums = []
+    for observations, design in zip(signals, designs, strict=True):
+        matrix = design.to_numpy()
+        labels, regression_results = run_glm(
+            observations,
+            matrix,
+            noise_model="ols",
+        )
+        prediction = np.empty_like(observations)
+        for label, result in regression_results.items():
+            prediction[:, labels == label] = matrix @ result.theta
+        residual_sums.append(np.sum((observations - prediction) ** 2, axis=0))
+        total_sums.append(
+            np.sum((observations - observations.mean(axis=0)) ** 2, axis=0)
+        )
+    return 1.0 - np.sum(residual_sums, axis=0) / np.sum(total_sums, axis=0)
+
+
+def _full_ols_designs(data, model):
+    return tuple(
+        make_first_level_design_matrix(
+            frame_times,
+            events=events,
+            hrf_model=model.hrf_model,
+            drift_model=model.drift_model,
+            high_pass=model.high_pass,
+            drift_order=model.drift_order,
+            add_regs=confounds.loc[:, list(model.confounds)],
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+        for frame_times, events, confounds in zip(
+            data.frame_times,
+            data.events,
+            data.confounds,
+            strict=True,
+        )
+    )
+
+
+def _nuisance_ols_designs(data, model):
+    return tuple(
+        make_first_level_design_matrix(
+            frame_times,
+            events=None,
+            hrf_model=None,
+            drift_model=model.drift_model,
+            high_pass=model.high_pass,
+            drift_order=model.drift_order,
+            add_regs=confounds.loc[:, list(model.confounds)],
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+        for frame_times, confounds in zip(
+            data.frame_times,
+            data.confounds,
+            strict=True,
+        )
+    )
 
 
 def test_fit_matches_nilearn_ols_contrast(single_run_problem):
@@ -572,16 +636,21 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     data, model, full_result = delta_r2_problem
 
     comparison = task_delta_r2(data, model, full_result)
+    expected_full_ols_r2 = _nilearn_pooled_ols_r2(
+        data.signals,
+        _full_ols_designs(data, model),
+    )
+    expected_nuisance_ols_r2 = _nilearn_pooled_ols_r2(
+        data.signals,
+        _nuisance_ols_designs(data, model),
+    )
+    expected_raw = expected_full_ols_r2 - expected_nuisance_ols_r2
 
-    np.testing.assert_allclose(
-        comparison.raw_delta_r2,
-        comparison.full_r2 - comparison.nuisance_r2,
-    )
-    np.testing.assert_allclose(
-        comparison.delta_r2,
-        np.maximum(comparison.raw_delta_r2, 0.0),
-    )
-    assert np.all(comparison.full_r2 > comparison.nuisance_r2)
+    np.testing.assert_allclose(comparison.full_r2, expected_full_ols_r2)
+    np.testing.assert_allclose(comparison.nuisance_r2, expected_nuisance_ols_r2)
+    np.testing.assert_allclose(comparison.raw_delta_r2, expected_raw)
+    assert np.all(comparison.raw_delta_r2 >= -1e-12)
+    np.testing.assert_allclose(comparison.delta_r2, np.maximum(expected_raw, 0.0))
     assert comparison.negative_voxel_count == int(
         np.count_nonzero(comparison.raw_delta_r2 < 0.0)
     )
@@ -605,6 +674,11 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     returned = comparison.nuisance_design_matrices[0]
     returned.iloc[0, 0] = -99.0
     assert comparison.nuisance_design_matrices[0].iloc[0, 0] != -99.0
+
+
+def test_task_delta_r2_rejects_broken_nested_ols_monotonicity():
+    with pytest.raises(ValueError, match="nested OLS monotonicity"):
+        fit_module._validate_nested_ols_delta(np.array([-1.1e-12]))
 
 
 def test_make_task_delta_r2_result_clips_and_owns_values(delta_r2_problem):
@@ -756,8 +830,11 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
     assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
     assert activity["definition"] == "full_r2 - nuisance_r2"
     assert activity["clip_below_zero"] is True
+    assert activity["diagnostic_noise_model"] == "ols"
+    assert activity["inferential_noise_model"] == "ar1"
     assert activity["nuisance_model"]["events"] is False
-    assert activity["nuisance_model"]["noise_model"] == "ar1"
+    assert activity["nuisance_model"]["noise_model"] == "ols"
+    assert activity["clip_policy"] == "numerical_roundoff_guard"
     assert activity["diagnostics"]["negative_voxel_count"] == (
         comparison.negative_voxel_count
     )
