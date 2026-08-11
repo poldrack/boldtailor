@@ -181,6 +181,12 @@ for _record in _plot_stat_map_records:
             "minimum": _minimum,
             "all_nonnegative": _all_nonnegative,
             "threshold": _arguments["threshold"],
+            "display_mode": _arguments["display_mode"],
+            "cut_coords": (
+                None
+                if _arguments["cut_coords"] is None
+                else np.asarray(_arguments["cut_coords"]).tolist()
+            ),
             "vmin": _arguments["vmin"],
             "colorbar": _arguments["colorbar"],
             "cmap": _arguments["cmap"],
@@ -340,7 +346,11 @@ def _assert_compact_variance_display_source():
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
+    expected_cut_coords = [-20, -5, 10, 25, 40, 55]
     assert len(audit) == 5
+    for call in audit:
+        assert call["display_mode"] == "z"
+        assert call["cut_coords"] == expected_cut_coords
     for call, contrast_name in zip(audit[:3], CONTRAST_EXPRESSIONS, strict=True):
         assert call["matched_z_scores"] == [contrast_name]
         assert call["matched_aggregate_r2"] is False
