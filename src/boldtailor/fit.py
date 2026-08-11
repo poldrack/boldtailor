@@ -4,15 +4,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 import logging
 import sys
-import warnings
 from uuid import uuid4
 
 import numpy as np
-import pandas as pd
-from nilearn.glm import compute_contrast
-from nilearn.glm.contrasts import expression_to_contrast_vector
-from nilearn.glm.first_level import run_glm
 
+from boldtailor._conventional import ConventionalFit, fit_designs, fit_r2_designs
 from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor.logging import append_event_history, bind_context, emit_event
@@ -21,7 +17,6 @@ from boldtailor.provenance import analysis_fingerprint, extend_provenance
 from boldtailor.results import (
     AnalysisResult,
     TaskDeltaR2Result,
-    contrast_result,
     make_result,
     make_task_delta_r2_result,
 )
@@ -29,28 +24,6 @@ from boldtailor.results import (
 _TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
 _DIAGNOSTIC_NOISE_MODEL = "ols"
 _NESTED_OLS_TOLERANCE = 1e-12
-
-
-@dataclass(frozen=True)
-class _RunFit:
-    contrasts: dict[str, object]
-    r2: np.ndarray
-    residual_sum: np.ndarray
-    total_sum: np.ndarray
-
-
-@dataclass(frozen=True)
-class _GLMFit:
-    labels: np.ndarray
-    regression_results: dict
-    residual_sum: np.ndarray
-    total_sum: np.ndarray
-
-
-@dataclass(frozen=True)
-class _R2Fit:
-    residual_sum: np.ndarray
-    total_sum: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -76,7 +49,7 @@ def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
             emit_event("fit_started", stage="fit"),
         )
         try:
-            compiled, run_fits, combined, aggregate_r2 = _fit_analysis(data, model)
+            compiled, numerical = _fit_analysis(data, model)
         except Exception as error:
             emit_event(
                 "fit_failed",
@@ -98,11 +71,11 @@ def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
         analysis_id=analysis_id,
     )
     return make_result(
-        combined,
+        numerical.contrasts,
         tuple(design.matrix for design in compiled),
         tuple(_design_provenance(design) for design in compiled),
-        tuple(run.r2 for run in run_fits),
-        aggregate_r2,
+        tuple(run.r2 for run in numerical.run_fits),
+        numerical.aggregate_r2,
         provenance,
     )
 
@@ -180,25 +153,15 @@ def task_delta_r2(
 def _fit_analysis(
     data: AnalysisData,
     model: ModelSpec,
-) -> tuple[
-    tuple[CompiledDesign, ...],
-    tuple[_RunFit, ...],
-    dict[str, object],
-    np.ndarray,
-]:
+) -> tuple[tuple[CompiledDesign, ...], ConventionalFit]:
     compiled = compile_designs(data, model)
-    run_fits = tuple(
-        _fit_run(signals, design, model, run)
-        for run, (signals, design) in enumerate(
-            zip(data.signals, compiled, strict=True)
-        )
+    numerical = fit_designs(
+        data.signals,
+        tuple(item.matrix for item in compiled),
+        model.contrasts,
+        model.noise_model,
     )
-    combined = _combine_contrasts(run_fits, model.contrast_names)
-    aggregate_r2 = _r2_from_sums(
-        np.sum([run.residual_sum for run in run_fits], axis=0),
-        np.sum([run.total_sum for run in run_fits], axis=0),
-    )
-    return compiled, run_fits, combined, aggregate_r2
+    return compiled, numerical
 
 
 def _fit_r2_analysis(
@@ -206,15 +169,10 @@ def _fit_r2_analysis(
     compiled: tuple[CompiledDesign, ...],
     noise_model: str,
 ) -> np.ndarray:
-    run_fits = tuple(
-        _fit_r2_run(signals, design, noise_model, run)
-        for run, (signals, design) in enumerate(
-            zip(data.signals, compiled, strict=True)
-        )
-    )
-    r2 = _r2_from_sums(
-        np.sum([run.residual_sum for run in run_fits], axis=0),
-        np.sum([run.total_sum for run in run_fits], axis=0),
+    r2 = fit_r2_designs(
+        data.signals,
+        tuple(item.matrix for item in compiled),
+        noise_model,
     )
     if not np.isfinite(r2).all():
         raise ValueError("diagnostic fit produced nonfinite r-squared values")
@@ -429,219 +387,8 @@ def _rank_warnings(rank: int, columns: int, run: int) -> list[str]:
     return [f"run {run} design rank is {rank} for {columns} columns"]
 
 
-def _fit_run(
-    signals: np.ndarray,
-    compiled: CompiledDesign,
-    model: ModelSpec,
-    run: int,
-) -> _RunFit:
-    design = compiled.matrix
-    matrix = design.to_numpy()
-    glm_fit = _fit_glm(signals, matrix, model.noise_model, run)
-    contrasts = {
-        name: _compute_contrast(
-            glm_fit.labels,
-            glm_fit.regression_results,
-            value,
-            design.columns,
-            matrix,
-            name,
-            run,
-        )
-        for name, value in model.contrasts.items()
-    }
-    return _RunFit(
-        contrasts=contrasts,
-        r2=_r2_from_sums(glm_fit.residual_sum, glm_fit.total_sum),
-        residual_sum=glm_fit.residual_sum,
-        total_sum=glm_fit.total_sum,
-    )
-
-
-def _fit_r2_run(
-    signals: np.ndarray,
-    compiled: CompiledDesign,
-    noise_model: str,
-    run: int,
-) -> _R2Fit:
-    glm_fit = _fit_glm(
-        signals,
-        compiled.matrix.to_numpy(),
-        noise_model,
-        run,
-    )
-    return _R2Fit(glm_fit.residual_sum, glm_fit.total_sum)
-
-
-def _fit_glm(
-    signals: np.ndarray,
-    design: np.ndarray,
-    noise_model: str,
-    run: int,
-) -> _GLMFit:
-    _warn_if_rank_deficient(design, run)
-    _validate_residual_dof(design, run)
-    labels, regression_results = run_glm(
-        signals,
-        design,
-        noise_model=noise_model,
-    )
-    prediction = _prediction(labels, regression_results, design, signals.shape)
-    residual_sum, total_sum = _sums_of_squares(signals, prediction)
-    return _GLMFit(labels, regression_results, residual_sum, total_sum)
-
-
-def _combine_contrasts(
-    run_fits: tuple[_RunFit, ...],
-    names: tuple[str, ...],
-) -> dict[str, object]:
-    return {
-        name: contrast_result(_fixed_effects([run.contrasts[name] for run in run_fits]))
-        for name in names
-    }
-
-
-def _fixed_effects(contrasts: list[object]) -> object:
-    combined = contrasts[0]
-    for contrast in contrasts[1:]:
-        combined = combined + contrast
-    return (1.0 / len(contrasts)) * combined
-
-
 def _design_provenance(compiled: CompiledDesign) -> dict[str, int | float]:
     return {
         "excluded_event_count": compiled.excluded_event_count,
         "min_onset_cutoff": compiled.min_onset_cutoff,
     }
-
-
-def _compute_contrast(
-    labels: np.ndarray,
-    regression_results: dict,
-    value: ContrastValue,
-    columns: pd.Index,
-    design: np.ndarray,
-    name: str,
-    run: int,
-) -> object:
-    vector = _contrast_vector(value, columns, name, run)
-    if not np.any(vector):
-        raise ValueError(f"run {run} contrast {name!r} resolves to all zeros")
-    _validate_estimable(vector, design, name, run)
-    return _nilearn_t_contrast(labels, regression_results, vector)
-
-
-def _nilearn_t_contrast(
-    labels: np.ndarray,
-    regression_results: dict,
-    vector: np.ndarray,
-) -> object:
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message=r"^divide by zero encountered in divide$",
-            category=RuntimeWarning,
-            module=r"^nilearn\.glm\._utils$",
-        )
-        return compute_contrast(
-            labels,
-            regression_results,
-            vector,
-            stat_type="t",
-        )
-
-
-def _contrast_vector(
-    value: ContrastValue,
-    columns: pd.Index,
-    name: str,
-    run: int,
-) -> np.ndarray:
-    if isinstance(value, str):
-        try:
-            return expression_to_contrast_vector(value, columns)
-        except (KeyError, NameError, SyntaxError, TypeError, ValueError) as error:
-            raise ValueError(
-                f"run {run} contrast {name!r} is invalid: {error}"
-            ) from error
-    return _weight_vector(value, columns, name, run)
-
-
-def _weight_vector(
-    weights: Mapping[str, float],
-    columns: pd.Index,
-    name: str,
-    run: int,
-) -> np.ndarray:
-    vector = np.zeros(len(columns), dtype=float)
-    positions = {column: index for index, column in enumerate(columns)}
-    for regressor, weight in weights.items():
-        if weight == 0.0:
-            continue
-        if regressor not in positions:
-            raise ValueError(
-                f"run {run} contrast {name!r} references missing "
-                f"regressor {regressor!r}"
-            )
-        vector[positions[regressor]] = weight
-    return vector
-
-
-def _validate_estimable(
-    vector: np.ndarray,
-    design: np.ndarray,
-    name: str,
-    run: int,
-) -> None:
-    projection = vector @ np.linalg.pinv(design) @ design
-    if not np.allclose(vector, projection, rtol=1e-7, atol=1e-9):
-        raise ValueError(f"run {run} contrast {name!r} is not estimable")
-
-
-def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
-    rank = np.linalg.matrix_rank(design)
-    if rank < design.shape[1]:
-        warnings.warn(
-            f"run {run} design rank is {rank} for {design.shape[1]} columns",
-            UserWarning,
-            stacklevel=2,
-        )
-
-
-def _validate_residual_dof(design: np.ndarray, run: int) -> None:
-    residual_dof = design.shape[0] - np.linalg.matrix_rank(design)
-    if residual_dof <= 0:
-        raise ValueError(
-            f"run {run} has residual degrees of freedom {residual_dof}; "
-            "contrast inference requires a positive value"
-        )
-
-
-def _prediction(
-    labels: np.ndarray,
-    regression_results: dict,
-    design: np.ndarray,
-    shape: tuple[int, int],
-) -> np.ndarray:
-    prediction = np.empty(shape, dtype=float)
-    for label, result in regression_results.items():
-        prediction[:, labels == label] = design @ result.theta
-    return prediction
-
-
-def _sums_of_squares(
-    observed: np.ndarray,
-    predicted: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    residual_sum = np.sum((observed - predicted) ** 2, axis=0)
-    total_sum = np.sum((observed - observed.mean(axis=0)) ** 2, axis=0)
-    return residual_sum, total_sum
-
-
-def _r2_from_sums(
-    residual_sum: np.ndarray,
-    total_sum: np.ndarray,
-) -> np.ndarray:
-    ratio = np.full(residual_sum.shape, np.nan, dtype=float)
-    np.divide(residual_sum, total_sum, out=ratio, where=total_sum > 0)
-    return 1.0 - ratio
