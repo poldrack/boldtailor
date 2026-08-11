@@ -27,6 +27,8 @@ from boldtailor.results import (
 )
 
 _TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
+_DIAGNOSTIC_NOISE_MODEL = "ols"
+_NESTED_OLS_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -128,17 +130,25 @@ def task_delta_r2(
         try:
             _validate_parent_analysis(expected_parent_id, full_result)
             _validate_full_result_dimensions(data, full_result)
-            compiled, nuisance_r2 = _fit_nuisance_analysis(data, model)
+            full_designs = compile_designs(data, model)
+            nuisance_designs = compile_nuisance_designs(data, model)
+            full_r2 = _fit_r2_analysis(data, full_designs, _DIAGNOSTIC_NOISE_MODEL)
+            nuisance_r2 = _fit_r2_analysis(
+                data,
+                nuisance_designs,
+                _DIAGNOSTIC_NOISE_MODEL,
+            )
+            _validate_nested_ols_delta(full_r2 - nuisance_r2)
             comparison = make_task_delta_r2_result(
-                full_r2=full_result.r2,
+                full_r2=full_r2,
                 nuisance_r2=nuisance_r2,
-                nuisance_designs=tuple(design.matrix for design in compiled),
+                nuisance_designs=tuple(design.matrix for design in nuisance_designs),
                 provenance=full_result.provenance,
             )
             activity = _task_delta_r2_activity(
                 data,
                 model,
-                compiled,
+                nuisance_designs,
                 comparison,
                 expected_parent_id,
             )
@@ -191,24 +201,29 @@ def _fit_analysis(
     return compiled, run_fits, combined, aggregate_r2
 
 
-def _fit_nuisance_analysis(
+def _fit_r2_analysis(
     data: AnalysisData,
-    model: ModelSpec,
-) -> tuple[tuple[CompiledDesign, ...], np.ndarray]:
-    compiled = compile_nuisance_designs(data, model)
+    compiled: tuple[CompiledDesign, ...],
+    noise_model: str,
+) -> np.ndarray:
     run_fits = tuple(
-        _fit_r2_run(signals, design, model, run)
+        _fit_r2_run(signals, design, noise_model, run)
         for run, (signals, design) in enumerate(
             zip(data.signals, compiled, strict=True)
         )
     )
-    nuisance_r2 = _r2_from_sums(
+    r2 = _r2_from_sums(
         np.sum([run.residual_sum for run in run_fits], axis=0),
         np.sum([run.total_sum for run in run_fits], axis=0),
     )
-    if not np.isfinite(nuisance_r2).all():
-        raise ValueError("nuisance fit produced nonfinite r-squared values")
-    return compiled, nuisance_r2
+    if not np.isfinite(r2).all():
+        raise ValueError("diagnostic fit produced nonfinite r-squared values")
+    return r2
+
+
+def _validate_nested_ols_delta(raw_delta_r2: np.ndarray) -> None:
+    if np.any(raw_delta_r2 < -_NESTED_OLS_TOLERANCE):
+        raise ValueError("nested OLS monotonicity violated")
 
 
 def _validate_parent_analysis(
@@ -255,6 +270,9 @@ def _task_delta_r2_settings(model: ModelSpec) -> dict[str, object]:
         "name": "task_delta_r2",
         "definition": _TASK_DELTA_R2_DEFINITION,
         "clip_below_zero": True,
+        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "inferential_noise_model": model.noise_model,
+        "clip_policy": "numerical_roundoff_guard",
         "nuisance_model": _nuisance_model_settings(model),
     }
 
@@ -266,7 +284,7 @@ def _nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
         "drift_model": model.drift_model,
         "high_pass": model.high_pass,
         "drift_order": model.drift_order,
-        "noise_model": model.noise_model,
+        "noise_model": _DIAGNOSTIC_NOISE_MODEL,
     }
 
 
@@ -370,6 +388,9 @@ def _task_delta_r2_activity(
         "parent_analysis_id": parent_id,
         "definition": _TASK_DELTA_R2_DEFINITION,
         "clip_below_zero": True,
+        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "inferential_noise_model": model.noise_model,
+        "clip_policy": "numerical_roundoff_guard",
         "nuisance_model": _nuisance_model_settings(model),
         "runs": runs,
         "diagnostics": {
@@ -440,13 +461,13 @@ def _fit_run(
 def _fit_r2_run(
     signals: np.ndarray,
     compiled: CompiledDesign,
-    model: ModelSpec,
+    noise_model: str,
     run: int,
 ) -> _R2Fit:
     glm_fit = _fit_glm(
         signals,
         compiled.matrix.to_numpy(),
-        model.noise_model,
+        noise_model,
         run,
     )
     return _R2Fit(glm_fit.residual_sum, glm_fit.total_sum)
