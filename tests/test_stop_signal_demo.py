@@ -346,7 +346,7 @@ def _assert_compact_variance_display_source():
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
-    expected_cut_coords = [-20, -5, 10, 25, 40, 55]
+    expected_cut_coords = [-10, 5, 20, 35, 50, 65]
     assert len(audit) == 5
     for call in audit:
         assert call["display_mode"] == "z"
@@ -1111,7 +1111,13 @@ def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch):
 
     configuration = _notebook_configuration()
 
-    assert configuration["SESSIONS"] == ("ses-06", "ses-08")
+    assert configuration["SESSIONS"] == (
+        "ses-02",
+        "ses-04",
+        "ses-06",
+        "ses-08",
+        "ses-10",
+    )
     assert configuration["MASK_STRATEGY"] == "intersection"
     assert configuration["MINIMUM_MEMORY_GIB"] == 32
     assert not any("ROI" in name.upper() for name in configuration)
