@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import logging
 import os
@@ -147,8 +147,15 @@ def _validate_path_safe_model_keys(
 
 
 def _validate_path_safe_mapping_keys(values: object) -> None:
-    if not isinstance(values, Mapping):
+    if isinstance(values, Mapping):
+        _validate_mapping_keys(values)
         return
+    if isinstance(values, Sequence) and not isinstance(values, (str, bytes, bytearray)):
+        for value in values:
+            _validate_path_safe_mapping_keys(value)
+
+
+def _validate_mapping_keys(values: Mapping[object, object]) -> None:
     for key, value in values.items():
         if _is_path_like_key(key):
             raise ValueError("model identity keys must not be path-like")
