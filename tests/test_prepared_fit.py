@@ -1,5 +1,6 @@
 import builtins
 from dataclasses import replace
+from importlib.metadata import version
 import io
 import json
 import logging
@@ -436,6 +437,10 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
     activity = first.provenance.activities[-1]
     assert activity["name"] == "fit_prepared"
     assert activity["stage"] == "fit"
+    assert activity["numerical_backend"] == {
+        "name": "nilearn",
+        "version": version("nilearn"),
+    }
     assert activity["model"] == {
         "kind": "prepared_design",
         "contrasts": {

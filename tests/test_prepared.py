@@ -1,4 +1,5 @@
 from copy import deepcopy
+from importlib.metadata import version
 import json
 import logging
 import re
@@ -50,6 +51,7 @@ def _make_prepared(
     tr: float | None = 2.0,
     frame_times: np.ndarray | list[np.ndarray] | None = None,
     sources: tuple[RunSources, ...] | None = None,
+    provenance_metadata: dict[str, object] | None = None,
 ):
     signals, designs, roles, metadata = prepared_inputs
     return PreparedDesignAnalysis.from_arrays(
@@ -60,6 +62,7 @@ def _make_prepared(
         column_roles=roles,
         run_metadata=metadata,
         sources=sources,
+        provenance_metadata=provenance_metadata,
     )
 
 
@@ -187,6 +190,15 @@ def test_prepared_analysis_rejects_invalid_design_inputs(
     mutator(case)
 
     with pytest.raises(ValueError, match=message):
+        _make_prepared(case)
+
+
+def test_prepared_analysis_rejects_absolute_path_design_column(prepared_inputs):
+    case = deepcopy(prepared_inputs)
+    case[1][0] = case[1][0].rename(columns={"face": "/private/secret/design.tsv"})
+    case[2][0]["/private/secret/design.tsv"] = case[2][0].pop("face")
+
+    with pytest.raises(ValueError, match="path-like"):
         _make_prepared(case)
 
 
@@ -376,6 +388,69 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
     assert first.design_fingerprint == second.design_fingerprint
 
 
+def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
+    prepared_inputs,
+):
+    inputs = deepcopy(prepared_inputs)
+    provenance_metadata = {
+        "adapter": {"name": "fitlins", "settings": ["fixed", "prepared"]},
+        "node": "run",
+    }
+    first = _make_prepared(
+        inputs,
+        sources=_complete_sources(),
+        provenance_metadata=provenance_metadata,
+    )
+    reordered = deepcopy(prepared_inputs)
+    reordered[3][:] = [dict(reversed(tuple(item.items()))) for item in reordered[3]]
+    second = _make_prepared(
+        reordered,
+        sources=_complete_sources(),
+        provenance_metadata=dict(reversed(tuple(provenance_metadata.items()))),
+    )
+    changed_metadata = deepcopy(prepared_inputs)
+    changed_metadata[3][0]["subject"] = "99"
+    third = _make_prepared(
+        changed_metadata,
+        sources=_complete_sources(),
+        provenance_metadata=provenance_metadata,
+    )
+    inputs[3][0]["subject"] = "mutated"
+    provenance_metadata["adapter"]["name"] = "mutated"
+
+    activity = first.provenance.to_dict()["activities"][0]
+    assert activity["metadata"] == {
+        "adapter": {"name": "fitlins", "settings": ["fixed", "prepared"]},
+        "node": "run",
+    }
+    assert activity["run_metadata"] == prepared_inputs[3]
+    assert activity["software_versions"] == {
+        "boldtailor": version("boldtailor"),
+        "numpy": version("numpy"),
+        "pandas": version("pandas"),
+    }
+    assert activity == second.provenance.to_dict()["activities"][0]
+    assert first.design_fingerprint == second.design_fingerprint
+    assert first.design_fingerprint == third.design_fingerprint
+
+
+@pytest.mark.parametrize("metadata_kind", ["run", "provenance"])
+def test_prepared_design_provenance_rejects_nested_path_like_metadata_keys(
+    prepared_inputs,
+    metadata_kind,
+):
+    case = deepcopy(prepared_inputs)
+    provenance_metadata = None
+    nested = {"safe": [{"/private/secret/metadata.json": "redacted"}]}
+    if metadata_kind == "run":
+        case[3][0] = nested
+    else:
+        provenance_metadata = nested
+
+    with pytest.raises(ValueError, match="path-like"):
+        _make_prepared(case, provenance_metadata=provenance_metadata)
+
+
 def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
     prepared_inputs,
 ):
@@ -390,7 +465,6 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
     assert all(column in canonical for column in ["face", "motion", "constant"])
     assert "712345.5" not in canonical
     assert "9274.25" not in canonical
-    assert "/private/secret/analysis.tsv" not in canonical
     assert str(private_inputs[3][0]) not in canonical
     assert anonymous.provenance.metadata_fingerprint is None
     assert any(
