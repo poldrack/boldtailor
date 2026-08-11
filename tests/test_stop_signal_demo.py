@@ -84,6 +84,8 @@ DELTA_AUDIT_PREFIX = "BOLDTAILOR_DELTA_AUDIT="
 DISPLAY_AUDIT_PREFIX = "BOLDTAILOR_DISPLAY_AUDIT="
 PREPARED_AUDIT_PREFIX = "BOLDTAILOR_PREPARED_AUDIT="
 PREPARED_AUDIT = f"""
+import json as _json
+
 from boldtailor.fit import fit as _event_fit
 from boldtailor.fit import task_delta_r2 as _event_task_delta_r2
 
@@ -113,7 +115,7 @@ _prepared_audit = {{
         np.allclose(task_delta.delta_r2, _event_delta.delta_r2)
     ),
 }}
-print("{PREPARED_AUDIT_PREFIX}" + json.dumps(_prepared_audit, sort_keys=True))
+print("{PREPARED_AUDIT_PREFIX}" + _json.dumps(_prepared_audit, sort_keys=True))
 """
 DISPLAY_AUDIT_SETUP = """
 _display_audit_records = []
