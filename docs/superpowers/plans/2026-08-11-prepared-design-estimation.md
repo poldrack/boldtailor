@@ -14,7 +14,7 @@
 - Use pytest with strict RED-GREEN-Refactor: commit failing tests before production implementation for every behavior change.
 - Never weaken a test or simplify a requirement to make an incomplete implementation pass.
 - Keep every `__init__.py` completely empty; do not export symbols from package initializers.
-- Preserve the existing `fit()`, `task_delta_r2()`, `from_arrays()`, `ModelSpec`, `AnalysisData`, and result behavior.
+- Preserve the existing `fit()`, `from_arrays()`, `ModelSpec`, `AnalysisData`, and result behavior. Preserve the `task_delta_r2()` public interface while changing its approved diagnostic semantics to nested OLS.
 - Add no runtime dependency and do not modify dependency declarations or `uv.lock`.
 - Support only semantic t contrasts and noise models `ols` and `ar1` in this phase; reject unsupported contrast types before fitting.
 - `fit_prepared()` and `task_delta_r2_prepared()` perform no filesystem writes.
@@ -35,6 +35,115 @@
 - Create `tests/test_prepared_fit.py`: numerical parity, multi-run behavior, errors, provenance, privacy, no-I/O, and prepared delta R-squared.
 - Modify `README.md`: document the advanced prepared-design path and its fixed-design limitation.
 - Do not modify `src/boldtailor/__init__.py`.
+
+---
+
+### Task 0: Correct task delta R-squared to a nested OLS diagnostic
+
+**Files:**
+- Modify: `tests/test_fit.py`
+- Modify: `tests/test_stop_signal_demo.py`
+- Modify: `src/boldtailor/fit.py`
+- Modify: `examples/stop_signal_demo.ipynb`
+
+**Interfaces:**
+- Consumes: the existing `task_delta_r2(data, model, full_result)` interface and compiled full/nuisance designs.
+- Produces: unchanged `TaskDeltaR2Result` fields whose `full_r2` and `nuisance_r2` are both computed with OLS; AR(1) remains the optional inferential model used by `fit()`.
+
+- [ ] **Step 1: Write the changed statistical-contract tests**
+
+Update the existing delta fixture to keep `ModelSpec.noise_model="ar1"`. Build
+the full and nuisance designs independently, fit both with Nilearn
+`run_glm(..., noise_model="ols")`, pool each model's SSE and centered SST across
+runs, and assert `task_delta_r2()` matches those OLS oracles rather than
+`full_result.r2`.
+
+Require:
+
+```python
+comparison = task_delta_r2(data, model, full_result)
+expected_raw = expected_full_ols_r2 - expected_nuisance_ols_r2
+
+np.testing.assert_allclose(comparison.full_r2, expected_full_ols_r2)
+np.testing.assert_allclose(comparison.nuisance_r2, expected_nuisance_ols_r2)
+np.testing.assert_allclose(comparison.raw_delta_r2, expected_raw)
+assert np.all(comparison.raw_delta_r2 >= -1e-12)
+np.testing.assert_allclose(comparison.delta_r2, np.maximum(expected_raw, 0.0))
+```
+
+Add a focused test seam that supplies a raw difference below `-1e-12` and
+requires a `ValueError` mentioning nested OLS monotonicity. Differences in the
+closed interval `[-1e-12, 0)` remain valid numerical roundoff and are floored
+to zero.
+
+Update provenance assertions to require:
+
+```python
+assert activity["diagnostic_noise_model"] == "ols"
+assert activity["inferential_noise_model"] == "ar1"
+assert activity["nuisance_model"]["noise_model"] == "ols"
+assert activity["clip_policy"] == "numerical_roundoff_guard"
+```
+
+Update notebook execution/metadata assertions to require the displayed and
+published configuration to distinguish OLS diagnostic fits from AR(1)
+inference and to use the title `Task-attributable delta R-squared (OLS diagnostic)`.
+
+- [ ] **Step 2: Commit the RED requirement change**
+
+Run:
+
+```bash
+uv run pytest tests/test_fit.py tests/test_stop_signal_demo.py -k "delta_r2 or variance_partition" -q -W error -p no:cacheprovider
+```
+
+Expected: failures show the implementation still reuses AR(1) full R-squared,
+fits the nuisance model with AR(1), and publishes the old clipping rationale.
+
+Commit tests only:
+
+```bash
+uv run --no-project git add tests/test_fit.py tests/test_stop_signal_demo.py
+uv run --no-project git commit -m "test: define delta r-squared as nested ols"
+```
+
+- [ ] **Step 3: Implement OLS diagnostic refits**
+
+Compile the full and nuisance designs once inside `task_delta_r2()`. Fit both
+sets with the shared R-squared path using the literal diagnostic noise model
+`"ols"`. Continue using the supplied `full_result` only for parent-fingerprint
+and dimension validation. Keep `fit()` and all contrast outputs governed by
+`model.noise_model`.
+
+Refactor `_fit_nuisance_analysis()` into a short design-agnostic helper if
+needed, but do not change ordinary `AnalysisResult.r2` behavior in this task.
+Record the diagnostic and inferential noise models separately and describe the
+zero floor as a numerical-roundoff guard. Reject any raw difference below
+`-1e-12` before constructing the public comparison result.
+
+- [ ] **Step 4: Update the notebook source cells**
+
+Change only source cells needed to label the diagnostic and publish accurate
+metadata. Keep the existing map count, filename, common slices, compact
+display, and no-raw-signal guarantees. Stored outputs need not be retained.
+
+- [ ] **Step 5: Verify and commit GREEN**
+
+Run:
+
+```bash
+uv run pytest tests/test_fit.py tests/test_stop_signal_demo.py -k "delta_r2 or variance_partition" -q -W error -p no:cacheprovider
+uv run pytest -q -W error -p no:cacheprovider
+uv run black --check src tests examples/stop_signal_demo.py
+uv run --no-project git diff --check
+```
+
+Commit production and notebook changes:
+
+```bash
+uv run --no-project git add src/boldtailor/fit.py examples/stop_signal_demo.ipynb
+uv run --no-project git commit -m "fix: use ols for task variance partitioning"
+```
 
 ---
 
@@ -769,13 +878,14 @@ def task_delta_r2_prepared(
     )
 ```
 
-Create nested full/nuisance synthetic models with at least one feature whose
-raw delta is negative due to numerical/sample variation. Assert:
+Create nested full/nuisance synthetic models. The full `AnalysisResult` may use
+AR(1) for inference, but both variance-partition fits must use OLS. Assert:
 
 - nuisance matrices contain exactly `nuisance` and `intercept` columns in their
   original order;
 - nuisance R-squared is pooled from summed SSE/SST across runs;
-- `raw_delta_r2 == full_r2 - nuisance_r2`;
+- `raw_delta_r2 == full_r2 - nuisance_r2` and every raw value is at least
+  `-1e-12`;
 - public `delta_r2 == maximum(raw_delta_r2, 0)`;
 - the negative count and raw minimum are exact;
 - all arrays own strict immutable storage; and
@@ -793,8 +903,12 @@ Require explicit failures when:
 - result dimensions do not match the prepared input; or
 - source metadata are insufficient to establish the parent analysis identity.
 
+Use a focused test seam to require rejection of a raw nested-OLS difference
+below `-1e-12`; retain values in `[-1e-12, 0)` only for the numerical floor.
+
 Require a separate `task_delta_r2_prepared` provenance activity with parent
-analysis ID, definition `full_r2 - nuisance_r2`, clipping disclosure, exact
+analysis ID, definition `full_r2 - nuisance_r2`, diagnostic noise model `ols`,
+separate inferential noise model, numerical-roundoff floor disclosure, exact
 role-based nuisance rule, run diagnostics, and bounded aggregate diagnostics.
 
 - [ ] **Step 3: Commit RED tests**
@@ -839,10 +953,12 @@ def _nuisance_designs(
 ```
 
 Recreate the full fit identity from the exact public arguments and require it
-to equal `full_result.provenance.analysis_fingerprint`. Delegate nuisance
-fitting to `fit_r2_designs()` with the same noise model. Use the existing
-`make_task_delta_r2_result()` so clipping and owned-storage behavior remain
-centralized.
+to equal `full_result.provenance.analysis_fingerprint`. Delegate both the full
+and nuisance diagnostic fits to `fit_r2_designs()` with the literal noise model
+`"ols"`; retain the public `noise_model` argument only to identify and validate
+the parent inferential fit. Use the existing `make_task_delta_r2_result()` so
+the numerical floor and owned-storage behavior remain centralized.
+Reject a raw difference below `-1e-12` before calling the result factory.
 
 - [ ] **Step 5: Verify and commit GREEN**
 
