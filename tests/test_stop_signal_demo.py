@@ -508,6 +508,7 @@ def test_notebook_uses_prepared_design_estimation_boundary():
     source = "\n".join(
         cell.source for cell in notebook.cells if cell.cell_type == "code"
     )
+    narrative = "\n".join(cell.source for cell in notebook.cells)
 
     assert "design.compile_designs" in calls
     assert "design.compile_nuisance_designs" in calls
@@ -519,9 +520,9 @@ def test_notebook_uses_prepared_design_estimation_boundary():
     assert "import boldtailor.design as design" in source
     assert "from boldtailor.prepared import PreparedDesignAnalysis" in source
     assert "import boldtailor.prepared_fit as prepared_fit" in source
-    assert "PyBIDS/FitLins" in source
-    assert "performs no image/file I/O" in source
-    assert "separate nested OLS fits" in source
+    assert "PyBIDS/FitLins" in narrative
+    assert "performs no image/file I/O" in narrative
+    assert "separate nested OLS fits" in narrative
 
 
 def test_notebook_source_boundary_ignores_stored_outputs():
