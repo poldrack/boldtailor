@@ -75,6 +75,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "filelock" },
+    { name = "ipykernel" },
     { name = "nilearn" },
     { name = "numpy" },
     { name = "pandas" },
@@ -94,6 +95,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "filelock" },
+    { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "nilearn", specifier = ">=0.14.0,<0.15" },
     { name = "numpy" },
     { name = "pandas" },
