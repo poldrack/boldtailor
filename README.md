@@ -52,6 +52,41 @@ varying features in the same fit retain their ordinary estimates and
 inference. Every run must have positive residual degrees of freedom for
 contrast inference, otherwise `fit()` raises a run-specific `ValueError`.
 
+## Advanced prepared-design estimation
+
+Use the prepared-design API when another tool has already compiled a fixed,
+labeled design matrix for each run. Boldtailor consumes the signal arrays and
+DataFrames directly; it performs no image or file I/O and does not parse BIDS,
+run PyBIDS transformations, or construct designs. FitLins and PyBIDS retain
+BIDS parsing, transformations, and design construction.
+
+```python
+from boldtailor.prepared import PreparedDesignAnalysis
+from boldtailor.prepared_fit import fit_prepared
+
+prepared = PreparedDesignAnalysis.from_arrays(
+    signals=signals,
+    design_matrices=design_matrices,
+    frame_times=frame_times,
+    column_roles=column_roles,
+    sources=sources,
+    run_metadata=run_metadata,
+)
+result = fit_prepared(
+    prepared,
+    contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+    noise_model="ar1",
+    model_metadata={"origin": "fitlins", "node": "run"},
+)
+```
+
+The conventional prepared path supports semantic t contrasts and OLS or AR(1)
+inference. `task_delta_r2_prepared()` is a separate nested-OLS diagnostic when
+column roles provide a complete task-versus-nuisance partition. This is not an
+optimized-HRF or GLMdenoise interface; those adaptive methods, fractional
+ridge, imaging/reconstruction, and FitLins integration remain separate future
+work.
+
 ## Provenance and lifecycle logging
 
 `from_arrays()` accepts one `RunSources` descriptor per run. Each descriptor
