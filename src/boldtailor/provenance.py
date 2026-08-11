@@ -395,15 +395,20 @@ def _freeze_mapping(value: object, *, path_safe: bool) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError("annotations must be a mapping")
     frozen = {
-        _freeze_key(key): _freeze_json(item, path_safe=path_safe)
+        _freeze_key(key, path_safe=path_safe): _freeze_json(
+            item,
+            path_safe=path_safe,
+        )
         for key, item in value.items()
     }
     return MappingProxyType(frozen)
 
 
-def _freeze_key(value: object) -> str:
+def _freeze_key(value: object, *, path_safe: bool) -> str:
     if not isinstance(value, str):
         raise ValueError("JSON-safe mappings require string keys")
+    if path_safe and _looks_path_like(value):
+        raise ValueError("path-like keys are not allowed")
     return value
 
 

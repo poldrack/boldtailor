@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from importlib.metadata import version as package_version
 import logging
 import os
 import re
@@ -35,6 +36,9 @@ _TRACEBACK_PATTERN = re.compile(r"Traceback \(most recent call last\):.*", re.DO
 _TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
 _DIAGNOSTIC_NOISE_MODEL = "ols"
 _NESTED_OLS_TOLERANCE = 1e-12
+_NUMERICAL_BACKEND = MappingProxyType(
+    {"name": "nilearn", "version": package_version("nilearn")}
+)
 
 
 @dataclass(frozen=True)
@@ -459,6 +463,7 @@ def _fit_activity(
     return {
         "name": "fit_prepared",
         "stage": "fit",
+        "numerical_backend": dict(_NUMERICAL_BACKEND),
         "model": model,
         "runs": tuple(_run_diagnostic(prepared, run) for run in range(prepared.n_runs)),
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
+from importlib.metadata import version as package_version
 import json
 import logging
 from types import MappingProxyType
@@ -30,6 +31,9 @@ from boldtailor.provenance import (
 ColumnRole = Literal["task", "nuisance", "intercept", "other"]
 _COLUMN_ROLES = frozenset({"task", "nuisance", "intercept", "other"})
 _DESIGN_ID_SCHEMA = "boldtailor.prepared-design/1"
+_SOFTWARE_VERSIONS = MappingProxyType(
+    {name: package_version(name) for name in ("boldtailor", "numpy", "pandas")}
+)
 
 
 @dataclass(frozen=True)
@@ -128,7 +132,6 @@ def _prepare_analysis(
     run_metadata: Mapping[str, object] | Sequence[Mapping[str, object]] | None,
     provenance_metadata: Mapping[str, object] | None,
 ) -> PreparedDesignAnalysis:
-    del provenance_metadata
     execution_id = str(uuid4())
     history = ()
     with bind_context(execution_id=execution_id):
@@ -162,6 +165,9 @@ def _prepare_analysis(
                 designs = _prepare_designs(design_matrices, prepared_signals)
                 roles = _prepare_roles(column_roles, designs)
                 metadata = _prepare_metadata(run_metadata, len(prepared_signals))
+                prepared_provenance_metadata = _prepare_provenance_metadata(
+                    provenance_metadata
+                )
                 times, timing_source = _prepare_timing(
                     tr,
                     frame_times,
@@ -179,6 +185,8 @@ def _prepare_analysis(
                     n_features=prepared_signals[0].shape[1],
                     run_fingerprints=run_fingerprints,
                     design_fingerprint=design_fingerprint,
+                    run_metadata=metadata,
+                    provenance_metadata=prepared_provenance_metadata,
                 )
                 ProvenanceRecord(
                     execution_id=execution_id,
@@ -232,6 +240,8 @@ def _normalization_activity(
     n_features: int,
     run_fingerprints: Sequence[str],
     design_fingerprint: str,
+    run_metadata: Sequence[Mapping[str, object]],
+    provenance_metadata: Mapping[str, object] | None,
 ) -> Mapping[str, object]:
     runs = [
         {
@@ -240,7 +250,7 @@ def _normalization_activity(
         }
         for design, run_roles in zip(designs, roles)
     ]
-    return {
+    activity = {
         "name": "normalize_prepared_design",
         "stage": "prepared_design",
         "timing_source": timing_source,
@@ -249,7 +259,12 @@ def _normalization_activity(
         "runs": runs,
         "run_design_fingerprints": list(run_fingerprints),
         "design_fingerprint": design_fingerprint,
+        "run_metadata": [_thaw(metadata) for metadata in run_metadata],
+        "software_versions": dict(_SOFTWARE_VERSIONS),
     }
+    if provenance_metadata is not None:
+        activity["metadata"] = _thaw(provenance_metadata)
+    return activity
 
 
 def _run_design_fingerprint(
@@ -411,6 +426,14 @@ def _as_metadata_runs(
 def _freeze_metadata(values: Mapping[str, object]) -> Mapping[str, object]:
     if not isinstance(values, Mapping):
         raise ValueError("run_metadata must contain mappings")
+    return _freeze_mapping(values, path_safe=True)
+
+
+def _prepare_provenance_metadata(
+    values: Mapping[str, object] | None,
+) -> Mapping[str, object] | None:
+    if values is None:
+        return None
     return _freeze_mapping(values, path_safe=True)
 
 
