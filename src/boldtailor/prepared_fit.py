@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import logging
 import os
 import re
@@ -9,8 +9,9 @@ from types import MappingProxyType
 from uuid import uuid4
 
 import numpy as np
+import pandas as pd
 
-from boldtailor._conventional import fit_designs
+from boldtailor._conventional import fit_designs, fit_r2_designs
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.model import ContrastValue, _prepare_contrasts, _validate_noise_model
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -20,12 +21,20 @@ from boldtailor.provenance import (
     analysis_fingerprint,
     extend_provenance,
 )
-from boldtailor.results import AnalysisResult, make_result
+from boldtailor.results import (
+    AnalysisResult,
+    TaskDeltaR2Result,
+    make_result,
+    make_task_delta_r2_result,
+)
 
 _PATH_PATTERN = re.compile(r"(?<![\w.-])/(?:[^\s'\"<>]+)")
 _ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
 _OBJECT_REPR_PATTERN = re.compile(r"<[^>\n]*\bobject\b[^>\n]*>")
 _TRACEBACK_PATTERN = re.compile(r"Traceback \(most recent call last\):.*", re.DOTALL)
+_TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
+_DIAGNOSTIC_NOISE_MODEL = "ols"
+_NESTED_OLS_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -62,6 +71,241 @@ def fit_prepared(
                 analysis_id,
                 history,
             )
+
+
+def task_delta_r2_prepared(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+    *,
+    contrasts: Mapping[str, ContrastValue],
+    noise_model: str = "ar1",
+    model_metadata: Mapping[str, object] | None = None,
+) -> TaskDeltaR2Result:
+    return _compare_prepared_models(
+        prepared,
+        full_result,
+        contrasts=contrasts,
+        noise_model=noise_model,
+        model_metadata=model_metadata,
+    )
+
+
+def _compare_prepared_models(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+    *,
+    contrasts: Mapping[str, ContrastValue],
+    noise_model: str,
+    model_metadata: Mapping[str, object] | None,
+) -> TaskDeltaR2Result:
+    execution_id = str(uuid4())
+    data_id = prepared.provenance.metadata_fingerprint
+    history = full_result.provenance.events
+    with bind_context(execution_id=execution_id, data_id=data_id):
+        history = append_event_history(
+            history,
+            emit_event("task_delta_r2_prepared_started", stage="fit"),
+        )
+        try:
+            fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
+            model = _model_identity(prepared, fit_spec)
+            parent_id = analysis_fingerprint(data_id, model)
+            comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
+            with bind_context(analysis_id=comparison_id):
+                comparison, provenance = _run_prepared_comparison(
+                    prepared,
+                    full_result,
+                    fit_spec,
+                    parent_id,
+                    execution_id,
+                    history,
+                )
+        except Exception as error:
+            emit_event(
+                "task_delta_r2_prepared_failed",
+                stage="fit",
+                level=logging.ERROR,
+                error=_sanitize_error(error),
+            )
+            raise
+        history = append_event_history(
+            history,
+            emit_event("task_delta_r2_prepared_completed", stage="fit"),
+        )
+    return replace(comparison, _provenance=_with_events(provenance, history))
+
+
+def _run_prepared_comparison(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+    fit_spec: _PreparedFitSpec,
+    parent_id: str | None,
+    execution_id: str,
+    history: tuple[Mapping[str, object], ...],
+) -> tuple[TaskDeltaR2Result, ProvenanceRecord]:
+    _validate_prepared_parent(prepared, full_result, parent_id)
+    nuisance_designs = _nuisance_designs(prepared)
+    full_r2 = _fit_prepared_r2(prepared, prepared.design_matrices)
+    nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
+    _validate_nested_ols_delta(full_r2 - nuisance_r2)
+    comparison = make_task_delta_r2_result(
+        full_r2=full_r2,
+        nuisance_r2=nuisance_r2,
+        nuisance_designs=nuisance_designs,
+        provenance=full_result.provenance,
+    )
+    activity = _prepared_delta_activity(
+        prepared,
+        fit_spec,
+        nuisance_designs,
+        comparison,
+        parent_id,
+    )
+    provenance = extend_provenance(
+        full_result.provenance,
+        execution_id=execution_id,
+        activity=activity,
+        events=history,
+        warnings=(),
+        analysis_id=_prepared_comparison_id(
+            prepared.provenance.metadata_fingerprint,
+            parent_id,
+            fit_spec,
+        ),
+    )
+    return comparison, provenance
+
+
+def _prepared_comparison_id(
+    data_id: str | None,
+    parent_id: str | None,
+    fit_spec: _PreparedFitSpec,
+) -> str | None:
+    return analysis_fingerprint(
+        data_id,
+        {
+            "name": "task_delta_r2_prepared",
+            "parent_analysis_id": parent_id,
+            "definition": _TASK_DELTA_R2_DEFINITION,
+            "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+            "inferential_noise_model": fit_spec.noise_model,
+        },
+    )
+
+
+def _validate_prepared_parent(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+    parent_id: str | None,
+) -> None:
+    if parent_id is None:
+        raise ValueError(
+            "task delta r-squared requires fingerprintable prepared sources"
+        )
+    if full_result.provenance.analysis_fingerprint != parent_id:
+        raise ValueError("full result does not match prepared input and model")
+    _validate_prepared_result_dimensions(prepared, full_result)
+
+
+def _validate_prepared_result_dimensions(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+) -> None:
+    designs = full_result.design_matrices
+    run_r2 = full_result.run_r2
+    if len(designs) != prepared.n_runs or len(run_r2) != prepared.n_runs:
+        raise ValueError("full result run dimensions do not match prepared input")
+    for run, (signal, design, values) in enumerate(
+        zip(prepared.signals, designs, run_r2, strict=True)
+    ):
+        if design.shape[0] != signal.shape[0]:
+            raise ValueError(
+                f"full result run {run} dimensions do not match prepared input"
+            )
+        if values.shape != (prepared.n_features,):
+            raise ValueError(
+                f"full result run {run} feature dimensions do not match prepared input"
+            )
+    if full_result.r2.shape != (prepared.n_features,):
+        raise ValueError("full result feature dimensions do not match prepared input")
+    if not np.isfinite(full_result.r2).all():
+        raise ValueError("full result r-squared values must be finite")
+
+
+def _nuisance_designs(
+    prepared: PreparedDesignAnalysis,
+) -> tuple[pd.DataFrame, ...]:
+    designs = []
+    for run, (matrix, roles) in enumerate(
+        zip(prepared.design_matrices, prepared.column_roles, strict=True)
+    ):
+        if "other" in roles.values():
+            raise ValueError(
+                f"run {run} column roles are incomplete for task delta r-squared"
+            )
+        task = [name for name in matrix if roles[name] == "task"]
+        nuisance = [name for name in matrix if roles[name] in {"nuisance", "intercept"}]
+        if not task:
+            raise ValueError(f"run {run} requires at least one task column")
+        if not nuisance:
+            raise ValueError(f"run {run} requires a nuisance or intercept column")
+        designs.append(matrix.loc[:, nuisance])
+    return tuple(designs)
+
+
+def _fit_prepared_r2(
+    prepared: PreparedDesignAnalysis,
+    designs: tuple[pd.DataFrame, ...],
+) -> np.ndarray:
+    r2 = fit_r2_designs(prepared.signals, designs, _DIAGNOSTIC_NOISE_MODEL)
+    if not np.isfinite(r2).all():
+        raise ValueError("diagnostic fit produced nonfinite r-squared values")
+    return r2
+
+
+def _validate_nested_ols_delta(raw_delta_r2: np.ndarray) -> None:
+    if np.any(raw_delta_r2 < -_NESTED_OLS_TOLERANCE):
+        raise ValueError("nested OLS monotonicity violated")
+
+
+def _prepared_delta_activity(
+    prepared: PreparedDesignAnalysis,
+    fit_spec: _PreparedFitSpec,
+    nuisance_designs: tuple[pd.DataFrame, ...],
+    comparison: TaskDeltaR2Result,
+    parent_id: str,
+) -> dict[str, object]:
+    return {
+        "name": "task_delta_r2_prepared",
+        "stage": "fit",
+        "parent_analysis_id": parent_id,
+        "definition": _TASK_DELTA_R2_DEFINITION,
+        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "inferential_noise_model": fit_spec.noise_model,
+        "clip_policy": "numerical_roundoff_guard",
+        "roundoff_tolerance": _NESTED_OLS_TOLERANCE,
+        "nuisance_rule": "column roles nuisance or intercept",
+        "runs": tuple(
+            _prepared_delta_run_diagnostic(prepared, design, run)
+            for run, design in enumerate(nuisance_designs)
+        ),
+        "diagnostics": {
+            "raw_min": comparison.raw_min,
+            "negative_voxel_count": comparison.negative_voxel_count,
+            "mean_delta_r2": float(comparison.delta_r2.mean()),
+            "max_delta_r2": float(comparison.delta_r2.max()),
+        },
+    }
+
+
+def _prepared_delta_run_diagnostic(
+    prepared: PreparedDesignAnalysis,
+    nuisance_design: pd.DataFrame,
+    run: int,
+) -> dict[str, object]:
+    diagnostic = _run_diagnostic(prepared, run)
+    diagnostic["nuisance_columns"] = list(nuisance_design.columns)
+    return diagnostic
 
 
 def _fit_with_lifecycle(
