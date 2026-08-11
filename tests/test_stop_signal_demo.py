@@ -401,12 +401,8 @@ def _assert_prepared_runtime_contract(executed):
     ):
         assert len(fingerprint) == 64
         int(fingerprint, 16)
-    assert all(
-        "other" not in roles.values() for roles in audit["roles"]
-    )
-    assert all(
-        all(fields.values()) for fields in audit["contrast_parity"].values()
-    )
+    assert all("other" not in roles.values() for roles in audit["roles"])
+    assert all(all(fields.values()) for fields in audit["contrast_parity"].values())
     assert audit["aggregate_r2_parity"] is True
     assert audit["delta_r2_parity"] is True
     assert audit["activity_names"] == [
@@ -498,9 +494,7 @@ def _notebook_calls(notebook):
         "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")
     )
     return {
-        ast.unparse(node.func)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
+        ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)
     }
 
 
@@ -607,9 +601,7 @@ def _assert_published_metadata(published, bids_root, expected_delta):
         len(fingerprint) == 64
         for fingerprint in prepared_design["run_design_fingerprints"]
     )
-    assert all(
-        counts["other"] == 0 for counts in prepared_design["column_role_counts"]
-    )
+    assert all(counts["other"] == 0 for counts in prepared_design["column_role_counts"])
     assert variance["definition"] == "full_r2 - nuisance_r2"
     assert variance["clip_below_zero"] is True
     assert variance["diagnostic_noise_model"] == "ols"
