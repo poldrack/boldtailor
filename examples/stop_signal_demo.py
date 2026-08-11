@@ -160,6 +160,51 @@ def estimate_signal_memory_gib(scan_counts: Sequence[int], voxel_count: int) -> 
     return float(sum(counts) * voxel_count * 8 / 2**30)
 
 
+def prepared_column_roles(
+    full_designs: Sequence[pd.DataFrame],
+    nuisance_designs: Sequence[pd.DataFrame],
+    run_labels: Sequence[str],
+) -> tuple[dict[str, str], ...]:
+    full = tuple(full_designs)
+    nuisance = tuple(nuisance_designs)
+    labels = tuple(run_labels)
+    if len(full) != len(nuisance) or len(full) != len(labels):
+        raise ValueError(
+            "full, nuisance, and run labels must have the same number of runs"
+        )
+    return tuple(
+        _prepared_run_column_roles(full_run, nuisance_run, label)
+        for full_run, nuisance_run, label in zip(full, nuisance, labels, strict=True)
+    )
+
+
+def _prepared_run_column_roles(
+    full: pd.DataFrame,
+    nuisance: pd.DataFrame,
+    run_label: str,
+) -> dict[str, str]:
+    missing = [name for name in nuisance if name not in full]
+    if missing:
+        raise ValueError(
+            f"{run_label} nuisance design columns absent from full design: "
+            + ", ".join(missing)
+        )
+    nuisance_names = set(nuisance)
+    roles = {
+        name: (
+            "intercept"
+            if name == "constant"
+            else "nuisance" if name in nuisance_names else "task"
+        )
+        for name in full
+    }
+    if not any(role == "task" for role in roles.values()):
+        raise ValueError(f"{run_label} requires at least one task column")
+    if not any(role in {"nuisance", "intercept"} for role in roles.values()):
+        raise ValueError(f"{run_label} requires a nuisance or intercept column")
+    return roles
+
+
 def run_sources(inputs: RunInputs, bids_root: Path) -> RunSources:
     mask = _source_metadata(inputs.mask, bids_root)
     signal = _source_ref(
