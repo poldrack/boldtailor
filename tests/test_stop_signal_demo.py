@@ -1,4 +1,5 @@
 import ast
+import copy
 import gzip
 import hashlib
 import importlib
@@ -81,6 +82,39 @@ TRANSFORMED_SIGNALS = [
 PLOT_AUDIT_PREFIX = "BOLDTAILOR_PLOT_AUDIT="
 DELTA_AUDIT_PREFIX = "BOLDTAILOR_DELTA_AUDIT="
 DISPLAY_AUDIT_PREFIX = "BOLDTAILOR_DISPLAY_AUDIT="
+PREPARED_AUDIT_PREFIX = "BOLDTAILOR_PREPARED_AUDIT="
+PREPARED_AUDIT = f"""
+from boldtailor.fit import fit as _event_fit
+from boldtailor.fit import task_delta_r2 as _event_task_delta_r2
+
+_event_result = _event_fit(analysis_data, model_spec)
+_event_delta = _event_task_delta_r2(analysis_data, model_spec, _event_result)
+_contrast_parity = {{
+    name: {{
+        field: bool(np.allclose(
+            getattr(result, field)(name),
+            getattr(_event_result, field)(name),
+            equal_nan=True,
+        ))
+        for field in ("effect", "variance", "stat", "z_score", "one_sided_p_value")
+    }}
+    for name in result.contrast_names
+}}
+_prepared_audit = {{
+    "n_runs": prepared_analysis.n_runs,
+    "run_metadata": list(prepared_analysis.run_metadata),
+    "roles": [dict(item) for item in prepared_analysis.column_roles],
+    "design_fingerprint": prepared_analysis.design_fingerprint,
+    "run_design_fingerprints": list(prepared_analysis.run_design_fingerprints),
+    "activity_names": [item["name"] for item in task_delta.provenance.activities],
+    "contrast_parity": _contrast_parity,
+    "aggregate_r2_parity": bool(np.allclose(result.r2, _event_result.r2)),
+    "delta_r2_parity": bool(
+        np.allclose(task_delta.delta_r2, _event_delta.delta_r2)
+    ),
+}}
+print("{PREPARED_AUDIT_PREFIX}" + json.dumps(_prepared_audit, sort_keys=True))
+"""
 DISPLAY_AUDIT_SETUP = """
 _display_audit_records = []
 _real_display = display
@@ -324,6 +358,16 @@ def _instrument_notebook_plots(notebook):
     notebook.cells.append(nbformat.v4.new_code_cell(DISPLAY_AUDIT_REPORT))
 
 
+def _instrument_notebook_prepared_audit(notebook):
+    design_index = next(
+        index for index, cell in enumerate(notebook.cells) if cell.id == "design-fit"
+    )
+    notebook.cells.insert(
+        design_index + 1,
+        nbformat.v4.new_code_cell(PREPARED_AUDIT),
+    )
+
+
 def _plot_audit(executed):
     return _runtime_audit(executed, PLOT_AUDIT_PREFIX)
 
@@ -334,6 +378,40 @@ def _delta_audit(executed):
 
 def _display_audit(executed):
     return _runtime_audit(executed, DISPLAY_AUDIT_PREFIX)
+
+
+def _prepared_audit(executed):
+    return _runtime_audit(executed, PREPARED_AUDIT_PREFIX)
+
+
+def _assert_prepared_runtime_contract(executed):
+    audit = _prepared_audit(executed)
+
+    assert audit["n_runs"] == 2
+    assert audit["run_metadata"] == [
+        {"subject": "s4", "session": "02", "task": "stopSignal", "run": "01"},
+        {"subject": "s4", "session": "04", "task": "stopSignal", "run": "01"},
+    ]
+    assert len(audit["run_design_fingerprints"]) == audit["n_runs"]
+    for fingerprint in (
+        audit["design_fingerprint"],
+        *audit["run_design_fingerprints"],
+    ):
+        assert len(fingerprint) == 64
+        int(fingerprint, 16)
+    assert all(
+        "other" not in roles.values() for roles in audit["roles"]
+    )
+    assert all(
+        all(fields.values()) for fields in audit["contrast_parity"].values()
+    )
+    assert audit["aggregate_r2_parity"] is True
+    assert audit["delta_r2_parity"] is True
+    assert audit["activity_names"] == [
+        "normalize_prepared_design",
+        "fit_prepared",
+        "task_delta_r2_prepared",
+    ]
 
 
 def _runtime_audit(executed, prefix):
@@ -413,6 +491,49 @@ def _assert_compact_variance_display_source():
         )
 
 
+def _notebook_calls(notebook):
+    tree = ast.parse(
+        "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")
+    )
+    return {
+        ast.unparse(node.func)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    }
+
+
+def test_notebook_uses_prepared_design_estimation_boundary():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    calls = _notebook_calls(notebook)
+    source = "\n".join(
+        cell.source for cell in notebook.cells if cell.cell_type == "code"
+    )
+
+    assert "design.compile_designs" in calls
+    assert "design.compile_nuisance_designs" in calls
+    assert "PreparedDesignAnalysis.from_arrays" in calls
+    assert "prepared_fit.fit_prepared" in calls
+    assert "prepared_fit.task_delta_r2_prepared" in calls
+    assert "fit.fit" not in calls
+    assert "fit.task_delta_r2" not in calls
+    assert "import boldtailor.design as design" in source
+    assert "from boldtailor.prepared import PreparedDesignAnalysis" in source
+    assert "import boldtailor.prepared_fit as prepared_fit" in source
+    assert "PyBIDS/FitLins" in source
+    assert "performs no image/file I/O" in source
+    assert "separate nested OLS fits" in source
+
+
+def test_notebook_source_boundary_ignores_stored_outputs():
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    without_outputs = copy.deepcopy(notebook)
+    for cell in without_outputs.cells:
+        cell["outputs"] = []
+        cell["execution_count"] = None
+
+    assert _notebook_calls(without_outputs) == _notebook_calls(notebook)
+
+
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
@@ -464,12 +585,28 @@ def _assert_published_metadata(published, bids_root, expected_delta):
         "contrasts": CONTRAST_EXPRESSIONS,
     }
     variance = configuration.pop("variance_partition")
+    prepared_design = configuration.pop("prepared_design")
     assert configuration == {
         "subject": "sub-s4",
         "task": "stopSignal",
         "sessions": ["ses-02", "ses-04"],
         **expected_shared,
     }
+    assert prepared_design["boundary"] == "fixed labeled design matrices"
+    assert prepared_design["design_compiler"] == "boldtailor.design.compile_designs"
+    assert prepared_design["fit_entry_point"] == "boldtailor.prepared_fit.fit_prepared"
+    assert (
+        prepared_design["task_delta_entry_point"]
+        == "boldtailor.prepared_fit.task_delta_r2_prepared"
+    )
+    assert len(prepared_design["design_fingerprint"]) == 64
+    assert all(
+        len(fingerprint) == 64
+        for fingerprint in prepared_design["run_design_fingerprints"]
+    )
+    assert all(
+        counts["other"] == 0 for counts in prepared_design["column_role_counts"]
+    )
     assert variance["definition"] == "full_r2 - nuisance_r2"
     assert variance["clip_below_zero"] is True
     assert variance["diagnostic_noise_model"] == "ols"
@@ -506,22 +643,28 @@ def _assert_published_metadata(published, bids_root, expected_delta):
     normalized = next(
         activity
         for activity in provenance["activities"]
-        if activity["name"] == "normalize"
+        if activity["name"] == "normalize_prepared_design"
     )
+    assert normalized["run_metadata"] == [
+        {"subject": "s4", "session": "02", "task": "stopSignal", "run": "01"},
+        {"subject": "s4", "session": "04", "task": "stopSignal", "run": "01"},
+    ]
     assert normalized["metadata"] == {
-        "example": "two-session stop-signal whole-brain",
-        "sessions": ["ses-02", "ses-04"],
-        **expected_shared,
+        "boundary": "prepared_design",
+        "design_compiler": "boldtailor.design.compile_designs",
+        "design_source": "events_and_confounds",
     }
     fitted = next(
-        activity for activity in provenance["activities"] if activity["name"] == "fit"
+        activity
+        for activity in provenance["activities"]
+        if activity["name"] == "fit_prepared"
     )
     assert fitted["model"]["contrasts"] == {
         name: {"kind": "expression", "value": expression}
         for name, expression in CONTRAST_EXPRESSIONS.items()
     }
     assert fitted["model"]["noise_model"] == "ar1"
-    assert provenance["activities"][-1]["name"] == "task_delta_r2"
+    assert provenance["activities"][-1]["name"] == "task_delta_r2_prepared"
 
     images = tuple(sorted(published.glob("images/*.nii.gz")))
     assert len(images) == 11
@@ -545,6 +688,7 @@ def _execute_notebook(
     working_directory,
     *,
     instrument_plots=False,
+    instrument_prepared=False,
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(bids_root))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
@@ -553,6 +697,8 @@ def _execute_notebook(
     notebook = nbformat.read(NOTEBOOK, as_version=4)
     if instrument_plots:
         _instrument_notebook_plots(notebook)
+    if instrument_prepared:
+        _instrument_notebook_prepared_audit(notebook)
     client = NotebookClient(
         notebook,
         timeout=180,
@@ -1223,7 +1369,7 @@ def test_notebook_design_fit_displays_compact_variance_summary():
     (NOTEBOOK.parents[1], NOTEBOOK.parent),
     ids=("repository-root", "notebook-directory"),
 )
-def test_variance_partition_notebook_executes_against_fixture(
+def test_variance_partition_prepared_runtime_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
 ):
     executed, rendered, published = _execute_notebook(
@@ -1232,10 +1378,12 @@ def test_variance_partition_notebook_executes_against_fixture(
         monkeypatch,
         working_directory,
         instrument_plots=True,
+        instrument_prepared=True,
     )
 
     _assert_plot_contract(executed)
     _assert_display_contract(executed)
+    _assert_prepared_runtime_contract(executed)
     assert "successful_inhibition" in rendered
     assert "stop_vs_go" in rendered
     assert "go_success_vs_baseline" in rendered
@@ -1271,8 +1419,10 @@ def test_variance_partition_notebook_publishes_complete_private_metadata(
         monkeypatch,
         NOTEBOOK.parents[1],
         instrument_plots=True,
+        instrument_prepared=True,
     )
 
+    _assert_prepared_runtime_contract(executed)
     _assert_published_metadata(
         published,
         stop_signal_bids_dataset,
