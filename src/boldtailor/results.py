@@ -12,7 +12,7 @@ from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 from boldtailor._arrays import immutable_float_array
 from boldtailor.provenance import ProvenanceRecord
 
-DesignProvenance = Mapping[str, int | float]
+DesignProvenance = Mapping[str, int | float | str]
 
 
 class _NilearnContrast(Protocol):
