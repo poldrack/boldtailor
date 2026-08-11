@@ -1,3 +1,10 @@
+import builtins
+import io
+import json
+import logging
+import os
+from pathlib import Path
+import re
 import warnings
 
 import numpy as np
@@ -9,6 +16,7 @@ from nilearn.glm.first_level import run_glm
 
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared
+from boldtailor.provenance import RunSources, SourceRef
 
 
 @pytest.fixture
@@ -53,6 +61,44 @@ def _prepared(signals, design, *, roles=None):
         tr=2.0,
         column_roles=roles,
     )
+
+
+def _complete_sources() -> tuple[RunSources, ...]:
+    return (
+        RunSources(
+            signal=SourceRef(
+                role="signal",
+                uri="sub-01/func/sub-01_task-faces_run-01_bold.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=2048,
+                modified_at="2026-08-11T12:00:00Z",
+            ),
+            events=SourceRef(
+                role="events",
+                uri="sub-01/func/sub-01_task-faces_run-01_events.tsv",
+                media_type="text/tab-separated-values",
+                byte_size=512,
+                modified_at="2026-08-11T12:01:00Z",
+            ),
+        ),
+    )
+
+
+def _prepared_with_sources(signals, design):
+    return PreparedDesignAnalysis.from_arrays(
+        signals=signals,
+        design_matrices=design,
+        tr=2.0,
+        column_roles={
+            name: "intercept" if name == "constant" else "task"
+            for name in design.columns
+        },
+        sources=_complete_sources(),
+    )
+
+
+def _structured_records(caplog):
+    return [json.loads(record.getMessage()) for record in caplog.records]
 
 
 def _nilearn_t_contrast(labels, regression_results, vector):
@@ -313,3 +359,419 @@ def test_fit_prepared_owns_results_and_reports_prepared_design_provenance(
             values[...] = 0.0
         np.testing.assert_array_equal(values, expected)
     np.testing.assert_array_equal(result.r2, original[0])
+
+
+def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
+    prepared_problem,
+):
+    del prepared_problem
+    rng = np.random.default_rng(20260815)
+    design = pd.DataFrame(
+        {
+            "face": rng.normal(size=24),
+            "house": rng.normal(size=24),
+            "constant": np.ones(24),
+        }
+    )
+    signals = design.to_numpy() @ np.array([[2.0, 1.0], [-1.0, 0.5], [5.0, 6.0]])
+    prepared = _prepared_with_sources(signals, design)
+    metadata = {"origin": "fitlins", "node": "run"}
+    contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
+
+    first = fit_prepared(
+        prepared,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+    second = fit_prepared(
+        prepared,
+        contrasts=contrasts,
+        noise_model="ar1",
+        model_metadata=metadata,
+    )
+
+    assert first.provenance.execution_id != second.provenance.execution_id
+    assert (
+        first.provenance.analysis_fingerprint == second.provenance.analysis_fingerprint
+    )
+    assert re.fullmatch(r"[0-9a-f]{64}", first.provenance.analysis_fingerprint or "")
+    activity = first.provenance.activities[-1]
+    assert activity["name"] == "fit_prepared"
+    assert activity["stage"] == "fit"
+    assert activity["model"] == {
+        "kind": "prepared_design",
+        "contrasts": {
+            "face_gt_house": {
+                "kind": "weights",
+                "weights": {"face": 1.0, "house": -1.0},
+            }
+        },
+        "noise_model": "ar1",
+        "metadata": metadata,
+        "design_fingerprint": prepared.design_fingerprint,
+    }
+    run = activity["runs"][0]
+    assert run == {
+        "n_scans": 24,
+        "n_features": 2,
+        "design_columns": ["face", "house", "constant"],
+        "role_counts": {"task": 2, "nuisance": 0, "intercept": 1, "other": 0},
+        "design_rank": 3,
+        "residual_dof": 21,
+        "run_design_fingerprint": prepared.run_design_fingerprints[0],
+        "warnings": [],
+    }
+
+
+def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(prepared_problem):
+    _, contrasts, _ = prepared_problem
+    rng = np.random.default_rng(20260816)
+    design = pd.DataFrame(
+        {
+            "face": rng.normal(size=24),
+            "house": rng.normal(size=24),
+            "constant": np.ones(24),
+        }
+    )
+    signals = design.to_numpy() @ np.array([[2.0], [-1.0], [5.0]])
+    prepared = _prepared_with_sources(signals, design)
+    baseline = fit_prepared(
+        prepared,
+        contrasts=contrasts,
+        noise_model="ols",
+        model_metadata={"node": "first"},
+    )
+    changed_design = design.copy()
+    changed_design.loc[0, "face"] += 0.25
+    changed_prepared = _prepared_with_sources(signals, changed_design)
+    changed_results = (
+        fit_prepared(
+            changed_prepared,
+            contrasts=contrasts,
+            noise_model="ols",
+            model_metadata={"node": "first"},
+        ),
+        fit_prepared(
+            prepared,
+            contrasts={"face": {"face": 1.0}},
+            noise_model="ols",
+            model_metadata={"node": "first"},
+        ),
+        fit_prepared(
+            prepared,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata={"node": "first"},
+        ),
+        fit_prepared(
+            prepared,
+            contrasts=contrasts,
+            noise_model="ols",
+            model_metadata={"node": "second"},
+        ),
+    )
+
+    assert all(
+        result.provenance.analysis_fingerprint
+        != baseline.provenance.analysis_fingerprint
+        for result in changed_results
+    )
+
+
+def test_fit_prepared_leaves_analysis_identity_unavailable_for_anonymous_sources(
+    prepared_problem,
+):
+    prepared, contrasts, _ = prepared_problem
+
+    result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+
+    assert result.provenance.analysis_fingerprint is None
+    assert any(
+        warning["code"] == "provenance_quality"
+        for warning in result.provenance.warnings
+    )
+
+
+def test_fit_prepared_logs_lifecycle_and_resets_context(caplog, prepared_problem):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    _, _, _ = prepared_problem
+    design = pd.DataFrame(
+        {
+            "face": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "house": [1.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+            "constant": 1.0,
+        }
+    )
+    signals = design.to_numpy() @ np.array([[2.0], [-1.0], [5.0]])
+    prepared = _prepared_with_sources(signals, design)
+    contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
+
+    result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+    from boldtailor.logging import emit_event
+
+    emit_event("after_prepared_fit", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_completed",
+    ]
+    assert all(
+        record["execution_id"] == result.provenance.execution_id
+        for record in fit_records
+    )
+    assert prepared.provenance.metadata_fingerprint is not None
+    assert result.provenance.analysis_fingerprint is not None
+    assert all(
+        record["data_id"] == prepared.provenance.metadata_fingerprint
+        for record in fit_records
+    )
+    assert all(
+        record["analysis_id"] == result.provenance.analysis_fingerprint
+        for record in fit_records
+    )
+    assert records[-1]["event"] == "after_prepared_fit"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
+
+
+def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
+    caplog,
+    monkeypatch,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    design = pd.DataFrame(
+        {
+            "face": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0],
+            "constant": 1.0,
+        }
+    )
+    signals = np.full((6, 1), 712345.5)
+    prepared = _prepared_with_sources(signals, design)
+    result = fit_prepared(
+        prepared,
+        contrasts={"face": {"face": 1.0}},
+        noise_model="ols",
+    )
+    with pytest.raises(ValueError, match="missing regressor"):
+        fit_prepared(
+            prepared,
+            contrasts={"missing": {"missing": 1.0}},
+            noise_model="ols",
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_sanitized_failure", stage="test")
+    records = _structured_records(caplog)
+    canonical = result.provenance.canonical_json()
+    combined = "\n".join(
+        [canonical, *(record.getMessage() for record in caplog.records)]
+    )
+
+    assert "712345.5" not in combined
+    assert "Traceback" not in combined
+    assert not re.search(r"0x[0-9a-fA-F]+", combined)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+    assert [record["event"] for record in fit_records[-2:]] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert (
+        fit_records[-1]["error"]
+        == "run 0 contrast 'missing' references missing regressor 'missing'"
+    )
+    assert records[-1]["event"] == "after_sanitized_failure"
+    assert records[-1].get("execution_id") is None
+
+
+@pytest.mark.parametrize(
+    ("contrasts", "model_metadata"),
+    [
+        ({"face": {"face": 1.0}}, {"/private/task-5-metadata-key": "safe"}),
+        ({"/private/task-5-contrast-key": {"face": 1.0}}, None),
+    ],
+)
+def test_fit_prepared_rejects_path_like_model_keys_without_logging_them(
+    caplog,
+    prepared_problem,
+    contrasts,
+    model_metadata,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, _, _ = prepared_problem
+    absolute_path = next(
+        value
+        for value in (
+            "/private/task-5-metadata-key",
+            "/private/task-5-contrast-key",
+        )
+        if value in str(contrasts) or value in str(model_metadata)
+    )
+
+    with pytest.raises(ValueError, match="path-like"):
+        fit_prepared(
+            prepared,
+            contrasts=contrasts,
+            noise_model="ols",
+            model_metadata=model_metadata,
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_path_key_failure", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert absolute_path not in "\n".join(
+        record.getMessage() for record in caplog.records
+    )
+    assert records[-1].get("execution_id") is None
+
+
+@pytest.mark.parametrize(
+    ("contrasts", "noise_model", "model_metadata"),
+    [
+        ({}, "ols", None),
+        ({"face": {"face": 1.0}}, "fast", None),
+        ({"face": {"face": 1.0}}, "ols", {"value": object()}),
+    ],
+)
+def test_fit_prepared_logs_invalid_specification_failures_and_resets_context(
+    caplog,
+    prepared_problem,
+    contrasts,
+    noise_model,
+    model_metadata,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, _, _ = prepared_problem
+
+    with pytest.raises(ValueError):
+        fit_prepared(
+            prepared,
+            contrasts=contrasts,
+            noise_model=noise_model,
+            model_metadata=model_metadata,
+        )
+    from boldtailor.logging import emit_event
+
+    emit_event("after_invalid_fit_spec", stage="test")
+    records = _structured_records(caplog)
+    fit_records = [record for record in records if record["stage"] == "fit"]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert fit_records[0]["execution_id"] == fit_records[1]["execution_id"]
+    assert fit_records[1]["level"] == "ERROR"
+    assert records[-1].get("execution_id") is None
+    assert records[-1].get("data_id") is None
+    assert records[-1].get("analysis_id") is None
+
+
+def test_fit_prepared_ignores_empty_sensitive_environment_values(caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    monkeypatch.setenv("BOLDTAILOR_EMPTY_SECRET", "")
+    design = pd.DataFrame({"face": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0], "constant": 1.0})
+    prepared = _prepared(design.to_numpy() @ np.array([[2.0], [5.0]]), design)
+
+    with pytest.raises(ValueError, match="missing regressor"):
+        fit_prepared(
+            prepared,
+            contrasts={"missing": {"missing": 1.0}},
+            noise_model="ols",
+        )
+
+    records = _structured_records(caplog)
+    failed = [record for record in records if record["event"] == "fit_failed"][-1]
+    assert (
+        failed["error"]
+        == "run 0 contrast 'missing' references missing regressor 'missing'"
+    )
+
+
+def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
+    caplog,
+    monkeypatch,
+    prepared_problem,
+):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    prepared, contrasts, _ = prepared_problem
+
+    class PrivateObject:
+        pass
+
+    private_object = PrivateObject()
+    raw_repr = repr(private_object)
+    raw_address = re.search(r"0x[0-9a-fA-F]+", raw_repr).group(0)
+
+    def fail_fit(*args, **kwargs):
+        raise ValueError(
+            "Traceback (most recent call last):\n"
+            f"private failure: {private_object!r}"
+        )
+
+    monkeypatch.setattr("boldtailor.prepared_fit.fit_designs", fail_fit)
+
+    with pytest.raises(ValueError, match="Traceback"):
+        fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+
+    combined = "\n".join(record.getMessage() for record in caplog.records)
+    fit_records = [
+        record for record in _structured_records(caplog) if record["stage"] == "fit"
+    ]
+
+    assert [record["event"] for record in fit_records] == [
+        "fit_started",
+        "fit_failed",
+    ]
+    assert "Traceback" not in combined
+    assert raw_repr not in combined
+    assert raw_address not in combined
+
+
+def test_fit_prepared_never_writes_to_the_filesystem(monkeypatch, prepared_problem):
+    prepared, contrasts, _ = prepared_problem
+    real_open = builtins.open
+    real_io_open = io.open
+    real_os_open = os.open
+
+    def guarded_open(file, mode="r", *args, **kwargs):
+        if any(flag in mode for flag in "wax+"):
+            raise AssertionError(f"unexpected write through open: {mode}")
+        return real_open(file, mode, *args, **kwargs)
+
+    def guarded_io_open(file, mode="r", *args, **kwargs):
+        if any(flag in mode for flag in "wax+"):
+            raise AssertionError(f"unexpected write through io.open: {mode}")
+        return real_io_open(file, mode, *args, **kwargs)
+
+    def fail_os_open(path, flags, *args, **kwargs):
+        write_flags = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
+        if flags & write_flags:
+            raise AssertionError("unexpected write through os.open")
+        return real_os_open(path, flags, *args, **kwargs)
+
+    def fail_path_open(*args, **kwargs):
+        raise AssertionError("unexpected Path.open")
+
+    def fail_write(*args, **kwargs):
+        raise AssertionError("unexpected Path write")
+
+    monkeypatch.setattr(builtins, "open", guarded_open)
+    monkeypatch.setattr(io, "open", guarded_io_open)
+    monkeypatch.setattr(os, "open", fail_os_open)
+    monkeypatch.setattr(Path, "open", fail_path_open)
+    monkeypatch.setattr(Path, "write_text", fail_write)
+    monkeypatch.setattr(Path, "write_bytes", fail_write)
+
+    result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+
+    assert result.contrast_names == ("face_gt_house",)
