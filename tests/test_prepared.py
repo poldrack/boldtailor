@@ -380,6 +380,12 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
         ],
         "run_design_fingerprints": list(first.run_design_fingerprints),
         "design_fingerprint": first.design_fingerprint,
+        "run_metadata": prepared_inputs[3],
+        "software_versions": {
+            "boldtailor": version("boldtailor"),
+            "numpy": version("numpy"),
+            "pandas": version("pandas"),
+        },
     }
     assert first.provenance.execution_id != second.provenance.execution_id
     assert (
