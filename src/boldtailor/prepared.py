@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+import hashlib
+import json
+import logging
 from types import MappingProxyType
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
@@ -16,6 +19,7 @@ from boldtailor.data import (
     _prepare_timing,
     _validate_feature_counts,
 )
+from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
@@ -25,6 +29,7 @@ from boldtailor.provenance import (
 
 ColumnRole = Literal["task", "nuisance", "intercept", "other"]
 _COLUMN_ROLES = frozenset({"task", "nuisance", "intercept", "other"})
+_DESIGN_ID_SCHEMA = "boldtailor.prepared-design/1"
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,8 @@ class PreparedDesignAnalysis:
     _timing_source: str
     _column_roles: tuple[Mapping[str, ColumnRole], ...]
     _run_metadata: tuple[Mapping[str, object], ...]
+    _run_design_fingerprints: tuple[str, ...]
+    _design_fingerprint: str
     _provenance: ProvenanceRecord
 
     @classmethod
@@ -97,6 +104,14 @@ class PreparedDesignAnalysis:
         return tuple(_thaw(metadata) for metadata in self._run_metadata)
 
     @property
+    def run_design_fingerprints(self) -> tuple[str, ...]:
+        return self._run_design_fingerprints
+
+    @property
+    def design_fingerprint(self) -> str:
+        return self._design_fingerprint
+
+    @property
     def provenance(self) -> ProvenanceRecord:
         return self._provenance
 
@@ -114,20 +129,81 @@ def _prepare_analysis(
     provenance_metadata: Mapping[str, object] | None,
 ) -> PreparedDesignAnalysis:
     del provenance_metadata
-    signal_runs = _as_signal_runs(signals)
-    prepared_signals = tuple(
-        _prepare_signal(values, run) for run, values in enumerate(signal_runs)
-    )
-    _validate_feature_counts(prepared_signals)
-    designs = _prepare_designs(design_matrices, prepared_signals)
-    roles = _prepare_roles(column_roles, designs)
-    metadata = _prepare_metadata(run_metadata, len(prepared_signals))
-    times, timing_source = _prepare_timing(tr, frame_times, prepared_signals)
-    prepared_sources = _prepare_sources(
-        run_count=len(prepared_signals),
-        sources=sources,
-        include_confounds=False,
-    )
+    execution_id = str(uuid4())
+    history = ()
+    with bind_context(execution_id=execution_id):
+        history = append_event_history(
+            history,
+            emit_event("normalization_started", stage="prepared_design"),
+        )
+        try:
+            signal_runs = _as_signal_runs(signals)
+            prepared_sources = _prepare_sources(
+                run_count=len(signal_runs),
+                sources=sources,
+                include_confounds=False,
+            )
+            source_fingerprint = _source_fingerprint(execution_id, prepared_sources)
+        except ValueError as error:
+            emit_event(
+                "normalization_failed",
+                stage="prepared_design",
+                level=logging.ERROR,
+                error=str(error),
+            )
+            raise
+        with bind_context(data_id=source_fingerprint):
+            try:
+                prepared_signals = tuple(
+                    _prepare_signal(values, run)
+                    for run, values in enumerate(signal_runs)
+                )
+                _validate_feature_counts(prepared_signals)
+                designs = _prepare_designs(design_matrices, prepared_signals)
+                roles = _prepare_roles(column_roles, designs)
+                metadata = _prepare_metadata(run_metadata, len(prepared_signals))
+                times, timing_source = _prepare_timing(
+                    tr,
+                    frame_times,
+                    prepared_signals,
+                )
+                run_fingerprints = tuple(
+                    _run_design_fingerprint(design, frame_time, run_roles)
+                    for design, frame_time, run_roles in zip(designs, times, roles)
+                )
+                design_fingerprint = _aggregate_design_fingerprint(run_fingerprints)
+                activity = _normalization_activity(
+                    timing_source=timing_source,
+                    designs=designs,
+                    roles=roles,
+                    n_features=prepared_signals[0].shape[1],
+                    run_fingerprints=run_fingerprints,
+                    design_fingerprint=design_fingerprint,
+                )
+                ProvenanceRecord(
+                    execution_id=execution_id,
+                    sources=prepared_sources,
+                    activities=(activity,),
+                    events=history,
+                )
+            except ValueError as error:
+                emit_event(
+                    "normalization_failed",
+                    stage="prepared_design",
+                    level=logging.ERROR,
+                    error=str(error),
+                )
+                raise
+            history = append_event_history(
+                history,
+                emit_event("normalization_completed", stage="prepared_design"),
+            )
+            provenance = ProvenanceRecord(
+                execution_id=execution_id,
+                sources=prepared_sources,
+                activities=(activity,),
+                events=history,
+            )
     return cls(
         _signals=prepared_signals,
         _design_matrices=designs,
@@ -135,10 +211,88 @@ def _prepare_analysis(
         _timing_source=timing_source,
         _column_roles=roles,
         _run_metadata=metadata,
-        _provenance=ProvenanceRecord(
-            execution_id=str(uuid4()),
-            sources=prepared_sources,
-        ),
+        _run_design_fingerprints=run_fingerprints,
+        _design_fingerprint=design_fingerprint,
+        _provenance=provenance,
+    )
+
+
+def _source_fingerprint(execution_id: str, sources: Sequence[RunSources]) -> str | None:
+    return ProvenanceRecord(
+        execution_id=execution_id,
+        sources=sources,
+    ).metadata_fingerprint
+
+
+def _normalization_activity(
+    *,
+    timing_source: str,
+    designs: Sequence[pd.DataFrame],
+    roles: Sequence[Mapping[str, ColumnRole]],
+    n_features: int,
+    run_fingerprints: Sequence[str],
+    design_fingerprint: str,
+) -> Mapping[str, object]:
+    runs = [
+        {
+            "columns": list(design.columns),
+            "roles": [run_roles[name] for name in design.columns],
+        }
+        for design, run_roles in zip(designs, roles)
+    ]
+    return {
+        "name": "normalize_prepared_design",
+        "stage": "prepared_design",
+        "timing_source": timing_source,
+        "run_count": len(designs),
+        "feature_count": n_features,
+        "runs": runs,
+        "run_design_fingerprints": list(run_fingerprints),
+        "design_fingerprint": design_fingerprint,
+    }
+
+
+def _run_design_fingerprint(
+    design: pd.DataFrame,
+    frame_times: np.ndarray,
+    roles: Mapping[str, ColumnRole],
+) -> str:
+    hasher = hashlib.sha256()
+    _hash_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
+    header = {
+        "shape": list(design.shape),
+        "columns": list(design.columns),
+        "roles": [roles[name] for name in design.columns],
+        "dtype": "<f8",
+    }
+    _hash_chunk(hasher, _canonical_json(header).encode("utf-8"))
+    _hash_chunk(
+        hasher,
+        np.asarray(frame_times, dtype="<f8", order="C").tobytes(),
+    )
+    _hash_chunk(
+        hasher,
+        np.asarray(design, dtype="<f8", order="C").tobytes(),
+    )
+    return hasher.hexdigest()
+
+
+def _aggregate_design_fingerprint(run_fingerprints: Sequence[str]) -> str:
+    hasher = hashlib.sha256()
+    _hash_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
+    payload = {"run_design_fingerprints": list(run_fingerprints)}
+    _hash_chunk(hasher, _canonical_json(payload).encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def _hash_chunk(hasher: Any, payload: bytes) -> None:
+    hasher.update(len(payload).to_bytes(8, "big"))
+    hasher.update(payload)
+
+
+def _canonical_json(payload: Mapping[str, object]) -> str:
+    return json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
 
 
