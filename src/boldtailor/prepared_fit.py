@@ -106,37 +106,94 @@ def _compare_prepared_models(
     data_id = prepared.provenance.metadata_fingerprint
     history = full_result.provenance.events
     with bind_context(execution_id=execution_id, data_id=data_id):
-        history = append_event_history(
-            history,
-            emit_event("task_delta_r2_prepared_started", stage="fit"),
-        )
         try:
-            fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
-            model = _model_identity(prepared, fit_spec)
-            parent_id = analysis_fingerprint(data_id, model)
-            comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
-            with bind_context(analysis_id=comparison_id):
-                comparison, provenance = _run_prepared_comparison(
-                    prepared,
-                    full_result,
-                    fit_spec,
-                    parent_id,
-                    execution_id,
-                    history,
-                )
-        except Exception as error:
-            emit_event(
-                "task_delta_r2_prepared_failed",
-                stage="fit",
-                level=logging.ERROR,
-                error=_sanitize_error(error),
+            fit_spec, parent_id, comparison_id = _prepare_comparison_identity(
+                prepared,
+                contrasts,
+                noise_model,
+                model_metadata,
+                data_id,
             )
+        except Exception as error:
+            _log_comparison_validation_failure(history, error)
             raise
-        history = append_event_history(
+        with bind_context(analysis_id=comparison_id):
+            return _comparison_with_lifecycle(
+                prepared,
+                full_result,
+                fit_spec,
+                parent_id,
+                comparison_id,
+                execution_id,
+                history,
+            )
+
+
+def _prepare_comparison_identity(
+    prepared: PreparedDesignAnalysis,
+    contrasts: Mapping[str, ContrastValue],
+    noise_model: str,
+    model_metadata: Mapping[str, object] | None,
+    data_id: str | None,
+) -> tuple[_PreparedFitSpec, str | None, str | None]:
+    fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
+    parent_id = analysis_fingerprint(data_id, _model_identity(prepared, fit_spec))
+    comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
+    return fit_spec, parent_id, comparison_id
+
+
+def _comparison_with_lifecycle(
+    prepared: PreparedDesignAnalysis,
+    full_result: AnalysisResult,
+    fit_spec: _PreparedFitSpec,
+    parent_id: str | None,
+    comparison_id: str | None,
+    execution_id: str,
+    history: tuple[Mapping[str, object], ...],
+) -> TaskDeltaR2Result:
+    history = append_event_history(
+        history,
+        emit_event("task_delta_r2_prepared_started", stage="fit"),
+    )
+    try:
+        comparison, provenance = _run_prepared_comparison(
+            prepared,
+            full_result,
+            fit_spec,
+            parent_id,
+            comparison_id,
+            execution_id,
             history,
-            emit_event("task_delta_r2_prepared_completed", stage="fit"),
         )
+    except Exception as error:
+        emit_event(
+            "task_delta_r2_prepared_failed",
+            stage="fit",
+            level=logging.ERROR,
+            error=_sanitize_error(error),
+        )
+        raise
+    history = append_event_history(
+        history,
+        emit_event("task_delta_r2_prepared_completed", stage="fit"),
+    )
     return replace(comparison, _provenance=_with_events(provenance, history))
+
+
+def _log_comparison_validation_failure(
+    history: tuple[Mapping[str, object], ...],
+    error: Exception,
+) -> None:
+    append_event_history(
+        history,
+        emit_event("task_delta_r2_prepared_started", stage="fit"),
+    )
+    emit_event(
+        "task_delta_r2_prepared_failed",
+        stage="fit",
+        level=logging.ERROR,
+        error=_sanitize_error(error),
+    )
 
 
 def _run_prepared_comparison(
@@ -144,6 +201,7 @@ def _run_prepared_comparison(
     full_result: AnalysisResult,
     fit_spec: _PreparedFitSpec,
     parent_id: str | None,
+    comparison_id: str | None,
     execution_id: str,
     history: tuple[Mapping[str, object], ...],
 ) -> tuple[TaskDeltaR2Result, ProvenanceRecord]:
@@ -171,11 +229,7 @@ def _run_prepared_comparison(
         activity=activity,
         events=history,
         warnings=(),
-        analysis_id=_prepared_comparison_id(
-            prepared.provenance.metadata_fingerprint,
-            parent_id,
-            fit_spec,
-        ),
+        analysis_id=comparison_id,
     )
     return comparison, provenance
 
