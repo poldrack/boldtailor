@@ -222,6 +222,76 @@ def _demo_module():
     return importlib.import_module("examples.stop_signal_demo")
 
 
+def test_prepared_column_roles_follow_nuisance_compiler():
+    prepared_column_roles = _demo_module().prepared_column_roles
+    full = (
+        pd.DataFrame(columns=("go_success", "motion", "drift_1", "constant")),
+        pd.DataFrame(columns=("constant", "drift_1", "motion", "stop_success")),
+    )
+    nuisance = (
+        pd.DataFrame(columns=("motion", "drift_1", "constant")),
+        pd.DataFrame(columns=("constant", "drift_1", "motion")),
+    )
+
+    roles = prepared_column_roles(full, nuisance, ("ses-02", "ses-04"))
+
+    assert roles == (
+        {
+            "go_success": "task",
+            "motion": "nuisance",
+            "drift_1": "nuisance",
+            "constant": "intercept",
+        },
+        {
+            "constant": "intercept",
+            "drift_1": "nuisance",
+            "motion": "nuisance",
+            "stop_success": "task",
+        },
+    )
+    assert tuple(roles[0]) == tuple(full[0])
+    assert tuple(roles[1]) == tuple(full[1])
+    assert tuple(map(len, roles)) == tuple(map(len, (item.columns for item in full)))
+    assert all(value != "other" for mapping in roles for value in mapping.values())
+
+
+def test_prepared_column_roles_rejects_missing_nuisance_column():
+    prepared_column_roles = _demo_module().prepared_column_roles
+    full = (
+        pd.DataFrame(columns=("go_success", "motion", "drift_1", "constant")),
+        pd.DataFrame(columns=("constant", "drift_1", "motion", "stop_success")),
+    )
+    nuisance = (
+        pd.DataFrame(columns=("motion", "drift_1", "constant")),
+        pd.DataFrame(columns=("constant", "missing_motion")),
+    )
+    bad_nuisance = (nuisance[0], nuisance[1])
+
+    with pytest.raises(ValueError, match="ses-04.*nuisance.*absent from full"):
+        prepared_column_roles(full, bad_nuisance, ("ses-02", "ses-04"))
+
+
+def test_prepared_column_roles_requires_task_column():
+    prepared_column_roles = _demo_module().prepared_column_roles
+    no_task_full = (pd.DataFrame(columns=("motion", "constant")),)
+    no_task_nuisance = (pd.DataFrame(columns=("motion", "constant")),)
+
+    with pytest.raises(ValueError, match="ses-02.*at least one task column"):
+        prepared_column_roles(no_task_full, no_task_nuisance, ("ses-02",))
+
+
+def test_prepared_column_roles_requires_matching_run_counts():
+    prepared_column_roles = _demo_module().prepared_column_roles
+    full = (
+        pd.DataFrame(columns=("go_success", "constant")),
+        pd.DataFrame(columns=("stop_success", "constant")),
+    )
+    nuisance = (pd.DataFrame(columns=("constant",)),)
+
+    with pytest.raises(ValueError, match="same number of runs"):
+        prepared_column_roles(full, nuisance, ("ses-02", "ses-04"))
+
+
 def _notebook_configuration():
     notebook = nbformat.read(NOTEBOOK, as_version=4)
     configuration_cell = next(
