@@ -232,7 +232,7 @@ def test_notebook_uses_prepared_design_estimation_boundary():
     assert "prepared_fit.fit_prepared" in calls
     assert "prepared_fit.task_delta_r2_prepared" in calls
     assert "fit.fit" not in calls
-assert "fit.task_delta_r2" not in calls
+    assert "fit.task_delta_r2" not in calls
 ```
 
 Build a separate `all_source` string from every Markdown and code cell when
