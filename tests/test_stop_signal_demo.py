@@ -1017,19 +1017,41 @@ def test_result_artifacts_follow_result_contrast_names(example_result):
     assert not any("contrast-stopVsGo" in path for path in paths)
 
 
-def test_result_artifacts_reject_contrast_label_collisions(example_result):
+def test_result_artifacts_reject_casefolded_contrast_label_collisions(example_result):
     _, mask_image, masker, result, comparison = example_result
     colliding = replace(
         result,
         _contrasts={
             "stop_success": result._contrasts["successful_inhibition"],
-            "stopSuccess": result._contrasts["stop_vs_go"],
+            "stopsuccess": result._contrasts["stop_vs_go"],
         },
     )
 
     with pytest.raises(ValueError, match="unique BIDS labels"):
         _demo_module().result_artifacts(
             colliding,
+            masker,
+            mask_image,
+            subject="sub-s4",
+            task="stopSignal",
+            sessions=("ses-02", "ses-04"),
+            space="MNI152NLin2009cAsym",
+            resolution=2,
+            configuration={},
+            task_delta=comparison,
+        )
+
+
+def test_result_artifacts_reject_non_ascii_contrast_labels(example_result):
+    _, mask_image, masker, result, comparison = example_result
+    non_ascii = replace(
+        result,
+        _contrasts={"café_vs_rest": result._contrasts["successful_inhibition"]},
+    )
+
+    with pytest.raises(ValueError, match="ASCII"):
+        _demo_module().result_artifacts(
+            non_ascii,
             masker,
             mask_image,
             subject="sub-s4",
