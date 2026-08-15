@@ -20,12 +20,6 @@ from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.publication import Artifact
 from boldtailor.results import AnalysisResult, TaskDeltaR2Result
 
-_CONTRAST_LABELS = (
-    ("successful_inhibition", "successfulInhibition"),
-    ("stop_vs_go", "stopVsGo"),
-    ("go_success_vs_baseline", "goSuccessVsBaseline"),
-)
-
 
 @dataclass(frozen=True, slots=True)
 class RunInputs:
@@ -404,7 +398,7 @@ def _contrast_images(
     result: AnalysisResult, masker: NiftiMasker, stem: str
 ) -> tuple[Artifact, ...]:
     images = []
-    for name, label in _CONTRAST_LABELS:
+    for name, label in _contrast_artifact_labels(result.contrast_names):
         images.extend(
             (
                 _image_artifact(
@@ -418,6 +412,21 @@ def _contrast_images(
             )
         )
     return tuple(images)
+
+
+def _contrast_artifact_labels(names: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    pairs = tuple((name, _bids_contrast_label(name)) for name in names)
+    labels = tuple(label for _, label in pairs)
+    if len(set(labels)) != len(labels):
+        raise ValueError("contrast names must produce unique BIDS labels")
+    return pairs
+
+
+def _bids_contrast_label(name: str) -> str:
+    parts = name.split("_")
+    if not all(part and part.isalnum() for part in parts):
+        raise ValueError("contrast names must contain alphanumeric words")
+    return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
 
 
 def _run_r2_images(
