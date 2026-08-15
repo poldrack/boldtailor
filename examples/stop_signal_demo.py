@@ -416,16 +416,16 @@ def _contrast_images(
 
 def _contrast_artifact_labels(names: Sequence[str]) -> tuple[tuple[str, str], ...]:
     pairs = tuple((name, _bids_contrast_label(name)) for name in names)
-    labels = tuple(label for _, label in pairs)
-    if len(set(labels)) != len(labels):
+    label_keys = tuple(label.casefold() for _, label in pairs)
+    if len(set(label_keys)) != len(label_keys):
         raise ValueError("contrast names must produce unique BIDS labels")
     return pairs
 
 
 def _bids_contrast_label(name: str) -> str:
     parts = name.split("_")
-    if not all(part and part.isalnum() for part in parts):
-        raise ValueError("contrast names must contain alphanumeric words")
+    if not all(part and part.isascii() and part.isalnum() for part in parts):
+        raise ValueError("contrast names must contain ASCII alphanumeric words")
     return parts[0] + "".join(part[:1].upper() + part[1:] for part in parts[1:])
 
 
