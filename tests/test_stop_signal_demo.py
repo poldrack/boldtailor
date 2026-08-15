@@ -52,6 +52,11 @@ CONTRAST_EXPRESSIONS = {
     "stop_vs_go": "(stop_success + stop_failure) - go_success",
     "go_success_vs_baseline": "go_success",
 }
+NOTEBOOK_CONTRAST_EXPRESSIONS = {
+    "successful_inhibition": "stop_success - stop_failure",
+    "stop_success_vs_go": "stop_success - go",
+    "go_success_vs_baseline": "go",
+}
 MASK_METADATA = {
     "strategy": "intersection",
     "shape": [7, 7, 7],
@@ -81,6 +86,7 @@ TRANSFORMED_SIGNALS = [
     {"session": "ses-04", "shape": [88, 343], "dtype": "float64"},
 ]
 PLOT_AUDIT_PREFIX = "BOLDTAILOR_PLOT_AUDIT="
+VIEW_AUDIT_PREFIX = "BOLDTAILOR_VIEW_AUDIT="
 DELTA_AUDIT_PREFIX = "BOLDTAILOR_DELTA_AUDIT="
 DISPLAY_AUDIT_PREFIX = "BOLDTAILOR_DISPLAY_AUDIT="
 PREPARED_AUDIT_PREFIX = "BOLDTAILOR_PREPARED_AUDIT="
@@ -166,7 +172,9 @@ import inspect as _inspect
 import json as _json
 
 _plot_stat_map_records = []
+_view_img_records = []
 _real_plot_stat_map = plotting.plot_stat_map
+_real_view_img = plotting.view_img
 
 
 def _record_plot_stat_map(stat_map_img, *args, **kwargs):
@@ -181,15 +189,30 @@ def _record_plot_stat_map(stat_map_img, *args, **kwargs):
 
 
 plotting.plot_stat_map = _record_plot_stat_map
+
+
+def _record_view_img(stat_map_img, *args, **kwargs):
+    call = _inspect.signature(_real_view_img).bind(
+        stat_map_img, *args, **kwargs
+    )
+    call.apply_defaults()
+    _view_img_records.append(
+        {"image": stat_map_img, "arguments": call.arguments}
+    )
+    return {"interactive_view": call.arguments["title"]}
+
+
+plotting.view_img = _record_view_img
 """
 PLOT_AUDIT_REPORT = f"""
-_plot_audit = []
 _common_mask_values = (
     np.asarray(common_mask.dataobj, dtype=bool)
     if "common_mask" in globals()
     else None
 )
-for _record in _plot_stat_map_records:
+
+
+def _inspect_image_record(_record):
     _arguments = _record["arguments"]
     _matches = []
     _matches_aggregate = False
@@ -210,28 +233,35 @@ for _record in _plot_stat_map_records:
             _matches_task_delta = bool(
                 np.allclose(_values, task_delta.delta_r2)
             )
-    _plot_audit.append(
-        {{
-            "matched_z_scores": _matches,
-            "matched_aggregate_r2": _matches_aggregate,
-            "matched_task_delta_r2": _matches_task_delta,
-            "minimum": _minimum,
-            "all_nonnegative": _all_nonnegative,
-            "threshold": _arguments["threshold"],
-            "display_mode": _arguments["display_mode"],
-            "cut_coords": (
-                None
-                if _arguments["cut_coords"] is None
-                else np.asarray(_arguments["cut_coords"]).tolist()
-            ),
-            "vmin": _arguments["vmin"],
-            "colorbar": _arguments["colorbar"],
-            "cmap": _arguments["cmap"],
-            "symmetric_cbar": _arguments["symmetric_cbar"],
-            "title": _arguments["title"],
-        }}
-    )
+    return {{
+        "matched_z_scores": _matches,
+        "matched_aggregate_r2": _matches_aggregate,
+        "matched_task_delta_r2": _matches_task_delta,
+        "minimum": _minimum,
+        "all_nonnegative": _all_nonnegative,
+        "threshold": _arguments["threshold"],
+        "cut_coords": (
+            None
+            if _arguments["cut_coords"] is None
+            else np.asarray(_arguments["cut_coords"]).tolist()
+        ),
+        "vmin": _arguments["vmin"],
+        "colorbar": _arguments["colorbar"],
+        "cmap": _arguments["cmap"],
+        "title": _arguments["title"],
+    }}
+
+
+_plot_audit = [_inspect_image_record(_record) for _record in _plot_stat_map_records]
+for _item, _record in zip(_plot_audit, _plot_stat_map_records, strict=True):
+    _arguments = _record["arguments"]
+    _item["display_mode"] = _arguments["display_mode"]
+    _item["symmetric_cbar"] = _arguments["symmetric_cbar"]
 print("{PLOT_AUDIT_PREFIX}" + _json.dumps(_plot_audit, sort_keys=True))
+_view_audit = [_inspect_image_record(_record) for _record in _view_img_records]
+for _item, _record in zip(_view_audit, _view_img_records, strict=True):
+    _item["symmetric_cmap"] = _record["arguments"]["symmetric_cmap"]
+print("{VIEW_AUDIT_PREFIX}" + _json.dumps(_view_audit, sort_keys=True))
 _delta_audit = {{
     "raw_min_delta_r2": float(task_delta.raw_min),
     "negative_voxel_count": int(task_delta.negative_voxel_count),
@@ -375,6 +405,10 @@ def _plot_audit(executed):
     return _runtime_audit(executed, PLOT_AUDIT_PREFIX)
 
 
+def _view_audit(executed):
+    return _runtime_audit(executed, VIEW_AUDIT_PREFIX)
+
+
 def _delta_audit(executed):
     return _runtime_audit(executed, DELTA_AUDIT_PREFIX)
 
@@ -428,7 +462,7 @@ def _runtime_audit(executed, prefix):
 
 def _assert_display_contract(executed):
     audit = _display_audit(executed)
-    assert audit["display_count"] == 11
+    assert audit["display_count"] == 16
     assert audit["max_array_or_table_elements"] <= 256
     assert audit["contains_raw_signal_memory"] is False
 
@@ -540,7 +574,9 @@ def _assert_plot_contract(executed):
     for call in audit:
         assert call["display_mode"] == "z"
         assert call["cut_coords"] == expected_cut_coords
-    for call, contrast_name in zip(audit[:3], CONTRAST_EXPRESSIONS, strict=True):
+    for call, contrast_name in zip(
+        audit[:3], NOTEBOOK_CONTRAST_EXPRESSIONS, strict=True
+    ):
         assert call["matched_z_scores"] == [contrast_name]
         assert call["matched_aggregate_r2"] is False
         assert call["matched_task_delta_r2"] is False
@@ -570,6 +606,43 @@ def _assert_plot_contract(executed):
     assert delta["title"] == "Task-attributable delta R-squared (OLS diagnostic)"
 
 
+def _assert_interactive_view_contract(executed):
+    audit = _view_audit(executed)
+
+    expected_cut_coords = [0, 0, 35]
+    assert len(audit) == 5
+    for call in audit:
+        assert call["cut_coords"] == expected_cut_coords
+        assert call["threshold"] is None
+        assert call["colorbar"] is True
+    for call, contrast_name in zip(
+        audit[:3], NOTEBOOK_CONTRAST_EXPRESSIONS, strict=True
+    ):
+        assert call["matched_z_scores"] == [contrast_name]
+        assert call["matched_aggregate_r2"] is False
+        assert call["matched_task_delta_r2"] is False
+        assert call["symmetric_cmap"] is True
+        assert call["title"] == f"{contrast_name} interactive z-score"
+
+    aggregate = audit[3]
+    assert aggregate["matched_z_scores"] == []
+    assert aggregate["matched_aggregate_r2"] is True
+    assert aggregate["matched_task_delta_r2"] is False
+    assert aggregate["vmin"] == 0
+    assert aggregate["cmap"] == "viridis"
+    assert aggregate["symmetric_cmap"] is False
+
+    delta = audit[4]
+    assert delta["matched_z_scores"] == []
+    assert delta["matched_aggregate_r2"] is False
+    assert delta["matched_task_delta_r2"] is True
+    assert delta["minimum"] >= 0.0
+    assert delta["all_nonnegative"] is True
+    assert delta["vmin"] == 0
+    assert delta["cmap"] == "magma"
+    assert delta["symmetric_cmap"] is False
+
+
 def _assert_published_metadata(published, bids_root, expected_delta):
     configuration_path = (
         published / "reports/sub-s4_task-stopSignal_desc-example_config.json"
@@ -580,7 +653,7 @@ def _assert_published_metadata(published, bids_root, expected_delta):
         "masker": MASKER_SETTINGS,
         "resources": RESOURCE_ASSUMPTIONS,
         "transformed_signals": TRANSFORMED_SIGNALS,
-        "contrasts": CONTRAST_EXPRESSIONS,
+        "contrasts": NOTEBOOK_CONTRAST_EXPRESSIONS,
     }
     variance = configuration.pop("variance_partition")
     prepared_design = configuration.pop("prepared_design")
@@ -657,7 +730,7 @@ def _assert_published_metadata(published, bids_root, expected_delta):
     )
     assert fitted["model"]["contrasts"] == {
         name: {"kind": "expression", "value": expression}
-        for name, expression in CONTRAST_EXPRESSIONS.items()
+        for name, expression in NOTEBOOK_CONTRAST_EXPRESSIONS.items()
     }
     assert fitted["model"]["noise_model"] == "ar1"
     assert provenance["activities"][-1]["name"] == "task_delta_r2_prepared"
@@ -687,10 +760,10 @@ def _execute_notebook(
     instrument_prepared=False,
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(bids_root))
-    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04")
     monkeypatch.setenv("BOLDTAILOR_TEMP_ROOT", str(temporary_root))
     monkeypatch.setenv("MPLBACKEND", "Agg")
     notebook = nbformat.read(NOTEBOOK, as_version=4)
+    _configure_notebook_fixture(notebook, bids_root)
     if instrument_plots:
         _instrument_notebook_plots(notebook)
     if instrument_prepared:
@@ -719,6 +792,23 @@ def _execute_notebook(
     )
     published = next(temporary_root.glob("boldtailor-*"))
     return executed, rendered, published
+
+
+def _configure_notebook_fixture(notebook, bids_root):
+    configuration = next(cell for cell in notebook.cells if cell.id == "configuration")
+    configuration.source += """
+FMRIPREP_ROOT = BIDS_ROOT / "derivatives" / "fmri_25.2.0"
+SUBJECT = "sub-s4"
+SESSIONS = ("ses-02", "ses-04")
+DEFAULT_SESSIONS = SESSIONS
+RUN = "run-01"
+"""
+    for events_path in bids_root.glob("sub-s4/ses-*/func/*_events.tsv"):
+        events = pd.read_csv(events_path, sep="\t")
+        events["trial_type"] = events["trial_type"].replace(
+            {"go_success": "go", "go_failure": "go"}
+        )
+        events.to_csv(events_path, sep="\t", index=False)
 
 
 def _discover(root, session="ses-02"):
@@ -1455,10 +1545,11 @@ def test_variance_partition_prepared_runtime_executes_against_fixture(
     )
 
     _assert_plot_contract(executed)
+    _assert_interactive_view_contract(executed)
     _assert_display_contract(executed)
     _assert_prepared_runtime_contract(executed)
     assert "successful_inhibition" in rendered
-    assert "stop_vs_go" in rendered
+    assert "stop_success_vs_go" in rendered
     assert "go_success_vs_baseline" in rendered
     assert "common_voxel_count" in rendered
     assert "estimated_signal_memory_gib" in rendered
