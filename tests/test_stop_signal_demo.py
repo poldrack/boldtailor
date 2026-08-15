@@ -1,5 +1,6 @@
 import ast
 import copy
+from dataclasses import replace
 import gzip
 import hashlib
 import importlib
@@ -984,6 +985,36 @@ def test_load_run_rejects_event_beyond_acquisition(stop_signal_bids_dataset):
 
     with pytest.raises(ValueError, match="event timing exceeds acquisition"):
         load_run(inputs, masker, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+
+
+def test_result_artifacts_follow_result_contrast_names(example_result):
+    _, mask_image, masker, result, comparison = example_result
+    renamed = replace(
+        result,
+        _contrasts={
+            "successful_inhibition": result._contrasts["successful_inhibition"],
+            "stop_success_vs_go": result._contrasts["stop_vs_go"],
+            "go_success_vs_baseline": result._contrasts["go_success_vs_baseline"],
+        },
+    )
+
+    artifacts = _demo_module().result_artifacts(
+        renamed,
+        masker,
+        mask_image,
+        subject="sub-s4",
+        task="stopSignal",
+        sessions=("ses-02", "ses-04"),
+        space="MNI152NLin2009cAsym",
+        resolution=2,
+        configuration={},
+        task_delta=comparison,
+    )
+    paths = {artifact.path for artifact in artifacts}
+
+    assert any("contrast-stopSuccessVsGo_stat-effect" in path for path in paths)
+    assert any("contrast-stopSuccessVsGo_stat-z" in path for path in paths)
+    assert not any("contrast-stopVsGo" in path for path in paths)
 
 
 def test_result_artifacts_are_deterministic_valid_metadata(
