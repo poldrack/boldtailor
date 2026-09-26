@@ -123,3 +123,24 @@ def test_unidentified_hrfs_are_rejected(timing_fixture):
     for hrf in ("glover", lambda tr, oversampling: np.ones(10)):
         with pytest.raises(ValueError, match="HRF|hrf"):
             compile_trial_run(*timing_fixture, "run-01", hrf=hrf)
+
+
+@pytest.mark.parametrize("offset", [.774,.775])
+@pytest.mark.parametrize("irregular", [False,True])
+def test_batched_trial_convolution_matches_nilearn_across_library(offset,irregular):
+    from nilearn.glm.first_level import compute_regressor
+    from boldtailor._hrf_design import trial_regressors
+    from boldtailor.hrf_library import expanded_hrf_library
+
+    times=offset+1.6*np.arange(188)
+    if irregular:
+        times[1:-1]+=np.random.default_rng(412).uniform(-.01,.01,len(times)-2)
+    events=pd.DataFrame(dict(onset=[times[0]-24,-.07,8.13,17.37,99.15,274.3],duration=[0,3,1.2,0,6.7,3]))
+    for cid in [0,1,137,291,456,648]:
+        candidate=expanded_hrf_library().candidates[cid]
+        actual=trial_regressors(events,times,candidate)
+        expected=np.column_stack([compute_regressor(np.array([[o],[d],[1.]]),"spm" if cid==0 else candidate.kernel,times)[0][:,0] for o,d in zip(events.onset,events.duration,strict=True)])
+        if cid==0:
+            np.testing.assert_array_equal(actual,expected)
+        else:
+            np.testing.assert_allclose(actual,expected,rtol=1e-11,atol=2e-14)

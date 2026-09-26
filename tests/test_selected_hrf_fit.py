@@ -99,7 +99,9 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
             np.testing.assert_allclose(
                 result.run_betas[r][:, v], expected[:3], atol=1e-11
             )
-            np.testing.assert_array_equal(result.group_designs[r, int(cid)], matrix)
+            # Custom convolution may use equivalent floating-point summation;
+            # exact canonical compatibility is tested separately.
+            np.testing.assert_allclose(result.group_designs[r, int(cid)], matrix, rtol=1e-11, atol=2e-14)
             sse.append(np.sum((y[:, v] - matrix @ expected) ** 2))
             null.append(
                 np.sum(
