@@ -341,3 +341,11 @@ designs, exact CIFTI axes, all 750 trial identities, RT vertex selection and
 even-run correlations. Library and diagnostic plots were visually checked.
 See the [validation record](../../docs/superpowers/validation/2026-09-26-hrf-selection.md)
 for audit details, implementation decisions, and the remaining archive limitation.
+
+The subsequently added `hrfdeltarsquared` maps were generated from the saved
+full-model R² images without refitting. Matching axes, all 750 trial rows,
+confounds, source runs, and estimator settings were verified first. Every
+grayordinate was checked against direct subtraction, with 525 undefined values
+per map. Median optimized-minus-canonical R² was −0.002160 for OLS (34.36%
+positive) and +0.001326 for ridge (59.61% positive). The two maps and their JSON
+sidecars preserve all 160 files present before this addition.

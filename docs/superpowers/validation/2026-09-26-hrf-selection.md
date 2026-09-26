@@ -104,3 +104,26 @@ target assumes transfer of the mean response across runs and does not guarantee
 better trial-amplitude estimates. HRF parameters at weak-signal locations have
 no significance threshold; 622 candidates were selected and 525 locations were
 undefined. The real-data improvement is modest and location-dependent.
+
+## Follow-up: full-model HRF comparison maps
+
+The requested per-grayordinate `hrfdeltarsquared` maps subtract canonical
+single-trial full R² from optimized single-trial full R², separately for OLS
+and fixed ridge. Expanded runs now fit the matching canonical baseline and
+publish each comparison with a JSON sidecar. Ineligible canonical designs
+produce NaNs and an explicit reason without aborting expanded analysis.
+
+Failing tests were committed at `edea34b` before implementation at `ca781bf`.
+Tests cover independently calculated canonical ordinary/augmented least squares,
+pooled R², signed differences, undefined values, exact spatial axes, and output
+collision checks before fitting. All 468 tests passed in the integrated main
+checkout (`uv run pytest tests examples/NSD -q -W error --tb=short`, 27.35 s).
+Existing user notebook/test edits remain byte-for-byte unchanged.
+
+The saved session's two maps and sidecars were generated directly from its
+verified full-R² images. Source axes, estimator settings, confounds, run lists,
+and all 750 trial rows matched. Trial-table column ordering differed, so the
+audit compared values by column name while preserving row order. Both output
+maps matched direct subtraction at every grayordinate. SHA256 checks confirmed
+preservation of all 160 prior files. Median differences were −0.002160 (OLS)
+and +0.001326 (ridge); each map contains 525 undefined grayordinates.
