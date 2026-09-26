@@ -38,8 +38,10 @@ Each run has independent coefficients for:
 - A run intercept.
 
 Frame times use the CIFTI TR and the BOLD JSON `StartTime`, accounting for
-slice-timing correction. For these data they are `0.775 + 1.6 * arange(188)`
-seconds. The example does not smooth, scale, or separately filter the signals.
+slice-timing correction. These data use 188 volumes with TR 1.6 seconds;
+`StartTime` is 0.774 seconds for runs 02, 09, 11, and 12, and 0.775 seconds
+for the others. Each run's exact JSON value is used. The example does not
+smooth, scale, or separately filter the signals.
 Only missing first-volume motion derivatives are replaced with zero; missing
 response times or other selected confounds cause an explicit error.
 
@@ -171,3 +173,37 @@ not guaranteed, and the checks never select HRFs or penalties.
 ```bash
 uv run pytest test_nsd_cifti.py test_nsd_single_trial.py test_rt_diagnostics.py -q -W error
 ```
+
+### Verified sub-07/ses-nsd10 run
+
+The 2026-09-26 run fitted all 12 runs, 750 trials, and 91,282 grayordinates
+with OLS and fixed ridge alpha 0.1. It published 66 new files under
+`/Volumes/extdata1/NSD/BIDS/derivatives/boldtailor/sub-07/ses-nsd10/func/`.
+Checksums confirmed that all 21 pre-existing files were preserved.
+
+| Pooled diagnostic (median across defined grayordinates) | OLS | Ridge 0.1 |
+| --- | ---: | ---: |
+| Full R² | 0.818498 | 0.799512 |
+| Confounds-only R² | 0.569213 | 0.569213 |
+| ΔR² | 0.222574 | 0.205088 |
+
+There are 525 grayordinates with undefined pooled R². Single-trial models
+have many more task coefficients than the conventional model, so increased
+in-sample R² alone is not evidence of better generalization.
+
+The five vertices selected by odd-run OLS had even-run correlations
+`0.163, 0.164, 0.172, -0.154, 0.173`; fixed ridge at the same vertices gave
+`0.225, 0.217, 0.222, -0.139, 0.187`. All retained their odd-run sign.
+The spatial correlation between odd/even cortical RT maps was 0.657 for OLS
+and 0.750 for ridge. These are modest, directionally consistent RT associations,
+not significance estimates or proof that ridge is generally superior. The
+scatterplots show a sparse long-RT tail; no outliers were removed or used to
+choose a penalty.
+
+An independent NumPy audit reconstructed 30 sampled grayordinates (including
+the five selected vertices) across every run using least squares and augmented
+least squares. Maximum absolute beta differences were below `7.7e-6` native
+units, and pooled R² errors below `3e-8`, consistent with float32 storage.
+The audit also checked exact imaging axes, trial identities, RT correlations,
+valid-trial counts, and odd-only selection. The measured run took 100.57 seconds
+with 2.57 GB maximum resident memory (decimal GB, macOS `/usr/bin/time -l`).
