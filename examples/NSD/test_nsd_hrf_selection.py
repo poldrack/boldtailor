@@ -275,20 +275,22 @@ def test_collision_and_publication_rollback(hrf_nsd, tmp_path, monkeypatch):
     assert not list((tmp_path / "rollback").rglob("*desc-hrf*"))
 
 
-def test_undefined_odd_hrf_at_rt_selected_vertex_does_not_abort(hrf_nsd,tmp_path):
-    _,prep,*_=hrf_nsd
-    for number in range(1,5):
-        path=next(prep.rglob(f"*run-{number:02d}*.dtseries.nii"))
-        image=nib.load(path)
-        y=image.get_fdata()
-        confound=pd.read_csv(next(prep.rglob(f"*run-{number:02d}*confounds*.tsv")),sep="\t")
-        y[:,0]=3*confound.trans_x+100
-        nib.save(nib.Cifti2Image(y,image.header),path)
-    paths=run(hrf_nsd,tmp_path/"undefined")
-    ids=nib.load(find(paths,"stat-oddhrfindex.")).get_fdata()
-    assert np.isnan(ids[0,0])
-    vertices=pd.read_csv(find(paths,"_selectedvertices.tsv"),sep="\t")
+def test_undefined_odd_hrf_at_rt_selected_vertex_does_not_abort(hrf_nsd, tmp_path):
+    _, prep, *_ = hrf_nsd
+    for number in range(1, 5):
+        path = next(prep.rglob(f"*run-{number:02d}*.dtseries.nii"))
+        image = nib.load(path)
+        y = image.get_fdata()
+        confound = pd.read_csv(
+            next(prep.rglob(f"*run-{number:02d}*confounds*.tsv")), sep="\t"
+        )
+        y[:, 0] = 3 * confound.trans_x + 100
+        nib.save(nib.Cifti2Image(y, image.header), path)
+    paths = run(hrf_nsd, tmp_path / "undefined")
+    ids = nib.load(find(paths, "stat-oddhrfindex.")).get_fdata()
+    assert np.isnan(ids[0, 0])
+    vertices = pd.read_csv(find(paths, "_selectedvertices.tsv"), sep="\t")
     if 0 in vertices.grayordinate_index.to_numpy():
-        row=vertices[vertices.grayordinate_index==0].iloc[0]
+        row = vertices[vertices.grayordinate_index == 0].iloc[0]
         assert np.isnan(row.odd_hrf_id)
         assert np.isnan(row.OLS_even_r)

@@ -209,8 +209,9 @@ def _independent_rt(runs, root, brain, models, library, state, train, test):
         feature_signature=signature,
     )
     expected = state["maps"]["oddhrfindex"][vertices]
-    actual = evaluation.training_selection.hrf_indices
-    if not np.array_equal(expected, actual):
+    actual = evaluation.training_selection.hrf_indices.astype(float)
+    actual[actual < 0] = np.nan
+    if not np.array_equal(expected, actual, equal_nan=True):
         raise RuntimeError(
             "selected-vertex HRFs differ from odd-run feature-block selection"
         )
