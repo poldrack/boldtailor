@@ -23,7 +23,13 @@ if __package__:
         json_artifact,
         single_trial_artifacts,
     )
-    from .hrf_artifacts import selection_paths, selection_artifacts, rt_artifacts
+    from .hrf_artifacts import (
+        selection_paths,
+        selection_artifacts,
+        rt_artifacts,
+        comparison_paths,
+        comparison_artifacts,
+    )
 else:
     from nsd_single_trial import _empty_result, _model_metadata, _preflight
     from nsd_cifti import _sources, _input_paths
@@ -34,7 +40,13 @@ else:
         json_artifact,
         single_trial_artifacts,
     )
-    from hrf_artifacts import selection_paths, selection_artifacts, rt_artifacts
+    from hrf_artifacts import (
+        selection_paths,
+        selection_artifacts,
+        rt_artifacts,
+        comparison_paths,
+        comparison_artifacts,
+    )
 
 SELECTION_STATS = (
     "hrfindex",
@@ -146,10 +158,28 @@ def _canonical_rt(runs, root, indices, library, state):
     )["odd"]
 
 
+def _canonical_comparisons(data, library, labels, models, results, start, stop):
+    for label, design in zip(labels, prepare_runs(data, library), strict=True):
+        eligible, reason = design.eligible(0)
+        if not eligible:
+            for result in results.values():
+                result["canonical_reason"] = (
+                    f"Canonical HRF is ineligible in {label}: {reason}"
+                )
+            return
+    for name, alpha in models.items():
+        fit = fit_single_trials(data, ridge_alpha=alpha, run_labels=labels)
+        results[name]["canonical_r2"][start:stop] = fit.full_r2
+        results[name]["canonical_provenance"].append(fit.provenance.to_dict())
+
+
 def fit_expanded_blocks(runs, root, brain, models, block_size, library, train, test):
     results = {name: _empty_result(runs, len(brain)) for name in models}
     for result in results.values():
         result["diagnostics"] = {}
+        result["canonical_r2"] = np.full(len(brain), np.nan, dtype=np.float32)
+        result["canonical_provenance"] = []
+        result["canonical_reason"] = ""
     state = dict(
         maps={name: np.full(len(brain), np.nan) for name in SELECTION_STATS},
         canonical_odd_rt=np.full(len(brain), np.nan),
@@ -190,6 +220,7 @@ def fit_expanded_blocks(runs, root, brain, models, block_size, library, train, t
                 feature_signature=signature,
             )
             _collect_fit(results[name], fit, start, stop)
+        _canonical_comparisons(data, library, labels, models, results, start, stop)
         if odd_runs:
             state["canonical_odd_rt"][start:stop] = _canonical_rt(
                 odd_runs, root, indices, library, state
@@ -276,6 +307,8 @@ def run_expanded_analysis(
         name: model_paths(runs, subject, session, name, descriptor="hrfOpt" + name)
         for name in models
     }
+    for model_paths_ in paths.values():
+        model_paths_.update(comparison_paths(model_paths_["fullrsquared"]))
     selection_paths_ = selection_paths(runs, subject, session)
     _preflight(
         output,
@@ -321,6 +354,15 @@ def run_expanded_analysis(
         artifacts.extend(
             single_trial_artifacts(runs, brain, result, diagnostics, paths[name], meta)
         )
+        artifacts.extend(
+            comparison_artifacts(
+                brain,
+                result["maps"][0],
+                result["canonical_r2"],
+                paths[name],
+                _comparison_metadata(meta, result, paths[name]),
+            )
+        )
     artifacts.extend(
         rt_artifacts(
             runs,
@@ -355,3 +397,23 @@ def run_expanded_analysis(
     )
     print(f"Saved {len(published)} files to {output}", flush=True)
     return published
+
+
+def _comparison_metadata(model_metadata, result, paths):
+    keys = (
+        "ridge_alpha",
+        "Estimator",
+        "Penalty",
+        "R2",
+        "Confounds",
+        "Sources",
+        "RunLabels",
+        "SoftwareVersions",
+    )
+    return dict(
+        {key: model_metadata[key] for key in keys},
+        ComparisonAvailable=not bool(result["canonical_reason"]),
+        ComparisonUnavailableReason=result["canonical_reason"],
+        CanonicalFitProvenance=result["canonical_provenance"],
+        OptimizedFitProvenance=paths["provenance"],
+    )

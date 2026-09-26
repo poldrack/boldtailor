@@ -243,6 +243,7 @@ New outputs coexist with the earlier models:
 | Descriptor / suffix | Content |
 | --- | --- |
 | `desc-hrfOptOLS`, `desc-hrfOptRidge` | Trial betas, trial mapping, pooled in-sample full/confound/ΔR², descriptive RT maps and provenance |
+| `desc-hrfOptOLS_stat-hrfdeltarsquared`, `desc-hrfOptRidge_stat-hrfdeltarsquared` | Per-grayordinate optimized full R² minus matching canonical full R², with JSON sidecars |
 | `desc-hrfSelection_stat-hrfindex` | Stable all-run HRF IDs; NaN where undefined |
 | `...stat-hrfparameters` | Selected parameters and peak times |
 | `...stat-selectioncvr2`, `canonicalcvr2`, `deltacvr2` | All-run selection score and canonical comparison |
@@ -260,6 +261,16 @@ may discard trials: proposed winners must support every trial with positive
 residual degrees of freedom. Eligibility is checked lazily; `unchecked` is
 distinct from eligible or excluded. Numerically zero nuisance-adjusted signals
 have no selected HRF. No weak-signal fallback or significance threshold is used.
+
+The `hrfdeltarsquared` maps compare **single-trial in-sample** fits pooled
+across all runs: `optimized_full_r2 - canonical_full_r2`. Positive values
+favor the optimized HRF, negative values favor the canonical HRF, and NaN
+means either score is undefined or the canonical design is ineligible.
+Expanded runs fit the canonical baseline with the same trials, confounds,
+and estimator (OLS or the same fixed ridge alpha); no prior canonical output
+is required. These maps differ from `deltarsquared` (task versus confounds)
+and `deltatestr2` (independent mean-prediction comparison). Their sidecars
+record the formula, fitting provenance and any unavailable-comparison reason.
 
 The array API is available from `boldtailor.hrf_library`,
 `boldtailor.hrf_selection` and `boldtailor.single_trial`:

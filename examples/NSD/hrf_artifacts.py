@@ -57,6 +57,41 @@ def selection_paths(runs, subject, session):
     return paths
 
 
+def comparison_paths(full_r2_path):
+    path = full_r2_path.replace("stat-fullrsquared", "stat-hrfdeltarsquared")
+    return {
+        "hrfdeltarsquared": path,
+        "hrfcomparison_metadata": path.removesuffix(".dscalar.nii") + ".json",
+    }
+
+
+def comparison_artifacts(brain, optimized, canonical, paths, metadata):
+    optimized, canonical = np.asarray(optimized), np.asarray(canonical)
+    delta = np.full(len(brain), np.nan)
+    np.subtract(
+        optimized,
+        canonical,
+        out=delta,
+        where=np.isfinite(optimized) & np.isfinite(canonical),
+    )
+    yield scalar_artifact(
+        paths["hrfdeltarsquared"],
+        brain,
+        delta[None],
+        ["optimized_full_r2_minus_canonical_full_r2"],
+    )
+    yield json_artifact(
+        paths["hrfcomparison_metadata"],
+        dict(
+            metadata,
+            Formula="optimized_full_r2 - canonical_full_r2",
+            Interpretation="positive: optimized HRF fits better; negative: canonical HRF fits better",
+            CanonicalHRF="Nilearn spm; oversampling 50; same trial model, confounds and ridge alpha",
+            Undefined="NaN where either full R2 is undefined or canonical design is ineligible",
+        ),
+    )
+
+
 def npz_artifact(path, **arrays):
     with BytesIO() as stream:
         np.savez_compressed(stream, **arrays)
