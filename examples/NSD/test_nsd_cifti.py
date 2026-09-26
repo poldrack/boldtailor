@@ -37,13 +37,17 @@ def confounds():
         name = f"a_comp_cor_{i:02d}"
         table[name] = rng.normal(size=96)
         metadata[name] = {
-            "Mask": "combined", "Retained": True,
-            "VarianceExplained": (8 - i) / 100, "Method": "aCompCor",
+            "Mask": "combined",
+            "Retained": True,
+            "VarianceExplained": (8 - i) / 100,
+            "Method": "aCompCor",
         }
     # A separate mask must not displace the combined-mask components.
     table["a_comp_cor_08"] = rng.normal(size=96)
     metadata["a_comp_cor_08"] = {
-        "Mask": "CSF", "Retained": True, "VarianceExplained": 0.8,
+        "Mask": "CSF",
+        "Retained": True,
+        "VarianceExplained": 0.8,
     }
     table["cosine00"] = np.cos(np.pi * (np.arange(96) + 0.5) / 96)
     table["non_steady_state_outlier00"] = np.r_[1.0, np.zeros(95)]
@@ -52,12 +56,14 @@ def confounds():
 
 @pytest.fixture
 def events():
-    return pd.DataFrame({
-        "onset": [8.0, 22.0, 38.0, 60.0, 90.0, 112.0],
-        "duration": [3.0] * 6,
-        "trial_type": [0, 1, 0, 1, 1, 0],
-        "response_time": [0.5, 1.0, 2.5, 1.5, 3.0, 0.5],
-    })
+    return pd.DataFrame(
+        {
+            "onset": [8.0, 22.0, 38.0, 60.0, 90.0, 112.0],
+            "duration": [3.0] * 6,
+            "trial_type": [0, 1, 0, 1, 1, 0],
+            "response_time": [0.5, 1.0, 2.5, 1.5, 3.0, 0.5],
+        }
+    )
 
 
 def test_confounds_use_24_motion_top_six_combined_components_and_cosines(confounds):
@@ -89,11 +95,14 @@ def test_rt_modulation_is_centered_and_preserves_stimulus_timing(events):
     times = 0.775 + np.arange(96) * 1.6
     design = example().task_regressors(events, times)
     expected_stim, _ = compute_regressor(
-        np.vstack([events.onset, events.duration, np.ones(6)]), "spm", times,
+        np.vstack([events.onset, events.duration, np.ones(6)]),
+        "spm",
+        times,
     )
     expected_rt, _ = compute_regressor(
         np.vstack([events.onset, events.duration, [-1, -0.5, 1, 0, 1.5, -1]]),
-        "spm", times,
+        "spm",
+        times,
     )
     assert list(design.columns) == ["stimulus", "response_time"]
     np.testing.assert_allclose(design.stimulus, expected_stim[:, 0])
@@ -115,18 +124,28 @@ def dataset(tmp_path, confounds, events):
     raw_func.mkdir(parents=True)
     prep_func.mkdir(parents=True)
     brain = nib.cifti2.BrainModelAxis.from_surface(
-        np.array([0, 2, 3, 6]), 8, name="CortexLeft",
+        np.array([0, 2, 3, 6]),
+        8,
+        name="CortexLeft",
     )
     table, metadata = confounds
     times = 0.775 + np.arange(96) * 1.6
-    task = np.column_stack([
-        compute_regressor(np.vstack([events.onset, events.duration, amp]), "spm", times)[0]
-        for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
-    ])
-    nuisance = np.column_stack([
-        table.iloc[:, :30].fillna(0), table.cosine00,
-        table.non_steady_state_outlier00, np.ones(96),
-    ])
+    task = np.column_stack(
+        [
+            compute_regressor(
+                np.vstack([events.onset, events.duration, amp]), "spm", times
+            )[0]
+            for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
+        ]
+    )
+    nuisance = np.column_stack(
+        [
+            table.iloc[:, :30].fillna(0),
+            table.cosine00,
+            table.non_steady_state_outlier00,
+            np.ones(96),
+        ]
+    )
     full = np.column_stack([task, nuisance])
     rng = np.random.default_rng(23)
     signal_runs = []
@@ -134,8 +153,12 @@ def dataset(tmp_path, confounds, events):
     for run, scale in [(1, 1), (2, 5)]:
         stem = f"sub-07_ses-nsd10_task-nsdcore_run-{run:02d}"
         events.to_csv(raw_func / f"{stem}_events.tsv", sep="\t", index=False)
-        table.to_csv(prep_func / f"{stem}_desc-confounds_timeseries.tsv", sep="\t", index=False)
-        (prep_func / f"{stem}_desc-confounds_timeseries.json").write_text(json.dumps(metadata))
+        table.to_csv(
+            prep_func / f"{stem}_desc-confounds_timeseries.tsv", sep="\t", index=False
+        )
+        (prep_func / f"{stem}_desc-confounds_timeseries.json").write_text(
+            json.dumps(metadata)
+        )
         y = scale * (full @ rng.normal(size=(35, 4)) + rng.normal(size=(96, 4)))
         y += run * 100
         y[:, -1] = 0  # Undefined R² must retain its spatial position as NaN.
@@ -143,9 +166,15 @@ def dataset(tmp_path, confounds, events):
         axes = (nib.cifti2.SeriesAxis(0, 1.6, 96), brain)
         image = nib.Cifti2Image(y, header=nib.Cifti2Header.from_axes(axes))
         nib.save(image, prep_func / f"{stem}_space-fsLR_den-91k_bold.dtseries.nii")
-        (prep_func / f"{stem}_space-fsLR_den-91k_bold.json").write_text(json.dumps({
-            "StartTime": 0.775, "RepetitionTime": 1.6, "SliceTimingCorrected": True,
-        }))
+        (prep_func / f"{stem}_space-fsLR_den-91k_bold.json").write_text(
+            json.dumps(
+                {
+                    "StartTime": 0.775,
+                    "RepetitionTime": 1.6,
+                    "SliceTimingCorrected": True,
+                }
+            )
+        )
     return root, prep, signal_runs, full, nuisance, brain
 
 
@@ -154,11 +183,15 @@ def test_complete_example_publishes_correct_pooled_maps_and_designs(dataset, tmp
     output = tmp_path / "output"
     paths = example().run_analysis(root, prep, output, block_size=2)
     assert all(path.is_file() for path in paths)
-    denom = sum(np.sum((y - y.mean(axis=0))**2, axis=0) for y in signals)
+    denom = sum(np.sum((y - y.mean(axis=0)) ** 2, axis=0) for y in signals)
     expected = {}
     for label, matrix in [("full", full), ("confounds", nuisance)]:
-        sse = sum(np.sum((y - matrix @ np.linalg.lstsq(matrix, y, rcond=None)[0])**2, axis=0)
-                  for y in signals)
+        sse = sum(
+            np.sum(
+                (y - matrix @ np.linalg.lstsq(matrix, y, rcond=None)[0]) ** 2, axis=0
+            )
+            for y in signals
+        )
         expected[label] = 1 - sse[:3] / denom[:3]
     expected["task"] = expected["full"] - expected["confounds"]
     for label, values in expected.items():
@@ -202,3 +235,18 @@ def test_confounds_length_must_match_cifti(dataset, tmp_path):
     table.iloc[:-1].to_csv(path, sep="\t", index=False)
     with pytest.raises(ValueError, match="rows|volumes|length"):
         example().run_analysis(root, prep, tmp_path / "output")
+
+
+def test_relative_fmriprep_override_works(dataset, tmp_path, monkeypatch):
+    root, prep, *_ = dataset
+    monkeypatch.chdir(tmp_path)
+    paths = example().run_analysis(
+        root, prep.relative_to(tmp_path), tmp_path / "output"
+    )
+    assert len([path for path in paths if path.name.endswith(".dscalar.nii")]) == 3
+
+
+def test_external_fmriprep_root_has_explicit_provenance_error(dataset, tmp_path):
+    root, *_ = dataset
+    with pytest.raises(ValueError, match="inside bids_root"):
+        example().run_analysis(root, tmp_path / "external", tmp_path / "output")
