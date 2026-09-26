@@ -138,3 +138,11 @@ def test_invalid_sampling_rejected(tr, oversampling):
     cls, _ = library_api()
     with pytest.raises(ValueError):
         cls.from_parameters([]).candidates[0].kernel(tr, oversampling)
+
+
+@pytest.mark.parametrize("parameters", [(3,16,1,1,6,0,32),(6,16,1,1,6,0,36)])
+def test_direct_spm_candidate_cannot_mislabel_fixed_kernel(parameters):
+    from boldtailor.hrf_library import HrfCandidate
+
+    with pytest.raises(ValueError,match="canonical|SPM|spm"):
+        HrfCandidate(0,"spm",parameters)

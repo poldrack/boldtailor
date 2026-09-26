@@ -294,3 +294,27 @@ def test_undefined_odd_hrf_at_rt_selected_vertex_does_not_abort(hrf_nsd, tmp_pat
         row = vertices[vertices.grayordinate_index == 0].iloc[0]
         assert np.isnan(row.odd_hrf_id)
         assert np.isnan(row.OLS_even_r)
+
+
+def test_canonical_ineligible_diagnostic_does_not_abort_expanded_outputs(hrf_nsd,tmp_path):
+    from dataclasses import replace
+    from boldtailor._single_trial_design import compile_trial_run
+    from examples.NSD.nsd_cifti import discover_runs
+    from examples.NSD.nsd_single_trial import _load_runs
+    from examples.NSD.nsd_hrf import run_expanded_analysis
+
+    root,prep,brain,*_=hrf_nsd
+    runs,_=_load_runs(discover_runs(root,prep))
+    altered=[]
+    for run in runs:
+        x,_,_=compile_trial_run(run.events,run.frame_times,run.confounds,run.label)
+        nuisance=pd.concat([run.confounds,x.rename(columns=lambda c:'absorbed_'+c)],axis=1)
+        altered.append(replace(run,confounds=nuisance))
+    paths=run_expanded_analysis(tuple(altered),root,tmp_path/'ineligible',brain,{'OLS':0.,'Ridge':.1},2,'sub-07','ses-nsd10')
+    assert np.isfinite(nib.load(find(paths,'desc-hrfOptOLS_stat-fullrsquared.')).get_fdata()[0,:3]).all()
+    assert np.isnan(nib.load(find(paths,'desc-hrfSelection_stat-canonicalcvr2.')).get_fdata()).all()
+    assert np.isfinite(nib.load(find(paths,'desc-hrfSelection_stat-testr2.')).get_fdata()[0,:3]).all()
+    metadata=json.loads(find(paths,'desc-hrfSelection_metadata.json').read_text())
+    assert metadata['IndependentRTAvailable'] is False
+    assert 'canonical' in metadata['IndependentRTReason'].lower()
+    assert pd.read_csv(find(paths,'_selectedvertices.tsv'),sep='\t').empty
