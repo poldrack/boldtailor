@@ -161,7 +161,8 @@ def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFra
     return pd.DataFrame(columns)
 
 
-def _load_run(inputs: RunInputs) -> PreparedRun:
+def load_inputs(inputs: RunInputs):
+    """Load image, raw events, selected nuisances, and corrected frame times."""
     image = nib.load(inputs.bold)
     if not isinstance(image, nib.Cifti2Image):
         raise ValueError(f"{inputs.stem}: expected CIFTI image")
@@ -183,7 +184,12 @@ def _load_run(inputs: RunInputs) -> PreparedRun:
     )
     if len(confounds) != len(times):
         raise ValueError(f"{inputs.stem}: confound rows must match CIFTI volumes")
-    task = task_regressors(pd.read_csv(inputs.events, sep="\t"), times)
+    return image, pd.read_csv(inputs.events, sep="\t"), confounds, times
+
+
+def _load_run(inputs: RunInputs) -> PreparedRun:
+    image, events, confounds, times = load_inputs(inputs)
+    task = task_regressors(events, times)
     design = pd.concat([task, confounds], axis=1).assign(constant=1.0)
     matrix = design.to_numpy()
     if (

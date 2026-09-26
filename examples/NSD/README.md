@@ -93,3 +93,81 @@ uv run pytest test_nsd_cifti.py -q
 Tests generate real miniature CIFTI datasets and compare the saved maps with
 independent NumPy least-squares calculations, including unequal run variances,
 different run means, and an all-zero grayordinate.
+
+## Single-trial betas and independent RT checks
+
+The simple single-trial alternative uses a fixed canonical SPM HRF and fits
+one amplitude per event row. Repeated image IDs remain separate trials.
+There is no GLMsingle repeated-stimulus cross-validation, adaptive HRF,
+data-driven denoising selection, or behavioral tuning.
+
+From this directory:
+
+```bash
+uv run python nsd_single_trial.py --ridge-alpha 0.1
+```
+
+OLS is always fitted. Omitting `--ridge-alpha` produces only OLS; a positive
+value adds one fixed ridge comparison. The NSD comparison uses the predeclared
+value **0.1**, not an RT-selected value or a fractional-ridge fraction. The
+same path, subject, session, and block-size flags as the conventional example
+are supported. Use a new output root to rerun or compare another fixed alpha.
+
+The package entry point is:
+
+```python
+from boldtailor.single_trial import fit_single_trials
+
+result = fit_single_trials(data, ridge_alpha=0.1)  # data is AnalysisData
+betas = result.run_betas  # one trials × features array per run
+```
+
+The model uses raw event onsets and durations, the same selected nuisance
+regressors as above, and a run intercept. It keeps sub-TR timing and models
+positive durations as unit-height boxcars; zero-duration events use Nilearn's
+sampled impulse convention. RT and image identity are metadata only. Missing
+or nonpositive RT does not exclude a trial from fitting.
+
+For ridge, trial columns and signals are projected off the nuisance span;
+trial columns are normalized to unit Euclidean norm before applying the
+penalty. Betas are then restored to native signal units, and nuisance
+coefficients are fitted without a penalty. Rank-deficient residual trial
+designs and designs without residual degrees of freedom are rejected.
+
+New files use `desc-singletrialOLS` or `desc-singletrialRidge`:
+
+| Suffix | Content |
+| --- | --- |
+| `run-XX_..._betas.dscalar.nii` | Trial beta maps, with trial IDs on the ScalarAxis |
+| `run-XX_..._design.tsv` | Trial columns, confounds, intercept, and frame times |
+| `_trials.tsv` | Original event metadata plus global trial index, run index, event index, and trial ID |
+| `_stat-fullrsquared.dscalar.nii` | Actual estimator's pooled in-sample R² |
+| `_stat-confoundsrsquared.dscalar.nii` | Pooled nuisance-only OLS R² |
+| `_stat-deltarsquared.dscalar.nii` | Raw full minus nuisance R² |
+| `_stat-rtcorrelation.dscalar.nii` | RT correlations: all, odd, even, then individual runs |
+| `_stat-rtcount.dscalar.nii` | Matching valid trial counts |
+| `_metadata.json`, `_provenance.json` | Settings, numerical diagnostics, and block provenance |
+| `desc-singletrialOLS_selectedvertices.tsv` | Up to five cortical vertices selected using odd-run OLS |
+| `desc-singletrialOLS_scatter.png` | Even-run scatterplots at those same vertices for both estimators |
+
+Trial map row `event_index` (zero-based within run) matches its row in the
+trial table; `trial_index` is zero-based across the session. Spatial axes
+are copied exactly from the input. Constant run signals have NaN trial betas
+and contribute zero SSE/SST to pooled R². Existing conventional outputs and
+dataset metadata are preserved. The complete artifact set is assembled in
+memory before transactional publication, so beta outputs remain a memory
+cost even though fitting uses feature blocks.
+
+For each feature, RT and beta are centered within each run using the same
+finite-beta/finite-positive-RT mask. Correlations pool these centered values;
+fewer than three valid trials or zero variance gives NaN. Numeric BIDS run
+parity defines odd and even sets. Vertices are selected by absolute odd-run
+OLS correlation, with lower grayordinate indices breaking ties; plots show
+only even-run values, centered within run. These are descriptive reality
+checks, not significance tests. Native beta scales can differ across runs,
+and temporal dependence affects interpretation. Strong RT associations are
+not guaranteed, and the checks never select HRFs or penalties.
+
+```bash
+uv run pytest test_nsd_cifti.py test_nsd_single_trial.py test_rt_diagnostics.py -q -W error
+```

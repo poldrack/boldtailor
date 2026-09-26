@@ -22,7 +22,7 @@ def example():
 @pytest.fixture
 def mini_nsd(dataset):
     root, prep, _, _, nuisance, brain = dataset
-    times = .775 + np.arange(96) * 1.6
+    times = 0.775 + np.arange(96) * 1.6
     rng = np.random.default_rng(92)
     signals = []
     for run in (1, 2):
@@ -30,12 +30,16 @@ def mini_nsd(dataset):
         table = pd.read_csv(event_path, sep="\t")
         table["73k_id"] = [4, 4, 5, 5, 4, 5]
         table.loc[1, "response_time"] = np.nan
-        table.loc[5, "response_time"] = -1.
+        table.loc[5, "response_time"] = -1.0
         table.to_csv(event_path, sep="\t", index=False)
-        x = np.column_stack([compute_regressor(np.array([[t], [3.], [1.]]), "spm", times)[0][:, 0]
-                             for t in table.onset])
+        x = np.column_stack(
+            [
+                compute_regressor(np.array([[t], [3.0], [1.0]]), "spm", times)[0][:, 0]
+                for t in table.onset
+            ]
+        )
         y = x @ rng.normal(size=(6, 4)) + nuisance @ rng.normal(size=(33, 4))
-        y += rng.normal(scale=.1 * run, size=y.shape) + 100 * run
+        y += rng.normal(scale=0.1 * run, size=y.shape) + 100 * run
         y[:, -1] = 0
         path = next(prep.rglob(f"*run-{run:02d}*.dtseries.nii"))
         nib.save(nib.Cifti2Image(y, nib.load(path).header), path)
@@ -51,11 +55,15 @@ def test_cifti_betas_and_pooled_maps_match_independent_fits(mini_nsd, tmp_path):
     old.write_bytes(b"preserve conventional result")
     description = output / "dataset_description.json"
     description.write_text('{"Name": "existing derivative"}')
-    paths = example().run_single_trial_analysis(root, prep, output, ridge_alpha=.1, block_size=2)
+    paths = example().run_single_trial_analysis(
+        root, prep, output, ridge_alpha=0.1, block_size=2
+    )
     assert old.read_bytes() == b"preserve conventional result"
     assert description.read_text() == '{"Name": "existing derivative"}'
-    for model, alpha in (("OLS", 0.), ("Ridge", .1)):
-        trials_path = next(p for p in paths if f"singletrial{model}_trials.tsv" in p.name)
+    for model, alpha in (("OLS", 0.0), ("Ridge", 0.1)):
+        trials_path = next(
+            p for p in paths if f"singletrial{model}_trials.tsv" in p.name
+        )
         trials = pd.read_csv(trials_path, sep="\t")
         assert len(trials) == 12
         assert trials.event_index.tolist() == list(range(6)) * 2
@@ -63,30 +71,75 @@ def test_cifti_betas_and_pooled_maps_match_independent_fits(mini_nsd, tmp_path):
         assert trials.response_time.isna().sum() == 2
         sse, null_sse, sst = [], [], []
         for run, y in enumerate(signals, 1):
-            path = next(p for p in paths if f"run-{run:02d}" in p.name and f"singletrial{model}_betas" in p.name)
+            path = next(
+                p
+                for p in paths
+                if f"run-{run:02d}" in p.name and f"singletrial{model}_betas" in p.name
+            )
             image = nib.load(path)
             assert image.header.get_axis(1) == brain
-            assert image.header.get_axis(0).name.tolist() == [f"run-{run:02d}_trial-{i:04d}" for i in range(1, 7)]
+            assert image.header.get_axis(0).name.tolist() == [
+                f"run-{run:02d}_trial-{i:04d}" for i in range(1, 7)
+            ]
             xr = x - n @ np.linalg.lstsq(n, x, rcond=None)[0]
             design = np.column_stack([x, n])
-            penalty = np.column_stack([np.diag(np.sqrt(alpha) * np.linalg.norm(xr, axis=0)), np.zeros((6, 33))])
-            beta = np.linalg.lstsq(np.vstack([design, penalty]), np.vstack([y, np.zeros((6, 4))]), rcond=None)[0]
-            np.testing.assert_allclose(image.get_fdata()[:, :3], beta[:6, :3], atol=2e-6)
+            penalty = np.column_stack(
+                [
+                    np.diag(np.sqrt(alpha) * np.linalg.norm(xr, axis=0)),
+                    np.zeros((6, 33)),
+                ]
+            )
+            beta = np.linalg.lstsq(
+                np.vstack([design, penalty]),
+                np.vstack([y, np.zeros((6, 4))]),
+                rcond=None,
+            )[0]
+            np.testing.assert_allclose(
+                image.get_fdata()[:, :3], beta[:6, :3], atol=2e-6
+            )
             assert np.isnan(image.get_fdata()[:, -1]).all()
-            sse.append(np.sum((y - design @ beta)**2, axis=0))
-            null_sse.append(np.sum((y - n @ np.linalg.lstsq(n, y, rcond=None)[0])**2, axis=0))
-            sst.append(np.sum((y - y.mean(axis=0))**2, axis=0))
+            sse.append(np.sum((y - design @ beta) ** 2, axis=0))
+            null_sse.append(
+                np.sum((y - n @ np.linalg.lstsq(n, y, rcond=None)[0]) ** 2, axis=0)
+            )
+            sst.append(np.sum((y - y.mean(axis=0)) ** 2, axis=0))
         full = 1 - np.sum(sse, axis=0)[:3] / np.sum(sst, axis=0)[:3]
         null = 1 - np.sum(null_sse, axis=0)[:3] / np.sum(sst, axis=0)[:3]
-        for statistic, expected in (("fullrsquared", full), ("confoundsrsquared", null), ("deltarsquared", full-null)):
-            image = nib.load(next(p for p in paths if f"singletrial{model}_stat-{statistic}.dscalar.nii" in p.name))
+        for statistic, expected in (
+            ("fullrsquared", full),
+            ("confoundsrsquared", null),
+            ("deltarsquared", full - null),
+        ):
+            image = nib.load(
+                next(
+                    p
+                    for p in paths
+                    if f"singletrial{model}_stat-{statistic}.dscalar.nii" in p.name
+                )
+            )
             np.testing.assert_allclose(image.get_fdata()[0, :3], expected, atol=2e-7)
             assert np.isnan(image.get_fdata()[0, -1])
-        count_image = nib.load(next(p for p in paths if f"singletrial{model}_stat-rtcount.dscalar.nii" in p.name))
-        assert count_image.header.get_axis(0).name.tolist() == ["all", "odd", "even", "run-01", "run-02"]
+        count_image = nib.load(
+            next(
+                p
+                for p in paths
+                if f"singletrial{model}_stat-rtcount.dscalar.nii" in p.name
+            )
+        )
+        assert count_image.header.get_axis(0).name.tolist() == [
+            "all",
+            "odd",
+            "even",
+            "run-01",
+            "run-02",
+        ]
         np.testing.assert_array_equal(count_image.get_fdata()[:, 0], [8, 4, 4, 4, 4])
         np.testing.assert_array_equal(count_image.get_fdata()[:, -1], 0)
-        metadata = json.loads(next(p for p in paths if f"singletrial{model}_metadata.json" in p.name).read_text())
+        metadata = json.loads(
+            next(
+                p for p in paths if f"singletrial{model}_metadata.json" in p.name
+            ).read_text()
+        )
         assert metadata["ridge_alpha"] == alpha
     assert any(p.name.endswith("_scatter.png") for p in paths)
 
@@ -95,11 +148,16 @@ def test_collision_stops_before_fitting(mini_nsd, tmp_path, monkeypatch):
     root, prep, *_ = mini_nsd
     api = example()
     output = tmp_path / "output"
-    target = output / "sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_desc-singletrialOLS_trials.tsv"
+    target = (
+        output
+        / "sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_desc-singletrialOLS_trials.tsv"
+    )
     target.parent.mkdir(parents=True)
     target.write_text("old result")
+
     def unexpected_fit(*args, **kwargs):
         pytest.fail("collision must be detected before fitting")
+
     monkeypatch.setattr(api, "fit_single_trials", unexpected_fit)
     with pytest.raises(FileExistsError):
         api.run_single_trial_analysis(root, prep, output)
@@ -114,23 +172,32 @@ def test_incomplete_or_misaligned_runs_rejected(mini_nsd, tmp_path, problem):
         path.unlink()
     else:
         image = nib.load(path)
-        header = nib.Cifti2Header.from_axes((image.header.get_axis(0), image.header.get_axis(1)[::-1]))
+        header = nib.Cifti2Header.from_axes(
+            (image.header.get_axis(0), image.header.get_axis(1)[::-1])
+        )
         nib.save(nib.Cifti2Image(image.get_fdata(), header), path)
-    with pytest.raises((ValueError, FileNotFoundError), match="run-02|grayordinate|BrainModel"):
+    with pytest.raises(
+        (ValueError, FileNotFoundError), match="run-02|grayordinate|BrainModel"
+    ):
         example().run_single_trial_analysis(root, prep, tmp_path / "output")
 
 
-def test_failed_publication_leaves_no_partial_single_trial_set(mini_nsd, tmp_path, monkeypatch):
+def test_failed_publication_leaves_no_partial_single_trial_set(
+    mini_nsd, tmp_path, monkeypatch
+):
     import boldtailor.publication as publication
+
     root, prep, *_ = mini_nsd
     original = publication.os.replace
     calls = 0
+
     def fail_second(source, target):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise OSError("injected promotion failure")
         return original(source, target)
+
     monkeypatch.setattr(publication.os, "replace", fail_second)
     output = tmp_path / "output"
     with pytest.raises(publication.PublicationError):
