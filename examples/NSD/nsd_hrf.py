@@ -9,6 +9,7 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor import hrf_library, hrf_selection
+from boldtailor._hrf_cv import prepare_runs
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.publication import publish_artifact_set
 
@@ -128,6 +129,23 @@ def _store_selection(state, selection, evaluation, start, stop):
         )
 
 
+def _canonical_rt(runs, root, indices, library, state):
+    data = block_data(runs, root, indices)
+    for run, design in zip(runs, prepare_runs(data, library), strict=True):
+        eligible, reason = design.eligible(0)
+        if not eligible:
+            state["canonical_rt_reason"] = (
+                f"Canonical HRF is ineligible in {run.label}: {reason}"
+            )
+            return np.full(len(indices), np.nan)
+    canonical = fit_single_trials(data, run_labels=[r.label for r in runs])
+    return correlate_rt(
+        canonical.run_betas,
+        reaction_times(runs),
+        run_numbers=[r.number for r in runs],
+    )["odd"]
+
+
 def fit_expanded_blocks(runs, root, brain, models, block_size, library, train, test):
     results = {name: _empty_result(runs, len(brain)) for name in models}
     for result in results.values():
@@ -173,15 +191,9 @@ def fit_expanded_blocks(runs, root, brain, models, block_size, library, train, t
             )
             _collect_fit(results[name], fit, start, stop)
         if odd_runs:
-            canonical = fit_single_trials(
-                block_data(odd_runs, root, indices),
-                run_labels=[r.label for r in odd_runs],
+            state["canonical_odd_rt"][start:stop] = _canonical_rt(
+                odd_runs, root, indices, library, state
             )
-            state["canonical_odd_rt"][start:stop] = correlate_rt(
-                canonical.run_betas,
-                reaction_times(odd_runs),
-                run_numbers=[r.number for r in odd_runs],
-            )["odd"]
         print(
             f"Selected HRFs and fitted grayordinates {start}:{stop} / {len(brain)}",
             flush=True,
@@ -284,6 +296,11 @@ def run_expanded_analysis(
         runs, root, brain, models, library, state, train, test
     )
     metadata = _metadata(library, runs, train, test)
+    if "canonical_rt_reason" in state:
+        metadata.update(
+            IndependentRTAvailable=False,
+            IndependentRTReason=state["canonical_rt_reason"],
+        )
     artifacts = list(
         selection_artifacts(
             runs, brain, library, state, selection_paths_, metadata, train, test

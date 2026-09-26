@@ -22,6 +22,7 @@ PARAMETER_NAMES = (
     "onset_delay",
     "duration",
 )
+CANONICAL_PARAMETERS = (6.0, 16.0, 1.0, 1.0, 6.0, 0.0, 32.0)
 
 
 def _parameters(values):
@@ -60,6 +61,8 @@ class HrfCandidate:
         if self.kind not in ("spm", "double_gamma"):
             raise ValueError("unknown HRF kind")
         object.__setattr__(self, "parameters", _parameters(self.parameters))
+        if self.kind == "spm" and self.parameters != CANONICAL_PARAMETERS:
+            raise ValueError("SPM candidate parameters must match the canonical kernel")
 
     def kernel(self, tr, oversampling=50):
         dt = _sampling(tr, oversampling)
@@ -122,7 +125,7 @@ class HrfLibrary:
         rows = [_parameters(row) for row in parameters]
         if len(rows) != len(set(rows)):
             raise ValueError("duplicate HRF parameter rows")
-        canonical = HrfCandidate(0, "spm", (6.0, 16.0, 1.0, 1.0, 6.0, 0.0, 32.0))
+        canonical = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
         custom = tuple(
             HrfCandidate(i, "double_gamma", row)
             for i, row in enumerate(sorted(rows), 1)
