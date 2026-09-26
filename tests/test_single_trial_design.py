@@ -8,19 +8,27 @@ from nilearn.glm.first_level import compute_regressor
 
 def compiler():
     try:
-        return importlib.import_module("boldtailor._single_trial_design").compile_trial_run
+        return importlib.import_module(
+            "boldtailor._single_trial_design"
+        ).compile_trial_run
     except ModuleNotFoundError:
         pytest.fail("Single-trial compiler is not implemented")
 
 
 @pytest.fixture
 def inputs():
-    events = pd.DataFrame({
-        "onset": [12.0, 8.0], "duration": [3.0, 1.0],
-        "73k_id": [99, 99], "response_time": [0.5, 2.0],
-    })
+    events = pd.DataFrame(
+        {
+            "onset": [12.0, 8.0],
+            "duration": [3.0, 1.0],
+            "73k_id": [99, 99],
+            "response_time": [0.5, 2.0],
+        }
+    )
     times = 0.775 + 1.6 * np.arange(40)
-    confounds = pd.DataFrame({"motion": np.linspace(-1, 1, 40)}, index=np.arange(40)+8)
+    confounds = pd.DataFrame(
+        {"motion": np.linspace(-1, 1, 40)}, index=np.arange(40) + 8
+    )
     return events, times, confounds
 
 
@@ -33,7 +41,9 @@ def test_subtr_timing_repeat_identity_and_row_order(inputs):
     assert list(n) == ["motion", "constant"]
     np.testing.assert_array_equal(n.motion, confounds.motion)
     for i, (onset, duration) in enumerate([(12.0, 3.0), (8.0, 1.0)]):
-        expected, _ = compute_regressor(np.array([[onset], [duration], [1.0]]), "spm", times)
+        expected, _ = compute_regressor(
+            np.array([[onset], [duration], [1.0]]), "spm", times
+        )
         np.testing.assert_allclose(x.iloc[:, i], expected[:, 0])
     pd.testing.assert_frame_equal(trials[events.columns], events)
 
@@ -55,7 +65,9 @@ def test_zero_duration_has_nilearn_impulse_convention(inputs):
     assert np.any(x.iloc[:, 0] != 0)
 
 
-@pytest.mark.parametrize("column,value", [("onset", np.nan), ("duration", -1), ("duration", np.inf)])
+@pytest.mark.parametrize(
+    "column,value", [("onset", np.nan), ("duration", -1), ("duration", np.inf)]
+)
 def test_invalid_timing_is_rejected(inputs, column, value):
     events, times, confounds = inputs
     events.loc[0, column] = value
@@ -71,7 +83,9 @@ def test_events_without_supported_response_are_rejected(inputs, onset):
         compiler()(events, times, confounds, "run-01")
 
 
-@pytest.mark.parametrize("name", ["trial_id", "trial_index", "run_index", "run_label", "event_index"])
+@pytest.mark.parametrize(
+    "name", ["trial_id", "trial_index", "run_index", "run_label", "event_index"]
+)
 def test_reserved_event_names_are_rejected(inputs, name):
     events, times, confounds = inputs
     events[name] = 1
@@ -81,8 +95,12 @@ def test_reserved_event_names_are_rejected(inputs, name):
 
 def test_invalid_nuisance_is_rejected(inputs):
     events, times, confounds = inputs
-    for bad in (confounds.assign(constant=1), confounds.iloc[:-1],
-                pd.concat([confounds, confounds], axis=1), confounds * np.nan):
+    for bad in (
+        confounds.assign(constant=1),
+        confounds.iloc[:-1],
+        pd.concat([confounds, confounds], axis=1),
+        confounds * np.nan,
+    ):
         with pytest.raises(ValueError):
             compiler()(events, times, bad, "run-01")
 
