@@ -20,6 +20,8 @@ def compile_trial_run(events, frame_times, confounds, run_label):
     nuisance = _nuisance_matrix(confounds, len(times))
     table = events.copy(deep=True).reset_index(drop=True)
     ids = [f"{run_label}_trial-{i + 1:04d}" for i in range(len(table))]
+    if set(ids).intersection(nuisance.columns):
+        raise ValueError("nuisance columns collide with reserved trial IDs")
     columns = [
         _trial_column(float(row.onset), float(row.duration), times, trial_id)
         for row, trial_id in zip(table.itertuples(), ids, strict=True)
