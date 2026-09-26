@@ -79,6 +79,7 @@ dependencies = [
     { name = "nilearn" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scipy" },
 ]
 
 [package.dev-dependencies]
@@ -99,6 +100,7 @@ requires-dist = [
     { name = "nilearn", specifier = ">=0.14.0,<0.15" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scipy", specifier = ">=1.18.0" },
 ]
 
 [package.metadata.requires-dev]
