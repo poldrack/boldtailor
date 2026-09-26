@@ -69,8 +69,11 @@ def fit_trial_run(x, nuisance, signals, *, alpha):
     if values.shape[1]:
         yr = values - q @ (q.T @ values)
         if alpha == 0:
-            _, fits = run_glm(values, np.column_stack([x, nuisance]), noise_model="ols")
-            beta = fits[0.0].theta[: x.shape[1]]
+            # Match the normalized span used for rank validation and ridge.
+            # Raw nuisance units must not determine which trials are retained.
+            xs = (x - q @ (q.T @ x)) / scale
+            _, fits = run_glm(yr, xs, noise_model="ols")
+            beta = fits[0.0].theta / scale[:, None]
         else:
             weights = (vt.T * (s / (s * s + alpha))) @ (u.T @ yr)
             beta = weights / scale[:, None]

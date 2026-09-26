@@ -287,14 +287,18 @@ def test_nested_event_metadata_is_owned_on_every_result_access(problem):
     assert enriched.events[0].loc[0, "metadata"] == {"tags": ["original"]}
 
 
-@pytest.mark.parametrize("alpha", [0., 1e-12, .1])
+@pytest.mark.parametrize("alpha", [0.0, 1e-12, 0.1])
 def test_ols_and_ridge_preserve_supported_trials_with_small_hrf_support(alpha):
     times = np.arange(80) * 1.6
-    onset = times[-1] - .1
-    x = compute_regressor(np.array([[onset], [0.], [1.]]), "spm", times)[0]
+    onset = times[-1] - 0.1
+    x = compute_regressor(np.array([[onset], [0.0], [1.0]]), "spm", times)[0]
     nuisance = pd.DataFrame({"motion": np.random.default_rng(8).normal(size=80) * 1e4})
-    data = from_arrays([2 * x], [pd.DataFrame({"onset": [onset], "duration": [0.]})],
-                       frame_times=[times], confounds=[nuisance])
+    data = from_arrays(
+        [2 * x],
+        [pd.DataFrame({"onset": [onset], "duration": [0.0]})],
+        frame_times=[times],
+        confounds=[nuisance],
+    )
     result = entry()(data, ridge_alpha=alpha)
     np.testing.assert_allclose(result.run_betas[0], [[2 / (1 + alpha)]], rtol=1e-8)
-    assert result.full_r2[0] > .99
+    assert result.full_r2[0] > 0.99
