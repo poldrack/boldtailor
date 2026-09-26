@@ -131,3 +131,17 @@ def _assemble_result(compiled, fits, alpha, provenance):
         alpha,
         provenance,
     )
+
+
+def fit_selected_hrfs(
+    data, *, selection, ridge_alpha=0.0, run_labels=None, feature_signature=None
+):
+    """Fit unrestricted trial betas using each feature's previously selected HRF.
+
+    The selection may come from different runs. A supplied spatial signature
+    must match; for anonymous arrays, the caller must preserve feature order.
+    OLS and fixed ridge use the identical selection and sum-normalized HRFs.
+    """
+    from boldtailor._selected_hrf_fit import fit_groups
+
+    return fit_groups(data, selection, ridge_alpha, run_labels, feature_signature)

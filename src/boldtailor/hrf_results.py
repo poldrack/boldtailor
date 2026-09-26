@@ -1,6 +1,7 @@
 """Owned results for HRF selection, independent evaluation and grouped fits."""
 
 from dataclasses import dataclass
+from copy import deepcopy
 import numpy as np
 import pandas as pd
 
@@ -60,3 +61,48 @@ class HrfEvaluationResult:
             object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
         for name in ("train_runs", "test_runs"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+
+
+@dataclass(frozen=True)
+class HrfSingleTrialResult:
+    run_betas: tuple[np.ndarray, ...]
+    _trial_table: pd.DataFrame
+    hrf_indices: np.ndarray
+    _group_designs: dict
+    run_full_r2: tuple[np.ndarray, ...]
+    run_nuisance_r2: tuple[np.ndarray, ...]
+    full_r2: np.ndarray
+    nuisance_r2: np.ndarray
+    delta_r2: np.ndarray
+    _diagnostics: tuple[dict, ...]
+    ridge_alpha: float
+    selection_provenance: ProvenanceRecord
+    provenance: ProvenanceRecord
+
+    def __post_init__(self):
+        for name in ("run_betas", "run_full_r2", "run_nuisance_r2"):
+            object.__setattr__(
+                self, name, tuple(immutable_float_array(a) for a in getattr(self, name))
+            )
+        for name in ("full_r2", "nuisance_r2", "delta_r2"):
+            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+        object.__setattr__(self, "hrf_indices", immutable_indices(self.hrf_indices))
+        object.__setattr__(self, "_trial_table", _owned_table(self._trial_table))
+        object.__setattr__(
+            self,
+            "_group_designs",
+            {k: immutable_float_array(v) for k, v in self._group_designs.items()},
+        )
+        object.__setattr__(self, "_diagnostics", deepcopy(self._diagnostics))
+
+    @property
+    def trial_table(self):
+        return _owned_table(self._trial_table)
+
+    @property
+    def group_designs(self):
+        return dict(self._group_designs)
+
+    @property
+    def diagnostics(self):
+        return deepcopy(self._diagnostics)
