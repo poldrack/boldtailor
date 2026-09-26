@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 import pandas as pd
-from boldtailor._hrf_design import convolve_events, hrf_model
+from boldtailor._hrf_design import convolve_events, hrf_model, trial_regressors
 
 RESERVED_COLUMNS = frozenset(
     {"trial_id", "trial_index", "run_index", "run_label", "event_index"}
@@ -23,14 +23,11 @@ def compile_trial_run(events, frame_times, confounds, run_label, *, hrf="spm"):
     ids = [f"{run_label}_trial-{i + 1:04d}" for i in range(len(table))]
     if set(ids).intersection(nuisance.columns):
         raise ValueError("nuisance columns collide with reserved trial IDs")
-    columns = [
-        _trial_column(float(row.onset), float(row.duration), times, trial_id, hrf)
-        for row, trial_id in zip(table.itertuples(), ids, strict=True)
-    ]
+    columns = trial_regressors(table, times, hrf)
     table.insert(0, "event_index", np.arange(len(table)))
     table.insert(0, "run_label", run_label)
     table.insert(0, "trial_id", ids)
-    return pd.DataFrame(np.column_stack(columns), columns=ids), nuisance, table
+    return pd.DataFrame(columns, columns=ids), nuisance, table
 
 
 def _validate_events(events, times, run_label):
