@@ -6,16 +6,17 @@ import re
 
 import numpy as np
 import pandas as pd
-from nilearn.glm.first_level import compute_regressor
+from boldtailor._hrf_design import convolve_events, hrf_model
 
 RESERVED_COLUMNS = frozenset(
     {"trial_id", "trial_index", "run_index", "run_label", "event_index"}
 )
 
 
-def compile_trial_run(events, frame_times, confounds, run_label):
+def compile_trial_run(events, frame_times, confounds, run_label, *, hrf="spm"):
     """Return task and nuisance matrices plus a row-aligned trial table."""
     times = np.asarray(frame_times, dtype=float)
+    hrf_model(hrf)
     _validate_events(events, times, run_label)
     nuisance = _nuisance_matrix(confounds, len(times))
     table = events.copy(deep=True).reset_index(drop=True)
@@ -23,7 +24,7 @@ def compile_trial_run(events, frame_times, confounds, run_label):
     if set(ids).intersection(nuisance.columns):
         raise ValueError("nuisance columns collide with reserved trial IDs")
     columns = [
-        _trial_column(float(row.onset), float(row.duration), times, trial_id)
+        _trial_column(float(row.onset), float(row.duration), times, trial_id, hrf)
         for row, trial_id in zip(table.itertuples(), ids, strict=True)
     ]
     table.insert(0, "event_index", np.arange(len(table)))
@@ -67,17 +68,5 @@ def _nuisance_matrix(confounds, n_scans):
     return nuisance.assign(constant=1.0)
 
 
-def _trial_column(onset, duration, times, trial_id):
-    # Avoid Nilearn silently discarding events outside its sampled window.
-    if onset < times[0] - 24 or onset >= times[-1]:
-        raise ValueError(f"{trial_id}: onset has no supported sampled response")
-    column, _ = compute_regressor(
-        np.array([[onset], [duration], [1.0]]),
-        "spm",
-        times,
-        con_id=trial_id,
-        oversampling=50,
-    )
-    if not np.isfinite(column).all() or not np.any(column):
-        raise ValueError(f"{trial_id}: no supported sampled response")
-    return column[:, 0]
+def _trial_column(onset, duration, times, trial_id, hrf="spm"):
+    return convolve_events([onset], [duration], times, hrf, trial_id)

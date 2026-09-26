@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._single_trial_design import compile_trial_run
+from boldtailor._hrf_design import hrf_metadata
 from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
 from boldtailor.data import AnalysisData
 from boldtailor.logging import append_event_history, bind_context, emit_event
@@ -23,6 +24,7 @@ def fit_single_trials(
     *,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
+    hrf="spm",
 ) -> SingleTrialResult:
     """Estimate one native-unit beta per event row, independently in each run.
 
@@ -52,7 +54,7 @@ def fit_single_trials(
         )
         try:
             compiled = tuple(
-                compile_trial_run(*args)
+                compile_trial_run(*args, hrf=hrf)
                 for args in zip(
                     data.events, data.frame_times, data.confounds, labels, strict=True
                 )
@@ -67,7 +69,7 @@ def fit_single_trials(
         history = append_event_history(
             history, emit_event("single_trial_completed", stage="fit")
         )
-    activity = _model_metadata(compiled, data.frame_times, labels, alpha)
+    activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf)
     provenance = extend_provenance(
         data.provenance,
         execution_id=execution_id,
@@ -81,7 +83,7 @@ def fit_single_trials(
     return _assemble_result(compiled, fits, alpha, provenance)
 
 
-def _model_metadata(compiled, times, labels, alpha):
+def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
     digest = hashlib.sha256()
     for (x, n, _), t in zip(compiled, times, strict=True):
         digest.update(json.dumps([list(x), list(n)], separators=(",", ":")).encode())
@@ -91,7 +93,7 @@ def _model_metadata(compiled, times, labels, alpha):
             digest.update(array.tobytes())
     return dict(
         name="single_trial",
-        hrf="spm",
+        hrf=hrf_metadata(hrf),
         oversampling=50,
         run_labels=list(labels),
         ridge_alpha=alpha,

@@ -66,7 +66,13 @@ class HrfCandidate:
         if self.kind == "spm":
             return immutable_float_array(spm_hrf(tr, oversampling))
         a, b, c, d, ratio, onset, duration = self.parameters
-        times = np.arange(0, duration, dt) - onset
+        # TR inferred from frame differences carries roundoff; do not add an
+        # extra tail sample when duration/dt is numerically an integer.
+        ratio_samples = duration / dt
+        nearest = round(ratio_samples)
+        if abs(ratio_samples - nearest) <= 1e-12 * max(1, ratio_samples):
+            ratio_samples = nearest
+        times = np.arange(int(np.ceil(ratio_samples))) * dt - onset
         values = (
             gamma.pdf(times, a / c, scale=c) - gamma.pdf(times, b / d, scale=d) / ratio
         )
