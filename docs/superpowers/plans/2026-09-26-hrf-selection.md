@@ -16,8 +16,10 @@ matplotlib, pytest. Declare SciPy directly because the new generator imports it.
 
 **Spec:** `docs/superpowers/specs/2026-09-26-hrf-selection-design.md`.
 
-**Status:** Plan only. User chose mean-stimulus prediction for HRF selection;
-implementation and full-data execution have not started.
+**Status:** Implemented, integrated locally, and validated on all 12 NSD runs.
+The main-checkout suite passed all 464 tests. See the
+[validation record](../validation/2026-09-26-hrf-selection.md) for measured
+performance, scientific results, review decisions and the deferred minor item.
 
 ## Global Constraints
 
@@ -58,7 +60,7 @@ The library owns a parameter table, sampled curves, and a deterministic fingerpr
 Candidate 0 routes to the existing `"spm"` path; custom IDs follow the sorted
 parameter product. Duplicate parameter rows are rejected.
 
-- [ ] Write tests for 649 IDs, exact parameter values, finite nonzero curves,
+- [x] Write tests for 649 IDs, exact parameter values, finite nonzero curves,
   normalization, immutable ownership, bad parameters, and stable fingerprints.
   Test the custom generator against an independently expressed gamma formula
   and selected numerical values from the notebook, not a second call to itself.
@@ -72,14 +74,14 @@ def test_expanded_library_includes_legacy_anchor():
     assert library.candidates[-1].parameters == (6., 16., 1.5, 2.5, 8., 2., 36.)
 ```
 
-- [ ] Run `uv run pytest tests/test_hrf_library.py -q -W error`, observe missing
+- [x] Run `uv run pytest tests/test_hrf_library.py -q -W error`, observe missing
   functionality, and commit failing tests.
-- [ ] Implement the double-gamma generator at `dt = tr / oversampling`:
+- [x] Implement the double-gamma generator at `dt = tr / oversampling`:
   `gamma(t-onset, response_delay/response_dispersion, scale=response_dispersion)`
   minus the undershoot gamma divided by response/undershoot ratio; truncate at
   duration, divide by its discrete sum, reject invalid/nonfinite/zero-sum kernels.
   Add SciPy with `uv add scipy`. Keep notebook loading out of runtime code.
-- [ ] Run the task tests, compare 0.1-second custom curves with the notebook,
+- [x] Run the task tests, compare 0.1-second custom curves with the notebook,
   format, and commit implementation.
 
 ## Task 2: Convolve specified HRFs without changing the canonical path
@@ -93,7 +95,7 @@ extend `compile_trial_run(..., *, hrf="spm")` and
 The default returns the existing `SingleTrialResult` without API field changes.
 Public fits record candidate parameters/fingerprint and sampled-design identity.
 
-- [ ] Write tests comparing a summed-presentation regressor with the sum of
+- [x] Write tests comparing a summed-presentation regressor with the sum of
   separately convolved trials; compare custom kernels with direct discrete
   convolution plus interpolation. Cover variable durations, zero-duration
   impulses, sub-TR onsets, both NSD offsets, causal support, and run boundaries.
@@ -110,12 +112,12 @@ def test_default_single_trial_design_is_unchanged(timing_fixture):
   Define `timing_fixture` in the test file with onsets `[8.13, 17.37]`,
   durations `[3., 1.2]`, `times=.774+1.6*np.arange(60)`, and one finite motion
   column. Also verify explicit candidate 0 equals this default.
-- [ ] Run the new tests plus `tests/test_single_trial_design.py` and
+- [x] Run the new tests plus `tests/test_single_trial_design.py` and
   `tests/test_single_trial.py`; commit the new failing tests before code.
-- [ ] Dispatch candidate 0 to `"spm"`, custom candidates to individual Nilearn
+- [x] Dispatch candidate 0 to `"spm"`, custom candidates to individual Nilearn
   callable HRFs. Supply one candidate per call to avoid cross-candidate
   orthogonalization. Preserve the existing event-window checks and IDs.
-- [ ] Run all affected tests with `-W error`; commit the tested extension.
+- [x] Run all affected tests with `-W error`; commit the tested extension.
 
 ## Task 3: Select HRFs with run-wise prediction and independent evaluation
 
@@ -141,7 +143,7 @@ NaN in imaging exports. Evaluation fields: `training_selection`,
 `train_runs`, `test_runs`, `provenance`. Scores use the spec's nuisance-adjusted
 denominator, not the single-trial full-model denominator.
 
-- [ ] Define a fixture with four runs having different onsets/durations,
+- [x] Define a fixture with four runs having different onsets/durations,
   nonidentical simulated trial amplitudes, known candidate HRFs per feature,
   run-specific nuisances and means, and seeded independent/AR noise. No image
   occurs in more than one run. The principal exact numerical oracle uses
@@ -149,7 +151,7 @@ denominator, not the single-trial full-model denominator.
   training stimulus columns and block-diagonal nuisance columns with NumPy
   least squares. Hold the resulting task coefficient fixed when scoring test
   data after profiling only test nuisance coefficients.
-- [ ] Test candidate scores/winners against that oracle; unequal run lengths
+- [x] Test candidate scores/winners against that oracle; unequal run lengths
   and variance must expose accidental mean-of-R² pooling. Test constant and
   nuisance-only features, duplicate nuisance columns, insufficient runs,
   invalid folds, negative scores, candidate ties/permutations, and batch size.
@@ -170,14 +172,14 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
   `changed_test_data` changes only the signals/RT in runs 1 and 3, retaining
   events' timing, confounds, and dimensions. A separate amplitude-shift test
   confirms worse held-out prediction, rather than a concealed task refit.
-- [ ] Run `uv run pytest tests/test_hrf_selection.py -q -W error`, observe RED,
+- [x] Run `uv run pytest tests/test_hrf_selection.py -q -W error`, observe RED,
   and commit tests.
-- [ ] Implement Q-span nuisance removal and `A/B/C` accumulation in candidate
+- [x] Implement Q-span nuisance removal and `A/B/C` accumulation in candidate
   batches. Fit each training amplitude by `sum(B)/sum(A)` and calculate the
   spec's held-out loss. Implement independent-split evaluation by calling
   selection only on training signals and then freezing the chosen HRF/amplitude.
   Record labels and fold memberships; validate every index and disjoint split.
-- [ ] Enforce structural eligibility across the relevant run designs. Start
+- [x] Enforce structural eligibility across the relevant run designs. Start
   with lazy winner validation: retain the block's candidate score matrix,
   test each proposed winner's full trial design in all relevant runs, exclude
   any structurally invalid candidate globally, and reselect until all winners
@@ -185,10 +187,10 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
   outer split, eligibility may inspect test timing/confounds, never test BOLD.
   Reject if no candidate is estimable; never give an invalid candidate a
   zero-loss score or silently drop an event.
-- [ ] Validate the canonical comparison candidate under the same structural
+- [x] Validate the canonical comparison candidate under the same structural
   rules. If it is ineligible, report its comparison score/difference as NaN
   with an eligibility reason. Always retain stable IDs after exclusions.
-- [ ] Run tests, verify input/result immutability and provenance changes for
+- [x] Run tests, verify input/result immutability and provenance changes for
   library/timing/folds, and commit implementation. Keep RT/image metadata out
   of the selection fingerprint except existing source-file identity.
 
@@ -208,7 +210,7 @@ If selection has an explicit spatial signature, require the same signature
 here. With anonymous arrays, check feature count and document caller-owned
 ordering; do not claim that raw signal values establish spatial identity.
 
-- [ ] Test interleaved feature IDs `[h1, h0, h1, h2, undefined]`; independently
+- [x] Test interleaved feature IDs `[h1, h0, h1, h2, undefined]`; independently
   reconstruct each feature's trial/nuisance matrix and compare OLS and fixed
   normalized ridge with NumPy/augmented least squares. Test trial row order,
   repeated image IDs, missing RT, per-run constants, identity mismatches,
@@ -224,12 +226,12 @@ expected = np.linalg.lstsq(np.vstack([matrix, penalty]),
                           np.r_[y, np.zeros(x.shape[1])], rcond=None)[0]
 ```
 
-- [ ] Run `uv run pytest tests/test_selected_hrf_fit.py -q -W error`; commit RED.
-- [ ] Group feature indices by chosen candidate, compile each needed run/design
+- [x] Run `uv run pytest tests/test_selected_hrf_fit.py -q -W error`; commit RED.
+- [x] Group feature indices by chosen candidate, compile each needed run/design
   once, call the existing run solver, and scatter outputs back to original
   indices. Use identical chosen HRFs for OLS/ridge and preserve beta units.
   Fill constant/undefined locations with NaNs according to the existing rule.
-- [ ] Aggregate sums of squares exactly as in the current API. Hash each
+- [x] Aggregate sums of squares exactly as in the current API. Hash each
   grouped design and feature-to-HRF mapping; record fitting and selection as
   distinct provenance activities. Run affected package tests and commit GREEN.
 
@@ -245,14 +247,14 @@ the same CIFTIs, source discovery, motion24, six retained combined aCompCor
 components, cosines, NSS indicators, and exact run timing. For this session,
 predeclare odd-run training and even-run independent evaluation.
 
-- [ ] Extend real miniature-CIFTI fixtures with at least four runs, differing
+- [x] Extend real miniature-CIFTI fixtures with at least four runs, differing
   event timings, two known HRFs at interleaved vertices, and complete nuisance
   files. Test HRF-map axes/indices, beta trial axes, exact spatial ordering,
   grouped-design association, all statistics and metadata, block invariance,
   existing-output preservation, and publication rollback. Change even BOLD/RT
   and assert odd-trained HRFs and selected cortical vertices are unchanged.
-- [ ] Run the new fixture tests and commit RED before runner/writer edits.
-- [ ] Run all-run selection per feature block, fit selected OLS/ridge, and
+- [x] Run the new fixture tests and commit RED before runner/writer edits.
+- [x] Run all-run selection per feature block, fit selected OLS/ridge, and
   aggregate the existing beta/R² products. Do not fit every candidate's trial
   coefficients at every grayordinate. Store library tables/curves once and
   group designs once per `(run, candidate)` actually used: one compressed NPZ
@@ -262,29 +264,29 @@ predeclare odd-run training and even-run independent evaluation.
   Supply a feature signature hashing the ordered BrainModel axis and block
   indices to every selection/fit/evaluation call. Evaluate mean
   prediction with odd-trained HRFs/amplitudes on even runs.
-- [ ] Require at least two training runs and one test run for independent
+- [x] Require at least two training runs and one test run for independent
   evaluation. If an example has too few odd/even runs, complete ordinary
   all-run selection when possible and record why independent evaluation/plots
   are unavailable. Never silently substitute an in-sample score.
-- [ ] For the independent RT scatter, retain canonical-OLS odd-run vertex
+- [x] For the independent RT scatter, retain canonical-OLS odd-run vertex
   selection and refit only the selected vertices' even-run trial betas using
   odd-selected HRFs. These free beta fits are for RT diagnostics, not the
   frozen-amplitude prediction score. All-run optimized RT maps are explicitly
   descriptive. Record which HRF map each diagnostic used.
-- [ ] Publish new descriptors `hrfOptOLS`, `hrfOptRidge`, and `hrfSelection`:
+- [x] Publish new descriptors `hrfOptOLS`, `hrfOptRidge`, and `hrfSelection`:
   selected IDs/parameters/peak times; selected/canonical/delta selection-CV
   scores; odd-trained IDs and independent test scores; trial betas and existing
   full/nuisance/ΔR²; grouped designs, trial mapping, library and fold tables,
   RT diagnostics, and complete provenance. Preflight collisions before fitting.
   Distinguish selection scores from full-model in-sample R² in filenames/metadata.
-- [ ] Run package and NSD tests and formatting checks. Benchmark 10 candidates
+- [x] Run package and NSD tests and formatting checks. Benchmark 10 candidates
   on two runs, then the complete library on a small fixed grayordinate sample.
   Measure convolution, eligibility, scoring, final fits, and peak memory
   separately; report estimates before the full expanded-library run. Start
   with candidate batches of 32 and feature blocks of 4096; reduce either to
   bound memory without changing the model. Optimize repeated design work only
   if profiling justifies it and equivalence tests protect it.
-- [ ] Run all 12 runs with the predeclared 649 candidates and ridge 0.1. Audit
+- [x] Run all 12 runs with the predeclared 649 candidates and ridge 0.1. Audit
   at least 25 grayordinates against independent CV and grouped-fit calculations;
   verify fold isolation, exact CIFTI axes, all 750 trials, and prior-file hashes.
   Report held-out improvement or deterioration and RT checks without choosing
@@ -311,5 +313,8 @@ matches the user's answer. Independent evaluation is one predeclared split,
 not an additional optimization criterion. RT and ridge are kept out of HRF
 selection, and no repeated-stimulus assumption is introduced.
 
-Recommended execution: direct implementation in this session with one final
-independent review. Review this plan before starting implementation.
+Execution used direct implementation with one final independent code review.
+Initial profiling used a small synthetic dataset with all 649 candidates,
+followed by real 32- and 4096-feature benchmarks, instead of a separate
+10-candidate/two-run timing step. The full-library benchmarks exposed and
+verified the convolution optimization before the full-session run.

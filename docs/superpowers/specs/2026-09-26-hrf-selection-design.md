@@ -1,6 +1,8 @@
 # Expanded HRF library and run-wise selection design
 
-Status: proposed design for review; the requested deliverable is a plan.
+Status: implemented and validated on 2026-09-26. See the
+[validation record](../validation/2026-09-26-hrf-selection.md) for results,
+review decisions, and the deferred diagnostic-only design archive enhancement.
 
 ## Intent and agreed validation target
 

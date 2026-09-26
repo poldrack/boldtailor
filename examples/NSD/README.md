@@ -280,3 +280,53 @@ The NSD wrapper hashes the ordered BrainModel axis and block indices. Array
 callers may omit the signature, but must then preserve feature order themselves.
 Results expose grouped designs keyed by `(run_index, hrf_id)`, because different
 features can have different designs. Existing canonical-only calls are unchanged.
+
+If the canonical trial model is structurally ineligible in an odd run, expanded
+fitting can still succeed. The independent RT diagnostic then has no selected
+vertices, and metadata records `IndependentRTAvailable=False` and the reason.
+Design archives contain the HRFs used in all-run production fits. A candidate
+used only in the independent RT diagnostic may require reconstruction from the
+exported library, frame times, trial timing, and shared nuisance matrix.
+
+### Verified expanded sub-07/ses-nsd10 run
+
+The 2026-09-26 expanded analysis fitted all 12 runs, 750 trials, and 91,282
+grayordinates. It published 72 new files in the same derivatives directory;
+all 87 earlier files were checksum-preserved. Runtime was 720.54 seconds
+(12.01 minutes), with 6.39 GB peak resident memory. The run used 4096-feature
+blocks and candidate batches of 32, without changing the library or ridge
+penalty after evaluation.
+
+| Median nuisance-adjusted mean-prediction R² | Selected HRF | Canonical SPM | Paired ΔR² |
+| --- | ---: | ---: | ---: |
+| All-run selection CV (used to choose HRFs) | 0.005495 | 0.000952 | 0.003686 |
+| Independent even runs (odd-trained HRF and amplitude) | 0.002465 | 0.001078 | 0.000924 |
+
+Each column is a separate median; the median paired difference need not equal
+the difference of medians. Independent prediction improved at 57.93% of defined
+grayordinates. There were 525 undefined HRFs and 622 distinct selected candidates.
+The improvement is small and varies across locations; the larger selection-CV
+gain is not an independent estimate of predictive benefit.
+
+| Median pooled single-trial diagnostic | Optimized OLS | Optimized ridge 0.1 |
+| --- | ---: | ---: |
+| Full R² | 0.812488 | 0.799636 |
+| Confounds-only R² | 0.569213 | 0.569213 |
+| ΔR² | 0.219646 | 0.207429 |
+
+The mean-prediction selection target does not maximize single-trial in-sample
+R²; the optimized OLS median is slightly lower than the canonical OLS median.
+At the same five canonical odd-RT-selected vertices, independent even-run
+correlations were `0.229, 0.197, 0.197, -0.102, 0.150` for optimized OLS and
+`0.251, 0.247, 0.213, -0.107, 0.135` for optimized ridge. Three associations
+strengthened and two weakened relative to their canonical counterparts;
+all five retained their odd-run sign. These are descriptive checks.
+
+An independent audit reconstructed 32 grayordinates across every run using
+direct convolution, explicit held-out predictions, and NumPy ordinary/augmented
+least squares. Maximum beta error was `3.80e-6` native units; R² errors were
+below `3e-8`, consistent with float32 storage. It also verified the saved
+designs, exact CIFTI axes, all 750 trial identities, RT vertex selection and
+even-run correlations. Library and diagnostic plots were visually checked.
+See the [validation record](../../docs/superpowers/validation/2026-09-26-hrf-selection.md)
+for audit details, implementation decisions, and the remaining archive limitation.
