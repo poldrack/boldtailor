@@ -107,7 +107,9 @@ def even_run_points(beta_runs, rt_runs, run_numbers, vertex):
     return tuple(np.concatenate([p[i] for p in points]) for i in (0, 1))
 
 
-def scatter_artifact(beta_runs_by_model, rt_runs, run_numbers, vertices, path):
+def scatter_artifact(
+    beta_runs_by_model, rt_runs, run_numbers, vertices, path, *, vertex_labels=None
+):
     """Plot held-out even runs at vertices chosen using odd-run OLS only."""
     figure = Figure(
         figsize=(5 * len(beta_runs_by_model), 2.7 * max(1, len(vertices))),
@@ -122,8 +124,9 @@ def scatter_artifact(beta_runs_by_model, rt_runs, run_numbers, vertices, path):
             axis = axes[row, column]
             axis.scatter(x, y, s=9, alpha=0.45, edgecolors="none")
             r = _correlation(np.sum(x * y), np.sum(y * y), np.sum(x * x), len(x))
+            label = vertex if vertex_labels is None else vertex_labels[row]
             axis.set(
-                title=f"{model} · grayordinate {vertex} · even r={float(r):.3f}",
+                title=f"{model} · grayordinate {label} · even r={float(r):.3f}",
                 xlabel="RT deviation within run (s)",
                 ylabel="Beta deviation (native units)",
             )

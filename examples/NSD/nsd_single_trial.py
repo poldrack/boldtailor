@@ -235,8 +235,11 @@ def run_single_trial_analysis(
     session="ses-nsd10",
     ridge_alpha=None,
     block_size=4096,
+    hrf_library="canonical",
 ):
     """Fit every run and publish one complete set without overwriting old results."""
+    if hrf_library not in ("canonical", "expanded"):
+        raise ValueError("hrf_library must be canonical or expanded")
     if (
         isinstance(block_size, bool)
         or not isinstance(block_size, Integral)
@@ -268,6 +271,14 @@ def run_single_trial_analysis(
     ).absolute()
     inputs = discover_runs(root, prep, subject=subject, session=session)
     runs, brain = _load_runs(inputs)
+    if hrf_library == "expanded":
+        if __package__:
+            from .nsd_hrf import run_expanded_analysis
+        else:
+            from nsd_hrf import run_expanded_analysis
+        return run_expanded_analysis(
+            runs, root, output, brain, models, block_size, subject, session
+        )
     paths = {name: model_paths(runs, subject, session, name) for name in models}
     checks = diagnostic_paths(subject, session)
     _preflight(
@@ -310,6 +321,9 @@ def main():
     parser.add_argument("--session", default="ses-nsd10")
     parser.add_argument("--ridge-alpha", type=float)
     parser.add_argument("--block-size", type=int, default=4096)
+    parser.add_argument(
+        "--hrf-library", choices=("canonical", "expanded"), default="canonical"
+    )
     run_single_trial_analysis(**vars(parser.parse_args()))
 
 

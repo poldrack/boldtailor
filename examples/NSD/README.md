@@ -207,3 +207,76 @@ units, and pooled R² errors below `3e-8`, consistent with float32 storage.
 The audit also checked exact imaging axes, trial identities, RT correlations,
 valid-trial counts, and odd-only selection. The measured run took 100.57 seconds
 with 2.57 GB maximum resident memory (decimal GB, macOS `/usr/bin/time -l`).
+
+## Expanded HRF selection across runs
+
+```bash
+uv run python nsd_single_trial.py --hrf-library expanded --ridge-alpha 0.1
+```
+
+This mode selects one HRF per grayordinate from 649 candidates: the exact
+existing Nilearn SPM kernel (ID 0), plus the supplied GLMsingle notebook's
+648 double-gamma combinations. Kernels have discrete sum one. The library
+table lists every parameter and ID; exported curves use 0.1-second sampling,
+while convolution uses TR/50 and the original acquisition offsets.
+
+Selection uses one stimulus-presentation regressor per candidate and run.
+For each held-out run, the common mean amplitude is learned on the other
+runs and kept fixed for prediction. Nuisances are projected out within each
+run. Scores pool held-out squared errors and nuisance-adjusted signal energy,
+without standardizing runs. Negative scores remain visible. This requires
+the mean response to transfer between runs; it requires neither repeated
+images nor equal responses to individual presentations. Final trial betas
+are free amplitudes estimated by OLS or fixed ridge using the same HRF map.
+
+The best all-run CV score is a **selection statistic**. A separate evaluation
+selects HRFs within odd runs, learns the mean amplitude from those runs, and
+predicts even runs with both fixed. It needs at least two odd runs and one
+even run; otherwise the metadata records its absence and test maps are NaN.
+RT does not enter HRF or ridge selection. The independent RT plot chooses
+vertices from canonical OLS odd-run correlations, then fits their even-run
+trial betas using odd-selected HRFs. Production RT maps use all-run selected
+HRFs and are descriptive. Neither correlation plot provides significance tests.
+
+New outputs coexist with the earlier models:
+
+| Descriptor / suffix | Content |
+| --- | --- |
+| `desc-hrfOptOLS`, `desc-hrfOptRidge` | Trial betas, trial mapping, pooled in-sample full/confound/ΔR², descriptive RT maps and provenance |
+| `desc-hrfSelection_stat-hrfindex` | Stable all-run HRF IDs; NaN where undefined |
+| `...stat-hrfparameters` | Selected parameters and peak times |
+| `...stat-selectioncvr2`, `canonicalcvr2`, `deltacvr2` | All-run selection score and canonical comparison |
+| `...stat-oddhrfindex` | HRFs selected within odd runs |
+| `...stat-testr2`, `canonicaltestr2`, `deltatestr2` | Independent even-run mean-prediction scores |
+| `...library.tsv`, `curves.npz`, `library.png` | Candidate identities and sampled HRFs |
+| `run-XX_desc-hrfSelection_designs.npz` | Each used HRF's float64 trial matrix, shared nuisance matrix, frame times and column IDs |
+| `...folds.tsv`, `eligibility.tsv`, `metadata.json`, `provenance.json` | Exact folds, lazy structural checks, definitions and source identities |
+| `...selectedvertices.tsv`, `scatter.png`, `selectedhrfs.png`, `rt_provenance.json` | Independent RT diagnostics and the odd-run HRFs used |
+
+Load design archives with `np.load(path, allow_pickle=False)`. For HRF ID `h`,
+the full design is `np.column_stack([saved[f"hrf_{h}"], saved["nuisance"]])`.
+`trial_columns`, `nuisance_columns` and `hrf_ids` are string arrays. No candidate
+may discard trials: proposed winners must support every trial with positive
+residual degrees of freedom. Eligibility is checked lazily; `unchecked` is
+distinct from eligible or excluded. Numerically zero nuisance-adjusted signals
+have no selected HRF. No weak-signal fallback or significance threshold is used.
+
+The array API is available from `boldtailor.hrf_library`,
+`boldtailor.hrf_selection` and `boldtailor.single_trial`:
+
+```python
+from boldtailor.hrf_library import expanded_hrf_library
+from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
+from boldtailor.single_trial import fit_selected_hrfs
+
+library = expanded_hrf_library()
+selection = select_hrf(data, library=library, feature_signature=axis_signature)
+result = fit_selected_hrfs(data, selection=selection, feature_signature=axis_signature)
+evaluation = evaluate_hrf_split(data, library=library, train_runs=[0, 2],
+                                test_runs=[1, 3], feature_signature=axis_signature)
+```
+
+The NSD wrapper hashes the ordered BrainModel axis and block indices. Array
+callers may omit the signature, but must then preserve feature order themselves.
+Results expose grouped designs keyed by `(run_index, hrf_id)`, because different
+features can have different designs. Existing canonical-only calls are unchanged.

@@ -11,174 +11,265 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import HrfLibrary
 from examples.NSD.nsd_single_trial import run_single_trial_analysis
-from examples.NSD.test_nsd_cifti import confounds,dataset,events  # noqa: F401
+from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 
 
 @pytest.fixture
-def hrf_nsd(dataset,monkeypatch):
-    root,prep,_,_,nuisance,brain=dataset
-    library=HrfLibrary.from_parameters([[3,10,.5,.5,2,0,36],[6,16,1.5,2.5,8,2,36]])
+def hrf_nsd(dataset, monkeypatch):
+    root, prep, _, _, nuisance, brain = dataset
+    library = HrfLibrary.from_parameters(
+        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+    )
     # Restrict only the library boundary; exercise the real selection/fitting/I/O.
     import boldtailor.hrf_library as libraries
-    monkeypatch.setattr(libraries,"expanded_hrf_library",lambda:library)
-    raw=root/"sub-07/ses-nsd10/func"
-    prepared=prep/"sub-07/ses-nsd10/func"
-    for folder in (raw,prepared):
-        originals=list(folder.glob("*run-01*"))
-        for number in (3,4):
+
+    monkeypatch.setattr(libraries, "expanded_hrf_library", lambda: library)
+    raw = root / "sub-07/ses-nsd10/func"
+    prepared = prep / "sub-07/ses-nsd10/func"
+    for folder in (raw, prepared):
+        originals = list(folder.glob("*run-01*"))
+        for number in (3, 4):
             for path in originals:
-                shutil.copyfile(path,folder/path.name.replace("run-01",f"run-{number:02d}"))
-    rng=np.random.default_rng(617)
-    signals=[]
-    for number in range(1,5):
-        path=next(raw.glob(f"*run-{number:02d}_events.tsv"))
-        e=pd.read_csv(path,sep="\t")
-        e.onset+=number*.17
-        e["73k_id"]=np.arange(6)+10*number
-        e.loc[1,"response_time"]=np.nan
-        e.to_csv(path,sep="\t",index=False)
-        t=.775+1.6*np.arange(96)
-        columns=[]
-        for cid in [1,2,1]:
-            c=library.candidates[cid]
-            x=np.column_stack([compute_regressor(np.array([[o],[d],[1.]]),c.kernel,t)[0][:,0] for o,d in zip(e.onset,e.duration,strict=True)])
-            beta=3+.1*e.response_time.fillna(1).to_numpy()+rng.normal(0,.03,6)
-            columns.append(x@beta+nuisance@rng.normal(0,.05,33)+100+number*7)
-        y=np.column_stack([*columns,np.zeros(96)])
-        bold=next(prepared.glob(f"*run-{number:02d}*.dtseries.nii"))
-        nib.save(nib.Cifti2Image(y,nib.load(bold).header),bold)
+                shutil.copyfile(
+                    path, folder / path.name.replace("run-01", f"run-{number:02d}")
+                )
+    rng = np.random.default_rng(617)
+    signals = []
+    for number in range(1, 5):
+        path = next(raw.glob(f"*run-{number:02d}_events.tsv"))
+        e = pd.read_csv(path, sep="\t")
+        e.onset += number * 0.17
+        e["73k_id"] = np.arange(6) + 10 * number
+        e.loc[1, "response_time"] = np.nan
+        e.to_csv(path, sep="\t", index=False)
+        t = 0.775 + 1.6 * np.arange(96)
+        columns = []
+        for cid in [1, 2, 1]:
+            c = library.candidates[cid]
+            x = np.column_stack(
+                [
+                    compute_regressor(np.array([[o], [d], [1.0]]), c.kernel, t)[0][:, 0]
+                    for o, d in zip(e.onset, e.duration, strict=True)
+                ]
+            )
+            beta = (
+                3 + 0.1 * e.response_time.fillna(1).to_numpy() + rng.normal(0, 0.03, 6)
+            )
+            columns.append(
+                x @ beta + nuisance @ rng.normal(0, 0.05, 33) + 100 + number * 7
+            )
+        y = np.column_stack([*columns, np.zeros(96)])
+        bold = next(prepared.glob(f"*run-{number:02d}*.dtseries.nii"))
+        nib.save(nib.Cifti2Image(y, nib.load(bold).header), bold)
         signals.append(y)
-    return root,prep,brain,library,signals
+    return root, prep, brain, library, signals
 
 
-def find(paths,fragment):
+def find(paths, fragment):
     return next(p for p in paths if fragment in p.name)
 
 
-def run(fixture,output,block=2):
-    return run_single_trial_analysis(fixture[0],fixture[1],output,ridge_alpha=.1,block_size=block,hrf_library="expanded")
+def run(fixture, output, block=2):
+    return run_single_trial_analysis(
+        fixture[0],
+        fixture[1],
+        output,
+        ridge_alpha=0.1,
+        block_size=block,
+        hrf_library="expanded",
+    )
 
 
-def test_expanded_artifacts_reconstruct_grouped_fits(hrf_nsd,tmp_path):
-    root,prep,brain,library,ys=hrf_nsd
-    output=tmp_path/"output";output.mkdir()
-    old=output/"old.dscalar.nii";old.write_bytes(b"preserve")
-    paths=run(hrf_nsd,output)
-    assert old.read_bytes()==b"preserve"
-    ids=nib.load(find(paths,"desc-hrfSelection_stat-hrfindex."))
-    assert ids.header.get_axis(1)==brain
-    np.testing.assert_array_equal(ids.get_fdata()[0,:3],[1,2,1])
-    assert np.isnan(ids.get_fdata()[0,3])
-    for model,alpha in [("OLS",0.),("Ridge",.1)]:
-        trials=pd.read_csv(find(paths,f"desc-hrfOpt{model}_trials.tsv"),sep="\t")
-        assert len(trials)==24
-        assert trials.event_index.tolist()==list(range(6))*4
-        sse=[];null=[];total=[]
+def test_expanded_artifacts_reconstruct_grouped_fits(hrf_nsd, tmp_path):
+    root, prep, brain, library, ys = hrf_nsd
+    output = tmp_path / "output"
+    output.mkdir()
+    old = output / "old.dscalar.nii"
+    old.write_bytes(b"preserve")
+    paths = run(hrf_nsd, output)
+    assert old.read_bytes() == b"preserve"
+    ids = nib.load(find(paths, "desc-hrfSelection_stat-hrfindex."))
+    assert ids.header.get_axis(1) == brain
+    np.testing.assert_array_equal(ids.get_fdata()[0, :3], [1, 2, 1])
+    assert np.isnan(ids.get_fdata()[0, 3])
+    for model, alpha in [("OLS", 0.0), ("Ridge", 0.1)]:
+        trials = pd.read_csv(find(paths, f"desc-hrfOpt{model}_trials.tsv"), sep="\t")
+        assert len(trials) == 24
+        assert trials.event_index.tolist() == list(range(6)) * 4
+        sse = []
+        null = []
+        total = []
         for r in range(4):
-            prefix=f"run-{r+1:02d}"
-            beta=nib.load(next(p for p in paths if prefix in p.name and f"desc-hrfOpt{model}_betas" in p.name))
-            assert beta.header.get_axis(1)==brain
-            assert beta.header.get_axis(0).name.tolist()==[f"{prefix}_trial-{i:04d}" for i in range(1,7)]
-            archive=next(p for p in paths if prefix in p.name and p.name.endswith("desc-hrfSelection_designs.npz"))
-            losses=[];nulls=[];totals=[]
-            with np.load(archive,allow_pickle=False) as saved:
+            prefix = f"run-{r+1:02d}"
+            beta = nib.load(
+                next(
+                    p
+                    for p in paths
+                    if prefix in p.name and f"desc-hrfOpt{model}_betas" in p.name
+                )
+            )
+            assert beta.header.get_axis(1) == brain
+            assert beta.header.get_axis(0).name.tolist() == [
+                f"{prefix}_trial-{i:04d}" for i in range(1, 7)
+            ]
+            archive = next(
+                p
+                for p in paths
+                if prefix in p.name and p.name.endswith("desc-hrfSelection_designs.npz")
+            )
+            losses = []
+            nulls = []
+            totals = []
+            with np.load(archive, allow_pickle=False) as saved:
                 for key in saved.files:
-                    assert saved[key].dtype.kind!='O'
-                n=saved["nuisance"]
-                assert n.shape==(96,33)
-                np.testing.assert_array_equal(saved["frame_times"],.775+1.6*np.arange(96))
-                for v,cid in enumerate([1,2,1]):
-                    x=saved[f"hrf_{cid}"]
-                    assert x.dtype==np.float64
-                    xr=x-n@np.linalg.lstsq(n,x,rcond=None)[0]
-                    matrix=np.column_stack([x,n])
-                    penalty=np.column_stack([np.diag(np.sqrt(alpha)*np.linalg.norm(xr,axis=0)),np.zeros((6,33))])
-                    expected=np.linalg.lstsq(np.vstack([matrix,penalty]),np.r_[ys[r][:,v],np.zeros(6)],rcond=None)[0]
-                    np.testing.assert_allclose(beta.get_fdata()[:,v],expected[:6],atol=2e-6)
-                    losses.append(np.sum((ys[r][:,v]-matrix@expected)**2))
-                    nulls.append(np.sum((ys[r][:,v]-n@np.linalg.lstsq(n,ys[r][:,v],rcond=None)[0])**2))
-                    totals.append(np.sum((ys[r][:,v]-ys[r][:,v].mean())**2))
-            sse.append(losses);null.append(nulls);total.append(totals)
-            assert np.isnan(beta.get_fdata()[:,3]).all()
-        full=1-np.sum(sse,axis=0)/np.sum(total,axis=0)
-        nuisance=1-np.sum(null,axis=0)/np.sum(total,axis=0)
-        for stat,want in [("fullrsquared",full),("confoundsrsquared",nuisance),("deltarsquared",full-nuisance)]:
-            actual=nib.load(find(paths,f"desc-hrfOpt{model}_stat-{stat}."))
-            np.testing.assert_allclose(actual.get_fdata()[0,:3],want,atol=2e-7)
-        meta=json.loads(find(paths,f"desc-hrfOpt{model}_metadata.json").read_text())
-        assert meta["ridge_alpha"]==alpha
+                    assert saved[key].dtype.kind != "O"
+                n = saved["nuisance"]
+                assert n.shape == (96, 33)
+                np.testing.assert_array_equal(
+                    saved["frame_times"], 0.775 + 1.6 * np.arange(96)
+                )
+                for v, cid in enumerate([1, 2, 1]):
+                    x = saved[f"hrf_{cid}"]
+                    assert x.dtype == np.float64
+                    xr = x - n @ np.linalg.lstsq(n, x, rcond=None)[0]
+                    matrix = np.column_stack([x, n])
+                    penalty = np.column_stack(
+                        [
+                            np.diag(np.sqrt(alpha) * np.linalg.norm(xr, axis=0)),
+                            np.zeros((6, 33)),
+                        ]
+                    )
+                    expected = np.linalg.lstsq(
+                        np.vstack([matrix, penalty]),
+                        np.r_[ys[r][:, v], np.zeros(6)],
+                        rcond=None,
+                    )[0]
+                    np.testing.assert_allclose(
+                        beta.get_fdata()[:, v], expected[:6], atol=2e-6
+                    )
+                    losses.append(np.sum((ys[r][:, v] - matrix @ expected) ** 2))
+                    nulls.append(
+                        np.sum(
+                            (
+                                ys[r][:, v]
+                                - n @ np.linalg.lstsq(n, ys[r][:, v], rcond=None)[0]
+                            )
+                            ** 2
+                        )
+                    )
+                    totals.append(np.sum((ys[r][:, v] - ys[r][:, v].mean()) ** 2))
+            sse.append(losses)
+            null.append(nulls)
+            total.append(totals)
+            assert np.isnan(beta.get_fdata()[:, 3]).all()
+        full = 1 - np.sum(sse, axis=0) / np.sum(total, axis=0)
+        nuisance = 1 - np.sum(null, axis=0) / np.sum(total, axis=0)
+        for stat, want in [
+            ("fullrsquared", full),
+            ("confoundsrsquared", nuisance),
+            ("deltarsquared", full - nuisance),
+        ]:
+            actual = nib.load(find(paths, f"desc-hrfOpt{model}_stat-{stat}."))
+            np.testing.assert_allclose(actual.get_fdata()[0, :3], want, atol=2e-7)
+        meta = json.loads(find(paths, f"desc-hrfOpt{model}_metadata.json").read_text())
+        assert meta["ridge_alpha"] == alpha
         assert "descriptive" in meta["RT"].lower()
-    metadata=json.loads(find(paths,"desc-hrfSelection_metadata.json").read_text())
-    assert metadata["LibraryFingerprint"]==library.fingerprint
-    assert metadata["TrainingRuns"]==["run-01","run-03"]
-    assert metadata["TestRuns"]==["run-02","run-04"]
+    metadata = json.loads(find(paths, "desc-hrfSelection_metadata.json").read_text())
+    assert metadata["LibraryFingerprint"] == library.fingerprint
+    assert metadata["TrainingRuns"] == ["run-01", "run-03"]
+    assert metadata["TestRuns"] == ["run-02", "run-04"]
     assert metadata["IndependentEvaluationAvailable"] is True
-    assert find(paths,"desc-hrfSelection_library.png").stat().st_size>1000
-    assert find(paths,"desc-hrfSelection_scatter.png").stat().st_size>1000
-    assert find(paths,"desc-hrfSelection_eligibility.tsv").is_file()
-    assert find(paths,"desc-hrfSelection_folds.tsv").is_file()
+    assert find(paths, "desc-hrfSelection_library.png").stat().st_size > 1000
+    assert find(paths, "desc-hrfSelection_scatter.png").stat().st_size > 1000
+    assert find(paths, "desc-hrfSelection_eligibility.tsv").is_file()
+    assert find(paths, "desc-hrfSelection_folds.tsv").is_file()
 
 
-def test_blocks_and_even_run_edits_preserve_training_decisions(hrf_nsd,tmp_path):
-    small=run(hrf_nsd,tmp_path/"small",1)
-    large=run(hrf_nsd,tmp_path/"large",4096)
-    other={p.name:p for p in large}
+def test_blocks_and_even_run_edits_preserve_training_decisions(hrf_nsd, tmp_path):
+    small = run(hrf_nsd, tmp_path / "small", 1)
+    large = run(hrf_nsd, tmp_path / "large", 4096)
+    other = {p.name: p for p in large}
     for p in small:
         if p.name.endswith(".dscalar.nii"):
-            np.testing.assert_allclose(nib.load(p).get_fdata(),nib.load(other[p.name]).get_fdata(),atol=1e-6,equal_nan=True)
-    root,prep,*_=hrf_nsd
-    for number in [2,4]:
-        path=next(prep.rglob(f"*run-{number:02d}*.dtseries.nii"))
-        image=nib.load(path)
-        nib.save(nib.Cifti2Image(np.random.default_rng(number).normal(size=image.shape)*100,image.header),path)
-        path=next((root/"sub-07").rglob(f"*run-{number:02d}_events.tsv"))
-        events=pd.read_csv(path,sep="\t");events.response_time=events.response_time*20+8
-        events.to_csv(path,sep="\t",index=False)
-    changed=run(hrf_nsd,tmp_path/"changed")
+            np.testing.assert_allclose(
+                nib.load(p).get_fdata(),
+                nib.load(other[p.name]).get_fdata(),
+                atol=1e-6,
+                equal_nan=True,
+            )
+    root, prep, *_ = hrf_nsd
+    for number in [2, 4]:
+        path = next(prep.rglob(f"*run-{number:02d}*.dtseries.nii"))
+        image = nib.load(path)
+        nib.save(
+            nib.Cifti2Image(
+                np.random.default_rng(number).normal(size=image.shape) * 100,
+                image.header,
+            ),
+            path,
+        )
+        path = next((root / "sub-07").rglob(f"*run-{number:02d}_events.tsv"))
+        events = pd.read_csv(path, sep="\t")
+        events.response_time = events.response_time * 20 + 8
+        events.to_csv(path, sep="\t", index=False)
+    changed = run(hrf_nsd, tmp_path / "changed")
     for fragment in ["stat-oddhrfindex."]:
-        np.testing.assert_array_equal(nib.load(find(small,fragment)).get_fdata(),nib.load(find(changed,fragment)).get_fdata())
-    a=pd.read_csv(find(small,"_selectedvertices.tsv"),sep="\t")
-    b=pd.read_csv(find(changed,"_selectedvertices.tsv"),sep="\t")
-    np.testing.assert_array_equal(a.grayordinate_index,b.grayordinate_index)
-    np.testing.assert_allclose(a.canonical_odd_r,b.canonical_odd_r,atol=1e-12)
+        np.testing.assert_array_equal(
+            nib.load(find(small, fragment)).get_fdata(),
+            nib.load(find(changed, fragment)).get_fdata(),
+        )
+    a = pd.read_csv(find(small, "_selectedvertices.tsv"), sep="\t")
+    b = pd.read_csv(find(changed, "_selectedvertices.tsv"), sep="\t")
+    np.testing.assert_array_equal(a.grayordinate_index, b.grayordinate_index)
+    np.testing.assert_allclose(a.canonical_odd_r, b.canonical_odd_r, atol=1e-12)
 
 
-def test_too_few_odd_runs_records_unavailable_evaluation(hrf_nsd,tmp_path):
-    root,prep,*_=hrf_nsd
-    for directory in (root/"sub-07",prep):
-        for number in [3,4]:
+def test_too_few_odd_runs_records_unavailable_evaluation(hrf_nsd, tmp_path):
+    root, prep, *_ = hrf_nsd
+    for directory in (root / "sub-07", prep):
+        for number in [3, 4]:
             for path in directory.rglob(f"*run-{number:02d}*"):
                 path.unlink()
-    paths=run(hrf_nsd,tmp_path/"output")
-    metadata=json.loads(find(paths,"desc-hrfSelection_metadata.json").read_text())
+    paths = run(hrf_nsd, tmp_path / "output")
+    metadata = json.loads(find(paths, "desc-hrfSelection_metadata.json").read_text())
     assert metadata["IndependentEvaluationAvailable"] is False
     assert metadata["IndependentEvaluationReason"]
-    assert np.isnan(nib.load(find(paths,"desc-hrfSelection_stat-testr2.")).get_fdata()).all()
+    assert np.isnan(
+        nib.load(find(paths, "desc-hrfSelection_stat-testr2.")).get_fdata()
+    ).all()
 
 
-def test_collision_and_publication_rollback(hrf_nsd,tmp_path,monkeypatch):
+def test_collision_and_publication_rollback(hrf_nsd, tmp_path, monkeypatch):
     import boldtailor.publication as publication
     import boldtailor.hrf_selection as selection
 
-    output=tmp_path/"output"
-    target=output/"sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_desc-hrfSelection_library.tsv"
-    target.parent.mkdir(parents=True);target.write_text("old")
+    output = tmp_path / "output"
+    target = (
+        output
+        / "sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_desc-hrfSelection_library.tsv"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_text("old")
     with monkeypatch.context() as patch:
-        def forbidden(*args,**kwargs):
+
+        def forbidden(*args, **kwargs):
             pytest.fail("collision must precede selection")
-        patch.setattr(selection,"select_hrf",forbidden)
+
+        patch.setattr(selection, "select_hrf", forbidden)
         with pytest.raises(FileExistsError):
-            run(hrf_nsd,output)
-    assert target.read_text()=="old"
-    original=publication.os.replace
-    count=0
-    def fail(source,target):
+            run(hrf_nsd, output)
+    assert target.read_text() == "old"
+    original = publication.os.replace
+    count = 0
+
+    def fail(source, target):
         nonlocal count
-        count+=1
-        if count==3:
+        count += 1
+        if count == 3:
             raise OSError("injected publication failure")
-        return original(source,target)
-    monkeypatch.setattr(publication.os,"replace",fail)
+        return original(source, target)
+
+    monkeypatch.setattr(publication.os, "replace", fail)
     with pytest.raises(publication.PublicationError):
-        run(hrf_nsd,tmp_path/"rollback")
-    assert not list((tmp_path/"rollback").rglob("*desc-hrf*"))
+        run(hrf_nsd, tmp_path / "rollback")
+    assert not list((tmp_path / "rollback").rglob("*desc-hrf*"))

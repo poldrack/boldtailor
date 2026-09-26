@@ -17,19 +17,21 @@ STATISTICS = (
 )
 
 
-def model_paths(runs, subject, session, model):
+def model_paths(runs, subject, session, model, *, descriptor=None):
     directory = f"{subject}/{session}/func"
     stem = f"{directory}/{subject}_{session}_task-nsdcore"
-    description = f"desc-singletrial{model}"
+    description = f"desc-{descriptor or ('singletrial' + model)}"
     base = f"{stem}_{description}"
     return {
         "betas": [
             f"{directory}/{r.inputs.stem}_space-fsLR_den-91k_{description}_betas.dscalar.nii"
             for r in runs
         ],
-        "designs": [
-            f"{directory}/{r.inputs.stem}_{description}_design.tsv" for r in runs
-        ],
+        "designs": (
+            [f"{directory}/{r.inputs.stem}_{description}_design.tsv" for r in runs]
+            if descriptor is None
+            else []
+        ),
         "trials": f"{base}_trials.tsv",
         "metadata": f"{base}_metadata.json",
         "provenance": f"{base}_provenance.json",
@@ -84,9 +86,10 @@ def single_trial_artifacts(runs, brain, result, rt, paths, metadata):
                 rows.trial_id.tolist(),
             )
         )
-        design = result["designs"][index].copy()
-        design.insert(0, "frame_time", run.frame_times)
-        artifacts.append(table_artifact(paths["designs"][index], design))
+        if paths["designs"]:
+            design = result["designs"][index].copy()
+            design.insert(0, "frame_time", run.frame_times)
+            artifacts.append(table_artifact(paths["designs"][index], design))
     artifacts.append(table_artifact(paths["trials"], table))
     for stat, values in zip(STATISTICS[:3], result["maps"], strict=True):
         artifacts.append(scalar_artifact(paths[stat], brain, values[None], [stat]))
