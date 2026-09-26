@@ -277,7 +277,9 @@ def test_nested_event_metadata_is_owned_on_every_result_access(problem):
     events = data.events
     for table in events:
         table["metadata"] = [{"tags": ["original"]} for _ in range(len(table))]
-    enriched = from_arrays(data.signals, events, frame_times=data.frame_times, confounds=data.confounds)
+    enriched = from_arrays(
+        data.signals, events, frame_times=data.frame_times, confounds=data.confounds
+    )
     result = entry()(enriched)
     exposed = result.trial_table
     exposed.loc[0, "metadata"]["tags"].append("changed")

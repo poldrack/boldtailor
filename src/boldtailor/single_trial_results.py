@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import immutable_float_array
+from boldtailor.data import _owned_table
 from boldtailor.provenance import ProvenanceRecord
 
 
@@ -31,7 +32,7 @@ class SingleTrialResult:
             )
         for name in ("full_r2", "nuisance_r2", "delta_r2"):
             object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
-        object.__setattr__(self, "_trial_table", self._trial_table.copy(deep=True))
+        object.__setattr__(self, "_trial_table", _owned_table(self._trial_table))
         object.__setattr__(
             self,
             "_design_matrices",
@@ -41,7 +42,7 @@ class SingleTrialResult:
 
     @property
     def trial_table(self):
-        return self._trial_table.copy(deep=True)
+        return _owned_table(self._trial_table)
 
     @property
     def design_matrices(self):
