@@ -138,6 +138,24 @@ use multiple processes should call it inside `if __name__ == "__main__":`.
 Worker counts must be positive integers. No automatic core or memory sizing is
 performed. Existing output files remain protected; use a fresh output root.
 
+On the 16-core, 128-GiB development machine, a real-data benchmark using all
+12 runs, all 649 HRFs, and 16,384 grayordinates measured:
+
+| Workers | Fitting time | Speedup | Sampled peak process-tree RSS |
+| --- | ---: | ---: | ---: |
+| 1 | 186.19 s | 1.00× | 5.43 GB |
+| 2 | 104.66 s | 1.78× | 9.19 GB |
+| 4 | 74.22 s | 2.51× | 12.77 GB |
+
+Four workers are a reasonable starting point on this machine. These timings
+include process startup and cold design caches, OLS/ridge fitting, canonical
+comparisons, and block-level odd/even checks. They exclude final artifact
+assembly/publication and cover four 4096-feature blocks, not the entire
+session. RSS is the sampled sum across the parent and children (decimal GB);
+shared pages may be counted more than once. Every benchmark map and trial beta
+matched serial execution exactly. See the
+[parallel validation record](../../docs/superpowers/validation/2026-09-26-nsd-parallel.md).
+
 The package entry point is:
 
 ```python
