@@ -112,3 +112,10 @@ def test_input_tables_are_not_mutated(inputs):
     trials.loc[0, "onset"] = 999
     pd.testing.assert_frame_equal(events, original_events)
     pd.testing.assert_frame_equal(confounds, original_confounds)
+
+
+def test_nuisance_cannot_reuse_a_generated_trial_name(inputs):
+    events, times, confounds = inputs
+    confounds = confounds.rename(columns={confounds.columns[0]: "run-01_trial-0001"})
+    with pytest.raises(ValueError, match="trial|reserved|collision"):
+        compiler()(events, times, confounds, "run-01")
