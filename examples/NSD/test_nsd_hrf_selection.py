@@ -224,6 +224,73 @@ def test_blocks_and_even_run_edits_preserve_training_decisions(hrf_nsd, tmp_path
     np.testing.assert_allclose(a.canonical_odd_r, b.canonical_odd_r, atol=1e-12)
 
 
+def test_hrf_comparison_uses_pooled_matching_canonical_trial_fit(hrf_nsd, tmp_path):
+    root, _, brain, _, signals = hrf_nsd
+    paths = run(hrf_nsd, tmp_path / "comparison")
+    for model, alpha in [("OLS", 0.0), ("Ridge", 0.1)]:
+        comparison = nib.load(find(paths, f"desc-hrfOpt{model}_stat-hrfdeltarsquared."))
+        assert comparison.header.get_axis(1) == brain
+        assert comparison.header.get_axis(0).name.tolist() == [
+            "optimized_full_r2_minus_canonical_full_r2"
+        ]
+        sse = np.zeros(3)
+        sst = np.zeros(3)
+        for number, signal in enumerate(signals, 1):
+            events = pd.read_csv(
+                next(root.glob(f"sub-07/ses-nsd10/func/*run-{number:02d}_events.tsv")),
+                sep="\t",
+            )
+            with np.load(
+                find(paths, f"run-{number:02d}_desc-hrfSelection_designs.npz"),
+                allow_pickle=False,
+            ) as saved:
+                nuisance = saved["nuisance"]
+                trial = np.column_stack(
+                    [
+                        compute_regressor(
+                            np.array([[onset], [duration], [1.0]]),
+                            "spm",
+                            saved["frame_times"],
+                        )[0][:, 0]
+                        for onset, duration in zip(
+                            events.onset, events.duration, strict=True
+                        )
+                    ]
+                )
+            residual_trial = (
+                trial - nuisance @ np.linalg.lstsq(nuisance, trial, rcond=None)[0]
+            )
+            design = np.column_stack([trial, nuisance])
+            penalty = np.column_stack(
+                [
+                    np.diag(np.sqrt(alpha) * np.linalg.norm(residual_trial, axis=0)),
+                    np.zeros((trial.shape[1], nuisance.shape[1])),
+                ]
+            )
+            coefficients = np.linalg.lstsq(
+                np.vstack([design, penalty]),
+                np.vstack([signal[:, :3], np.zeros((trial.shape[1], 3))]),
+                rcond=None,
+            )[0]
+            sse += np.sum((signal[:, :3] - design @ coefficients) ** 2, axis=0)
+            sst += np.sum((signal[:, :3] - signal[:, :3].mean(axis=0)) ** 2, axis=0)
+        canonical = 1 - sse / sst
+        optimized = nib.load(
+            find(paths, f"desc-hrfOpt{model}_stat-fullrsquared.")
+        ).get_fdata()[0]
+        np.testing.assert_allclose(
+            comparison.get_fdata()[0, :3], optimized[:3] - canonical, atol=6e-8
+        )
+        assert np.isnan(comparison.get_fdata()[0, 3])
+        metadata = json.loads(
+            find(paths, f"desc-hrfOpt{model}_stat-hrfdeltarsquared.json").read_text()
+        )
+        assert metadata["ridge_alpha"] == alpha
+        assert "in-sample" in metadata["R2"]
+        assert metadata["Formula"] == "optimized_full_r2 - canonical_full_r2"
+        assert len(metadata["CanonicalFitProvenance"]) == 2
+
+
 def test_too_few_odd_runs_records_unavailable_evaluation(hrf_nsd, tmp_path):
     root, prep, *_ = hrf_nsd
     for directory in (root / "sub-07", prep):
@@ -339,3 +406,56 @@ def test_canonical_ineligible_diagnostic_does_not_abort_expanded_outputs(
     assert metadata["IndependentRTAvailable"] is False
     assert "canonical" in metadata["IndependentRTReason"].lower()
     assert pd.read_csv(find(paths, "_selectedvertices.tsv"), sep="\t").empty
+    for model in ["OLS", "Ridge"]:
+        assert np.isnan(
+            nib.load(
+                find(paths, f"desc-hrfOpt{model}_stat-hrfdeltarsquared.")
+            ).get_fdata()
+        ).all()
+        comparison = json.loads(
+            find(paths, f"desc-hrfOpt{model}_stat-hrfdeltarsquared.json").read_text()
+        )
+        assert comparison["ComparisonAvailable"] is False
+        assert "canonical" in comparison["ComparisonUnavailableReason"].lower()
+
+
+def test_comparison_artifact_preserves_signed_difference_and_undefined(
+    hrf_nsd, tmp_path
+):
+    from examples.NSD.hrf_artifacts import comparison_artifacts, comparison_paths
+    from boldtailor.publication import publish_artifact_set
+
+    brain = hrf_nsd[2]
+    paths = comparison_paths("example_stat-fullrsquared.dscalar.nii")
+    artifacts = comparison_artifacts(
+        brain,
+        np.array([0.8, 0.2, np.nan, 0.4]),
+        np.array([0.6, 0.5, 0.7, np.nan]),
+        paths,
+        {"ridge_alpha": 0.0},
+    )
+    published = publish_artifact_set(tmp_path / "artifacts", artifacts)
+    image = nib.load(find(published, "stat-hrfdeltarsquared.dscalar.nii"))
+    np.testing.assert_allclose(
+        image.get_fdata(), [[0.2, -0.3, np.nan, np.nan]], atol=2e-8
+    )
+    assert image.header.get_axis(1) == brain
+
+
+@pytest.mark.parametrize("suffix", ["dscalar.nii", "json"])
+def test_comparison_collisions_precede_fitting(hrf_nsd, tmp_path, monkeypatch, suffix):
+    output = tmp_path / "collision"
+    target = (
+        output
+        / f"sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_space-fsLR_den-91k_desc-hrfOptOLS_stat-hrfdeltarsquared.{suffix}"
+    )
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"preserve")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("comparison collision must be caught before selection")
+
+    monkeypatch.setattr("boldtailor.hrf_selection.select_hrf", forbidden)
+    with pytest.raises(FileExistsError):
+        run(hrf_nsd, output)
+    assert target.read_bytes() == b"preserve"
