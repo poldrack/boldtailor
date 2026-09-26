@@ -270,3 +270,16 @@ def test_known_rt_variability_with_ar_noise_and_nuisance_only_feature(alpha):
     np.testing.assert_allclose(result.delta_r2[1], 0.0, atol=1e-12)
     assert np.isnan(result.run_betas[0][:, 2]).all()
     assert np.isnan(result.full_r2[2])
+
+
+def test_nested_event_metadata_is_owned_on_every_result_access(problem):
+    data, _, _ = problem
+    events = data.events
+    for table in events:
+        table["metadata"] = [{"tags": ["original"]} for _ in range(len(table))]
+    enriched = from_arrays(data.signals, events, frame_times=data.frame_times, confounds=data.confounds)
+    result = entry()(enriched)
+    exposed = result.trial_table
+    exposed.loc[0, "metadata"]["tags"].append("changed")
+    assert result.trial_table.loc[0, "metadata"] == {"tags": ["original"]}
+    assert enriched.events[0].loc[0, "metadata"] == {"tags": ["original"]}
