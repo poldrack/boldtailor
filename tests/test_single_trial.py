@@ -234,3 +234,39 @@ def test_provenance_tracks_design_and_penalty_without_behavior_values(problem, c
     )
     assert "73k_id" not in caplog.text
     assert "/private/" not in caplog.text
+
+
+@pytest.mark.parametrize("alpha", [0.0, 0.1])
+def test_known_rt_variability_with_ar_noise_and_nuisance_only_feature(alpha):
+    rng = np.random.default_rng(842)
+    times = np.arange(220) * 1.6
+    rt = rng.uniform(0.4, 2.0, 30)
+    onsets = 8 + np.arange(30) * 10.0
+    x = np.column_stack(
+        [
+            compute_regressor(np.array([[t], [3.0], [1.0]]), "spm", times)[0][:, 0]
+            for t in onsets
+        ]
+    )
+    motion = rng.normal(size=len(times))
+    noise = rng.normal(scale=0.01, size=len(times))
+    for i in range(1, len(noise)):
+        noise[i] += 0.6 * noise[i - 1]
+    amplitudes = 2.0 * (rt - rt.mean()) + 1.0
+    nuisance = 100 + motion * 3
+    signals = np.column_stack(
+        [x @ amplitudes + nuisance + noise, nuisance, np.zeros(len(times))]
+    )
+    events = pd.DataFrame({"onset": onsets, "duration": 3.0, "response_time": rt})
+    data = from_arrays(
+        [signals],
+        [events],
+        frame_times=[times],
+        confounds=[pd.DataFrame({"motion": motion})],
+    )
+    result = entry()(data, ridge_alpha=alpha)
+    assert np.corrcoef(result.run_betas[0][:, 0], rt)[0, 1] > 0.98
+    np.testing.assert_allclose(result.run_betas[0][:, 1], 0.0, atol=1e-10)
+    np.testing.assert_allclose(result.delta_r2[1], 0.0, atol=1e-12)
+    assert np.isnan(result.run_betas[0][:, 2]).all()
+    assert np.isnan(result.full_r2[2])

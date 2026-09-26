@@ -203,3 +203,24 @@ def test_failed_publication_leaves_no_partial_single_trial_set(
     with pytest.raises(publication.PublicationError):
         example().run_single_trial_analysis(root, prep, output)
     assert not list(output.rglob("*desc-singletrial*"))
+
+
+def test_block_size_does_not_change_maps_or_trial_identity(mini_nsd, tmp_path):
+    root, prep, *_ = mini_nsd
+    small = example().run_single_trial_analysis(
+        root, prep, tmp_path / "small", ridge_alpha=0.1, block_size=1
+    )
+    large = example().run_single_trial_analysis(
+        root, prep, tmp_path / "large", ridge_alpha=0.1, block_size=4096
+    )
+    by_name = {p.name: p for p in large}
+    for path in small:
+        if path.name.endswith(".dscalar.nii"):
+            a, b = nib.load(path), nib.load(by_name[path.name])
+            assert a.header.get_axis(0) == b.header.get_axis(0)
+            assert a.header.get_axis(1) == b.header.get_axis(1)
+            np.testing.assert_allclose(
+                a.get_fdata(), b.get_fdata(), atol=1e-7, equal_nan=True
+            )
+        elif path.name.endswith("_trials.tsv"):
+            assert path.read_bytes() == by_name[path.name].read_bytes()
