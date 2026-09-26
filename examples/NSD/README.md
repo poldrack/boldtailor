@@ -115,6 +115,29 @@ value **0.1**, not an RT-selected value or a fractional-ridge fraction. The
 same path, subject, session, and block-size flags as the conventional example
 are supported. Use a new output root to rerun or compare another fixed alpha.
 
+`--n-jobs N` enables parallel feature-block fitting in both single-trial modes;
+the default `1` retains serial execution. For example:
+
+```bash
+uv run python nsd_single_trial.py --hrf-library expanded --ridge-alpha 0.1 \
+  --n-jobs 4 --output-root /Volumes/extdata1/NSD/BIDS/derivatives/boldtailor-parallel
+```
+
+Each process fits a separate grayordinate block using all runs, preserving the
+same cross-validation folds. Worker processes limit numerical-library threads
+to one to avoid competing thread pools. The parent assembles blocks in their
+original order and publishes only after every fit succeeds. At most `N` blocks
+are dispatched together; each process keeps its own timing/design cache and
+loads only its assigned CIFTI columns. RAM grows with the number of workers,
+while the parent still retains the complete output maps. The metadata's
+`Execution` field records the requested/effective workers, block size, backend,
+and worker thread limit. A single available block uses the serial path.
+
+The Python API accepts `run_single_trial_analysis(..., n_jobs=4)`. Scripts that
+use multiple processes should call it inside `if __name__ == "__main__":`.
+Worker counts must be positive integers. No automatic core or memory sizing is
+performed. Existing output files remain protected; use a fresh output root.
+
 The package entry point is:
 
 ```python

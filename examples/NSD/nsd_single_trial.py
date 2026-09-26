@@ -1,4 +1,4 @@
-"""Fit independent NSD trial betas with canonical-HRF OLS and optional fixed ridge.
+"""Fit NSD trial betas with canonical or selected HRFs and optional fixed ridge.
 
 Run ``uv run python examples/NSD/nsd_single_trial.py --ridge-alpha 0.1``
 from the repository root. RT is used only for descriptive checks after fitting.
@@ -21,6 +21,7 @@ from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.publication import publish_artifact_set
 
 if __package__:
+    from .parallel_blocks import map_blocks, validate_n_jobs, execution_settings
     from .nsd_cifti import (
         BIDS_ROOT,
         MODEL,
@@ -41,6 +42,7 @@ if __package__:
         table_artifact,
     )
 else:
+    from parallel_blocks import map_blocks, validate_n_jobs, execution_settings
     from nsd_cifti import (
         BIDS_ROOT,
         MODEL,
@@ -120,38 +122,59 @@ def _empty_result(runs, n_features):
     )
 
 
-def _fit_blocks(runs, root, brain, models, block_size):
-    results = {name: _empty_result(runs, len(brain)) for name in models}
-    for start in range(0, len(brain), block_size):
-        stop = min(start + block_size, len(brain))
-        signals = [
-            np.asarray(r.image.dataobj[:, start:stop], dtype=float) for r in runs
-        ]
-        data = from_arrays(
-            signals,
-            [r.events for r in runs],
-            frame_times=[r.frame_times for r in runs],
-            confounds=[r.confounds for r in runs],
-            sources=[_sources(r, root, np.arange(start, stop)) for r in runs],
+def _fit_trial_block(bounds, runs, root, models):
+    start, stop = bounds
+    data = from_arrays(
+        [np.asarray(r.image.dataobj[:, start:stop], dtype=float) for r in runs],
+        [r.events for r in runs],
+        frame_times=[r.frame_times for r in runs],
+        confounds=[r.confounds for r in runs],
+        sources=[_sources(r, root, np.arange(start, stop)) for r in runs],
+    )
+    results = {}
+    for name, alpha in models.items():
+        fit = fit_single_trials(
+            data, ridge_alpha=alpha, run_labels=[r.label for r in runs]
         )
-        for name, alpha in models.items():
-            fit = fit_single_trials(
-                data, ridge_alpha=alpha, run_labels=[r.label for r in runs]
-            )
-            target = results[name]
-            for output, values in zip(target["betas"], fit.run_betas, strict=True):
-                output[:, start:stop] = values
-            target["maps"][:, start:stop] = np.stack(
-                [fit.full_r2, fit.nuisance_r2, fit.delta_r2]
-            )
-            target["provenance"].append(fit.provenance.to_dict())
+        results[name] = dict(
+            betas=[np.asarray(b, dtype=np.float32) for b in fit.run_betas],
+            maps=np.asarray(
+                [fit.full_r2, fit.nuisance_r2, fit.delta_r2], dtype=np.float32
+            ),
+            provenance=[fit.provenance.to_dict()],
+            trial_table=fit.trial_table,
+            designs=fit.design_matrices,
+            diagnostics=fit.diagnostics,
+        )
+    return results
+
+
+def _merge_block_arrays(target, block, start, stop):
+    for output, values in zip(target["betas"], block["betas"], strict=True):
+        output[:, start:stop] = values
+    target["maps"][:, start:stop] = block["maps"]
+    target["provenance"].extend(block["provenance"])
+    target["trial_table"] = block["trial_table"]
+
+
+def _fit_blocks(runs, root, brain, models, block_size, n_jobs=1):
+    results = {name: _empty_result(runs, len(brain)) for name in models}
+    blocks = (
+        (start, min(start + block_size, len(brain)))
+        for start in range(0, len(brain), block_size)
+    )
+    for (start, stop), block in map_blocks(
+        _fit_trial_block, blocks, args=(runs, root, models), n_jobs=n_jobs
+    ):
+        for name, fitted in block.items():
+            _merge_block_arrays(results[name], fitted, start, stop)
             if start == 0:
-                target.update(
-                    trial_table=fit.trial_table,
-                    designs=fit.design_matrices,
-                    diagnostics=fit.diagnostics,
+                results[name].update(
+                    designs=fitted["designs"], diagnostics=fitted["diagnostics"]
                 )
         print(f"Fitted grayordinates {start}:{stop} / {len(brain)}", flush=True)
+    for result in results.values():
+        result["execution"] = execution_settings(n_jobs, block_size, len(brain))
     return results
 
 
@@ -175,6 +198,7 @@ def _model_metadata(runs, root, alpha, result):
         "Sources": [r.inputs.bold.relative_to(root).as_posix() for r in runs],
         "RunLabels": [r.label for r in runs],
         "DesignDiagnostics": result["diagnostics"],
+        "Execution": result["execution"],
         "SoftwareVersions": {
             name: version(name)
             for name in ("boldtailor", "nilearn", "nibabel", "numpy", "pandas")
@@ -236,8 +260,10 @@ def run_single_trial_analysis(
     ridge_alpha=None,
     block_size=4096,
     hrf_library="canonical",
+    n_jobs=1,
 ):
     """Fit every run and publish one complete set without overwriting old results."""
+    n_jobs = validate_n_jobs(n_jobs)
     if hrf_library not in ("canonical", "expanded"):
         raise ValueError("hrf_library must be canonical or expanded")
     if (
@@ -277,7 +303,15 @@ def run_single_trial_analysis(
         else:
             from nsd_hrf import run_expanded_analysis
         return run_expanded_analysis(
-            runs, root, output, brain, models, block_size, subject, session
+            runs,
+            root,
+            output,
+            brain,
+            models,
+            block_size,
+            subject,
+            session,
+            n_jobs=n_jobs,
         )
     paths = {name: model_paths(runs, subject, session, name) for name in models}
     checks = diagnostic_paths(subject, session)
@@ -289,7 +323,7 @@ def run_single_trial_analysis(
         f"Loaded {len(runs)} runs, {sum(len(r.events) for r in runs)} trials; fixed settings {models}",
         flush=True,
     )
-    results = _fit_blocks(runs, root, brain, models, block_size)
+    results = _fit_blocks(runs, root, brain, models, block_size, n_jobs=n_jobs)
     artifacts = _build_artifacts(runs, root, brain, models, results, paths, checks)
     if not (output / "dataset_description.json").exists():
         artifacts.append(
@@ -321,6 +355,12 @@ def main():
     parser.add_argument("--session", default="ses-nsd10")
     parser.add_argument("--ridge-alpha", type=float)
     parser.add_argument("--block-size", type=int, default=4096)
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=1,
+        help="Number of parallel feature-block processes (default: 1)",
+    )
     parser.add_argument(
         "--hrf-library", choices=("canonical", "expanded"), default="canonical"
     )

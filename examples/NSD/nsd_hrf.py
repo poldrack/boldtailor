@@ -14,7 +14,13 @@ from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.publication import publish_artifact_set
 
 if __package__:
-    from .nsd_single_trial import _empty_result, _model_metadata, _preflight
+    from .nsd_single_trial import (
+        _empty_result,
+        _model_metadata,
+        _preflight,
+        _merge_block_arrays,
+    )
+    from .parallel_blocks import map_blocks, validate_n_jobs, execution_settings
     from .nsd_cifti import _sources, _input_paths
     from .rt_diagnostics import correlate_rt, select_vertices
     from .single_trial_artifacts import (
@@ -31,7 +37,13 @@ if __package__:
         comparison_artifacts,
     )
 else:
-    from nsd_single_trial import _empty_result, _model_metadata, _preflight
+    from nsd_single_trial import (
+        _empty_result,
+        _model_metadata,
+        _preflight,
+        _merge_block_arrays,
+    )
+    from parallel_blocks import map_blocks, validate_n_jobs, execution_settings
     from nsd_cifti import _sources, _input_paths
     from rt_diagnostics import correlate_rt, select_vertices
     from single_trial_artifacts import (
@@ -173,64 +185,112 @@ def _canonical_comparisons(data, library, labels, models, results, start, stop):
         results[name]["canonical_provenance"].append(fit.provenance.to_dict())
 
 
-def fit_expanded_blocks(runs, root, brain, models, block_size, library, train, test):
-    results = {name: _empty_result(runs, len(brain)) for name in models}
+def _empty_expanded(runs, n_features, models):
+    results = {name: _empty_result(runs, n_features) for name in models}
     for result in results.values():
         result["diagnostics"] = {}
-        result["canonical_r2"] = np.full(len(brain), np.nan, dtype=np.float32)
+        result["canonical_r2"] = np.full(n_features, np.nan, dtype=np.float32)
         result["canonical_provenance"] = []
         result["canonical_reason"] = ""
     state = dict(
-        maps={name: np.full(len(brain), np.nan) for name in SELECTION_STATS},
-        canonical_odd_rt=np.full(len(brain), np.nan),
+        maps={name: np.full(n_features, np.nan) for name in SELECTION_STATS},
+        canonical_odd_rt=np.full(n_features, np.nan),
         provenance=[],
         evaluation_provenance=[],
         eligibility=[],
     )
+    return results, state
+
+
+def _fit_expanded_block(bounds, runs, root, brain, models, library, train, test):
+    start, stop = bounds
+    width = stop - start
+    results, state = _empty_expanded(runs, width, models)
     available = len(train) >= 2 and len(test) >= 1
     labels = [r.label for r in runs]
     odd_runs = tuple(runs[i] for i in train)
-    for start in range(0, len(brain), block_size):
-        stop = min(start + block_size, len(brain))
-        indices = np.arange(start, stop)
-        signature = spatial_signature(brain, indices)
-        data = block_data(runs, root, indices)
-        selection = hrf_selection.select_hrf(
-            data, library=library, run_labels=labels, feature_signature=signature
+    indices = np.arange(start, stop)
+    signature = spatial_signature(brain, indices)
+    data = block_data(runs, root, indices)
+    selection = hrf_selection.select_hrf(
+        data, library=library, run_labels=labels, feature_signature=signature
+    )
+    evaluation = (
+        hrf_selection.evaluate_hrf_split(
+            data,
+            library=library,
+            train_runs=train,
+            test_runs=test,
+            run_labels=labels,
+            feature_signature=signature,
         )
-        evaluation = (
-            hrf_selection.evaluate_hrf_split(
-                data,
-                library=library,
-                train_runs=train,
-                test_runs=test,
-                run_labels=labels,
-                feature_signature=signature,
-            )
-            if available
-            else None
+        if available
+        else None
+    )
+    _store_selection(state, selection, evaluation, 0, width)
+    for name, alpha in models.items():
+        fit = fit_selected_hrfs(
+            data,
+            selection=selection,
+            ridge_alpha=alpha,
+            run_labels=labels,
+            feature_signature=signature,
         )
-        _store_selection(state, selection, evaluation, start, stop)
-        for name, alpha in models.items():
-            fit = fit_selected_hrfs(
-                data,
-                selection=selection,
-                ridge_alpha=alpha,
-                run_labels=labels,
-                feature_signature=signature,
-            )
-            _collect_fit(results[name], fit, start, stop)
-        _canonical_comparisons(data, library, labels, models, results, start, stop)
-        if odd_runs:
-            state["canonical_odd_rt"][start:stop] = _canonical_rt(
-                odd_runs, root, indices, library, state
-            )
+        _collect_fit(results[name], fit, 0, width)
+    _canonical_comparisons(data, library, labels, models, results, 0, width)
+    if odd_runs:
+        state["canonical_odd_rt"][:] = _canonical_rt(
+            odd_runs, root, indices, library, state
+        )
+    return results, state
+
+
+def _merge_expanded_block(results, state, block, start, stop):
+    fitted, selected = block
+    for name, values in fitted.items():
+        target = results[name]
+        _merge_block_arrays(target, values, start, stop)
+        target["canonical_r2"][start:stop] = values["canonical_r2"]
+        target["canonical_provenance"].extend(values["canonical_provenance"])
+        target["canonical_reason"] = values["canonical_reason"]
+        for key, diagnostic in values["diagnostics"].items():
+            if key not in target["diagnostics"]:
+                target["diagnostics"][key] = diagnostic.copy()
+            else:
+                target["diagnostics"][key]["n_features"] += diagnostic["n_features"]
+    for name, values in selected["maps"].items():
+        state["maps"][name][start:stop] = values
+    state["canonical_odd_rt"][start:stop] = selected["canonical_odd_rt"]
+    for key in ("provenance", "evaluation_provenance"):
+        state[key].extend(selected[key])
+    state["eligibility"].extend(
+        t.assign(feature_start=start, feature_stop=stop)
+        for t in selected["eligibility"]
+    )
+    if "canonical_rt_reason" in selected:
+        state["canonical_rt_reason"] = selected["canonical_rt_reason"]
+
+
+def fit_expanded_blocks(
+    runs, root, brain, models, block_size, library, train, test, n_jobs=1
+):
+    results, state = _empty_expanded(runs, len(brain), models)
+    blocks = (
+        (start, min(start + block_size, len(brain)))
+        for start in range(0, len(brain), block_size)
+    )
+    args = (runs, root, brain, models, library, train, test)
+    for (start, stop), block in map_blocks(
+        _fit_expanded_block, blocks, args=args, n_jobs=n_jobs
+    ):
+        _merge_expanded_block(results, state, block, start, stop)
         print(
             f"Selected HRFs and fitted grayordinates {start}:{stop} / {len(brain)}",
             flush=True,
         )
     for result in results.values():
         result["diagnostics"] = list(result["diagnostics"].values())
+        result["execution"] = execution_settings(n_jobs, block_size, len(brain))
     return results, state
 
 
@@ -301,8 +361,9 @@ def _metadata(library, runs, train, test):
 
 
 def run_expanded_analysis(
-    runs, root, output, brain, models, block_size, subject, session
+    runs, root, output, brain, models, block_size, subject, session, n_jobs=1
 ):
+    n_jobs = validate_n_jobs(n_jobs)
     paths = {
         name: model_paths(runs, subject, session, name, descriptor="hrfOpt" + name)
         for name in models
@@ -319,16 +380,17 @@ def run_expanded_analysis(
     train = [i for i, r in enumerate(runs) if r.number % 2 == 1]
     test = [i for i, r in enumerate(runs) if r.number % 2 == 0]
     print(
-        f"Expanded HRF analysis: {len(runs)} runs, {len(library.candidates)} candidates, {len(brain)} grayordinates",
+        f"Expanded HRF analysis: {len(runs)} runs, {len(library.candidates)} candidates, {len(brain)} grayordinates, {n_jobs} requested workers",
         flush=True,
     )
     results, state = fit_expanded_blocks(
-        runs, root, brain, models, block_size, library, train, test
+        runs, root, brain, models, block_size, library, train, test, n_jobs=n_jobs
     )
     vertices, rt_fits, evaluation = _independent_rt(
         runs, root, brain, models, library, state, train, test
     )
     metadata = _metadata(library, runs, train, test)
+    metadata["Execution"] = execution_settings(n_jobs, block_size, len(brain))
     if "canonical_rt_reason" in state:
         metadata.update(
             IndependentRTAvailable=False,
@@ -409,6 +471,7 @@ def _comparison_metadata(model_metadata, result, paths):
         "Sources",
         "RunLabels",
         "SoftwareVersions",
+        "Execution",
     )
     return dict(
         {key: model_metadata[key] for key in keys},
