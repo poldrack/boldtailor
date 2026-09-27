@@ -166,7 +166,7 @@ def _beta_block(job, runs, root, alpha):
 
 
 def fit_beta_series(runs, root, blocks, *, selections=None, ridge_alpha=0.0, n_jobs=1):
-    """Fit one coefficient per raw trial; RT never tunes HRFs or ridge strength."""
+    """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
     label = f"Beta series ({hrf}, alpha={ridge_alpha:g})"
     print(f"{label}: fitting {len(runs)} runs in {len(blocks)} blocks", flush=True)
