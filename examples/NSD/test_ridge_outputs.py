@@ -85,6 +85,17 @@ def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_
         arrays = np.load(next(p for p in paths if f"{base}_folds.npz" in p.name))
         np.testing.assert_allclose(arrays["sse"], selected["scores"].fold_sse)
         np.testing.assert_allclose(arrays["sst"], selected["scores"].fold_sst)
+        record = json.loads(
+            next(p for p in paths if f"{base}_provenance.json" in p.name).read_text()
+        )
+        assert (
+            record["analysis_fingerprint"]
+            == selected["provenance"].analysis_fingerprint
+        )
+        assert (
+            record["activities"][-1]["selected_alpha"]
+            == selected["selection"].ridge_alpha
+        )
     for split in ("OddToEven", "EvenToOdd"):
         base = f"desc-notebookCanonicalRidgeCV{split}"
         metadata = json.loads(

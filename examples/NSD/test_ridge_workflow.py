@@ -240,3 +240,51 @@ def test_workflow_preflight_rejects_invalid_inputs(six_run_dataset, cv_library, 
         kwargs["n_jobs"] = True
     with pytest.raises(ValueError):
         workflow().fit_cv_beta_series(runs, root, **kwargs)
+
+
+def test_final_provenance_identifies_the_tuning_decision(six_run_dataset):
+    root, prep = six_run_dataset
+    runs = load_session(root, prep)
+
+    def fit(run_set, **overrides):
+        kwargs = dict(library=None, alphas=[1.0], percentile=90, block_size=2)
+        kwargs.update(overrides)
+        return workflow().fit_cv_beta_series(run_set, root, **kwargs)
+
+    original = fit(runs)
+    repeated = fit(runs)
+    changed_predictors = [
+        replace(r, events=r.events.assign(response_time=r.events.response_time + 1))
+        for r in runs
+    ]
+    alternatives = [
+        fit(runs, percentile=80),
+        fit(runs, alphas=[0.0, 1.0]),
+        fit(changed_predictors),
+        fit(runs, max_grayordinates=2),
+    ]
+    records = []
+    for result in (original, repeated, *alternatives):
+        tuned = result["tuning"]["all"]
+        assert "provenance" in tuned, "The global decision needs identified provenance"
+        decision = tuned["provenance"]
+        assert decision.analysis_fingerprint
+        activity = decision.to_dict()["activities"][-1]
+        assert activity["percentile"] == tuned["selection"].percentile
+        assert activity["selected_alpha"] == tuned["selection"].ridge_alpha
+        assert activity["scoring_mask_fingerprint"]
+        assert activity["validation_target"] == "candidate_regularized_betas"
+        final_record = result["final"]["provenance"][0]["record"]
+        link = final_record["activities"][-1]
+        assert link["name"] == "encoding_guided_ridge_refit"
+        assert link["tuning_analysis_fingerprint"] == decision.analysis_fingerprint
+        assert link["tuning_execution_id"] == decision.execution_id
+        records.append(
+            (decision.analysis_fingerprint, final_record["analysis_fingerprint"])
+        )
+    assert records[0] == records[1], "Execution UUIDs must not change analysis identity"
+    assert all(record != records[0] for record in records[2:])
+    # Percentile-only changes still select alpha 1; their final provenance differs.
+    assert (
+        original["final"]["ridge_alpha"] == alternatives[0]["final"]["ridge_alpha"] == 1
+    )
