@@ -15,11 +15,11 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 
 | Choice | Boldtailor | Published GLMsingle workflow |
 | --- | --- | --- |
-| HRF library | Canonical SPM plus 648 double-gamma candidates; custom parameter grids supported | Default library of 20 empirically derived HRFs; custom libraries supported |
+| HRF library | NSD notebooks use canonical SPM plus 512 Sobol-sampled double-gamma candidates; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
 | HRF selection | Predict each omitted run using a shared mean stimulus amplitude learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
 | Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
-| Regularization | OLS or a caller-chosen ridge penalty, shared across features | Fractional ridge selected separately per voxel by cross-validation |
-| Cross-validation target | Nuisance-adjusted time-series prediction of the mean stimulus response | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
+| Regularization | OLS, fixed ridge, or one shared ridge penalty selected by trial-encoding prediction | Fractional ridge selected separately per voxel by cross-validation |
+| Cross-validation target | HRFs: nuisance-adjusted mean-stimulus time-series prediction. Ridge: held-out trial betas estimated with the same candidate penalty | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
 | Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
 
 GLMsingle's HRF selection itself does **not** use the repeated-condition
@@ -39,10 +39,19 @@ discuss the potential to remove trial-varying effects in the
 Boldtailor does not use image identity or repeated-condition beta agreement to
 select an HRF. It assumes that each location's mean stimulus response transfers
 across runs. Final fits then estimate individual trial amplitudes, optionally
-with fixed ridge. A changing mean response across runs, or a weak mean response,
+with fixed or CV-selected ridge. A changing mean response across runs, or a weak mean response,
 can make this HRF-selection objective less informative. Avoiding repeat-based
 tuning does not guarantee preservation of every trial-level effect: nuisance
 regression and ridge still affect the estimates.
+
+For ridge selection, Boldtailor fits a trial-level encoding model on training
+runs and predicts omitted-run betas. The NSD model uses trial type and RT, with
+an intercept for the shared task response. It selects one penalty using the
+90th percentile of pooled held-out R² across grayordinates. Each candidate is
+scored against betas estimated with that same penalty, so this measures
+predictability of regularized responses. It does not establish which penalty
+recovers the most accurate unobserved trial amplitudes. Image repeats are not
+needed, but the encoding relationship is assumed to transfer across runs.
 
 The repeated-condition requirement belongs to GLMsingle's automatic tuning
 steps. HRF selection and fixed-setting fits can be used without that tuning;
@@ -52,8 +61,11 @@ it would be misleading to say GLMsingle cannot be used without repeats.
 
 Boldtailor's NSD example writes CIFTI beta series, trial tables, full and
 confound-only R², optimized-minus-canonical R², HRF parameter/peak-time maps,
-and separate odd/even selections. RT correlations provide a descriptive check;
-RT does not tune the HRF or ridge penalty. Its general API also fits condition
+and separate odd/even selections. Fixed-penalty workflows use RT only for a
+descriptive check. In the notebook's CV mode, RT and trial type tune ridge;
+separate odd-to-even and even-to-odd evaluations assess encoding prediction
+after tuning on the training half. HRF selection remains based on the mean
+stimulus response. Its general API also fits condition
 contrasts with OLS or AR(1), can apply selected voxelwise HRFs to those
 conventional GLMs, and accepts externally prepared designs.
 

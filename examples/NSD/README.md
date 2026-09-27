@@ -39,13 +39,14 @@ running `uv sync --group dev`, and select the checkout's `.venv` Python kernel.
 Edit the first cell's paths and execution settings, then run all cells. The
 default uses all grayordinates and four workers. Set `max_grayordinates=128`
 for a quick run through every stage using all runs and a small spatial subset.
-The reliability stages require at least two odd and two even runs. This
+The HRF reliability stages require at least two odd and two even runs;
+optimized-HRF ridge CV needs at least three in each half. This
 notebook requires matching nuisance column names and order after trimming;
 it rejects mismatches before fitting.
 
 The notebook walks through input inspection, two conventional GLMs, optimized
 HRF selection, odd/even reliability, canonical and optimized single-trial
-models, optional fixed ridge, RT checks, and export. The conventional GLMs
+models, encoding-guided ridge CV, RT checks, and export. The conventional GLMs
 fit three predictors jointly, without orthogonalization:
 
 - `task`: unit amplitude for every presentation.
@@ -104,6 +105,55 @@ Beta-series fitting prints one start and one completion message per model,
 including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
+
+### Ridge selection and held-out encoding
+
+The notebook defaults to `ridge_mode="cv"`. For each candidate penalty, it
+estimates training and validation beta series at that same penalty and predicts
+validation betas using an OLS model with an intercept (`task`), binary trial
+type, and RT. No repeated images are needed. HRFs are selected on the training
+runs within each fold, using the existing mean-stimulus objective.
+
+The selection score is the 90th percentile across grayordinates of pooled
+held-out encoding R². All candidates use the same predictor-complete trials
+and common valid grayordinate mask. Scores retain negative values. Parallel
+blocks are combined before selecting one penalty for the whole scope.
+
+Odd-run tuning evaluates on even runs, then the roles reverse. A separate
+all-run tune supplies the final beta images. Canonical and optimized HRF
+models tune independently. These scores evaluate each pipeline's regularized
+targets, which can differ between penalties; they are not BOLD time-series R²
+or accuracy against a common unregularized reference.
+
+Set `ridge_alphas` to change the candidate grid (default
+`[0, .001, .01, .1, 1, 10, 100]`) or `ridge_percentile` to change the spatial
+summary (default 90). A zero penalty may win. Use `ridge_mode="fixed"` with
+`ridge_alpha` to reproduce a fixed fit, or `ridge_mode="off"` for OLS only.
+An older injected `NSD_CONFIG` containing only `ridge_alpha` still selects
+fixed mode; `ridge_alpha=None` disables it.
+
+Final CV beta files use `desc-notebookCanonicalTrialRidgeCV` and
+`desc-notebookOptimizedTrialRidgeCV`. Diagnostic descriptors contain
+`CanonicalRidgeCV` or `OptimizedRidgeCV` followed by `Odd`, `Even`, `All`,
+`OddToEven`, or `EvenToOdd`:
+
+| File suffix | Contents |
+| --- | --- |
+| `_scores.tsv` | Candidate penalties, percentile scores, and selected penalty |
+| `_stat-encodingcvr2.dscalar.nii` | One inner-CV encoding R² map per penalty |
+| `_stat-scoringmask.dscalar.nii` | Common mask used by every candidate |
+| `_stat-foldhrfindex.dscalar.nii`, `_folds.npz` | Inner training HRFs and validation SSE/SST arrays |
+| `_stat-encodingpredictionr2.dscalar.nii` | Outer-test encoding R² |
+| `_stat-coefficients.dscalar.nii` | Training encoding intercept, trial-type, and RT coefficients |
+| `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order outer-test predictions and regularized betas |
+| `_metadata.json`, `_provenance.json` | Run splits, predictor centering, penalties, HRF/source records, and definitions |
+
+`desc-notebookRidgeCV_predictors.tsv` preserves the trial IDs and exact
+encoding predictors, including excluded rows. `desc-notebookRidgeCV_tuning.png`
+shows all candidate scores. The complete HRF library is saved with the other
+notebook outputs. RT now helps choose the penalty, so final all-run RT
+correlations are descriptive; use the outer evaluations for held-out evidence.
+The conventional GLMs and the across-session HRF reliability notebook are unchanged.
 
 ## HRF reliability across sessions
 
@@ -343,8 +393,9 @@ RT correlations use finite betas and positive, finite RTs, centered within each
 run. Plot vertices are selected using canonical-OLS odd-run correlations;
 scatterplots show even-run trials at those locations. Expanded plots use
 odd-selected HRFs. Production all-run RT maps are descriptive and may differ
-from these independent checks. No p-values are reported and RT does not tune
-HRFs or ridge penalties.
+from these independent checks. No p-values are reported. These script-based
+checks do not tune HRFs or ridge penalties; the notebook's encoding CV option
+uses RT and trial type to tune ridge, with separate outer-test evaluation.
 
 Measured results, numerical audits, and timings for the development session
 are in [NSD validation](../../docs/validation/nsd-session.md). Development and

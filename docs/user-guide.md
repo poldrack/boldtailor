@@ -241,15 +241,70 @@ Each beta array is **trials × features**. The trial table retains your event
 metadata and adds run labels, within-run event indices, session-wide trial
 indices, and unique trial IDs. Missing RT does not remove a trial from the fit.
 
-Ridge is optional and uses a fixed, nonnegative penalty. Trial regressors are
+These fitting functions accept a nonnegative penalty. Trial regressors are
 adjusted for nuisances and scaled to unit length before regularization; returned
 betas are restored to the original signal scale. Nuisance coefficients are
 unpenalized. The value is an ordinary ridge penalty, not a fractional-ridge
-fraction. There is no automatic choice of penalty or AR(1) single-trial fitting.
+fraction. Use the cross-validation workflow below to choose the penalty;
+single-trial fitting itself does not use AR(1).
 
 Supply your intended high-pass and other nuisance columns in `data.confounds`.
 Do not include a `constant` column: the single-trial API adds it. Designs with
 unidentifiable trial coefficients or no residual degrees of freedom are rejected.
+
+## Choosing ridge by trial-level prediction
+
+When trial variables should explain response variation, choose a penalty by
+how well those variables predict beta estimates in new runs. For NSD the
+encoding model is `beta ~ trial_type + response_time`, with a shared intercept.
+The intercept is the mean task response; do not supply another all-ones column.
+The encoding model uses OLS. Ridge applies to beta estimation.
+
+```python
+from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
+from boldtailor.single_trial import fit_single_trials
+
+# Supply only training runs here if reserving separate outer test runs.
+# Numeric tables have one row per original event, in exactly the same order.
+predictors = [e[["trial_type", "response_time"]] for e in data.events]
+scores = score_ridge_candidates(
+    data, predictors, alphas=[0., .001, .01, .1, 1., 10., 100.]
+)
+choice = select_ridge_penalty(scores.cv_r2, scores.alphas, percentile=90)
+betas = fit_single_trials(data, ridge_alpha=choice.ridge_alpha)
+```
+
+The default HRF is canonical SPM. Pass `library=library` to select per-feature
+HRFs afresh within each inner-training set. For final optimized betas, select
+HRFs on the complete training set and pass that assignment and
+`choice.ridge_alpha` to `fit_selected_hrfs`. The scorer needs two runs for
+canonical HRFs or three for optimized HRFs.
+
+For each penalty, both training and validation beta series use that penalty.
+Predictor centering and encoding coefficients are learned only on training
+runs. The score is `1 - sum(SSE) / sum(within-run SST)` over validation trials
+and runs; negative values are retained. The 90th percentile is taken across a
+common finite grayordinate mask. One penalty applies to the whole mask. With
+parallel blocks, combine candidate score maps before choosing the penalty;
+averaging block percentiles gives a different objective.
+
+Nonfinite predictor rows are omitted from encoding, while their stimuli stay
+in beta estimation. The NSD adapter also excludes nonpositive RT from encoding.
+Training predictors must have full rank; incomplete features and constant
+targets have undefined scores. Ties within `1e-12` favor the smallest penalty.
+Zero is a valid winner. The candidate grid and percentile are configurable.
+
+These are selection scores for predictability of the **regularized** responses.
+Different penalties produce different targets. This criterion can favor removing
+variation unrelated to the supplied predictors, including real trial variation.
+Evaluate the chosen pipeline on separate outer runs before interpreting its
+predictive performance. RT used for tuning is no longer an independent check
+on the same training data.
+
+The [NSD notebook](../examples/NSD/nsd_workflow.ipynb) performs odd-to-even and
+even-to-odd outer evaluations, then tunes again on all runs for the final beta
+images. Canonical and optimized HRFs receive separate penalties. Conventional
+GLMs remain OLS, and the HRF reliability analysis is unchanged.
 
 ## Selecting an HRF for each location
 
@@ -348,8 +403,11 @@ correlations and valid-trial counts.
 Scatterplots use cortical vertices selected by canonical-OLS odd-run RT
 correlations, then show even-run trials. With optimized HRFs, those plots use
 HRFs selected only from odd runs. The production RT maps use all-run HRFs and
-are descriptive. These checks provide neither significance tests nor a way to
-tune the model. The helper functions are listed in the [API reference](api.md#example-workflows).
+are descriptive. The correlation helper itself provides no significance tests
+or tuning. The notebook's separate encoding CV workflow uses RT and trial type
+to tune ridge, so correlations from its final all-run fits are not independent
+checks. Use its outer-test prediction scores for held-out evaluation. The helper
+functions are listed in the [API reference](api.md#example-workflows).
 
 ## Saving results and analysis records
 

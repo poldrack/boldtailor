@@ -17,6 +17,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Fit a design matrix prepared by another tool | [Prepared designs](docs/user-guide.md#using-your-own-design-matrix) |
 | Compare full-model and confound-only R² | [Variance explained](docs/user-guide.md#measuring-task-related-variance) |
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
+| Choose a ridge penalty using held-out prediction from trial variables | [Encoding-guided ridge](docs/user-guide.md#choosing-ridge-by-trial-level-prediction) |
 | Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
 | Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.ipynb) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
@@ -85,9 +86,10 @@ betas = trials.run_betas[0]  # trials × features for the first run
 trial_metadata = trials.trial_table
 ```
 
-The ridge penalty is fixed by you; `ridge_alpha=0` gives OLS. Repeated images
-remain separate trials. Reaction time can be used afterward to check the
-estimated responses, without selecting the HRF or ridge penalty from RT.
+This call uses a fixed penalty; `ridge_alpha=0` gives OLS. Repeated images
+remain separate trials. To choose the penalty from data, use
+[encoding-guided ridge CV](docs/user-guide.md#choosing-ridge-by-trial-level-prediction),
+which predicts beta series from trial variables such as trial type and RT.
 
 ## Working with images
 
@@ -98,7 +100,8 @@ It includes commands for using your own data paths and running several workers.
 The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
 SPM HRF and then with an optimized HRF per grayordinate. It also demonstrates
-HRF reliability, single-trial beta series, RT checks, and CIFTI export.
+HRF reliability, single-trial beta series, nested ridge selection, held-out
+trial encoding, RT checks, and CIFTI export.
 
 The [whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) combines
 multiple sessions in a common brain mask, fits contrasts, displays maps, and
@@ -112,13 +115,16 @@ signals with your usual imaging tools and use the array API, or adapt an example
 
 Both packages estimate single-trial responses with an HRF selected at each
 brain location. Boldtailor also supports conventional contrasts and custom
-design matrices. Its single-trial workflow uses supplied confounds, optional
-fixed ridge, and HRF selection by mean-stimulus prediction across runs.
+design matrices. Its single-trial workflow uses supplied confounds, fixed or
+encoding-guided ridge penalties, and HRF selection by mean-stimulus prediction
+across runs.
 
 The published GLMsingle workflow selects HRFs by in-sample fit, then uses
 repeated conditions to tune data-derived denoising and fractional ridge.
 Boldtailor's HRF selection needs no repeated images, but assumes that a mean
-stimulus response transfers between runs. See the
+stimulus response transfers between runs. Its ridge CV predicts regularized
+beta series from trial variables such as trial type and RT, assuming that
+those relationships transfer across runs. See the
 [GLMsingle comparison](docs/glmsingle-comparison.md) for the methods, assumptions,
 and differences from the locally developed GLMsingle API.
 
@@ -132,6 +138,6 @@ and differences from the locally developed GLMsingle API.
 - [Developer guide](docs/development.md): testing, architecture, provenance, and file-writing conventions.
 
 Boldtailor is under active development. It currently supports t contrasts,
-OLS/AR(1) conventional GLMs, and OLS/fixed-ridge single-trial fits. Automatic
-GLMdenoise or ridge tuning and a general BIDS analysis command are not yet
-available. HRF selection does not require repeated stimuli.
+OLS/AR(1) conventional GLMs, and OLS, fixed-ridge, or encoding-tuned single-trial
+fits. Automatic GLMdenoise and a general BIDS analysis command are not yet
+available. HRF and encoding-guided ridge selection do not require repeated stimuli.

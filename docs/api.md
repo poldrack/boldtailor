@@ -146,6 +146,51 @@ instead has `group_designs`, keyed by `(run_index, hrf_id)`, as well as
 `hrf_indices` and `selection_provenance`. These grouped matrices include the
 trial columns followed by the nuisance columns.
 
+## Encoding-guided ridge selection
+
+From `boldtailor.ridge_selection`:
+
+```text
+score_ridge_candidates(data, predictors, *, alphas, library=None,
+                      run_labels=None, feature_signature=None)
+select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=None)
+```
+
+`predictors` contains one numeric DataFrame per run, aligned positionally with
+event rows, with matching named columns. Do not include `task`: an intercept is
+added. Nonfinite predictor rows are excluded from encoding only. The scorer
+requires at least two runs (`library=None`, canonical SPM), or three with an
+`HrfLibrary`. Supplied libraries trigger fresh HRF selection within each
+inner-training set. Supply only outer-training runs when nesting the call.
+
+`RidgeCandidateScores` contains sorted `alphas`, `cv_r2` (alpha × feature),
+`fold_sse` and `fold_sst` (validation run × alpha × feature),
+`fold_hrf_indices` (validation run × feature), `trial_masks`, `run_labels`,
+and `provenance`. Validation targets use the candidate's own regularization.
+Scores pool SSE and within-run SST; they are penalty-selection statistics.
+
+`select_ridge_penalty` selects once across all supplied features. Its optional
+`feature_mask` is a matching boolean vector. Features must have finite scores
+at every alpha; an empty common mask raises `ValueError`. Percentiles use linear
+interpolation. Ties within `1e-12` choose the smaller alpha, including zero.
+`RidgeSelection` exposes `ridge_alpha`, sorted `alphas`, `objective_scores`,
+`percentile`, and `scoring_mask`. Merge spatial blocks before this call.
+
+From `boldtailor.trial_encoding`:
+
+```text
+evaluate_trial_encoding(beta_runs, predictors, *, train_runs, test_runs)
+```
+
+This fits pooled training-run OLS coefficients and predicts disjoint test runs.
+Split indices are zero-based. Centering comes from training predictors only;
+validation beta means are not refitted. `TrialEncodingResult` contains
+`coefficients` (intercept first), `predictor_means`, `predictor_names`,
+`train_runs`, `test_runs`, `trial_masks`, `predictions` (test runs in requested
+order, original trial rows), `run_sse`, `run_sst`, and pooled `r2`.
+Excluded trial predictions and undefined feature scores are NaN. Numerical
+result arrays are owned and read-only.
+
 ## HRF libraries, selection, and evaluation
 
 From `boldtailor.hrf_library`:
@@ -260,6 +305,7 @@ Run them from the repository checkout:
 | `examples.NSD.rt_diagnostics.correlate_rt` | Within-run-centered beta/RT correlations and counts, pooled by run partition |
 | `examples.NSD.rt_diagnostics.select_vertices` | Select cortical vertices by absolute odd-run correlation |
 | `examples.NSD.rt_diagnostics.scatter_artifact` | Create even-run RT scatterplots for the selected vertices |
+| `examples.NSD.ridge_workflow.fit_cv_beta_series` | Globally tune a beta-series penalty, evaluate both odd/even outer splits, and fit final all-run betas |
 | `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
 | `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 

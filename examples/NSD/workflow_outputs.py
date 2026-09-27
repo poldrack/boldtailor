@@ -169,7 +169,7 @@ def _beta_artifacts(stem, brain, betas, runs):
     return artifacts
 
 
-def _metadata(runs, library, settings):
+def _metadata(runs, library, settings, ridge_cv=None):
     return dict(
         regressors=list(REGRESSORS),
         noise_model="ols",
@@ -187,7 +187,24 @@ def _metadata(runs, library, settings):
         inference="Contrasts use equal-run fixed effects; conditional on selected HRFs, without selection uncertainty correction",
         hrf_selection="Sum leave-one-run-out mean-stimulus prediction errors, then choose one HRF per grayordinate",
         split_prediction="Train HRF and mean amplitude on one half; freeze both for the other half; nuisance projection is conditional on each run",
-        rt_check="Descriptive within-run-centered correlation, never used to select HRFs or ridge strength; all-run optimized HRFs use both halves",
+        rt_check=(
+            "RT/type tune CV ridge strength; final all-run RT correlations are descriptive. Outer test runs are excluded from HRF and penalty selection."
+            if ridge_cv
+            else "Descriptive within-run-centered correlation, never used to select HRFs or fixed ridge strength; all-run optimized HRFs use both halves"
+        ),
+        ridge_cv=(
+            dict(
+                validation_target="candidate_regularized_betas",
+                percentile=settings.get("ridge_percentile", 90.0),
+                encoding_predictors=["task", "trial_type", "response_time"],
+                task="Shared trial-encoding intercept, not an additional all-ones column",
+                objective="Percentile across a common grayordinate mask of pooled within-run encoding R2",
+                outer_splits="odd_to_even_and_even_to_odd",
+                final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",
+            )
+            if ridge_cv
+            else None
+        ),
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",
@@ -216,6 +233,7 @@ def save_workflow(
     *,
     settings,
     figures=None,
+    ridge_cv=None,
     subject="sub-07",
     session="ses-nsd10",
 ):
@@ -225,10 +243,15 @@ def save_workflow(
     artifacts = _glm_artifacts(stem, brain, glms, runs)
     artifacts.extend(_hrf_artifacts(stem, brain, selections, library))
     artifacts.extend(_beta_artifacts(stem, brain, betas, runs))
+    if ridge_cv:
+        from .ridge_outputs import ridge_artifacts
+
+        artifacts.extend(ridge_artifacts(stem, brain, runs, ridge_cv, library))
     artifacts.extend(_input_artifacts(stem, runs))
     artifacts.append(
         json_artifact(
-            f"{stem}_desc-notebook_metadata.json", _metadata(runs, library, settings)
+            f"{stem}_desc-notebook_metadata.json",
+            _metadata(runs, library, settings, ridge_cv),
         )
     )
     for name, figure in (figures or {}).items():
