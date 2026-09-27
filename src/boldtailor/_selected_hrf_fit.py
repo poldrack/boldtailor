@@ -11,6 +11,11 @@ from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
 from boldtailor._single_trial_design import _validate_events
 from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
+from boldtailor._fractional_ridge import (
+    regularization,
+    fit_fraction_run,
+    fraction_metadata,
+)
 from boldtailor.hrf_results import HrfSingleTrialResult
 from boldtailor.hrf_selection import run_labels_for
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
@@ -37,17 +42,26 @@ def _tables(data, labels):
     return trials
 
 
-def _fit_run(run, y, ids, alpha, run_index):
+def _fit_run(run, y, ids, alpha, run_index, fractions=None):
     betas = np.full((len(run.events), y.shape[1]), np.nan)
     full = np.zeros(y.shape[1])
     null = full.copy()
     total = full.copy()
     designs = {}
     diagnostics = []
+    alphas = np.full(y.shape[1], np.nan)
     for cid in np.unique(ids[ids >= 0]):
         features = np.flatnonzero(ids == cid)
         x = run.trial_matrix(int(cid))
-        fit = fit_trial_run(x, run.nuisance, y[:, features], alpha=alpha)
+        fit = (
+            fit_trial_run(x, run.nuisance, y[:, features], alpha=alpha)
+            if fractions is None
+            else fit_fraction_run(
+                x, run.nuisance, y[:, features], fractions=fractions[features]
+            )
+        )
+        if fractions is not None:
+            alphas[features] = fit.diagnostics["ridge_alphas"]
         betas[:, features] = fit.betas
         full[features] = fit.full_sse
         null[features] = fit.nuisance_sse
@@ -61,10 +75,10 @@ def _fit_run(run, y, ids, alpha, run_index):
                 **fit.diagnostics,
             )
         )
-    return betas, full, null, total, designs, diagnostics
+    return betas, full, null, total, designs, diagnostics, alphas
 
 
-def _provenance(data, selection, labels, alpha, assignment, designs):
+def _provenance(data, selection, labels, alpha, assignment, designs, fractions=None):
     digest = sha256()
     for key, values in sorted(designs.items()):
         digest.update(json.dumps(key).encode())
@@ -90,6 +104,8 @@ def _provenance(data, selection, labels, alpha, assignment, designs):
         oversampling=50,
         selection=selection.provenance.to_dict()["activities"][-1],
     )
+    if fractions is not None:
+        activity.update(fraction_metadata(fractions))
     return extend_provenance(
         data.provenance,
         execution_id=str(uuid4()),
@@ -102,21 +118,25 @@ def _provenance(data, selection, labels, alpha, assignment, designs):
     )
 
 
-def fit_groups(data, selection, ridge_alpha, run_labels, feature_signature):
-    alpha = validate_alpha(ridge_alpha)
+def fit_groups(
+    data, selection, ridge_alpha, run_labels, feature_signature, *, ridge_fraction=None
+):
+    alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
     assignment = validate_selection(data, selection, feature_signature)
     labels = run_labels_for(data, run_labels)
     trials = _tables(data, labels)
     runs = prepare_runs(data, selection.library)
     fits = [
-        _fit_run(run, y, selection.hrf_indices, alpha, r)
+        _fit_run(run, y, selection.hrf_indices, alpha, r, fractions)
         for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
     ]
     designs = {k: v for f in fits for k, v in f[4].items()}
     total = sum(f[3] for f in fits)
     full = r_squared(sum(f[1] for f in fits), total)
     null = r_squared(sum(f[2] for f in fits), total)
-    provenance = _provenance(data, selection, labels, alpha, assignment, designs)
+    provenance = _provenance(
+        data, selection, labels, alpha, assignment, designs, fractions
+    )
     return HrfSingleTrialResult(
         tuple(f[0] for f in fits),
         trials,
@@ -131,4 +151,6 @@ def fit_groups(data, selection, ridge_alpha, run_labels, feature_signature):
         alpha,
         selection.provenance,
         provenance,
+        fractions,
+        None if fractions is None else tuple(f[6] for f in fits),
     )

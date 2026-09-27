@@ -75,11 +75,16 @@ class HrfSingleTrialResult:
     nuisance_r2: np.ndarray
     delta_r2: np.ndarray
     _diagnostics: tuple[dict, ...]
-    ridge_alpha: float
+    ridge_alpha: float | None
     selection_provenance: ProvenanceRecord
     provenance: ProvenanceRecord
+    ridge_fraction: np.ndarray | None = None
+    run_ridge_alphas: tuple[np.ndarray, ...] | None = None
 
     def __post_init__(self):
+        from boldtailor._fractional_ridge import freeze_fraction_result
+
+        freeze_fraction_result(self)
         for name in ("run_betas", "run_full_r2", "run_nuisance_r2"):
             object.__setattr__(
                 self, name, tuple(immutable_float_array(a) for a in getattr(self, name))

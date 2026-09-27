@@ -13,6 +13,11 @@ import pandas as pd
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._hrf_design import hrf_metadata
 from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
+from boldtailor._fractional_ridge import (
+    regularization,
+    fit_fraction_run,
+    fraction_metadata,
+)
 from boldtailor.data import AnalysisData
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
@@ -25,6 +30,7 @@ def fit_single_trials(
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
     hrf="spm",
+    ridge_fraction=None,
 ) -> SingleTrialResult:
     """Estimate one native-unit beta per event row, independently in each run.
 
@@ -32,7 +38,7 @@ def fit_single_trials(
     trial coefficients after nuisance projection and column normalization. RT and
     condition labels are retained as metadata and never enter the design.
     """
-    alpha = validate_alpha(ridge_alpha)
+    alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
     labels = (
         tuple(run_labels)
         if run_labels is not None
@@ -60,7 +66,11 @@ def fit_single_trials(
                 )
             )
             fits = tuple(
-                fit_trial_run(x, n, y, alpha=alpha)
+                (
+                    fit_trial_run(x, n, y, alpha=alpha)
+                    if fractions is None
+                    else fit_fraction_run(x, n, y, fractions=fractions)
+                )
                 for (x, n, _), y in zip(compiled, data.signals, strict=True)
             )
         except Exception:
@@ -70,6 +80,8 @@ def fit_single_trials(
             history, emit_event("single_trial_completed", stage="fit")
         )
     activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf)
+    if fractions is not None:
+        activity.update(fraction_metadata(fractions))
     provenance = extend_provenance(
         data.provenance,
         execution_id=execution_id,
@@ -80,7 +92,7 @@ def fit_single_trials(
             data.provenance.metadata_fingerprint, activity
         ),
     )
-    return _assemble_result(compiled, fits, alpha, provenance)
+    return _assemble_result(compiled, fits, alpha, provenance, fractions)
 
 
 def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
@@ -107,7 +119,7 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
     )
 
 
-def _assemble_result(compiled, fits, alpha, provenance):
+def _assemble_result(compiled, fits, alpha, provenance, fractions=None):
     tables, designs = [], []
     for run, (x, n, table) in enumerate(compiled):
         table = table.assign(run_index=run)
@@ -130,11 +142,23 @@ def _assemble_result(compiled, fits, alpha, provenance):
         tuple(f.diagnostics for f in fits),
         alpha,
         provenance,
+        fractions,
+        (
+            None
+            if fractions is None
+            else tuple(f.diagnostics["ridge_alphas"] for f in fits)
+        ),
     )
 
 
 def fit_selected_hrfs(
-    data, *, selection, ridge_alpha=0.0, run_labels=None, feature_signature=None
+    data,
+    *,
+    selection,
+    ridge_alpha=0.0,
+    run_labels=None,
+    feature_signature=None,
+    ridge_fraction=None,
 ):
     """Fit unrestricted trial betas using each feature's previously selected HRF.
 
@@ -144,4 +168,11 @@ def fit_selected_hrfs(
     """
     from boldtailor._selected_hrf_fit import fit_groups
 
-    return fit_groups(data, selection, ridge_alpha, run_labels, feature_signature)
+    return fit_groups(
+        data,
+        selection,
+        ridge_alpha,
+        run_labels,
+        feature_signature,
+        ridge_fraction=ridge_fraction,
+    )

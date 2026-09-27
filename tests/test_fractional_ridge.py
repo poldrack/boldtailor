@@ -38,18 +38,27 @@ def oracle(x, n, y, fraction):
     matrix = np.column_stack([x / scale, n])
 
     def coefficients(alpha):
-        penalty = np.column_stack([np.sqrt(alpha) * np.eye(x.shape[1]),
-                                   np.zeros((x.shape[1], n.shape[1]))])
-        return np.linalg.lstsq(np.vstack([matrix, penalty]),
-                              np.r_[y, np.zeros(x.shape[1])], rcond=None)[0]
+        penalty = np.column_stack(
+            [np.sqrt(alpha) * np.eye(x.shape[1]), np.zeros((x.shape[1], n.shape[1]))]
+        )
+        return np.linalg.lstsq(
+            np.vstack([matrix, penalty]), np.r_[y, np.zeros(x.shape[1])], rcond=None
+        )[0]
 
-    baseline = np.linalg.norm(coefficients(0)[:x.shape[1]])
-    alpha = 0 if fraction == 1 else brentq(
-        lambda a: np.linalg.norm(coefficients(a)[:x.shape[1]]) / baseline - fraction,
-        0, 1e7, xtol=1e-13,
+    baseline = np.linalg.norm(coefficients(0)[: x.shape[1]])
+    alpha = (
+        0
+        if fraction == 1
+        else brentq(
+            lambda a: np.linalg.norm(coefficients(a)[: x.shape[1]]) / baseline
+            - fraction,
+            0,
+            1e7,
+            xtol=1e-13,
+        )
     )
     coef = coefficients(alpha)
-    return coef[:x.shape[1]] / scale, coef[x.shape[1]:], alpha
+    return coef[: x.shape[1]] / scale, coef[x.shape[1] :], alpha
 
 
 def test_fraction_path_matches_requested_norm_and_oracle(regression):
@@ -64,68 +73,103 @@ def test_fraction_path_matches_requested_norm_and_oracle(regression):
     assert abs(outputs[1][2][0] - outputs[1][2][1]) > 0.01
 
 
-def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(regression):
+def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(
+    regression,
+):
     x, n, y = regression
     solver = fractional()
     base = solver.fit_fraction_run(x, n, y, fractions=[0.3, 1])
     altered = solver.fit_fraction_run(x, n, y * [5, -2] + 321, fractions=[0.3, 1])
     np.testing.assert_allclose(altered.betas, base.betas * [5, -2], atol=1e-9)
-    np.testing.assert_allclose(altered.diagnostics['ridge_alphas'], base.diagnostics['ridge_alphas'], atol=1e-10)
+    np.testing.assert_allclose(
+        altered.diagnostics["ridge_alphas"],
+        base.diagnostics["ridge_alphas"],
+        atol=1e-10,
+    )
     for v, fraction in enumerate([0.3, 1]):
         beta, nuisance, _ = oracle(x, n, y[:, v], fraction)
         np.testing.assert_allclose(base.betas[:, v], beta, atol=1e-9)
-        np.testing.assert_allclose(n @ base.nuisance_betas[:, v], n @ nuisance, atol=1e-9)
-        np.testing.assert_allclose(base.full_sse[v], np.sum((y[:, v]-x@beta-n@nuisance)**2), atol=1e-8)
+        np.testing.assert_allclose(
+            n @ base.nuisance_betas[:, v], n @ nuisance, atol=1e-9
+        )
+        np.testing.assert_allclose(
+            base.full_sse[v],
+            np.sum((y[:, v] - x @ beta - n @ nuisance) ** 2),
+            atol=1e-8,
+        )
 
 
 def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regression):
     x, n, y = regression
-    y = np.column_stack([y, np.ones(len(y))*100, n[:, 1]])
+    y = np.column_stack([y, np.ones(len(y)) * 100, n[:, 1]])
     fit = fractional().fit_fraction_run(x, n, y, fractions=[0.5, np.nan, 0.5, 0.5])
     assert np.isfinite(fit.betas[:, 0]).all()
     assert np.isnan(fit.betas[:, 1:]).all()
-    assert np.isnan(fit.diagnostics['ridge_alphas'][1:]).all()
+    assert np.isnan(fit.diagnostics["ridge_alphas"][1:]).all()
     t = np.arange(60)
     first = np.sin(t)
-    second = first + 1e-8*np.cos(t)
+    second = first + 1e-8 * np.cos(t)
     design = np.column_stack([first, second])
-    signal = (first-second)[:, None]
+    signal = (first - second)[:, None]
     nuisance = np.ones((60, 1))
-    _, ols, _ = next(fractional().fraction_beta_path(design, nuisance, signal, fractions=[1]))
-    _, shrunk, _ = next(fractional().fraction_beta_path(design, nuisance, signal, fractions=[0.4]))
-    scale = np.linalg.norm(design-design.mean(0), axis=0)
-    assert np.linalg.norm(shrunk[:, 0]*scale)/np.linalg.norm(ols[:, 0]*scale) == pytest.approx(.4, rel=1e-7)
+    _, ols, _ = next(
+        fractional().fraction_beta_path(design, nuisance, signal, fractions=[1])
+    )
+    _, shrunk, _ = next(
+        fractional().fraction_beta_path(design, nuisance, signal, fractions=[0.4])
+    )
+    scale = np.linalg.norm(design - design.mean(0), axis=0)
+    assert np.linalg.norm(shrunk[:, 0] * scale) / np.linalg.norm(
+        ols[:, 0] * scale
+    ) == pytest.approx(0.4, rel=1e-7)
 
 
-@pytest.mark.parametrize('fractions', [[0], [-.1], [1.1], [np.inf], [True], [], [.5,.5]])
+@pytest.mark.parametrize(
+    "fractions", [[0], [-0.1], [1.1], [np.inf], [True], [], [0.5, 0.5]]
+)
 def test_invalid_fraction_grids_fail(regression, fractions):
     x, n, y = regression
     with pytest.raises(ValueError):
         list(fractional().fraction_beta_path(x, n, y, fractions=fractions))
 
 
-@pytest.mark.parametrize('selected', [False, True])
-def test_public_fraction_fits_keep_trial_units_and_hrf_groups(selected_fixture, selected):
+@pytest.mark.parametrize("selected", [False, True])
+def test_public_fraction_fits_keep_trial_units_and_hrf_groups(
+    selected_fixture, selected
+):
     data, selection = selected_fixture
     fit = fit_selected_hrfs if selected else fit_single_trials
-    kwargs = dict(selection=selection, feature_signature='ordered-axis') if selected else {}
-    fractions = np.array([1, .7, .4, .2, np.nan])
+    kwargs = (
+        dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+    )
+    fractions = np.array([1, 0.7, 0.4, 0.2, np.nan])
     result = fit(data, ridge_fraction=fractions, **kwargs)
     assert result.ridge_alpha is None
     np.testing.assert_allclose(result.ridge_fraction, fractions, equal_nan=True)
     assert not result.ridge_fraction.flags.writeable
     assert all(not a.flags.writeable for a in result.run_ridge_alphas)
-    for r, (y, events, times, confounds) in enumerate(zip(data.signals, data.events, data.frame_times, data.confounds)):
+    for r, (y, events, times, confounds) in enumerate(
+        zip(data.signals, data.events, data.frame_times, data.confounds)
+    ):
         for v in range(4):
-            hrf = selection.library.candidates[selection.hrf_indices[v]] if selected else 'spm'
-            x, n, _ = compile_trial_run(events, times, confounds, f'run-{r+1:02}', hrf=hrf)
+            hrf = (
+                selection.library.candidates[selection.hrf_indices[v]]
+                if selected
+                else "spm"
+            )
+            x, n, _ = compile_trial_run(
+                events, times, confounds, f"run-{r+1:02}", hrf=hrf
+            )
             beta, _, alpha = oracle(np.asarray(x), np.asarray(n), y[:, v], fractions[v])
             np.testing.assert_allclose(result.run_betas[r][:, v], beta, atol=1e-8)
             np.testing.assert_allclose(result.run_ridge_alphas[r][v], alpha, atol=1e-9)
         assert np.isnan(result.run_betas[r][:, -1]).all()
-    assert result.provenance.to_dict()['activities'][-1]['regularization'] == 'fractional_ridge'
+    assert (
+        result.provenance.to_dict()["activities"][-1]["regularization"]
+        == "fractional_ridge"
+    )
     with pytest.raises(ValueError):
-        fit(data, ridge_alpha=.1, ridge_fraction=.5, **kwargs)
+        fit(data, ridge_alpha=0.1, ridge_fraction=0.5, **kwargs)
 
 
 def test_fraction_one_matches_existing_ols(selected_fixture):
