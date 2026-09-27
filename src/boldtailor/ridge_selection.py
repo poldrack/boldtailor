@@ -47,3 +47,21 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     )
     winner = np.flatnonzero(objectives >= objectives.max() - 1e-12)[0]
     return RidgeSelection(alphas[winner], alphas, objectives, float(percentile), mask)
+
+
+def score_ridge_candidates(
+    data, predictors, *, alphas, library=None, run_labels=None, feature_signature=None
+):
+    """Score candidate-regularized trial betas with leave-one-run-out encoding.
+
+    Supply only outer-training runs when nesting this selection. A library
+    selects HRFs separately on each inner-training set; None uses canonical
+    SPM. This returns feature-level scores, without choosing a block-local
+    penalty. Combine blocks before calling select_ridge_penalty.
+    """
+    from boldtailor._ridge_cv import score_candidates
+
+    grid = tuple(sorted(_alpha_grid(alphas)))
+    return score_candidates(
+        data, predictors, grid, library, run_labels, feature_signature
+    )

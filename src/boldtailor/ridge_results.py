@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from boldtailor._arrays import immutable_float_array
+from boldtailor.hrf_results import immutable_indices
+from boldtailor.provenance import ProvenanceRecord
 
 
 def immutable_bool_array(values):
@@ -57,4 +59,30 @@ class RidgeSelection:
         )
         object.__setattr__(
             self, "scoring_mask", immutable_bool_array(self.scoring_mask)
+        )
+
+
+@dataclass(frozen=True)
+class RidgeCandidateScores:
+    alphas: tuple[float, ...]
+    cv_r2: np.ndarray
+    fold_sse: np.ndarray
+    fold_sst: np.ndarray
+    fold_hrf_indices: np.ndarray
+    trial_masks: tuple[np.ndarray, ...]
+    run_labels: tuple[str, ...]
+    provenance: ProvenanceRecord
+
+    def __post_init__(self):
+        for name in ("alphas", "run_labels"):
+            object.__setattr__(self, name, tuple(getattr(self, name)))
+        for name in ("cv_r2", "fold_sse", "fold_sst"):
+            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+        object.__setattr__(
+            self, "fold_hrf_indices", immutable_indices(self.fold_hrf_indices)
+        )
+        object.__setattr__(
+            self,
+            "trial_masks",
+            tuple(immutable_bool_array(m) for m in self.trial_masks),
         )
