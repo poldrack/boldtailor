@@ -20,6 +20,13 @@ def solve(x, n, y, alpha):
     return entry("_single_trial_fit", "fit_trial_run")(x, n, y, alpha=alpha)
 
 
+def beta_path(x, n, y, alphas):
+    module = importlib.import_module("boldtailor._single_trial_fit")
+    if not hasattr(module, "trial_beta_path"):
+        pytest.fail("Missing shared-factorization trial beta path")
+    return module.trial_beta_path(x, n, y, alphas=alphas)
+
+
 @pytest.fixture
 def problem():
     rng = np.random.default_rng(52)
@@ -93,6 +100,55 @@ def test_normalized_ridge_leaves_nuisance_unpenalized():
     np.testing.assert_allclose(
         fitted.nuisance_betas, np.mean(y - x @ expected, axis=0)[None]
     )
+
+
+@pytest.mark.parametrize("ill_conditioned", [False, True])
+def test_beta_path_matches_augmented_ols(problem, ill_conditioned):
+    data, x, ns = problem
+    x = x * [1., 2., 3., 4.]
+    if ill_conditioned:
+        x[:, 1] = x[:, 0] + 1e-4 * x[:, 1]
+    n = np.column_stack([ns[0], ns[0][:, 0]])
+    y = np.column_stack([data.signals[0], np.full(len(x), 30.)])
+    scale = np.linalg.norm(x - n @ np.linalg.lstsq(n, x, rcond=None)[0], axis=0)
+    alphas = [2., 0., .1]
+    path = list(beta_path(x, n, y, alphas))
+    assert [a for a, _ in path] == alphas
+    for alpha, beta in path:
+        augmented = np.vstack([
+            np.column_stack([x, n]),
+            np.column_stack([np.diag(np.sqrt(alpha) * scale), np.zeros((x.shape[1], n.shape[1]))])
+        ])
+        expected = np.linalg.lstsq(augmented, np.vstack([y[:, :3], np.zeros((x.shape[1], 3))]), rcond=None)[0][:x.shape[1]]
+        np.testing.assert_allclose(beta[:, :3], expected, rtol=1e-7, atol=1e-7)
+        np.testing.assert_allclose(beta, solve(x, n, y, alpha).betas, rtol=1e-9, atol=1e-9)
+        assert np.isnan(beta[:, -1]).all()
+
+
+def test_beta_path_factors_design_once(problem, monkeypatch):
+    module = importlib.import_module("boldtailor._single_trial_fit")
+    original, calls = module._project_design, []
+    def observe(*args):
+        calls.append(1)
+        return original(*args)
+    monkeypatch.setattr(module, "_project_design", observe)
+    data, x, ns = problem
+    list(beta_path(x, ns[0], data.signals[0], [0., .1, 1., 10.]))
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("case", ["rank", "support", "dof", "alpha"])
+def test_beta_path_retains_solver_rejections(case):
+    x = np.arange(12.).reshape(6, 2)
+    n, y = np.ones((6, 1)), np.arange(6.)[:, None]
+    if case == "support":
+        x = n.copy()
+    elif case == "dof":
+        x = np.eye(6)[:, :5]
+    elif case == "alpha":
+        x = np.eye(6)[:, :2]
+    with pytest.raises(ValueError):
+        list(beta_path(x, n, y, [-1.] if case == "alpha" else [0., .1]))
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 2.0])
