@@ -1,17 +1,43 @@
 # boldtailor
 
-Boldtailor is a composable first-level fMRI modeling package.
+Boldtailor fits first-level fMRI models to voxel or grayordinate time series.
+You can estimate condition contrasts, measure variance explained by a task,
+fit a separate response for every trial, and select an HRF for each brain
+location using prediction across runs.
 
-Phase 1 provides an array-based conventional GLM backed by Nilearn. BIDS,
-NIfTI, CIFTI, adaptive HRFs, and the GLMsingle recipe are delivered in later
-phases described by the package design.
+The Python API works with NumPy arrays and pandas tables. The repository also
+includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 
-## Examples
+## What can I do with it?
 
-[Two-session common-mask whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb)
-uses a local dataset path by default; override it with `BOLDTAILOR_BIDS_ROOT`.
+| Task | Where to start |
+| --- | --- |
+| Fit condition effects and t contrasts with OLS or AR(1) noise | [Conventional GLMs](docs/user-guide.md#condition-effects-and-contrasts) |
+| Fit a design matrix prepared by another tool | [Prepared designs](docs/user-guide.md#using-your-own-design-matrix) |
+| Compare full-model and confound-only R² | [Variance explained](docs/user-guide.md#measuring-task-related-variance) |
+| Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
+| Choose among 649 HRFs using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
+| Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
+| Analyze NSD CIFTIs, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
+| Fit and view whole-brain NIfTI contrast and R² maps | [Whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) |
+| Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
-## Array-based conventional GLM
+## Install
+
+Use Python 3.12 or later. From a checkout of this repository:
+
+```bash
+uv sync --group dev
+```
+
+This installs Boldtailor and the packages used by the examples. Run scripts
+with `uv run python your_script.py`. To add a local checkout to another uv
+project, use `uv add /path/to/boldtailor` from that project.
+
+## A first model
+
+This example runs without a dataset. The random signals demonstrate the API;
+replace them with your BOLD data for an analysis.
 
 ```python
 import numpy as np
@@ -21,148 +47,83 @@ from boldtailor.data import from_arrays
 from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
 
-events = pd.DataFrame(
-    {
-        "onset": [0.0, 8.0, 16.0, 24.0],
-        "duration": [1.0, 1.0, 1.0, 1.0],
-        "trial_type": ["face", "house", "face", "house"],
-    }
-)
-signals = np.load("run_signals.npy")  # shape: time x features
+signals = 100 + np.random.default_rng(7).normal(size=(100, 3))
+events = pd.DataFrame({
+    "onset": [10.0, 40.0, 70.0, 100.0],
+    "duration": [2.0, 2.0, 2.0, 2.0],
+    "trial_type": ["face", "house", "face", "house"],
+})
+
 data = from_arrays(signals, events, tr=2.0)
 model = ModelSpec(
     contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+    hrf_model="spm",
     noise_model="ar1",
 )
-
 result = fit(data, model)
-contrast_effect = result.effect("face_gt_house")
-directional_p = result.one_sided_p_value("face_gt_house")
-fit_quality = result.r2
+
+effects = result.effect("face_gt_house")  # one value per feature
+z_scores = result.z_score("face_gt_house")
+r_squared = result.r2
 ```
 
-`fit()` returns arrays only and never writes files. BIDS, NIfTI, and CIFTI
-adapters are added in later phases. Contrast p-values are directional and
-one-sided, matching Nilearn. For nonuniform or nonzero acquisition times, pass
-one frame-time array per run instead of `tr`.
+Signals have shape **time points × features**. A feature can be a voxel, a
+surface vertex, or a CIFTI grayordinate. For multiple runs, pass lists of
+signal arrays and event tables. Each run is fitted separately and contrasts
+are combined across runs. Feature order must match between runs.
 
-Features with zero centered sum of squares, including all-zero and constant
-features, are accepted. Their per-run and aggregate R-squared values are NaN;
-varying features in the same fit retain their ordinary estimates and
-inference. Every run must have positive residual degrees of freedom for
-contrast inference, otherwise `fit()` raises a run-specific `ValueError`.
-
-## Advanced prepared-design estimation
-
-Use the prepared-design API when another tool has already compiled a fixed,
-labeled design matrix for each run. Boldtailor consumes the signal arrays and
-DataFrames directly; it performs no image or file I/O and does not parse BIDS,
-run PyBIDS transformations, or construct designs. FitLins and PyBIDS retain
-BIDS parsing, transformations, and design construction.
+To estimate a separate beta for each event in the same data:
 
 ```python
-from boldtailor.prepared import PreparedDesignAnalysis
-from boldtailor.prepared_fit import fit_prepared
+from boldtailor.single_trial import fit_single_trials
 
-prepared = PreparedDesignAnalysis.from_arrays(
-    signals=signals,
-    design_matrices=design_matrices,
-    frame_times=frame_times,
-    column_roles=column_roles,
-    sources=sources,
-    run_metadata=run_metadata,
-)
-result = fit_prepared(
-    prepared,
-    contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
-    noise_model="ar1",
-    model_metadata={"origin": "fitlins", "node": "run"},
-)
+trials = fit_single_trials(data, ridge_alpha=0.1)
+betas = trials.run_betas[0]  # trials × features for the first run
+trial_metadata = trials.trial_table
 ```
 
-The conventional prepared path supports only semantic t contrasts and OLS or
-AR(1) inference. F contrasts are unsupported by the prepared path and remain
-deferred. `task_delta_r2_prepared()` is a separate nested-OLS diagnostic when
-column roles provide a complete task-versus-nuisance partition. This is not an
-optimized-HRF or GLMdenoise interface; those adaptive methods, fractional
-ridge, imaging/reconstruction, and FitLins integration remain separate future
-work.
+The ridge penalty is fixed by you; `ridge_alpha=0` gives OLS. Repeated images
+remain separate trials. Reaction time can be used afterward to check the
+estimated responses, without selecting the HRF or ridge penalty from RT.
 
-## Provenance and lifecycle logging
+## Working with images
 
-`from_arrays()` accepts one `RunSources` descriptor per run. Each descriptor
-identifies the signal and events inputs, plus confounds when present, with a
-dataset-relative POSIX URI or BIDS URI and optional media type. Byte size and a
-UTC modification time complete the stable source metadata:
+The [NSD guide](examples/NSD/README.md) covers conventional and single-trial
+CIFTI models, optimized HRFs, odd/even HRF parameter maps, and their outputs.
+It includes commands for using your own data paths and running several workers.
 
-```python
-from boldtailor.provenance import RunSources, SourceRef
+The [whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) combines
+multiple sessions in a common brain mask, fits contrasts, displays maps, and
+optionally saves NIfTI results. Set `BOLDTAILOR_BIDS_ROOT` to your dataset and
+edit the notebook's subject, session, and preprocessing settings.
 
-sources = (
-    RunSources(
-        signal=SourceRef(
-            role="signal",
-            uri="sub-01/func/sub-01_task-localizer_bold.npy",
-            media_type="application/x-npy",
-            byte_size=240128,
-            modified_at="2026-08-08T12:00:00Z",
-        ),
-        events=SourceRef(
-            role="events",
-            uri="sub-01/func/sub-01_task-localizer_events.tsv",
-            media_type="text/tab-separated-values",
-            byte_size=384,
-            modified_at="2026-08-08T12:01:00Z",
-        ),
-    ),
-)
-data = from_arrays(signals, events, tr=2.0, sources=sources)
-```
+These are dataset-specific examples. For a different dataset, load aligned
+signals with your usual imaging tools and use the array API, or adapt an example.
 
-Source identity is metadata-only: Boldtailor does not read source files or hash
-signal, event, or confound contents. Complete source metadata produces a
-deterministic `metadata_fingerprint`; `fit()` combines it with the complete,
-reproducible `ModelSpec` to produce a deterministic `analysis_fingerprint`.
-Execution IDs are different: every normalization and fit attempt receives a
-fresh UUID used to correlate lifecycle events. Omitting `sources`, supplying an
-incomplete descriptor, or using a local or lambda HRF leaves the corresponding
-deterministic fingerprint unavailable and records a provenance-quality or
-partial-reproducibility warning. Anonymous array analysis remains supported,
-but it cannot establish stable data or analysis identity.
+## How does it compare with GLMsingle?
 
-Normalization and fitting emit structured JSON records through the standard
-`boldtailor` Python logger. The package does not install handlers or change
-application logging configuration. Provenance retains a bounded event history;
-records contain lifecycle metadata and correlation IDs, not raw signals,
-tables, design values, estimates, statistics, command-line arguments,
-environment variables, working directories, usernames, or hostnames. Absolute
-and path-like caller metadata is rejected. Callers remain responsible for
-de-identifying otherwise valid relative source URIs and annotations.
+Both packages estimate single-trial responses with an HRF selected at each
+brain location. Boldtailor also supports conventional contrasts and custom
+design matrices. Its single-trial workflow uses supplied confounds, optional
+fixed ridge, and HRF selection by mean-stimulus prediction across runs.
 
-## BIDS provenance projection and artifact publication
+The published GLMsingle workflow selects HRFs by in-sample fit, then uses
+repeated conditions to tune data-derived denoising and fractional ridge.
+Boldtailor's HRF selection needs no repeated images, but assumes that a mean
+stimulus response transfers between runs. See the
+[GLMsingle comparison](docs/glmsingle-comparison.md) for the methods, assumptions,
+and differences from the locally developed GLMsingle API.
 
-`project_bids_provenance()` is a pure, in-memory projection from the canonical
-Boldtailor provenance record to stable BIDS 1.11.1 derivative metadata. Draft
-export is enabled by default and is pinned to
-`BEP028@02172700aac8d1bdd67b45191f43533f426848dc`. The supported draft subset is
-Activities, Files, Environments, Software, the provenance label table, and file
-`GeneratedBy`/`Sources` relationships; this is not a claim of conformance to a
-final BIDS provenance standard. `export_bids_prov=False` omits only those draft
-files, leaving stable BIDS metadata and canonical provenance output intact.
+## Documentation
 
-`publish_artifact_set()` is the sole filesystem publication primitive. It
-accepts and validates one complete in-memory `Artifact` set, locks the
-destination, stages and fsyncs files, and rolls back the set on failure. By
-default, failure leaves only a sanitized
-`.boldtailor/publication_failures.jsonl` record. If rollback cannot restore an
-original, Boldtailor automatically preserves the last recoverable copy under
-`.boldtailor/failed/<execution-id>/recovery/`; this safety copy is independent
-of `retain_incomplete`. Setting `retain_incomplete=True` additionally keeps the
-requested failed artifact set under the same execution directory and marks
-retained canonical provenance as failed and unpublished.
+- [User guide](docs/user-guide.md): model choices, timing, confounds, HRFs, and interpretation.
+- [API reference](docs/api.md): entry points, options, and returned values.
+- [GLMsingle comparison](docs/glmsingle-comparison.md): HRFs, denoising, regularization, and validation.
+- [NSD guide](examples/NSD/README.md): commands and CIFTI output reference.
+- [NSD validation](docs/validation/nsd-session.md): recorded numerical checks and benchmarks.
+- [Developer guide](docs/development.md): testing, architecture, provenance, and file-writing conventions.
 
-Future derivative adapters must first project every primary artifact, sidecar,
-and provenance file into one complete artifact set, then route that set through
-`publish_artifact_set()`; adapters must not write files directly. The current
-release provides this publication core but no BIDS discovery and no NIfTI or
-CIFTI writer. `fit()` performs zero filesystem I/O.
+Boldtailor is under active development. It currently supports t contrasts,
+OLS/AR(1) conventional GLMs, and OLS/fixed-ridge single-trial fits. Automatic
+GLMdenoise or ridge tuning and a general BIDS analysis command are not yet
+available. HRF selection does not require repeated stimuli.
