@@ -105,6 +105,44 @@ including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
 
+## HRF reliability across sessions
+
+Use [nsd_session_hrf_reliability.ipynb](nsd_session_hrf_reliability.ipynb) to
+compare independently estimated HRFs for `sub-07`, `ses-nsd10` through
+`ses-nsd19`. All sessions use the same 513-candidate Sobol library by default.
+The notebook fits only HRF selection, using all runs within each session and
+the same confounds and nonsteady-volume trimming as the full workflow.
+HRF selection needs only stimulus timing, so trials with missing reaction
+times are retained; RT and trial type do not enter this selection model.
+
+Completed session estimates are saved immediately under each session's `func`
+directory. Reruns reuse them when the input identities, library, settings,
+coverage, software versions, and spatial axis match. Matching outputs from
+the full workflow can also be reused; add other derivative roots to
+`reuse_roots` if needed. Older grid estimates are refitted separately. A
+changed input or library receives a new cache name, and damaged caches are
+recomputed. Source identity uses file paths, sizes, and modification times,
+plus the prepared event/confound/timing values; it does not hash every BOLD
+file's contents.
+
+The primary outputs are full-HRF Pearson correlations at each grayordinate:
+45 session-pair maps and 10 session-to-canonical maps. Each pair's canonical
+baseline is the mean of its two session-to-SPM correlations. Summary maps
+contain mean pairwise correlation, mean matched canonical baseline, their
+mean difference, and the contributing session/pair counts. The notebook also
+saves sample SD maps for the six varied HRF parameters and full-HRF time to
+peak. Missing estimates remain NaN; counts indicate available data. These
+are descriptive shape and parameter comparisons, not ICCs or tests treating
+the 45 overlapping session pairs as independent observations.
+
+Across-session CIFTIs, tables, figures, and metadata go under `sub-07/func/`
+with `desc-sessionHRFReliability...` names. Per-session caches use
+`desc-sessionHRF...` names and contain the exact library and selection
+provenance. Sessions run sequentially, with `n_jobs` parallel blocks within
+each session. Set `max_grayordinates=128` for a check across all ten sessions;
+use `None` for the full spatial axis. This notebook does not fit beta series
+or depend on ridge tuning.
+
 ## Run an analysis
 
 From the repository root, install the example dependencies:

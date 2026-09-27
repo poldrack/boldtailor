@@ -48,7 +48,9 @@ def test_all_pairs_and_canonical_baselines_match_direct_curve_correlations(libra
     np.testing.assert_allclose(result["summary"][0, :2], expected[:, :2].mean(axis=0))
     np.testing.assert_allclose(result["summary"][1, :2], baseline[:, :2].mean(axis=0))
     np.testing.assert_allclose(
-        result["summary"][2, :2], (expected - baseline)[:, :2].mean(axis=0)
+        result["summary"][2, :2],
+        (expected - baseline)[:, :2].mean(axis=0),
+        atol=1e-14,  # Independent Pearson implementations differ at roundoff near zero.
     )
     np.testing.assert_array_equal(result["summary"][3:], [[3, 3, 1, 0], [3, 3, 0, 0]])
     assert np.isnan(result["summary"][:3, 2:]).all()

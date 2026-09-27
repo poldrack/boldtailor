@@ -48,7 +48,7 @@ def glm_events(events):
     )
 
 
-def _trim(run):
+def _trim(run, *, hrf_only=False):
     flags = run.confounds.filter(like="non_steady_state_outlier")
     if not np.isin(flags.to_numpy(), [0, 1]).all():
         raise ValueError("Nonsteady flags must be binary")
@@ -58,7 +58,8 @@ def _trim(run):
     retained = np.arange(len(dropped), len(run.frame_times))
     if not len(retained):
         raise ValueError("No scans remain after trimming")
-    glm_events(run.events)  # Validate before expensive fitting.
+    if not hrf_only:
+        glm_events(run.events)  # Conventional GLMs require these covariates.
     return WorkflowRun(
         run.inputs,
         run.image,
@@ -71,14 +72,18 @@ def _trim(run):
     )
 
 
-def load_session(root, prep, *, subject="sub-07", session="ses-nsd10"):
+def load_session(root, prep, *, subject="sub-07", session="ses-nsd10", hrf_only=False):
     """Keep original event onsets and acquisition times when dropping NSS scans."""
     inputs = discover_runs(Path(root), Path(prep), subject=subject, session=session)
     raw_runs, _ = _load_runs(inputs)
-    runs = [_trim(run) for run in raw_runs]
+    runs = [_trim(run, hrf_only=hrf_only) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise ValueError("Retained confound names must match across runs")
-    if any(sum(r.number % 2 == parity for r in runs) < 2 for parity in (0, 1)):
+    if len(runs) < 2:
+        raise ValueError("HRF selection needs at least two runs")
+    if not hrf_only and any(
+        sum(r.number % 2 == parity for r in runs) < 2 for parity in (0, 1)
+    ):
         raise ValueError("The full notebook needs at least two odd and two even runs")
     return runs
 
