@@ -83,6 +83,62 @@ contrasts as equal-weight fixed effects. P-values are directional, one-sided,
 and uncorrected for multiple comparisons. `result.run_r2` contains one R²
 array per run; `result.r2` pools residual and total sums of squares across runs.
 
+## Voxelwise HRFs in conventional GLMs
+
+Pass an existing HRF selection to `fit()` to use a different HRF at each voxel
+or grayordinate. The model can contain conditions, amplitude modulators, and
+contrasts just as in a fixed-HRF fit. Confound selection, drift terms, timing,
+and the OLS/AR(1) noise option still come from `ModelSpec`.
+
+```python
+from boldtailor.fit import fit, task_delta_r2
+
+# data contains your target runs; model names their conditions and contrasts.
+# selection was obtained from select_hrf() using the same feature ordering.
+result = fit(data, model, hrf_selection=selection)
+effects = result.effect("face_gt_house")
+z_scores = result.z_score("face_gt_house")
+r_squared = result.r2
+
+# As with fixed-HRF comparisons, data needs complete source descriptors.
+comparison = task_delta_r2(data, model, result)
+task_added_r2 = comparison.delta_r2
+```
+
+The selection replaces `ModelSpec.hrf_model` entirely, including any derivative
+basis specified there. Each location uses one selected HRF for all its task
+regressors. The final GLM estimates condition/modulator amplitudes independently
+within each run; it does not reuse the mean amplitude from HRF selection.
+
+Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
+usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
+`group_designs[(run_index, hrf_id)]`, `group_design_provenance`, `hrf_indices`,
+`hrf_selection`, and `selection_provenance`. It uses `group_designs` in place of
+`design_matrices`, since one matrix no longer describes a whole run. Run indices
+are zero-based and result arrays preserve the input feature order.
+
+This option is available through the array API. The current NSD conventional
+command and stop-signal notebook use fixed HRFs. Adapting an image workflow
+also requires saving each grouped design; the stop-signal `result_artifacts()`
+helper currently expects a common-HRF result.
+
+The selection can come from separate training runs. If you supplied a
+`feature_signature` when selecting HRFs, also pass the target data's spatial
+signature to `fit()`. Matching feature counts alone do not prove that voxels
+are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
+Selection still follows the [mean-response method](#selecting-an-hrf-for-each-location);
+for selection input, represent each presentation once, without extra event rows
+used to encode amplitude modulators in the target GLM.
+
+Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
+`task_delta_r2()` also preserves undefined/constant features as NaNs, and compares
+nested OLS fits even if the contrast fit uses AR(1).
+
+Contrast statistics treat the selected HRFs as fixed. If selection used the
+same BOLD data as the contrast fit, those statistics do not account for HRF
+selection uncertainty. Use separate training runs when you need selection to
+be independent of the contrast data.
+
 ## Using your own design matrix
 
 Use `PreparedDesignAnalysis` when you already have a labeled design matrix.
@@ -155,9 +211,10 @@ These comparison functions require complete source metadata so they can check
 that the supplied result belongs to the same input and model. Pass the same
 contrasts, noise setting, and model metadata used for the original fit. See
 [source records](api.md#source-records-and-saving) for the required fields.
-Both comparison functions currently require finite pooled R² for every supplied
-feature. Exclude constant features before comparing models, then restore NaNs
-at those locations when reconstructing an image.
+For common-HRF and prepared-design fits, both comparison functions currently
+require finite pooled R² for every supplied feature. Exclude constant features
+before those comparisons, then restore NaNs when reconstructing an image.
+The selected-HRF GLM comparison handles undefined locations directly.
 
 Single-trial results already contain `full_r2`, `nuisance_r2`, and `delta_r2`.
 Their difference uses the actual OLS or ridge estimator and retains negative

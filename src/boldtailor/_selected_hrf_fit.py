@@ -8,30 +8,12 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._hrf_cv import prepare_runs
+from boldtailor._hrf_assignment import validate_selection
 from boldtailor._single_trial_design import _validate_events
 from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
-from boldtailor.hrf_results import HrfSelectionResult, HrfSingleTrialResult
+from boldtailor.hrf_results import HrfSingleTrialResult
 from boldtailor.hrf_selection import run_labels_for
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
-
-
-def _validate_selection(data, selection, signature):
-    if not isinstance(selection, HrfSelectionResult):
-        raise ValueError("selection must be an HrfSelectionResult")
-    if signature != selection.feature_signature:
-        raise ValueError("feature_signature must match selection")
-    ids = selection.hrf_indices
-    if ids.shape != (data.n_features,):
-        raise ValueError("selection feature count must match data")
-    activity = selection.provenance.to_dict()["activities"][-1]
-    assignment = sha256(ids.astype("<i8").tobytes()).hexdigest()
-    if activity.get("library_fingerprint") != selection.library.fingerprint:
-        raise ValueError("selection library fingerprint does not match identity")
-    if np.any(ids < -1) or np.any(ids >= len(selection.library.candidates)):
-        raise ValueError("selection contains invalid HRF IDs")
-    if activity.get("hrf_assignment_fingerprint") != assignment:
-        raise ValueError("selection HRF assignment identity does not match provenance")
-    return assignment
 
 
 def _tables(data, labels):
@@ -122,7 +104,7 @@ def _provenance(data, selection, labels, alpha, assignment, designs):
 
 def fit_groups(data, selection, ridge_alpha, run_labels, feature_signature):
     alpha = validate_alpha(ridge_alpha)
-    assignment = _validate_selection(data, selection, feature_signature)
+    assignment = validate_selection(data, selection, feature_signature)
     labels = run_labels_for(data, run_labels)
     trials = _tables(data, labels)
     runs = prepare_runs(data, selection.library)

@@ -13,6 +13,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Task | Where to start |
 | --- | --- |
 | Fit condition effects and t contrasts with OLS or AR(1) noise | [Conventional GLMs](docs/user-guide.md#condition-effects-and-contrasts) |
+| Fit conventional GLMs with an optimized HRF per voxel or grayordinate | [Voxelwise HRFs](docs/user-guide.md#voxelwise-hrfs-in-conventional-glms) |
 | Fit a design matrix prepared by another tool | [Prepared designs](docs/user-guide.md#using-your-own-design-matrix) |
 | Compare full-model and confound-only R² | [Variance explained](docs/user-guide.md#measuring-task-related-variance) |
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |

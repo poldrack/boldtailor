@@ -54,7 +54,8 @@ Boldtailor's NSD example writes CIFTI beta series, trial tables, full and
 confound-only R², optimized-minus-canonical R², HRF parameter/peak-time maps,
 and separate odd/even selections. RT correlations provide a descriptive check;
 RT does not tune the HRF or ridge penalty. Its general API also fits condition
-contrasts with OLS or AR(1) and accepts externally prepared designs.
+contrasts with OLS or AR(1), can apply selected voxelwise HRFs to those
+conventional GLMs, and accepts externally prepared designs.
 
 GLMsingle exposes beta estimates and diagnostics for its component stages,
 including HRF choice, noise PCs, and ridge fractions.

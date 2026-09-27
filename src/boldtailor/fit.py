@@ -13,6 +13,8 @@ from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.model import ContrastValue, ModelSpec
+from boldtailor.hrf_results import HrfSelectionResult
+from boldtailor.hrf_glm_results import HrfAnalysisResult
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
 from boldtailor.results import (
     AnalysisResult,
@@ -33,7 +35,26 @@ class _ModelProvenance:
     warnings: tuple[Mapping[str, object], ...]
 
 
-def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
+def fit(
+    data: AnalysisData,
+    model: ModelSpec,
+    *,
+    hrf_selection: HrfSelectionResult | None = None,
+    feature_signature: str | None = None,
+) -> AnalysisResult | HrfAnalysisResult:
+    """Fit conventional contrasts, optionally using an HRF per feature.
+
+    A supplied selection replaces model.hrf_model. Its spatial signature must
+    match feature_signature; all other model settings retain their meaning.
+    Selected-HRF results expose group_designs instead of design_matrices.
+    """
+    if hrf_selection is not None:
+        from boldtailor._hrf_glm import fit_selected_glm
+
+        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        return fit_selected_glm(data, model, hrf_selection, feature_signature, settings)
+    if feature_signature is not None:
+        raise ValueError("feature_signature requires hrf_selection")
     execution_id = str(uuid4())
     model_provenance = _model_provenance(model)
     data_id = data.provenance.metadata_fingerprint
@@ -83,8 +104,13 @@ def fit(data: AnalysisData, model: ModelSpec) -> AnalysisResult:
 def task_delta_r2(
     data: AnalysisData,
     model: ModelSpec,
-    full_result: AnalysisResult,
+    full_result: AnalysisResult | HrfAnalysisResult,
 ) -> TaskDeltaR2Result:
+    if isinstance(full_result, HrfAnalysisResult):
+        from boldtailor._hrf_glm import selected_task_delta_r2
+
+        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        return selected_task_delta_r2(data, model, full_result, settings)
     execution_id = str(uuid4())
     model_provenance = _model_provenance(model)
     data_id = data.provenance.metadata_fingerprint

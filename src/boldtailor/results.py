@@ -36,11 +36,8 @@ class _ContrastResult:
     one_sided_p_value: np.ndarray
 
 
-@dataclass(frozen=True)
-class AnalysisResult:
+class _AnalysisAccessors:
     _contrasts: Mapping[str, _ContrastResult]
-    _design_matrices: tuple[pd.DataFrame, ...]
-    _design_provenance: tuple[DesignProvenance, ...]
     _run_r2: tuple[np.ndarray, ...]
     _r2: np.ndarray
     _provenance: ProvenanceRecord
@@ -48,14 +45,6 @@ class AnalysisResult:
     @property
     def contrast_names(self) -> tuple[str, ...]:
         return tuple(self._contrasts)
-
-    @property
-    def design_matrices(self) -> tuple[pd.DataFrame, ...]:
-        return tuple(frame.copy(deep=True) for frame in self._design_matrices)
-
-    @property
-    def design_provenance(self) -> tuple[DesignProvenance, ...]:
-        return self._design_provenance
 
     @property
     def run_r2(self) -> tuple[np.ndarray, ...]:
@@ -89,6 +78,24 @@ class AnalysisResult:
             return self._contrasts[name]
         except KeyError as error:
             raise KeyError(f"unknown contrast {name!r}") from error
+
+
+@dataclass(frozen=True)
+class AnalysisResult(_AnalysisAccessors):
+    _contrasts: Mapping[str, _ContrastResult]
+    _design_matrices: tuple[pd.DataFrame, ...]
+    _design_provenance: tuple[DesignProvenance, ...]
+    _run_r2: tuple[np.ndarray, ...]
+    _r2: np.ndarray
+    _provenance: ProvenanceRecord
+
+    @property
+    def design_matrices(self) -> tuple[pd.DataFrame, ...]:
+        return tuple(frame.copy(deep=True) for frame in self._design_matrices)
+
+    @property
+    def design_provenance(self) -> tuple[DesignProvenance, ...]:
+        return self._design_provenance
 
 
 @dataclass(frozen=True)

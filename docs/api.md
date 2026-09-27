@@ -56,6 +56,13 @@ accepted by this interface.
 | `boldtailor.fit.fit(data, model)` | `AnalysisResult` |
 | `boldtailor.fit.task_delta_r2(data, model, full_result)` | `TaskDeltaR2Result`, using nested OLS fits |
 
+`fit()` also accepts the keyword arguments `hrf_selection=None` and
+`feature_signature=None`. With an `HrfSelectionResult`, it returns an
+`HrfAnalysisResult` and replaces `model.hrf_model` with the selected HRF at each
+feature. The supplied signature must match the selection's signature; it may
+be omitted if selection also omitted it. `feature_signature` without a
+selection is an error.
+
 `CompiledDesign` contains `matrix`, `excluded_event_count`, and
 `min_onset_cutoff`. Events earlier than the cutoff are excluded with a warning.
 
@@ -70,10 +77,22 @@ accepted by this interface.
 | `design_matrices`, `design_provenance` | Fitted run designs and their records |
 | `provenance` | Analysis record |
 
+`boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
+`contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`
+and `design_provenance`, it exposes `group_designs` and
+`group_design_provenance`, keyed by `(zero_based_run_index, hrf_id)`.
+The latter records excluded-event counts, onset cutoffs, design ranks, and
+residual degrees of freedom. Additional members are `hrf_indices`,
+`hrf_selection`, and `selection_provenance`. Designs are returned as copies.
+Undefined HRF assignments produce NaN contrast/R² values.
+
 `TaskDeltaR2Result` provides `full_r2`, `nuisance_r2`, `raw_delta_r2`,
 `delta_r2`, `negative_voxel_count`, `raw_min`, `nuisance_design_matrices`, and
 `provenance`. See the [user guide](user-guide.md#measuring-task-related-variance)
 for source-identity requirements, NaN handling, and the difference from ridge R².
+For an `HrfAnalysisResult`, the comparison automatically uses its HRF assignment
+and retains NaNs at undefined or constant features. It verifies source metadata,
+effective model settings, spatial assignment, and compiled design identity.
 
 ## Prepared designs
 

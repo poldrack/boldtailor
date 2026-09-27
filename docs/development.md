@@ -34,6 +34,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
+| Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication` |
 | Dataset discovery and image reconstruction | `examples/NSD`, `examples/stop_signal_demo.py` |
 
@@ -52,6 +53,25 @@ Conventional fits use Nilearn's OLS/AR(1) estimator and t contrasts. Each run
 has independent coefficients. Contrasts are combined through Nilearn contrast
 addition and equal-run averaging. Full-model R² uses predictions on the original
 signal scale and pools within-run sums of squares.
+
+`fit(..., hrf_selection=...)` dispatches to grouped conventional fitting.
+Each HRF group uses the same numerical contrast engine as a common-HRF fit.
+Custom-HRF task columns are compiled separately from nuisances so Nilearn's
+callable-name suffix cannot rename a semantic contrast or collide with a
+confound. Canonical groups use the existing SPM design path. Group results
+are restored to input feature order; undefined HRFs remain NaN.
+
+The grouped result exposes a design for each `(run_index, hrf_id)`, with owned
+arrays and copied DataFrames. Its identity includes effective model settings,
+the HRF library/assignment, and labeled design values plus frame times. The
+ignored fixed `hrf_model` setting does not affect this identity. The grouped
+delta-R² path checks the parent identity, refits nested OLS models, and retains
+NaNs for undefined selections or constant signals. Common-HRF/prepared delta
+paths still require finite pooled R².
+
+Selected-HRF completion logs include the analysis identity. Start records use
+execution/source IDs because the identity is established during design
+compilation.
 
 Task-versus-nuisance diagnostics use nested OLS fits. Small negative differences
 from floating-point roundoff are clipped in `TaskDeltaR2Result.delta_r2`;
