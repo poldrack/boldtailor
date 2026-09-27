@@ -285,15 +285,29 @@ New outputs coexist with the earlier models:
 | --- | --- |
 | `desc-hrfOptOLS`, `desc-hrfOptRidge` | Trial betas, trial mapping, pooled in-sample full/confound/ΔR², descriptive RT maps and provenance |
 | `desc-hrfOptOLS_stat-hrfdeltarsquared`, `desc-hrfOptRidge_stat-hrfdeltarsquared` | Per-grayordinate optimized full R² minus matching canonical full R², with JSON sidecars |
+| `desc-hrfSelection_stat-oddhrfindex`, `stat-evenhrfindex` | HRF IDs selected separately within odd and even runs |
+| `desc-hrfSelection_stat-oddhrfparameters`, `stat-evenhrfparameters` | Matching parameter maps for split-half reliability, including full-HRF peak time |
+| `desc-hrfSelection_splitmetadata.json`, `_splitprovenance.json` | Split memberships, availability, library identity, within-half CV folds and block selection provenance |
 | `desc-hrfSelection_stat-hrfindex` | Stable all-run HRF IDs; NaN where undefined |
 | `...stat-hrfparameters` | Selected parameters and peak times |
 | `...stat-selectioncvr2`, `canonicalcvr2`, `deltacvr2` | All-run selection score and canonical comparison |
-| `...stat-oddhrfindex` | HRFs selected within odd runs |
 | `...stat-testr2`, `canonicaltestr2`, `deltatestr2` | Independent even-run mean-prediction scores |
 | `...library.tsv`, `curves.npz`, `library.png` | Candidate identities and sampled HRFs |
 | `run-XX_desc-hrfSelection_designs.npz` | Each used HRF's float64 trial matrix, shared nuisance matrix, frame times and column IDs |
 | `...folds.tsv`, `eligibility.tsv`, `metadata.json`, `provenance.json` | Exact folds, lazy structural checks, definitions and source identities |
 | `...selectedvertices.tsv`, `scatter.png`, `selectedhrfs.png`, `rt_provenance.json` | Independent RT diagnostics and the odd-run HRFs used |
+
+The odd/even parameter images contain the same eight named maps: response
+delay, undershoot delay, response dispersion, undershoot dispersion,
+response/undershoot ratio, onset delay, duration, and full-HRF `peak_time`.
+Each half selects its own HRF by pooling prediction errors from leave-one-run-out
+folds **within that half**. No opposite-half BOLD or RT enters that selection.
+Both halves enforce the same structural eligibility across all runs' timing and
+confounds, retaining compatibility with the existing odd-to-even evaluation.
+These maps describe each half's winner; parameters are never averaged across folds.
+Compare the parameter values or reconstructed curves; numeric HRF IDs are
+categorical labels. A half with fewer than two runs has NaN maps and an explicit
+unavailability reason. Locations with undefined selection remain NaN.
 
 Load design archives with `np.load(path, allow_pickle=False)`. For HRF ID `h`,
 the full design is `np.column_stack([saved[f"hrf_{h}"], saved["nuisance"]])`.

@@ -29,6 +29,9 @@ def selection_paths(runs, subject, session):
         "canonicalcvr2",
         "deltacvr2",
         "oddhrfindex",
+        "evenhrfindex",
+        "oddhrfparameters",
+        "evenhrfparameters",
         "testr2",
         "canonicaltestr2",
         "deltatestr2",
@@ -44,6 +47,8 @@ def selection_paths(runs, subject, session):
         ("eligibility", "tsv"),
         ("metadata", "json"),
         ("provenance", "json"),
+        ("splitmetadata", "json"),
+        ("splitprovenance", "json"),
         ("selectedvertices", "tsv"),
         ("scatter", "png"),
         ("selectedhrfs", "png"),
@@ -134,7 +139,8 @@ def _fold_table(runs, train, test):
     rows = []
     for scope, indices in (
         ("all_run_selection", list(range(len(runs)))),
-        ("odd_run_selection", train if len(train) >= 2 and test else []),
+        ("odd_run_selection", train if len(train) >= 2 else []),
+        ("even_run_selection", test if len(test) >= 2 else []),
     ):
         for held in indices:
             rows.append(
@@ -186,17 +192,60 @@ def _grouped_design_artifacts(runs, library, state, paths):
         yield npz_artifact(paths[index], **arrays)
 
 
-def selection_artifacts(runs, brain, library, state, paths, metadata, train, test):
-    for name, values in state["maps"].items():
-        yield scalar_artifact(paths[name], brain, values[None], [name])
-    ids = state["maps"]["hrfindex"]
+def parameter_artifact(brain, library, ids, path):
+    """Look up the exact selected library entry, preserving undefined features."""
     names = [*PARAMETER_NAMES, "peak_time"]
     parameters = np.full((len(names), len(brain)), np.nan)
     valid = np.isfinite(ids)
     parameters[:, valid] = (
         library.parameter_table[names].to_numpy()[ids[valid].astype(int)].T
     )
-    yield scalar_artifact(paths["hrfparameters"], brain, parameters, names)
+    return scalar_artifact(path, brain, parameters, names)
+
+
+def split_selection_artifacts(runs, brain, library, state, paths, train, test):
+    splits = {}
+    for half, indices in (("odd", train), ("even", test)):
+        splits[half] = dict(
+            RunLabels=[runs[i].label for i in indices],
+            Available=len(indices) >= 2,
+            Reason=(
+                "" if len(indices) >= 2 else "Requires at least two runs in this half"
+            ),
+        )
+        yield parameter_artifact(
+            brain,
+            library,
+            state["maps"][half + "hrfindex"],
+            paths[half + "hrfparameters"],
+        )
+    yield json_artifact(
+        paths["splitmetadata"],
+        dict(
+            LibraryFingerprint=library.fingerprint,
+            CandidateCount=len(library.candidates),
+            Splits=splits,
+            Method="Separate leave-one-run-out mean-stimulus prediction within each half",
+            Eligibility="Trial designs must be estimable across all runs; uses timing and confounds, never opposite-half BOLD",
+            ParameterMaps=[*PARAMETER_NAMES, "peak_time"],
+            PeakTime="Seconds at the full HRF maximum on the saved 0.1-second grid",
+            HRFNormalization="discrete sum one; convolution at TR/50",
+            Undefined="NaN where the half is unavailable or its signal has no variance outside nuisance span",
+            Interpretation="Compare parameters or curves; HRF IDs are categorical library indices, not ordered measurements",
+        ),
+    )
+    yield json_artifact(paths["splitprovenance"], state["split_provenance"])
+
+
+def selection_artifacts(runs, brain, library, state, paths, metadata, train, test):
+    for name, values in state["maps"].items():
+        yield scalar_artifact(paths[name], brain, values[None], [name])
+    yield parameter_artifact(
+        brain, library, state["maps"]["hrfindex"], paths["hrfparameters"]
+    )
+    yield from split_selection_artifacts(
+        runs, brain, library, state, paths, train, test
+    )
     yield table_artifact(paths["library"], library.parameter_table)
     yield npz_artifact(
         paths["curves"],

@@ -1,4 +1,4 @@
-"""Expanded HRF NSD workflow, with odd-run training and even-run evaluation."""
+"""Expanded HRF workflow with independent odd/even selection and evaluation."""
 
 from hashlib import sha256
 from importlib.metadata import version
@@ -69,6 +69,7 @@ SELECTION_STATS = (
     "testr2",
     "canonicaltestr2",
     "deltatestr2",
+    "evenhrfindex",
 )
 
 
@@ -126,29 +127,59 @@ def _collect_fit(target, fit, start, stop):
 def _store_selection(state, selection, evaluation, start, stop):
     ids = selection.hrf_indices.astype(float)
     ids[ids < 0] = np.nan
-    values = [ids, selection.cv_r2, selection.canonical_cv_r2, selection.delta_cv_r2]
+    values = dict(
+        hrfindex=ids,
+        selectioncvr2=selection.cv_r2,
+        canonicalcvr2=selection.canonical_cv_r2,
+        deltacvr2=selection.delta_cv_r2,
+    )
     if evaluation is not None:
-        odd = evaluation.training_selection.hrf_indices.astype(float)
-        odd[odd < 0] = np.nan
-        values.extend(
-            [
-                odd,
-                evaluation.test_r2,
-                evaluation.canonical_test_r2,
-                evaluation.delta_test_r2,
-            ]
+        values.update(
+            testr2=evaluation.test_r2,
+            canonicaltestr2=evaluation.canonical_test_r2,
+            deltatestr2=evaluation.delta_test_r2,
         )
         state["evaluation_provenance"].append(evaluation.provenance.to_dict())
-    for name, value in zip(SELECTION_STATS, values, strict=False):
+    for name, value in values.items():
         state["maps"][name][start:stop] = value
     state["provenance"].append(selection.provenance.to_dict())
-    tables = [("all", selection)]
-    if evaluation is not None:
-        tables.append(("odd", evaluation.training_selection))
-    for scope, selected in tables:
+    state["eligibility"].append(
+        selection.eligibility.assign(
+            scope="all", feature_start=start, feature_stop=stop
+        )
+    )
+
+
+def _select_halves(data, selection, evaluation, labels, signature, train, test):
+    """Use each half's BOLD only, with shared timing-based candidate eligibility."""
+    halves = {}
+    if len(train) >= 2:
+        halves["odd"] = evaluation.training_selection if evaluation else selection
+    if len(test) >= 2:
+        halves["even"] = (
+            hrf_selection.evaluate_hrf_split(
+                data,
+                library=selection.library,
+                train_runs=test,
+                test_runs=train,
+                run_labels=labels,
+                feature_signature=signature,
+            ).training_selection
+            if train
+            else selection
+        )
+    return halves
+
+
+def _store_halves(state, halves, start, stop):
+    for half, selected in halves.items():
+        ids = selected.hrf_indices.astype(float)
+        ids[ids < 0] = np.nan
+        state["maps"][half + "hrfindex"][start:stop] = ids
+        state["split_provenance"][half].append(selected.provenance.to_dict())
         state["eligibility"].append(
             selected.eligibility.assign(
-                scope=scope, feature_start=start, feature_stop=stop
+                scope=half, feature_start=start, feature_stop=stop
             )
         )
 
@@ -197,6 +228,7 @@ def _empty_expanded(runs, n_features, models):
         canonical_odd_rt=np.full(n_features, np.nan),
         provenance=[],
         evaluation_provenance=[],
+        split_provenance={"odd": [], "even": []},
         eligibility=[],
     )
     return results, state
@@ -228,6 +260,8 @@ def _fit_expanded_block(bounds, runs, root, brain, models, library, train, test)
         else None
     )
     _store_selection(state, selection, evaluation, 0, width)
+    halves = _select_halves(data, selection, evaluation, labels, signature, train, test)
+    _store_halves(state, halves, 0, width)
     for name, alpha in models.items():
         fit = fit_selected_hrfs(
             data,
@@ -263,6 +297,8 @@ def _merge_expanded_block(results, state, block, start, stop):
     state["canonical_odd_rt"][start:stop] = selected["canonical_odd_rt"]
     for key in ("provenance", "evaluation_provenance"):
         state[key].extend(selected[key])
+    for half in ("odd", "even"):
+        state["split_provenance"][half].extend(selected["split_provenance"][half])
     state["eligibility"].extend(
         t.assign(feature_start=start, feature_stop=stop)
         for t in selected["eligibility"]
