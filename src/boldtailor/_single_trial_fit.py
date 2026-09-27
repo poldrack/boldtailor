@@ -86,6 +86,33 @@ def fit_trial_run(x, nuisance, signals, *, alpha):
     return TrialRunFit(betas, gamma, full_sse, nuisance_sse, total_ss, diagnostics)
 
 
+def trial_beta_path(x, nuisance, signals, *, alphas):
+    """Yield trial betas while reusing the projected design and signal coordinates.
+
+    Constant features remain NaN. The alpha-zero branch matches fit_trial_run;
+    all observed-signal intermediates are local to this iterator.
+    """
+    alphas = tuple(validate_alpha(a) for a in alphas)
+    x, nuisance, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
+    q, scale, u, s, vt, _ = _project_design(x, nuisance)
+    varying = np.ptp(y, axis=0) > 0
+    values = y[:, varying]
+    yr = values - q @ (q.T @ values)
+    coordinates = u.T @ yr
+    for alpha in alphas:
+        betas = np.full((x.shape[1], y.shape[1]), np.nan)
+        if values.shape[1]:
+            if alpha == 0:
+                xs = (x - q @ (q.T @ x)) / scale
+                _, fits = run_glm(yr, xs, noise_model="ols")
+                beta = fits[0.0].theta / scale[:, None]
+            else:
+                weights = (vt.T * (s / (s * s + alpha))) @ coordinates
+                beta = weights / scale[:, None]
+            betas[:, varying] = beta
+        yield alpha, betas
+
+
 def r_squared(sse, total_ss):
     result = np.full_like(total_ss, np.nan, dtype=float)
     np.divide(sse, total_ss, out=result, where=total_ss > 0)
