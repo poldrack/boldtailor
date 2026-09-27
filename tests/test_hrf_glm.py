@@ -423,3 +423,17 @@ def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_probl
     assert np.isnan(delta.nuisance_r2[0])
     assert np.isnan(delta.delta_r2[0])
     assert np.isfinite(delta.delta_r2[1:4]).all()
+
+
+@pytest.mark.parametrize("contrast", ["absent", "stimulus - stimulus"])
+def test_undefined_assignment_still_validates_contrasts(hrf_glm_problem, contrast):
+    data, model, _, _ = hrf_glm_problem
+    constant = from_arrays(
+        [np.full_like(y, 100) for y in data.signals],
+        [e.iloc[:6] for e in data.events],
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+    )
+    selection = select_hrf(constant, library=HrfLibrary.from_parameters([]))
+    with pytest.raises(ValueError, match="invalid|zero|missing"):
+        fit(data, replace(model, contrasts={"bad": contrast}), hrf_selection=selection)
