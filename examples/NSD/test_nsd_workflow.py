@@ -149,7 +149,7 @@ def independent_ols(runs, indices, library, ids):
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
 def test_both_glms_match_independent_ols_and_keep_spatial_order(
-    four_runs, small_library, n_jobs
+    four_runs, small_library, n_jobs, capfd
 ):
     root, prep = four_runs
     runs = workflow().load_session(root, prep)
@@ -162,9 +162,14 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
     model = inputs.glm_model(runs)
     selected = analysis.select_hrfs(runs, root, blocks, small_library, n_jobs=n_jobs)
     for selection in (None, selected):
+        capfd.readouterr()
         result = analysis.fit_glms(
             runs, root, blocks, model, selections=selection, n_jobs=n_jobs
         )
+        captured = capfd.readouterr()
+        assert "modulation" not in captured.out
+        assert "make_first_level_design_matrix" not in captured.out
+        assert "GLM:" in captured.out
         ids = (
             np.zeros(3, dtype=int)
             if selection is None
@@ -176,6 +181,21 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
         assert np.isnan(result["r2"][:, 3]).all()
         assert np.isnan(result["effects"][:, 3]).all()
         assert result["designs"] and result["provenance"]
+
+
+def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
+    root, prep = four_runs
+    inputs, analysis = workflow(), workflow("workflow_analysis")
+    runs = inputs.load_session(root, prep)
+    for run in runs:
+        run.events.loc[0, "onset"] = -40.0
+    blocks = inputs.make_blocks(runs, block_size=4)
+    model = inputs.glm_model(runs)
+    with pytest.warns(UserWarning, match="excluding"):
+        analysis.fit_glms(runs, root, blocks, model)
+    captured = capfd.readouterr()
+    assert "modulation" not in captured.out
+    assert "GLM:" in captured.out
 
 
 def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
