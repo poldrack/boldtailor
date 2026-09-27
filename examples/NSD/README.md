@@ -169,6 +169,9 @@ can differ between candidate settings; they do not measure recovery of a common
 unobserved ground-truth response. Conventional GLMs and the across-session HRF
 reliability notebook are unchanged.
 
+See the [fractional-ridge validation record](../../docs/validation/nsd-fractional-ridge.md)
+for automated tests and the bounded real-data audit.
+
 ## HRF reliability across sessions
 
 Use [nsd_session_hrf_reliability.ipynb](nsd_session_hrf_reliability.ipynb) to
