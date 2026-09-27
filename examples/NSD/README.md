@@ -71,9 +71,21 @@ The notebook also saves contrast effects/variances/t/z, all/odd/even HRF
 parameters and indices, the complete HRF library with time to peak, per-run
 beta series, trial tables, grouped designs, scan times, provenance, and plots.
 The final cells explain how to read the outputs and reuse the saved HRFs.
+Section 7b compares full HRF curves at each grayordinate: odd versus even,
+odd versus canonical SPM, and even versus canonical SPM. These are Pearson
+correlations across the library's complete 0.1-second time grid, including
+the undershoot, without shifting curves to align peaks. The canonical
+comparisons provide a baseline for shared HRF shape. The three correlations
+are saved in `desc-notebookHRFReliability_stat-curvecorrelation.dscalar.nii`.
+The plots use the same grayordinates for every comparison, requiring both
+half-session HRFs to be defined. This section can run from existing
+`library` and `hrf_maps` variables without refitting.
+
 Spatially unprocessed or undefined grayordinates remain NaN on the original
 CIFTI axis. Beta-series RT plots are descriptive; all-run optimized HRFs use
 both halves of the session.
+Beta-series fitting prints one start and one completion message per model,
+including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
 

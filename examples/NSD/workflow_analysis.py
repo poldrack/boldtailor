@@ -167,6 +167,9 @@ def _beta_block(job, runs, root, alpha):
 
 def fit_beta_series(runs, root, blocks, *, selections=None, ridge_alpha=0.0, n_jobs=1):
     """Fit one coefficient per raw trial; RT never tunes HRFs or ridge strength."""
+    hrf = "canonical" if selections is None else "optimized"
+    label = f"Beta series ({hrf}, alpha={ridge_alpha:g})"
+    print(f"{label}: fitting {len(runs)} runs in {len(blocks)} blocks", flush=True)
     n = runs[0].image.shape[1]
     result = dict(
         betas=[np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs],
@@ -186,13 +189,10 @@ def fit_beta_series(runs, root, blocks, *, selections=None, ridge_alpha=0.0, n_j
         result["r2"][:, indices] = block["r2"]
         result["trial_table"] = block["trial_table"]
         _collect_metadata(result, block, indices)
-        print(
-            f"Beta series (alpha={ridge_alpha:g}): {indices[0]}–{indices[-1]}",
-            flush=True,
-        )
     result["rt"] = correlate_rt(
         result["betas"],
         [r.events.response_time.to_numpy() for r in runs],
         run_numbers=[r.number for r in runs],
     )
+    print(f"{label}: complete", flush=True)
     return result

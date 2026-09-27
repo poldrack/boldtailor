@@ -37,3 +37,20 @@ small HRF library to keep the tests fast; the real-data check uses all 649.
 This validates the workflow on a spatial subset, not full-brain notebook
 runtime or peak memory. Earlier whole-brain command-line measurements are
 recorded separately in the [session validation](nsd-session.md).
+
+## Full-HRF curve comparisons
+
+The added curve-comparison cell was also run against the existing whole-brain
+command-line odd/even HRF maps. All 90,757 grayordinates with both HRFs defined
+were compared on the full library time grid. Median Pearson correlations were
+0.81290 for odd/even, 0.70968 for odd/canonical, and 0.68936 for even/canonical.
+These are separate medians, not paired differences or significance estimates.
+The source maps use the command-line scan handling described in the session
+validation; these numbers are not a new run of the notebook's trimmed models.
+
+An independent `numpy.corrcoef` check of 256 sampled grayordinates agreed
+within 1.45e-15. The notebook's new histogram and baseline comparison plots
+were inspected, and fixture execution verified the exported three-map CIFTI
+against direct curve correlations. Missing selections preserve pairwise NaN
+values. Beta-series progress was checked to remain at two lines per model
+as the number of blocks increases.

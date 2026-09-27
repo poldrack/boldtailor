@@ -6,6 +6,7 @@ import numpy as np
 
 from boldtailor.publication import publish_artifact_set
 from .hrf_artifacts import npz_artifact, parameter_artifact, figure_artifact
+from .hrf_reliability import CORRELATION_NAMES, hrf_curve_correlations
 from .nsd_cifti import _input_paths
 from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
 from .workflow_analysis import selection_maps
@@ -82,6 +83,14 @@ def _hrf_artifacts(stem, brain, selections, library):
             f"{stem}_desc-notebookHRF_library.npz",
             times=library.times,
             curves=library.curves,
+        ),
+        _map(
+            stem,
+            brain,
+            "HRFReliability",
+            "curvecorrelation",
+            hrf_curve_correlations(library, maps["odd"][0], maps["even"][0]),
+            list(CORRELATION_NAMES),
         ),
     ]
     for name in ("all", "odd", "even"):
@@ -182,6 +191,15 @@ def _metadata(runs, library, settings):
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",
+        hrf_curve_correlations=dict(
+            method="Pearson over HRF time samples, without temporal shifting",
+            map_order=list(CORRELATION_NAMES),
+            canonical_hrf_id=0,
+            time_range_seconds=[float(library.times[0]), float(library.times[-1])],
+            sample_interval_seconds=0.1,
+            time_grid="Full stored library grid, including zero-padded tails of shorter curves",
+            interpretation="Shape similarity, invariant to amplitude scale and offset; not BOLD prediction accuracy",
+        ),
         undefined="NaN for constant, undefined, or unprocessed grayordinates; CIFTI axis preserved",
         settings=settings,
     )
