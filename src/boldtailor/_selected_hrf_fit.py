@@ -10,7 +10,7 @@ import pandas as pd
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
 from boldtailor._single_trial_design import _validate_events
-from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
+from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
     regularization,
     fit_fraction_run,

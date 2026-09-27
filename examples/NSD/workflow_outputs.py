@@ -175,6 +175,23 @@ def _beta_artifacts(stem, brain, betas, runs):
     return artifacts
 
 
+def _ridge_metadata(settings, results):
+    if not results:
+        return None
+    definition = next(iter(results.values()))["provenance"]
+    return dict(
+        validation_target=definition["validation_target"],
+        objective=definition["objective"],
+        percentile=settings.get("ridge_percentile", 90.0),
+        percentile_role=definition.get("percentile_role", "selection_objective"),
+        fraction_norm_basis=definition.get("fraction_norm_basis"),
+        encoding_predictors=["task", "trial_type", "response_time"],
+        task="Shared trial-encoding intercept, not an additional all-ones column",
+        outer_splits="odd_to_even_and_even_to_odd",
+        final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",
+    )
+
+
 def _metadata(runs, library, settings, ridge_cv=None):
     return dict(
         regressors=list(REGRESSORS),
@@ -198,19 +215,7 @@ def _metadata(runs, library, settings, ridge_cv=None):
             if ridge_cv
             else "Descriptive within-run-centered correlation, never used to select HRFs or fixed ridge strength; all-run optimized HRFs use both halves"
         ),
-        ridge_cv=(
-            dict(
-                validation_target="candidate_regularized_betas",
-                percentile=settings.get("ridge_percentile", 90.0),
-                encoding_predictors=["task", "trial_type", "response_time"],
-                task="Shared trial-encoding intercept, not an additional all-ones column",
-                objective="Percentile across a common grayordinate mask of pooled within-run encoding R2",
-                outer_splits="odd_to_even_and_even_to_odd",
-                final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",
-            )
-            if ridge_cv
-            else None
-        ),
+        ridge_cv=_ridge_metadata(settings, ridge_cv),
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",

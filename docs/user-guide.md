@@ -252,7 +252,63 @@ Supply your intended high-pass and other nuisance columns in `data.confounds`.
 Do not include a `constant` column: the single-trial API adds it. Designs with
 unidentifiable trial coefficients or no residual degrees of freedom are rejected.
 
+## Fractional ridge at each grayordinate
+
+Fractional ridge specifies how much coefficient length to retain relative to
+OLS. A fraction of 1 gives OLS; smaller fractions give stronger shrinkage.
+Boldtailor defines this ratio in its nuisance-projected, unit-L2 trial-design
+basis. Exported betas remain in native signal units. Confounds and the run
+intercept remain unpenalized, and no post-fit scaling or offset is applied.
+
+```python
+from boldtailor.fractional_ridge import (
+    score_fraction_candidates, select_ridge_fractions,
+)
+from boldtailor.single_trial import fit_single_trials
+
+predictors = [e[["trial_type", "response_time"]] for e in data.events]
+scores = score_fraction_candidates(
+    data, predictors, fractions=[.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]
+)
+choice = select_ridge_fractions(scores.cv_r2, scores.fractions)
+betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
+```
+
+Each grayordinate chooses its own fraction by maximizing pooled held-out
+encoding R². Ties within `1e-12` favor the largest fraction. Fractions must
+have finite scores across all candidates at that location; undefined locations
+receive NaN. A zero OLS task-coefficient norm has undefined fractional
+shrinkage and is excluded. Negative scores remain valid.
+
+The selected fraction is fixed across runs, while its corresponding alpha is
+computed separately for each run and grayordinate. Results expose
+`ridge_fraction` and `run_ridge_alphas`; `ridge_alpha` is `None` for fractional
+fits. You may also supply a fixed scalar fraction or a feature map directly
+to `fit_single_trials` or `fit_selected_hrfs`. Map NaNs mark excluded features.
+Do not combine a fraction with a positive `ridge_alpha`.
+
+To optimize HRFs, pass `library=library` to the scorer. Each inner fold then
+selects HRFs using only its training runs. For final fitting, select HRFs on
+the complete training set and pass that selection and the fraction map to
+`fit_selected_hrfs`. Reserve outer test runs before calling either selector.
+
+Training and validation betas use the same candidate fraction. OLS defines
+the shrinkage scale; it is not the validation target. The encoding model is
+OLS with a shared task intercept and the supplied trial variables. Trial-level
+predictor exclusions never delete stimuli from the beta-series model. As with
+alpha CV, this objective measures predictability of regularized responses,
+not recovery of an unobserved ground-truth beta series.
+
+The NSD notebook defaults to this approach, with separate odd/even outer
+evaluations and an all-run final refit. Its percentile curves summarize the
+candidate scores; they do not select a brain-wide fraction. Conventional
+GLMs and the across-session HRF reliability analysis are unchanged.
+
 ## Choosing ridge by trial-level prediction
+
+This earlier option selects **one shared alpha** using a spatial percentile.
+It remains available through `ridge_mode="cv"` in the NSD notebook. The
+fractional workflow above selects independently at each location.
 
 When trial variables should explain response variation, choose a penalty by
 how well those variables predict beta estimates in new runs. For NSD the

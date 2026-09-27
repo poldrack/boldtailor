@@ -12,7 +12,7 @@ import pandas as pd
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._hrf_design import hrf_metadata
-from boldtailor._single_trial_fit import fit_trial_run, r_squared, validate_alpha
+from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
     regularization,
     fit_fraction_run,
@@ -37,6 +37,12 @@ def fit_single_trials(
     Nuisance regressors and an intercept are unpenalized. Positive alpha penalizes
     trial coefficients after nuisance projection and column normalization. RT and
     condition labels are retained as metadata and never enter the design.
+
+    Alternatively, ridge_fraction specifies the coefficient-norm ratio to OLS
+    in that normalized basis, as a scalar or one value per feature. Values must
+    be in (0, 1]; NaNs in a feature map exclude features. A positive ridge_alpha
+    cannot be combined with ridge_fraction. Fractional results include the
+    selected fractions and implied alpha for each run and feature.
     """
     alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
     labels = (
@@ -164,7 +170,9 @@ def fit_selected_hrfs(
 
     The selection may come from different runs. A supplied spatial signature
     must match; for anonymous arrays, the caller must preserve feature order.
-    OLS and fixed ridge use the identical selection and sum-normalized HRFs.
+    OLS, fixed-alpha ridge, and fractional ridge use the identical selection
+    and sum-normalized HRFs. ridge_fraction follows fit_single_trials semantics;
+    its implied alpha is computed separately for each run and feature.
     """
     from boldtailor._selected_hrf_fit import fit_groups
 

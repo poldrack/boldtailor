@@ -123,9 +123,10 @@ same fit settings as `full_result`.
 From `boldtailor.single_trial`:
 
 ```text
-fit_single_trials(data, *, ridge_alpha=0.0, run_labels=None, hrf="spm")
+fit_single_trials(data, *, ridge_alpha=0.0, run_labels=None, hrf="spm",
+                  ridge_fraction=None)
 fit_selected_hrfs(data, *, selection, ridge_alpha=0.0, run_labels=None,
-                  feature_signature=None)
+                  feature_signature=None, ridge_fraction=None)
 ```
 
 `fit_single_trials` accepts `"spm"` or an `HrfCandidate` for its fixed HRF.
@@ -145,6 +146,36 @@ The fixed-HRF result also has `design_matrices`. The selected-HRF result
 instead has `group_designs`, keyed by `(run_index, hrf_id)`, as well as
 `hrf_indices` and `selection_provenance`. These grouped matrices include the
 trial columns followed by the nuisance columns.
+
+## Per-grayordinate fractional ridge
+
+From `boldtailor.fractional_ridge`:
+
+```text
+score_fraction_candidates(data, predictors, *, fractions, library=None,
+                          run_labels=None, feature_signature=None)
+select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
+```
+
+`FractionCandidateScores` has `fractions` in descending order, `cv_r2`,
+`fold_sse`, `fold_sst`, `fold_hrf_indices`, `trial_masks`, `run_labels`, and
+`provenance`. Array dimensions match `RidgeCandidateScores` below, with
+fraction replacing alpha. Predictor requirements and nested HRF selection
+are the same; targets use the candidate fraction.
+
+`FractionSelection` has the candidate `fractions`, per-feature
+`ridge_fraction`, `selected_r2`, `fraction_indices`, and `scoring_mask`.
+Every candidate must have a finite score for an eligible feature. Ties within
+`1e-12` choose the largest fraction; excluded features have NaN values and
+index -1. An entirely invalid block returns undefined maps.
+
+Single-trial fit functions accept `ridge_fraction` as a scalar in `(0,1]` or
+a feature array (NaNs explicitly exclude features). Positive `ridge_alpha`
+and `ridge_fraction` are mutually exclusive. Fractional results add immutable
+`ridge_fraction` and `run_ridge_alphas` arrays, and set `ridge_alpha=None`.
+The norm ratio uses normalized trial coefficients after nuisance projection;
+the returned beta arrays use native signal units. See the
+[fractional-ridge guide](user-guide.md#fractional-ridge-at-each-grayordinate).
 
 ## Encoding-guided ridge selection
 
@@ -305,7 +336,7 @@ Run them from the repository checkout:
 | `examples.NSD.rt_diagnostics.correlate_rt` | Within-run-centered beta/RT correlations and counts, pooled by run partition |
 | `examples.NSD.rt_diagnostics.select_vertices` | Select cortical vertices by absolute odd-run correlation |
 | `examples.NSD.rt_diagnostics.scatter_artifact` | Create even-run RT scatterplots for the selected vertices |
-| `examples.NSD.ridge_workflow.fit_cv_beta_series` | Globally tune a beta-series penalty, evaluate both odd/even outer splits, and fit final all-run betas |
+| `examples.NSD.ridge_workflow.fit_cv_beta_series` | Tune per-grayordinate fractions (`fractions=...`) or one global alpha (`alphas=...`), evaluate both odd/even outer splits, and fit final all-run betas |
 | `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
 | `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 

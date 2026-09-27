@@ -17,7 +17,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Fit a design matrix prepared by another tool | [Prepared designs](docs/user-guide.md#using-your-own-design-matrix) |
 | Compare full-model and confound-only R² | [Variance explained](docs/user-guide.md#measuring-task-related-variance) |
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
-| Choose a ridge penalty using held-out prediction from trial variables | [Encoding-guided ridge](docs/user-guide.md#choosing-ridge-by-trial-level-prediction) |
+| Choose a ridge fraction at each grayordinate using held-out trial prediction | [Fractional ridge](docs/user-guide.md#fractional-ridge-at-each-grayordinate) |
 | Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
 | Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.ipynb) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
@@ -88,7 +88,7 @@ trial_metadata = trials.trial_table
 
 This call uses a fixed penalty; `ridge_alpha=0` gives OLS. Repeated images
 remain separate trials. To choose the penalty from data, use
-[encoding-guided ridge CV](docs/user-guide.md#choosing-ridge-by-trial-level-prediction),
+[encoding-guided fractional ridge CV](docs/user-guide.md#fractional-ridge-at-each-grayordinate),
 which predicts beta series from trial variables such as trial type and RT.
 
 ## Working with images

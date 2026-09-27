@@ -108,52 +108,66 @@ for the fixture and real-data checks.
 
 ### Ridge selection and held-out encoding
 
-The notebook defaults to `ridge_mode="cv"`. For each candidate penalty, it
-estimates training and validation beta series at that same penalty and predicts
-validation betas using an OLS model with an intercept (`task`), binary trial
-type, and RT. No repeated images are needed. HRFs are selected on the training
-runs within each fold, using the existing mean-stimulus objective.
+The notebook defaults to `ridge_mode="fractional_cv"`, with candidate fractions
+0.1 through 1. Each grayordinate selects the fraction maximizing its own pooled
+held-out encoding R². Ties favor the larger fraction. The encoding model uses
+an intercept (`task`), binary trial type, and RT; no repeated images are needed.
+HRFs are selected on the training runs within each fold using mean-stimulus
+prediction. Both training and validation betas use the same candidate fraction.
 
-The selection score is the 90th percentile across grayordinates of pooled
-held-out encoding R². All candidates use the same predictor-complete trials
-and common valid grayordinate mask. Scores retain negative values. Parallel
-blocks are combined before selecting one penalty for the whole scope.
+A fraction of 1 gives OLS. Smaller fractions shrink the coefficient norm in the
+nuisance-projected, unit-L2 trial-design basis. Confounds remain unpenalized,
+and the exported betas retain native units. The chosen fraction is fixed across
+runs, while the corresponding alpha is computed per run and grayordinate.
+OLS estimates define the fraction; they are not the validation targets.
 
-Odd-run tuning evaluates on even runs, then the roles reverse. A separate
-all-run tune supplies the final beta images. Canonical and optimized HRF
-models tune independently. These scores evaluate each pipeline's regularized
-targets, which can differ between penalties; they are not BOLD time-series R²
-or accuracy against a common unregularized reference.
+Odd-run tuning evaluates on even runs, then the roles reverse. Separate all-run
+tuning supplies the final beta images. Canonical and optimized HRF models tune
+independently. Missing predictors exclude encoding rows only. Locations need
+finite scores for every candidate; undefined locations remain NaN.
 
-Set `ridge_alphas` to change the candidate grid (default
-`[0, .001, .01, .1, 1, 10, 100]`) or `ridge_percentile` to change the spatial
-summary (default 90). A zero penalty may win. Use `ridge_mode="fixed"` with
-`ridge_alpha` to reproduce a fixed fit, or `ridge_mode="off"` for OLS only.
-An older injected `NSD_CONFIG` containing only `ridge_alpha` still selects
-fixed mode; `ridge_alpha=None` disables it.
+Use `ridge_fractions` to change the candidate grid. `ridge_percentile` controls
+a descriptive summary curve and does not select the fractions. The notebook
+also plots the counts of grayordinates choosing each fraction.
 
-Final CV beta files use `desc-notebookCanonicalTrialRidgeCV` and
-`desc-notebookOptimizedTrialRidgeCV`. Diagnostic descriptors contain
-`CanonicalRidgeCV` or `OptimizedRidgeCV` followed by `Odd`, `Even`, `All`,
-`OddToEven`, or `EvenToOdd`:
+The older modes remain available:
+
+- `ridge_mode="cv"`: choose one shared alpha using the spatial percentile;
+  `ridge_alphas` defaults to `[0, .001, .01, .1, 1, 10, 100]`.
+- `ridge_mode="fixed"`: use a positive `ridge_alpha`.
+- `ridge_mode="off"`: OLS alone.
+
+An older injected `NSD_CONFIG` with only `ridge_alpha` retains fixed/off behavior.
+An override with `ridge_alphas` and no mode retains shared-alpha CV.
+
+Fractional beta files use `desc-notebookCanonicalTrialFractionalCV` and
+`desc-notebookOptimizedTrialFractionalCV`. Tuning and outer-evaluation descriptors
+contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
+`Even`, `All`, `OddToEven`, or `EvenToOdd`. Shared-alpha outputs retain `RidgeCV`.
 
 | File suffix | Contents |
 | --- | --- |
-| `_scores.tsv` | Candidate penalties, percentile scores, and selected penalty |
-| `_stat-encodingcvr2.dscalar.nii` | One inner-CV encoding R² map per penalty |
-| `_stat-scoringmask.dscalar.nii` | Common mask used by every candidate |
-| `_stat-foldhrfindex.dscalar.nii`, `_folds.npz` | Inner training HRFs and validation SSE/SST arrays |
-| `_stat-encodingpredictionr2.dscalar.nii` | Outer-test encoding R² |
-| `_stat-coefficients.dscalar.nii` | Training encoding intercept, trial-type, and RT coefficients |
+| `_scores.tsv` | Candidate fractions, descriptive percentile R², and counts selected |
+| `_stat-ridgefraction.dscalar.nii` | Selected fraction per grayordinate, for tuning scopes and outer/final fits |
+| `_stat-ridgealpha.dscalar.nii` | One implied-alpha map per run for outer/final fits |
+| `_stat-encodingcvr2.dscalar.nii` | One inner-CV encoding R² map per candidate |
+| `_stat-selectedencodingr2.dscalar.nii` | Each grayordinate's selected inner-CV score |
+| `_stat-scoringmask.dscalar.nii` | Common eligibility mask across candidates |
+| `_stat-foldhrfindex.dscalar.nii`, `_folds.npz` | Inner-training HRFs and validation SSE/SST |
+| `_stat-encodingpredictionr2.dscalar.nii` | Independent outer-test encoding R² |
+| `_stat-coefficients.dscalar.nii` | Training encoding intercept, trial-type, and RT effects |
 | `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order outer-test predictions and regularized betas |
-| `_metadata.json`, `_provenance.json` | Run splits, predictor centering, penalties, HRF/source records, and definitions |
+| `_metadata.json`, `_provenance.json` | Run splits, transforms, norm definitions, sources and linked tuning identities |
 
-`desc-notebookRidgeCV_predictors.tsv` preserves the trial IDs and exact
-encoding predictors, including excluded rows. `desc-notebookRidgeCV_tuning.png`
-shows all candidate scores. The complete HRF library is saved with the other
-notebook outputs. RT now helps choose the penalty, so final all-run RT
-correlations are descriptive; use the outer evaluations for held-out evidence.
-The conventional GLMs and the across-session HRF reliability notebook are unchanged.
+`desc-notebookFractionalCV_predictors.tsv` saves exact predictors, original trial
+IDs and excluded rows. `desc-notebookFractionalCV_tuning.png` saves the descriptive
+score curves. The complete HRF library is saved with the notebook outputs.
+
+RT and trial type help choose shrinkage, so final all-run RT correlations are
+descriptive. Outer scores assess prediction of regularized beta targets, which
+can differ between candidate settings; they do not measure recovery of a common
+unobserved ground-truth response. Conventional GLMs and the across-session HRF
+reliability notebook are unchanged.
 
 ## HRF reliability across sessions
 
