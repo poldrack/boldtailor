@@ -1,5 +1,8 @@
 """Blockwise public-API calls used by the NSD tutorial."""
 
+from contextlib import redirect_stdout
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -72,8 +75,11 @@ def _glm_block(job, runs, root, model):
         if selection is None
         else dict(hrf_selection=selection, feature_signature=_signature(runs, indices))
     )
-    result = fit(data, model, **options)
-    comparison = task_delta_r2(data, model, result)
+    # Nilearn prints modulation notices without a verbosity option. Suppress
+    # stdout within each worker; warnings/stderr and parent progress stay visible.
+    with open(os.devnull, "w") as sink, redirect_stdout(sink):
+        result = fit(data, model, **options)
+        comparison = task_delta_r2(data, model, result)
     designs = (
         {(i, 0): x for i, x in enumerate(result.design_matrices)}
         if selection is None
