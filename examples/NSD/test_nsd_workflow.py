@@ -243,6 +243,33 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
         assert any(
             f"desc-notebookHRF{label}_stat-hrfparameters" in p.name for p in scalars
         )
+    curve_path = next(
+        (
+            p
+            for p in scalars
+            if "desc-notebookHRFReliability_stat-curvecorrelation" in p.name
+        ),
+        None,
+    )
+    assert curve_path is not None, "The workflow must export full-HRF correlations"
+    curve_image = nib.load(curve_path)
+    assert curve_image.header.get_axis(0).name.tolist() == [
+        "odd_even_r",
+        "odd_canonical_r",
+        "even_canonical_r",
+    ]
+    odd_ids = read("desc-notebookHRFOdd_stat-selection.dscalar.nii")[0]
+    even_ids = read("desc-notebookHRFEven_stat-selection.dscalar.nii")[0]
+    curves = np.load(next(p for p in files if p.name.endswith("_library.npz")))[
+        "curves"
+    ]
+    expected = np.full((3, 4), np.nan)
+    for i, (a, b) in enumerate(zip(odd_ids, even_ids, strict=True)):
+        for row, (x, y) in enumerate(((a, b), (a, 0), (b, 0))):
+            if np.isfinite(x) and np.isfinite(y):
+                expected[row, i] = np.corrcoef(curves[int(x)], curves[int(y)])[0, 1]
+    np.testing.assert_allclose(curve_image.get_fdata(), expected, atol=1e-7)
+    assert any("HRFCurveReliability_plot.png" in p.name for p in files)
     assert len([p for p in scalars if "_betas." in p.name]) == 16
     assert len([p for p in files if p.name.endswith("_trials.tsv")]) == 4
     assert any(p.name.endswith("_library.tsv") for p in files)
@@ -259,6 +286,10 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     assert metadata["library_candidates"] == 2
     assert metadata["noise_model"] == "ols"
     assert "independent" in metadata["glm_comparison"].lower()
+    assert (
+        metadata["hrf_curve_correlations"]["method"]
+        == "Pearson over HRF time samples, without temporal shifting"
+    )
     before = {p: p.read_bytes() for p in scalars}
     with pytest.raises(FileExistsError):
         workflow("workflow_outputs").check_output(output, "sub-07", "ses-nsd10")
@@ -295,3 +326,18 @@ def test_rerunning_beta_cell_uses_current_settings(four_runs, small_library):
     refit = context["beta_models"]["OptimizedTrialRidge"]
     assert refit["ridge_alpha"] == 0.4
     assert not np.allclose(original[:, :3], refit["betas"][0][:, :3])
+
+
+def test_beta_series_progress_is_brief_across_blocks(four_runs, capfd):
+    root, prep = four_runs
+    inputs, analysis = workflow(), workflow("workflow_analysis")
+    runs = inputs.load_session(root, prep)
+    blocks = inputs.make_blocks(runs, block_size=1)
+    capfd.readouterr()
+    result = analysis.fit_beta_series(runs, root, blocks)
+    output = capfd.readouterr().out
+    messages = [line for line in output.splitlines() if line.startswith("Beta series")]
+    assert 1 <= len(messages) <= 2
+    assert "complete" in messages[-1].lower()
+    assert len(result["betas"]) == 4
+    assert all(np.isfinite(beta[:, :3]).all() for beta in result["betas"])
