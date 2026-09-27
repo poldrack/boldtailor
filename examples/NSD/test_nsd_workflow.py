@@ -243,3 +243,35 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     with pytest.raises(FileExistsError):
         workflow("workflow_outputs").check_output(output, "sub-07", "ses-nsd10")
     assert all(p.read_bytes() == value for p, value in before.items())
+
+
+def test_rerunning_beta_cell_uses_current_settings(four_runs, small_library):
+    assert NOTEBOOK.is_file(), "The full NSD workflow notebook has not been created"
+    root, prep = four_runs
+    inputs, analysis = workflow(), workflow("workflow_analysis")
+    runs = inputs.load_session(root, prep)
+    blocks = inputs.make_blocks(runs, block_size=4)
+    selections = analysis.select_hrfs(runs, root, blocks, small_library)
+    notebook = nbformat.read(NOTEBOOK, as_version=4)
+    cell = next(
+        c
+        for c in notebook.cells
+        if c.cell_type == "code" and "beta_models =" in c.source
+    )
+    context = dict(
+        runs=runs,
+        root=root,
+        blocks=blocks,
+        selections=selections,
+        fit_beta_series=analysis.fit_beta_series,
+        workers=1,
+        settings={"ridge_alpha": 0.1},
+        display=lambda value: None,
+    )
+    exec(cell.source, context)
+    original = context["beta_models"]["OptimizedTrialRidge"]["betas"][0].copy()
+    context["settings"]["ridge_alpha"] = 0.4
+    exec(cell.source, context)
+    refit = context["beta_models"]["OptimizedTrialRidge"]
+    assert refit["ridge_alpha"] == 0.4
+    assert not np.allclose(original[:, :3], refit["betas"][0][:, :3])
