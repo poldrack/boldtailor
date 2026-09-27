@@ -86,3 +86,49 @@ class RidgeCandidateScores:
             "trial_masks",
             tuple(immutable_bool_array(m) for m in self.trial_masks),
         )
+
+
+@dataclass(frozen=True)
+class FractionCandidateScores:
+    fractions: tuple[float, ...]
+    cv_r2: np.ndarray
+    fold_sse: np.ndarray
+    fold_sst: np.ndarray
+    fold_hrf_indices: np.ndarray
+    trial_masks: tuple[np.ndarray, ...]
+    run_labels: tuple[str, ...]
+    provenance: ProvenanceRecord
+
+    def __post_init__(self):
+        object.__setattr__(self, "fractions", tuple(self.fractions))
+        object.__setattr__(self, "run_labels", tuple(self.run_labels))
+        for name in ("cv_r2", "fold_sse", "fold_sst"):
+            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+        object.__setattr__(
+            self, "fold_hrf_indices", immutable_indices(self.fold_hrf_indices)
+        )
+        object.__setattr__(
+            self,
+            "trial_masks",
+            tuple(immutable_bool_array(m) for m in self.trial_masks),
+        )
+
+
+@dataclass(frozen=True)
+class FractionSelection:
+    fractions: tuple[float, ...]
+    ridge_fraction: np.ndarray
+    selected_r2: np.ndarray
+    fraction_indices: np.ndarray
+    scoring_mask: np.ndarray
+
+    def __post_init__(self):
+        object.__setattr__(self, "fractions", tuple(self.fractions))
+        for name in ("ridge_fraction", "selected_r2"):
+            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+        object.__setattr__(
+            self, "fraction_indices", immutable_indices(self.fraction_indices)
+        )
+        object.__setattr__(
+            self, "scoring_mask", immutable_bool_array(self.scoring_mask)
+        )

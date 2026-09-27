@@ -9,11 +9,12 @@ import numpy as np
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._single_trial_fit import r_squared, trial_beta_path
+from boldtailor._fractional_ridge import fraction_beta_path, NORM_BASIS
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import run_labels_for, select_hrf
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
-from boldtailor.ridge_results import RidgeCandidateScores
+from boldtailor.ridge_results import RidgeCandidateScores, FractionCandidateScores
 from boldtailor.trial_encoding import (
     _predictor_arrays,
     _training_design,
@@ -49,7 +50,7 @@ def _validate(data, predictors, library, signature):
     return arrays, columns, masks
 
 
-def _run_beta_path(data, r, prepared, ids, alphas, label):
+def _run_beta_path(data, r, prepared, ids, alphas, label, *, fractional=False):
     groups = []
     if prepared is None:
         x, n, _ = compile_trial_run(
@@ -59,13 +60,16 @@ def _run_beta_path(data, r, prepared, ids, alphas, label):
         features = np.flatnonzero(ids == cid)
         if prepared is not None:
             x, n = prepared[r].trial_matrix(int(cid)), prepared[r].nuisance
-        path = trial_beta_path(x, n, data.signals[r][:, features], alphas=alphas)
+        path = (
+            fraction_beta_path(x, n, data.signals[r][:, features], fractions=alphas)
+            if fractional
+            else trial_beta_path(x, n, data.signals[r][:, features], alphas=alphas)
+        )
         groups.append((features, path))
     for alpha in alphas:
         betas = np.full((len(data.events[r]), data.n_features), np.nan)
         for features, path in groups:
-            _, values = next(path)
-            betas[:, features] = values
+            betas[:, features] = next(path)[1]
         yield betas
 
 
@@ -81,11 +85,22 @@ def _fold_selection(data, library, labels, signature, train):
     return selected.hrf_indices, selected.provenance.to_dict()["activities"][-1]
 
 
-def _score_fold(data, predictors, prepared, library, labels, signature, alphas, test):
+def _score_fold(
+    data,
+    predictors,
+    prepared,
+    library,
+    labels,
+    signature,
+    alphas,
+    test,
+    *,
+    fractional=False,
+):
     train = [r for r in range(data.n_runs) if r != test]
     ids, selection_record = _fold_selection(data, library, labels, signature, train)
     paths = [
-        _run_beta_path(data, r, prepared, ids, alphas, labels[r])
+        _run_beta_path(data, r, prepared, ids, alphas, labels[r], fractional=fractional)
         for r in range(data.n_runs)
     ]
     losses, totals = [], []
@@ -121,7 +136,19 @@ def _fingerprint(arrays, names):
     return digest.hexdigest()
 
 
-def _provenance(data, arrays, columns, labels, alphas, library, signature, folds, ids):
+def _provenance(
+    data,
+    arrays,
+    columns,
+    labels,
+    alphas,
+    library,
+    signature,
+    folds,
+    ids,
+    *,
+    fractional=False,
+):
     designs = []
     for e, t, n in zip(data.events, data.frame_times, data.confounds, strict=True):
         designs.extend([e[["onset", "duration"]], t, n])
@@ -149,6 +176,13 @@ def _provenance(data, arrays, columns, labels, alphas, library, signature, folds
         encoding_model="ols_with_shared_intercept",
         trial_masks=[np.isfinite(x).all(axis=1).tolist() for x in arrays],
     )
+    if fractional:
+        activity.update(
+            name="encoding_guided_fractional_ridge_cv",
+            validation_target="candidate_fraction_regularized_betas",
+            fraction_norm_basis=NORM_BASIS,
+            fractions=activity.pop("alphas"),
+        )
     return extend_provenance(
         data.provenance,
         execution_id=str(uuid4()),
@@ -161,13 +195,30 @@ def _provenance(data, arrays, columns, labels, alphas, library, signature, folds
     )
 
 
-def score_candidates(data, predictors, alphas, library, run_labels, feature_signature):
+def score_candidates(
+    data,
+    predictors,
+    alphas,
+    library,
+    run_labels,
+    feature_signature,
+    *,
+    fractional=False,
+):
     arrays, columns, masks = _validate(data, predictors, library, feature_signature)
     labels = run_labels_for(data, run_labels)
     prepared = None if library is None else prepare_runs(data, library)
     folds = [
         _score_fold(
-            data, predictors, prepared, library, labels, feature_signature, alphas, test
+            data,
+            predictors,
+            prepared,
+            library,
+            labels,
+            feature_signature,
+            alphas,
+            test,
+            fractional=fractional,
         )
         for test in range(data.n_runs)
     ]
@@ -183,8 +234,10 @@ def score_candidates(data, predictors, alphas, library, run_labels, feature_sign
         feature_signature,
         [f[3] for f in folds],
         ids,
+        fractional=fractional,
     )
-    return RidgeCandidateScores(
+    result_type = FractionCandidateScores if fractional else RidgeCandidateScores
+    return result_type(
         alphas,
         r_squared(losses.sum(axis=0), totals.sum(axis=0)),
         losses,
