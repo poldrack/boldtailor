@@ -82,9 +82,9 @@ def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_
             scores.loc[scores.selected, "alpha"].item()
             == selected["selection"].ridge_alpha
         )
-        arrays = np.load(next(p for p in paths if f"{base}_folds.npz" in p.name))
-        np.testing.assert_allclose(arrays["sse"], selected["scores"].fold_sse)
-        np.testing.assert_allclose(arrays["sst"], selected["scores"].fold_sst)
+        with np.load(next(p for p in paths if f"{base}_folds.npz" in p.name)) as arrays:
+            np.testing.assert_allclose(arrays["sse"], selected["scores"].fold_sse)
+            np.testing.assert_allclose(arrays["sst"], selected["scores"].fold_sst)
         record = json.loads(
             next(p for p in paths if f"{base}_provenance.json" in p.name).read_text()
         )

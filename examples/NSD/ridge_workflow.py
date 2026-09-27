@@ -19,6 +19,7 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from .nsd_hrf import spatial_signature
 from .parallel_blocks import map_blocks, validate_n_jobs
+from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
 from .workflow_inputs import load_block, _trimmed_sources
 
@@ -155,7 +156,12 @@ def _global_scores(runs, root, predictors, blocks, library, alphas, n_jobs):
 def _tune(runs, root, predictors, blocks, library, alphas, percentile, n_jobs):
     scores = _global_scores(runs, root, predictors, blocks, library, alphas, n_jobs)
     selection = select_ridge_penalty(scores.cv_r2, scores.alphas, percentile=percentile)
-    return dict(scores=scores, selection=selection, run_labels=[r.label for r in runs])
+    return dict(
+        scores=scores,
+        selection=selection,
+        run_labels=[r.label for r in runs],
+        provenance=tuning_provenance(scores, selection),
+    )
 
 
 def _outer_block(indices, runs, root, predictors, library, alpha, train, test):
@@ -320,6 +326,7 @@ def fit_cv_beta_series(
             )
         print(f"Ridge CV ({mode}, {scope}): selected alpha={alpha:g}", flush=True)
     result["final"] = _final_fit(runs, root, blocks, library, alpha, n_jobs)
+    link_final_provenance(result["final"], result["tuning"]["all"]["provenance"])
     result["provenance"] = dict(
         objective="percentile_of_pooled_within_run_trial_encoding_r2",
         percentile=percentile,

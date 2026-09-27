@@ -97,7 +97,7 @@ def _tuning_artifacts(stem, brain, mode, scope, result, table):
             base + "_scores.tsv",
             table.loc[(table["mode"] == mode) & (table.scope == scope)],
         ),
-        json_artifact(base + "_provenance.json", scores.provenance.to_dict()),
+        json_artifact(base + "_provenance.json", result["provenance"].to_dict()),
         json_artifact(
             base + "_metadata.json",
             dict(
