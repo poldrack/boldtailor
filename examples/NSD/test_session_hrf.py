@@ -124,9 +124,8 @@ def test_damaged_cache_is_recomputed_instead_of_silently_reused(
     np.testing.assert_allclose(recovered[1].maps, original[1].maps, atol=1e-7)
 
 
-def test_matching_full_workflow_estimates_are_reused(
-    session_data, library, tmp_path, monkeypatch
-):
+@pytest.fixture
+def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
     from examples.NSD.workflow_inputs import load_session, make_blocks
     from examples.NSD.workflow_analysis import select_hrfs
@@ -154,6 +153,14 @@ def test_matching_full_workflow_estimates_are_reused(
     )
     existing = tmp_path / "existing"
     publish_artifact_set(existing, artifacts)
+    return existing
+
+
+def test_matching_full_workflow_estimates_are_reused(
+    session_data, library, tmp_path, monkeypatch, workflow_export
+):
+    root, prep = session_data
+    existing = workflow_export
     before = {p: p.read_bytes() for p in existing.rglob("*") if p.is_file()}
 
     def forbidden(*args, **kwargs):
@@ -174,6 +181,66 @@ def test_matching_full_workflow_estimates_are_reused(
     assert str(existing) in result[0].reused_from
     assert np.isfinite(result[0].maps[0, :3]).all()
     assert all(p.read_bytes() == value for p, value in before.items())
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_partial_full_workflow_exports_are_refitted(
+    session_data, library, tmp_path, workflow_export, empty
+):
+    root, prep = session_data
+    path = next(workflow_export.rglob("*desc-notebookHRF_provenance.json"))
+    records = json.loads(path.read_text())
+    removed = records if empty else records[-1:]
+    path.write_text(json.dumps([] if empty else records[:-1]))
+    selected_path = next(
+        workflow_export.rglob("*desc-notebookHRFAll_stat-selection.dscalar.nii")
+    )
+    image = nib.load(selected_path)
+    maps = image.get_fdata()
+    for record in removed:
+        maps[:, record["grayordinate_indices"]] = np.nan
+    nib.save(nib.Cifti2Image(maps.astype(np.float32), image.header), selected_path)
+    result = session_api().estimate_sessions(
+        root,
+        prep,
+        tmp_path / "output",
+        library=library,
+        sessions=["ses-nsd10"],
+        reuse_roots=[workflow_export],
+    )
+    assert result[0].reused_from is None
+    assert np.isfinite(result[0].maps[0, :3]).all()
+
+
+def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
+    session_data, library, tmp_path
+):
+    from examples.NSD.workflow_inputs import load_session
+
+    root, prep = session_data
+    path = next((root / "sub-07/ses-nsd10").rglob("*events.tsv"))
+    events = pd.read_csv(path, sep="\t")
+    events.loc[0, "response_time"] = np.nan
+    events.to_csv(path, sep="\t", index=False)
+    result = session_api().estimate_sessions(
+        root, prep, tmp_path / "output", library=library, sessions=["ses-nsd10"]
+    )
+    assert np.isfinite(result[0].maps[0, :3]).all()
+    runs = load_session(root, prep, hrf_only=True)
+    assert len(runs[0].events) == len(events)
+    assert pd.isna(runs[0].events.response_time).sum() == 1
+    with pytest.raises(ValueError, match="response_time"):
+        load_session(root, prep)  # Conventional GLMs still require their RT predictor.
+
+
+def test_hrf_only_analysis_requires_two_runs_without_odd_even_splits(
+    dataset, library, tmp_path
+):
+    root, prep, *_ = dataset
+    result = session_api().estimate_sessions(
+        root, prep, tmp_path / "output", library=library, sessions=["ses-nsd10"]
+    )
+    assert np.isfinite(result[0].maps[0, :3]).all()
 
 
 def test_incompatible_axes_or_missing_sessions_fail_before_fitting(
