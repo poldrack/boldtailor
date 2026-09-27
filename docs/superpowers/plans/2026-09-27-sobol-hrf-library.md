@@ -47,8 +47,8 @@ Interface: settings `hrf_library="sobol"`, `hrf_n_samples=512`, `hrf_seed=0`; ex
 - [x] Add executed notebook preview tests for defaults/overrides/grid/custom/invalid choice. Parameterize the full synthetic CIFTI workflow over custom and small Sobol libraries; verify saved settings and reconstruct exact curves from the saved table.
 - [x] Run and commit failing tests before notebook edits.
 - [x] Separate library generation/plot from selection into independent cells. Use colored curves by full-HRF time to peak, black canonical reference, full time range. Update settings and plain-language documentation, including bounds and parameter-space versus waveform-space coverage.
-- [ ] Execute both full synthetic notebook cases and complete suite with warnings as errors. Independently compare the new default factory to the approved preview table.
-- [ ] Request a fresh code review, integrate the tested change into the main checkout while preserving user notebook outputs, then verify the integrated suite.
+- [x] Execute both full synthetic notebook cases and complete suite with warnings as errors. Independently compare the new default factory to the approved preview table.
+- [x] Request a fresh code review, integrate the tested change into the main checkout while preserving user notebook outputs, then verify the integrated suite.
 
 ## Execution notes
 
@@ -59,3 +59,5 @@ Validation so far: baseline 32 passed; RED 25 new unit/preview cases fail for mi
 Test-harness correction: standalone preview tests use the Agg backend and therefore emit its expected noninteractive-show warning. A narrow warning filter around the preview execution fixes that harness error; other warnings still fail tests.
 
 Pre-integration validation: 504 tests passed in the feature worktree, excluding the unrelated stop-signal tests whose current fixes are in the main checkout. Independent fresh review found no actionable issues and independently confirmed exact preview identity, factory validation, preview execution, and export reuse. Full main-checkout verification follows integration. Scientific superiority over the grid is outside this implementation and has not been claimed.
+
+Final validation: integrated main checkout passed all 551 tests with warnings treated as errors (52.71 s). Black and git diff --check passed. Notebook sources match the tested template; original cell metadata/outputs and unrelated tracked file bytes were preserved. No full real-data refit was performed.
