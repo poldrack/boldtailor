@@ -124,6 +124,19 @@ def test_damaged_cache_is_recomputed_instead_of_silently_reused(
     np.testing.assert_allclose(recovered[1].maps, original[1].maps, atol=1e-7)
 
 
+@pytest.mark.parametrize("bad_metadata", [[], None])
+def test_malformed_cache_manifest_is_recomputed(
+    session_data, library, tmp_path, bad_metadata
+):
+    output = tmp_path / "output"
+    original = run_sessions(session_data, output, library)
+    original[0].cache_path.write_text(json.dumps(bad_metadata))
+    recovered = run_sessions(session_data, output, library)
+    assert recovered[0].reused_from is None
+    assert recovered[1].reused_from is not None
+    np.testing.assert_allclose(recovered[0].maps, original[0].maps, atol=1e-7)
+
+
 @pytest.fixture
 def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
@@ -200,6 +213,33 @@ def test_partial_full_workflow_exports_are_refitted(
     for record in removed:
         maps[:, record["grayordinate_indices"]] = np.nan
     nib.save(nib.Cifti2Image(maps.astype(np.float32), image.header), selected_path)
+    result = session_api().estimate_sessions(
+        root,
+        prep,
+        tmp_path / "output",
+        library=library,
+        sessions=["ses-nsd10"],
+        reuse_roots=[workflow_export],
+    )
+    assert result[0].reused_from is None
+    assert np.isfinite(result[0].maps[0, :3]).all()
+
+
+@pytest.mark.parametrize("damage", ["image", "activities"])
+def test_damaged_full_workflow_exports_are_refitted(
+    session_data, library, tmp_path, workflow_export, damage
+):
+    root, prep = session_data
+    if damage == "image":
+        path = next(
+            workflow_export.rglob("*desc-notebookHRFAll_stat-selection.dscalar.nii")
+        )
+        path.write_bytes(b"truncated image")
+    else:
+        path = next(workflow_export.rglob("*desc-notebookHRF_provenance.json"))
+        records = json.loads(path.read_text())
+        records[0]["scopes"]["all"]["selection_provenance"]["activities"] = []
+        path.write_text(json.dumps(records))
     result = session_api().estimate_sessions(
         root,
         prep,
