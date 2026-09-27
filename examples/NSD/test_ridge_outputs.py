@@ -29,7 +29,8 @@ def outputs():
 @pytest.mark.parametrize(
     "overrides,mode",
     [
-        ({}, "cv"),
+        ({}, "fractional_cv"),
+        ({"ridge_alphas": [0, .1]}, "cv"),
         ({"ridge_alpha": 0.2}, "fixed"),
         ({"ridge_alpha": None}, "off"),
         ({"ridge_mode": "off"}, "off"),
