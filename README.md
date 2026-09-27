@@ -20,6 +20,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Choose among 649 HRFs using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
 | Analyze NSD CIFTIs, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
+| Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |
 | Fit and view whole-brain NIfTI contrast and R² maps | [Whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
@@ -92,6 +93,11 @@ estimated responses, without selecting the HRF or ridge penalty from RT.
 The [NSD guide](examples/NSD/README.md) covers conventional and single-trial
 CIFTI models, optimized HRFs, odd/even HRF parameter maps, and their outputs.
 It includes commands for using your own data paths and running several workers.
+
+The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
+GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
+SPM HRF and then with an optimized HRF per grayordinate. It also demonstrates
+HRF reliability, single-trial beta series, RT checks, and CIFTI export.
 
 The [whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) combines
 multiple sessions in a common brain mask, fits contrasts, displays maps, and

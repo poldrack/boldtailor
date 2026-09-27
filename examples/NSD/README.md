@@ -1,13 +1,16 @@
 # NSD CIFTI analysis
 
 This example analyzes every run in one Natural Scenes Dataset session using
-fMRIPrep CIFTI time series. It supports three analyses:
+fMRIPrep CIFTI time series. Start with the
+[full workflow notebook](nsd_workflow.ipynb) for a guided analysis, or use the
+scripts below for individual analyses.
 
 | Analysis | What you get |
 | --- | --- |
 | Stimulus presentation plus response-time modulation | Full, confounds-only, and task-added R² maps |
 | Single-trial model with the canonical SPM HRF | One beta map per presentation, OLS/fixed-ridge comparisons, and RT diagnostics |
 | Single-trial model with an HRF selected per grayordinate | Optimized beta series, HRF parameter maps, independent prediction checks, and odd/even HRF maps |
+| Matched conventional GLMs with canonical and optimized HRFs (notebook) | Task, response-time, and trial-type contrast maps, R², and optimized-minus-canonical R² |
 
 See the project [user guide](../../docs/user-guide.md) for the underlying models
 and the [API reference](../../docs/api.md) for using arrays directly.
@@ -28,6 +31,51 @@ The defaults analyze `sub-07/ses-nsd10` under `/Volumes/extdata1/NSD/BIDS`,
 read `derivatives/fmriprep-25.2.5`, and write to `derivatives/boldtailor`.
 That session has 12 runs, 750 trials, and 91,282 grayordinates. The data are
 not included in this repository.
+
+## Full workflow notebook
+
+Open [nsd_workflow.ipynb](nsd_workflow.ipynb) in your notebook editor after
+running `uv sync --group dev`, and select the checkout's `.venv` Python kernel.
+Edit the first cell's paths and execution settings, then run all cells. The
+default uses all grayordinates and four workers. Set `max_grayordinates=128`
+for a quick run through every stage using all runs and a small spatial subset.
+The reliability stages require at least two odd and two even runs. This
+notebook requires matching nuisance column names and order after trimming;
+it rejects mismatches before fitting.
+
+The notebook walks through input inspection, two conventional GLMs, expanded
+HRF selection, odd/even reliability, canonical and optimized single-trial
+models, optional fixed ridge, RT checks, and export. The conventional GLMs
+fit three predictors jointly, without orthogonalization:
+
+- `task`: unit amplitude for every presentation.
+- `response_time`: seconds, centered within each run.
+- `trial_type`: binary codes 0/1, centered within each run; the coefficient is
+  type 1 minus type 0, controlling for RT.
+
+Both GLMs use the same scans, motion/aCompCor/cosine columns, run intercepts,
+and OLS settings. The notebook removes leading flagged nonsteady volumes
+from every analysis and keeps original acquisition times and event onsets.
+The scripts below instead include nonsteady indicator regressors and all
+scans. Their R² values therefore need not agree with the notebook's values.
+
+Results use `desc-notebook...` filenames under the chosen derivative root,
+so existing script results are preserved. Reruns require a new output root.
+Each conventional `stat-rsquared.dscalar.nii` contains three maps: full R²,
+confounds-only R², and task-added ΔR². The
+`desc-notebookGLMComparison_stat-deltarsquared.dscalar.nii` map contains
+optimized minus canonical full R². This is a descriptive comparison using
+the fitted data; independent half-session prediction scores are saved separately.
+
+The notebook also saves contrast effects/variances/t/z, all/odd/even HRF
+parameters and indices, the complete HRF library with time to peak, per-run
+beta series, trial tables, grouped designs, scan times, provenance, and plots.
+The final cells explain how to read the outputs and reuse the saved HRFs.
+Spatially unprocessed or undefined grayordinates remain NaN on the original
+CIFTI axis. Beta-series RT plots are descriptive; all-run optimized HRFs use
+both halves of the session.
+See the [notebook validation record](../../docs/validation/nsd-notebook.md)
+for the fixture and real-data checks.
 
 ## Run an analysis
 
