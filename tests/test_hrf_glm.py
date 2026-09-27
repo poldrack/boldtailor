@@ -1,6 +1,7 @@
 """Conventional voxelwise HRFs must preserve semantic contrasts and inference."""
 
 from dataclasses import replace
+import json
 
 import numpy as np
 import pandas as pd
@@ -437,3 +438,22 @@ def test_undefined_assignment_still_validates_contrasts(hrf_glm_problem, contras
     selection = select_hrf(constant, library=HrfLibrary.from_parameters([]))
     with pytest.raises(ValueError, match="invalid|zero|missing"):
         fit(data, replace(model, contrasts={"bad": contrast}), hrf_selection=selection)
+
+
+def test_completed_operations_log_their_analysis_identity(hrf_glm_problem, caplog):
+    data, model, selection, _ = hrf_glm_problem
+    with caplog.at_level("INFO", logger="boldtailor"):
+        result = _selected_fit(data, model, selection)
+        comparison = task_delta_r2(data, model, result)
+    events = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "boldtailor"
+    ]
+    for name, output in [
+        ("fit_completed", result),
+        ("task_delta_r2_completed", comparison),
+    ]:
+        completed = next(event for event in events if event["event"] == name)
+        assert completed.get("analysis_id") == output.provenance.analysis_fingerprint
+        assert completed["execution_id"] == output.provenance.execution_id
