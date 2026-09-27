@@ -17,7 +17,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Fit a design matrix prepared by another tool | [Prepared designs](docs/user-guide.md#using-your-own-design-matrix) |
 | Compare full-model and confound-only R² | [Variance explained](docs/user-guide.md#measuring-task-related-variance) |
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
-| Choose among 649 HRFs using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
+| Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
 | Analyze NSD CIFTIs, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
 | Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |

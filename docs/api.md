@@ -152,7 +152,8 @@ From `boldtailor.hrf_library`:
 
 | Entry point | Use |
 | --- | --- |
-| `expanded_hrf_library()` | Return the 649-candidate default library |
+| `sobol_hrf_library(n_samples=512, *, seed=0)` | Sample continuous parameters with scrambled Sobol; add canonical SPM as ID 0 |
+| `expanded_hrf_library()` | Return the original 649-candidate grid library |
 | `HrfLibrary.from_parameters(parameters)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 |
 | `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"` or `"double_gamma"` |
 | `candidate.kernel(tr, oversampling=50)` | Sample a discrete-sum-normalized kernel at TR/oversampling |
@@ -166,6 +167,17 @@ SPM candidates require the exact canonical parameter tuple
 `fingerprint`. Table rows and curve rows follow stable candidate IDs. The
 table's `peak_time` is the full-curve maximum on the 0.1-second export grid.
 Custom rows are sorted deterministically; duplicate rows are rejected.
+
+For Sobol sampling, `n_samples` is the number of custom HRFs and must be a
+positive integer power of two; `seed` must be a nonnegative integer. The
+default returns 513 candidates. Samples span response delay [3, 6],
+undershoot delay [10, 16], response dispersion [0.5, 1.5], undershoot
+dispersion [0.5, 2.5], response/undershoot ratio [2, 8], and onset delay
+[0, 2], with duration fixed at 36 seconds. These bounds match the grid
+library, but sampling is continuous. Coverage is balanced in normalized
+parameter coordinates, not in HRF waveform distance. Keep the exact table
+and curves with results; the seed is useful for regeneration, while the
+saved library records precisely which candidates were used.
 
 From `boldtailor.hrf_selection`:
 

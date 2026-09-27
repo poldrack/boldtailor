@@ -9,7 +9,7 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 from nilearn.glm.first_level.hemodynamic_models import spm_hrf
-from scipy.stats import gamma
+from scipy.stats import gamma, qmc
 
 from boldtailor._arrays import immutable_float_array
 
@@ -160,3 +160,29 @@ def expanded_hrf_library():
             (36,),
         )
     )
+
+
+def sobol_hrf_library(n_samples=512, *, seed=0):
+    """Sample continuous HRF parameters, plus exact canonical SPM at ID zero.
+
+    ``n_samples`` must be a positive power of two; ``seed`` must be a
+    nonnegative integer. Scrambled Sobol points cover the six-dimensional
+    parameter box of :func:`expanded_hrf_library`, with duration fixed at
+    36 seconds. This balances parameter coverage, not waveform distances.
+    Custom candidates are sorted by parameters, not Sobol sequence order.
+    """
+    if (
+        isinstance(n_samples, (bool, np.bool_))
+        or not isinstance(n_samples, Integral)
+        or n_samples < 1
+        or int(n_samples) & (int(n_samples) - 1)
+    ):
+        raise ValueError("n_samples must be a positive integer power of two")
+    if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, Integral) or seed < 0:
+        raise ValueError("seed must be a nonnegative integer")
+    points = qmc.Sobol(d=6, scramble=True, rng=int(seed)).random_base2(
+        int(n_samples).bit_length() - 1
+    )
+    parameters = qmc.scale(points, [3, 10, 0.5, 0.5, 2, 0], [6, 16, 1.5, 2.5, 8, 2])
+    rows = np.column_stack([parameters, np.full(int(n_samples), 36.0)])
+    return HrfLibrary.from_parameters(rows)

@@ -258,11 +258,11 @@ following example, `multi_run_data` is an `AnalysisData` object created from
 lists of runs as described above:
 
 ```python
-from boldtailor.hrf_library import expanded_hrf_library
+from boldtailor.hrf_library import sobol_hrf_library
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.single_trial import fit_selected_hrfs
 
-library = expanded_hrf_library()
+library = sobol_hrf_library(n_samples=512, seed=0)
 selection = select_hrf(multi_run_data, library=library)
 optimized = fit_selected_hrfs(multi_run_data, selection=selection)
 optimized_ridge = fit_selected_hrfs(
@@ -270,10 +270,20 @@ optimized_ridge = fit_selected_hrfs(
 )
 ```
 
-The library contains the exact canonical SPM HRF plus 648 double-gamma curves
-with varied delays, dispersions, undershoot ratios, and onset delays. You can
-inspect `library.parameter_table`, `library.times`, and `library.curves`, or
-create a smaller/custom library with `HrfLibrary.from_parameters()`.
+This library contains exact canonical SPM plus 512 double-gamma curves sampled
+continuously with a scrambled Sobol sequence. It covers the same parameter
+ranges as the original grid: response delay 3–6 s, undershoot delay 10–16 s,
+response dispersion 0.5–1.5, undershoot dispersion 0.5–2.5,
+response/undershoot ratio 2–8, and onset delay 0–2 s. Custom curves span 36 s.
+The sample count must be a power of two; the seed controls reproducibility.
+This balances coverage in parameter space, though similar waveforms can still
+arise from different parameter combinations.
+
+Inspect `library.parameter_table`, `library.times`, and `library.curves`.
+Use `expanded_hrf_library()` for the original 649-candidate grid, or
+`HrfLibrary.from_parameters()` for explicit custom rows. All three factories
+include canonical SPM at ID zero. Save the exact table and curves alongside
+the library fingerprint when you need to reuse fitted HRFs.
 
 At each feature, selection evaluates every candidate HRF in turn. For each
 held-out run, it learns a mean stimulus amplitude from the remaining runs and

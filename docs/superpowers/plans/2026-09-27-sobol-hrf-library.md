@@ -33,10 +33,10 @@ Files: `src/boldtailor/hrf_library.py`, new `tests/test_sobol_hrf_library.py`.
 Interface: `sobol_hrf_library(n_samples=512, *, seed=0) -> HrfLibrary`.
 Bounds in parameter order: (3,6), (10,16), (0.5,1.5), (0.5,2.5), (2,8), (0,2).
 
-- [ ] Test default count, exact canonical anchor, normalization, preview reference row, stratification, reproducibility, different seeds, NumPy integer arguments, and invalid counts/seeds.
-- [ ] Run `uv run --no-cache --no-sync pytest tests/test_sobol_hrf_library.py -q -W error -p no:cacheprovider`; expect missing factory failures. Commit tests.
-- [ ] Validate integers, draw `qmc.Sobol(d=6, scramble=True, rng=int(seed)).random_base2(int(n_samples).bit_length()-1)`, scale bounds, append duration 36, pass to `HrfLibrary.from_parameters`.
-- [ ] Run existing and new library tests; expect all passing.
+- [x] Test default count, exact canonical anchor, normalization, preview reference row, stratification, reproducibility, different seeds, NumPy integer arguments, and invalid counts/seeds.
+- [x] Run `uv run --no-cache --no-sync pytest tests/test_sobol_hrf_library.py -q -W error -p no:cacheprovider`; expect missing factory failures. Commit tests.
+- [x] Validate integers, draw `qmc.Sobol(d=6, scramble=True, rng=int(seed)).random_base2(int(n_samples).bit_length()-1)`, scale bounds, append duration 36, pass to `HrfLibrary.from_parameters`.
+- [x] Run existing and new library tests; expect all passing.
 
 ## Task 2: Notebook and documentation
 
@@ -44,12 +44,18 @@ Files: `examples/NSD/nsd_workflow.ipynb`, `examples/NSD/test_nsd_workflow.py`, `
 
 Interface: settings `hrf_library="sobol"`, `hrf_n_samples=512`, `hrf_seed=0`; existing non-None `hrf_parameters` overrides the factory choice. `hrf_library="expanded"` reproduces the old grid. Invalid names raise ValueError.
 
-- [ ] Add executed notebook preview tests for defaults/overrides/grid/custom/invalid choice. Parameterize the full synthetic CIFTI workflow over custom and small Sobol libraries; verify saved settings and reconstruct exact curves from the saved table.
-- [ ] Run and commit failing tests before notebook edits.
-- [ ] Separate library generation/plot from selection into independent cells. Use colored curves by full-HRF time to peak, black canonical reference, full time range. Update settings and plain-language documentation, including bounds and parameter-space versus waveform-space coverage.
+- [x] Add executed notebook preview tests for defaults/overrides/grid/custom/invalid choice. Parameterize the full synthetic CIFTI workflow over custom and small Sobol libraries; verify saved settings and reconstruct exact curves from the saved table.
+- [x] Run and commit failing tests before notebook edits.
+- [x] Separate library generation/plot from selection into independent cells. Use colored curves by full-HRF time to peak, black canonical reference, full time range. Update settings and plain-language documentation, including bounds and parameter-space versus waveform-space coverage.
 - [ ] Execute both full synthetic notebook cases and complete suite with warnings as errors. Independently compare the new default factory to the approved preview table.
 - [ ] Request a fresh code review, integrate the tested change into the main checkout while preserving user notebook outputs, then verify the integrated suite.
 
 ## Execution notes
 
 The user explicitly said “looks great, proceed”; implementation is authorized without another planning approval. Reuse `/private/tmp/boldtailor-hrf-selection` at baseline `f239ba6`. Baseline notebook test needs Jupyter runtime access outside the sandbox. The main checkout contains unrelated stop-signal changes, which must remain untouched.
+
+Validation so far: baseline 32 passed; RED 25 new unit/preview cases fail for missing behavior and full Sobol workflow fails 649 != 5; tests committed as d8588c0 before implementation. GREEN 58 library/workflow tests passed, including full custom and Sobol notebook execution. All 513 parameter rows and peak times exactly match the approved preview.
+
+Test-harness correction: standalone preview tests use the Agg backend and therefore emit its expected noninteractive-show warning. A narrow warning filter around the preview execution fixes that harness error; other warnings still fail tests.
+
+Pre-integration validation: 504 tests passed in the feature worktree, excluding the unrelated stop-signal tests whose current fixes are in the main checkout. Independent fresh review found no actionable issues and independently confirmed exact preview identity, factory validation, preview execution, and export reuse. Full main-checkout verification follows integration. Scientific superiority over the grid is outside this implementation and has not been claimed.

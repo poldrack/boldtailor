@@ -3,6 +3,7 @@
 import importlib
 import json
 from pathlib import Path
+import warnings
 
 import nbformat
 from nbclient import NotebookClient
@@ -328,7 +329,14 @@ def preview_library(tmp_path, **overrides):
     context = {"NSD_CONFIG": {"output_root": str(tmp_path / "output"), **overrides}}
     try:
         exec(cells["de5dc917"].source, context)
-        exec(cells["f3d49ae3"].source, context)
+        # These cells run without Jupyter; only suppress Agg's show warning.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="FigureCanvasAgg is non-interactive, and thus cannot be shown",
+                category=UserWarning,
+            )
+            exec(cells["f3d49ae3"].source, context)
     except NameError as error:
         pytest.fail(
             f"The library preview must execute without loading or fitting data: {error}"

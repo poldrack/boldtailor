@@ -43,7 +43,7 @@ The reliability stages require at least two odd and two even runs. This
 notebook requires matching nuisance column names and order after trimming;
 it rejects mismatches before fitting.
 
-The notebook walks through input inspection, two conventional GLMs, expanded
+The notebook walks through input inspection, two conventional GLMs, optimized
 HRF selection, odd/even reliability, canonical and optimized single-trial
 models, optional fixed ridge, RT checks, and export. The conventional GLMs
 fit three predictors jointly, without orthogonalization:
@@ -52,6 +52,22 @@ fit three predictors jointly, without orthogonalization:
 - `response_time`: seconds, centered within each run.
 - `trial_type`: binary codes 0/1, centered within each run; the coefficient is
   type 1 minus type 0, controlling for RT.
+
+By default, the notebook samples 512 continuous parameter combinations with
+a scrambled Sobol sequence (seed 0), then adds canonical SPM for 513 HRFs.
+This is the same parameter range as the original grid described below, with
+36-second custom curves. Sampling balances coverage in parameter space;
+different parameter combinations can still produce similar HRF shapes.
+Set `hrf_n_samples` to a power of two and `hrf_seed` to a nonnegative integer.
+The library cell plots every HRF, colored by time to peak, and runs separately
+from the following selection cell so you can inspect it before fitting.
+
+For the previous grid, set `hrf_library="expanded"`. Non-None
+`hrf_parameters` overrides the library choice with your own parameter rows.
+The metadata JSON saves these settings; the library TSV and NPZ save the
+exact parameter values and curves used. When changing libraries, rerun
+selection and all subsequent models with a new output root: HRF IDs are only
+meaningful together with their original library.
 
 Both GLMs use the same scans, motion/aCompCor/cosine columns, run intercepts,
 and OLS settings. The notebook removes leading flagged nonsteady volumes
