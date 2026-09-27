@@ -198,8 +198,15 @@ def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
     assert "GLM:" in captured.out
 
 
+@pytest.mark.parametrize(
+    "library_config, candidate_count",
+    [
+        ({"hrf_parameters": [[3, 10, 0.5, 0.5, 2, 0, 36]]}, 2),
+        ({"hrf_library": "sobol", "hrf_n_samples": 4, "hrf_seed": 7}, 5),
+    ],
+)
 def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
-    four_runs, tmp_path
+    four_runs, tmp_path, library_config, candidate_count
 ):
     assert NOTEBOOK.is_file(), "The full NSD workflow notebook has not been created"
     root, prep = four_runs
@@ -210,8 +217,8 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
         output_root=str(output),
         block_size=2,
         n_jobs=1,
-        hrf_parameters=[[3, 10, 0.5, 0.5, 2, 0, 36]],
         ridge_alpha=0.1,
+        **library_config,
     )
     notebook = nbformat.read(NOTEBOOK, as_version=4)
     nbformat.validate(notebook)
@@ -283,7 +290,23 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     )
     assert metadata["regressors"] == ["task", "response_time", "trial_type"]
     assert metadata["retained_scans"] == [95, 94, 93, 95]
-    assert metadata["library_candidates"] == 2
+    assert metadata["library_candidates"] == candidate_count
+    for name, value in library_config.items():
+        assert metadata["settings"][name] == value
+    saved_table = pd.read_csv(
+        next(p for p in files if p.name.endswith("_library.tsv")),
+        sep="\t",
+        float_precision="round_trip",
+    )
+    from boldtailor.hrf_library import PARAMETER_NAMES
+
+    restored = HrfLibrary.from_parameters(
+        saved_table.loc[
+            saved_table.kind == "double_gamma", list(PARAMETER_NAMES)
+        ].to_numpy()
+    )
+    assert restored.fingerprint == metadata["library_fingerprint"]
+    np.testing.assert_array_equal(restored.curves, curves)
     assert metadata["noise_model"] == "ols"
     assert "independent" in metadata["glm_comparison"].lower()
     assert (
@@ -294,6 +317,57 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     with pytest.raises(FileExistsError):
         workflow("workflow_outputs").check_output(output, "sub-07", "ses-nsd10")
     assert all(p.read_bytes() == value for p, value in before.items())
+
+
+def preview_library(tmp_path, **overrides):
+    """Execute the actual settings and preview cells without any input data."""
+    import matplotlib.pyplot as plt
+
+    plt.switch_backend("Agg")
+    cells = {c.id: c for c in nbformat.read(NOTEBOOK, as_version=4).cells}
+    context = {"NSD_CONFIG": {"output_root": str(tmp_path / "output"), **overrides}}
+    try:
+        exec(cells["de5dc917"].source, context)
+        exec(cells["f3d49ae3"].source, context)
+    except NameError as error:
+        pytest.fail(
+            f"The library preview must execute without loading or fitting data: {error}"
+        )
+    finally:
+        plt.close("all")
+    return context["library"], context["settings"]
+
+
+def test_notebook_default_preview_uses_approved_sobol_library(tmp_path):
+    from boldtailor import hrf_library
+
+    result, settings = preview_library(tmp_path)
+    assert len(result.candidates) == 513
+    assert settings["hrf_seed"] == 0
+    assert result.fingerprint == hrf_library.sobol_hrf_library().fingerprint
+
+
+def test_notebook_preview_honors_sobol_settings(tmp_path):
+    from boldtailor import hrf_library
+
+    result, _ = preview_library(tmp_path, hrf_n_samples=8, hrf_seed=11)
+    assert len(result.candidates) == 9
+    assert result.fingerprint == hrf_library.sobol_hrf_library(8, seed=11).fingerprint
+
+
+def test_notebook_preview_can_reproduce_grid_or_use_custom_rows(tmp_path):
+    from boldtailor.hrf_library import expanded_hrf_library
+
+    result, _ = preview_library(tmp_path, hrf_library="expanded")
+    assert result.fingerprint == expanded_hrf_library().fingerprint
+    rows = [[3, 10, 0.5, 0.5, 2, 0, 36]]
+    result, _ = preview_library(tmp_path, hrf_parameters=rows, hrf_n_samples=3)
+    assert result.fingerprint == HrfLibrary.from_parameters(rows).fingerprint
+
+
+def test_notebook_preview_rejects_unknown_library(tmp_path):
+    with pytest.raises(ValueError, match="hrf_library"):
+        preview_library(tmp_path, hrf_library="typo")
 
 
 def test_rerunning_beta_cell_uses_current_settings(four_runs, small_library):
