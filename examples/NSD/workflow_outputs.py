@@ -146,6 +146,12 @@ def _beta_artifacts(stem, brain, betas, runs):
     directory = str(Path(stem).parent)
     for descriptor, result in betas.items():
         artifacts.extend(_fit_artifacts(stem, brain, descriptor, result, runs))
+        if "ridge_fraction" in result:
+            from .fractional_outputs import fraction_fit_artifacts
+
+            artifacts.extend(
+                fraction_fit_artifacts(stem, brain, descriptor, result, runs)
+            )
         artifacts.append(
             table_artifact(
                 f"{stem}_desc-notebook{descriptor}_trials.tsv", result["trial_table"]

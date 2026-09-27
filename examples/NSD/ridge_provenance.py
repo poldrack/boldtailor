@@ -4,6 +4,8 @@ from hashlib import sha256
 from uuid import uuid4
 
 import numpy as np
+from boldtailor.ridge_results import FractionSelection
+from boldtailor._fractional_ridge import NORM_BASIS
 
 from boldtailor.provenance import (
     ProvenanceRecord,
@@ -13,20 +15,26 @@ from boldtailor.provenance import (
 
 
 def tuning_provenance(scores, selection):
-    activity = dict(
-        name="global_encoding_ridge_selection",
+    if isinstance(selection, FractionSelection):
+        activity = dict(
+            name="voxelwise_encoding_fraction_selection",
+            fractions=list(selection.fractions),
+            objective="maximum_encoding_r2_per_grayordinate",
+            validation_target="candidate_fraction_regularized_betas",
+            fraction_norm_basis=NORM_BASIS,
+            selected_fraction_fingerprint=sha256(
+                np.asarray(selection.ridge_fraction, dtype="<f8").tobytes()
+            ).hexdigest(),
+            tie_rule="largest fraction within 1e-12 of the maximum score",
+        )
+    else:
+        activity = _alpha_activity(selection)
+    activity.update(
         run_labels=list(scores.run_labels),
-        alphas=list(selection.alphas),
-        percentile=selection.percentile,
-        objective="percentile_of_pooled_within_run_trial_encoding_r2",
-        validation_target="candidate_regularized_betas",
-        tie_rule="smallest alpha within 1e-12 of the maximum objective",
         scoring_mask_fingerprint=sha256(selection.scoring_mask.tobytes()).hexdigest(),
         candidate_score_fingerprint=sha256(
             np.asarray(scores.cv_r2, dtype="<f8").tobytes()
         ).hexdigest(),
-        objective_scores=selection.objective_scores.tolist(),
-        selected_alpha=selection.ridge_alpha,
     )
     record = scores.provenance
     identity = dict(scoring=record.to_dict()["activities"], selection=activity)
@@ -37,6 +45,19 @@ def tuning_provenance(scores, selection):
         events=record.events,
         warnings=(),
         analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
+    )
+
+
+def _alpha_activity(selection):
+    return dict(
+        name="global_encoding_ridge_selection",
+        alphas=list(selection.alphas),
+        percentile=selection.percentile,
+        objective="percentile_of_pooled_within_run_trial_encoding_r2",
+        validation_target="candidate_regularized_betas",
+        tie_rule="smallest alpha within 1e-12 of the maximum objective",
+        objective_scores=selection.objective_scores.tolist(),
+        selected_alpha=selection.ridge_alpha,
     )
 
 
@@ -55,6 +76,10 @@ def link_final_provenance(result, decision):
             tuning_execution_id=decision.execution_id,
             **identity,
         )
+        if "ridge_fraction" in result:
+            activity.update(
+                regularization="fractional_ridge", fraction_norm_basis=NORM_BASIS
+            )
         block["record"] = extend_provenance(
             record,
             execution_id=str(uuid4()),

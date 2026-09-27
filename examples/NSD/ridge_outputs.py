@@ -5,6 +5,14 @@ from pathlib import Path
 from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
+from boldtailor.ridge_results import FractionSelection
+from boldtailor._fractional_ridge import NORM_BASIS
+from .fractional_outputs import (
+    tuning_rows,
+    plot_tuning,
+    tuning_artifacts,
+    fraction_fit_artifacts,
+)
 
 from .hrf_artifacts import figure_artifact, npz_artifact, parameter_artifact
 from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
@@ -20,6 +28,9 @@ def tuning_table(results):
     for mode, result in results.items():
         for scope, tuned in result["tuning"].items():
             selected = tuned["selection"]
+            if isinstance(selected, FractionSelection):
+                rows.extend(tuning_rows(mode, scope, tuned))
+                continue
             for alpha, value in zip(
                 selected.alphas, selected.objective_scores, strict=True
             ):
@@ -41,6 +52,9 @@ def tuning_figure(results):
     figure = Figure(figsize=(6 * len(results), 4), layout="constrained")
     axes = figure.subplots(1, len(results), squeeze=False)[0]
     for axis, (mode, result) in zip(axes, results.items(), strict=True):
+        if isinstance(result["tuning"]["all"]["selection"], FractionSelection):
+            plot_tuning(axis, mode, result)
+            continue
         positive = []
         for scope, tuned in result["tuning"].items():
             selected = tuned["selection"]
@@ -63,6 +77,8 @@ def tuning_figure(results):
 
 
 def _tuning_artifacts(stem, brain, mode, scope, result, table):
+    if isinstance(result["selection"], FractionSelection):
+        return tuning_artifacts(stem, brain, mode, scope, result, table)
     descriptor = f"{mode}RidgeCV{scope.title()}"
     base = f"{stem}_desc-notebook{descriptor}"
     scores, selected = result["scores"], result["selection"]
@@ -133,7 +149,9 @@ def _prediction_artifacts(stem, brain, descriptor, runs, outer):
 
 
 def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
-    descriptor = mode + "RidgeCV" + "".join(word.title() for word in scope.split("_"))
+    fractional = "ridge_fraction" in outer
+    kind = "FractionalCV" if fractional else "RidgeCV"
+    descriptor = mode + kind + "".join(word.title() for word in scope.split("_"))
     base = f"{stem}_desc-notebook{descriptor}"
     ids = np.where(outer["hrf_indices"] >= 0, outer["hrf_indices"], np.nan)
     artifacts = [
@@ -166,13 +184,29 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
                 predictor_means=outer["predictor_means"].tolist(),
                 trial_masks=[m.tolist() for m in outer["trial_masks"]],
                 trial_mask_run_labels=[r.label for r in runs],
-                validation_target="selected_penalty_regularized_betas",
+                validation_target=(
+                    "selected_fraction_regularized_betas"
+                    if fractional
+                    else "selected_penalty_regularized_betas"
+                ),
+                tuning_analysis_fingerprint=outer.get("tuning_analysis_fingerprint"),
+                **(
+                    dict(
+                        fraction_norm_basis=NORM_BASIS,
+                        alpha_run_labels=[r.label for r in runs],
+                        alpha_interpretation="per-run conversion of the fixed training-selected fraction",
+                    )
+                    if fractional
+                    else {}
+                ),
                 interpretation="Held-out encoding prediction of this pipeline's regularized beta targets",
             ),
         ),
     ]
     parameter_path = f"{stem}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-hrfparameters.dscalar.nii"
     artifacts.append(parameter_artifact(brain, library, ids, parameter_path))
+    if fractional:
+        artifacts.extend(fraction_fit_artifacts(stem, brain, descriptor, outer, runs))
     return [*artifacts, *_prediction_artifacts(stem, brain, descriptor, runs, outer)]
 
 
@@ -195,16 +229,17 @@ def ridge_artifacts(stem, brain, runs, results, library):
     """Return one publishable group; final beta images use existing artifacts."""
     table = tuning_table(results)
     first = next(iter(results.values()))
+    kind = "FractionalCV" if "ridge_fraction" in first["final"] else "RidgeCV"
     artifacts = [
         table_artifact(
-            f"{stem}_desc-notebookRidgeCV_predictors.tsv",
+            f"{stem}_desc-notebook{kind}_predictors.tsv",
             _predictor_table(runs, first["predictors"]),
         ),
         figure_artifact(
-            f"{stem}_desc-notebookRidgeCV_tuning.png", tuning_figure(results)
+            f"{stem}_desc-notebook{kind}_tuning.png", tuning_figure(results)
         ),
         json_artifact(
-            f"{stem}_desc-notebookRidgeCV_metadata.json",
+            f"{stem}_desc-notebook{kind}_metadata.json",
             {mode: r["provenance"] for mode, r in results.items()},
         ),
     ]

@@ -143,10 +143,12 @@ def _trial_designs(result, runs, selection):
     return designs
 
 
-def _beta_block(job, runs, root, alpha):
+def _beta_block(job, runs, root, alpha, fractions=None):
     indices, selection = job
     data = load_block(runs, root, indices)
     options = dict(ridge_alpha=alpha, run_labels=[r.label for r in runs])
+    if fractions is not None:
+        options["ridge_fraction"] = fractions[indices]
     if selection is None:
         result = fit_single_trials(data, hrf="spm", **options)
     else:
@@ -162,13 +164,30 @@ def _beta_block(job, runs, root, alpha):
         r2=np.stack([result.full_r2, result.nuisance_r2, result.delta_r2]),
         designs=_trial_designs(result, runs, selection),
         provenance=result.provenance.to_dict(),
+        run_ridge_alphas=result.run_ridge_alphas,
     )
 
 
-def fit_beta_series(runs, root, blocks, *, selections=None, ridge_alpha=0.0, n_jobs=1):
+def fit_beta_series(
+    runs,
+    root,
+    blocks,
+    *,
+    selections=None,
+    ridge_alpha=0.0,
+    n_jobs=1,
+    ridge_fraction=None,
+):
     """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
-    label = f"Beta series ({hrf}, alpha={ridge_alpha:g})"
+    from boldtailor._fractional_ridge import regularization
+
+    alpha, fractions = regularization(
+        ridge_alpha, ridge_fraction, runs[0].image.shape[1]
+    )
+    label = f"Beta series ({hrf}, " + (
+        f"alpha={alpha:g})" if fractions is None else "fractional ridge)"
+    )
     print(f"{label}: fitting {len(runs)} runs in {len(blocks)} blocks", flush=True)
     n = runs[0].image.shape[1]
     result = dict(
@@ -176,17 +195,25 @@ def fit_beta_series(runs, root, blocks, *, selections=None, ridge_alpha=0.0, n_j
         r2=np.full((3, n), np.nan),
         designs={},
         provenance=[],
-        ridge_alpha=ridge_alpha,
+        ridge_alpha=alpha,
     )
+    if fractions is not None:
+        result.update(
+            ridge_fraction=fractions, run_ridge_alphas=np.full((len(runs), n), np.nan)
+        )
     for (indices, _), block in map_blocks(
         _beta_block,
         _jobs(blocks, selections),
-        args=(runs, root, ridge_alpha),
+        args=(runs, root, ridge_alpha, fractions),
         n_jobs=n_jobs,
     ):
         for target, values in zip(result["betas"], block["betas"], strict=True):
             target[:, indices] = values
         result["r2"][:, indices] = block["r2"]
+        if fractions is not None:
+            result["run_ridge_alphas"][:, indices] = np.asarray(
+                block["run_ridge_alphas"]
+            )
         result["trial_table"] = block["trial_table"]
         _collect_metadata(result, block, indices)
     result["rt"] = correlate_rt(
