@@ -52,6 +52,8 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Owned arrays, event tables, timing, and source records | `data`, `_arrays`, `provenance` |
 | Event-based conventional GLMs | `model`, `design`, `fit`, `_conventional`, `results` |
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
+| Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
+| Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
@@ -162,7 +164,9 @@ least squares and root finding provide checks against the production SVD.
 Reusable synthetic datasets are pytest fixtures in `tests/conftest.py`.
 
 HRF ID 0 dispatches to the exact Nilearn SPM kernel with 32-second support.
-The default custom grid adds 648 double-gamma candidates with 36-second support.
+`expanded_hrf_library()` adds 648 double-gamma candidates with 36-second support.
+The NSD notebooks instead default to `sobol_hrf_library(n_samples=512, seed=0)`,
+which adds 512 sampled custom HRFs over the same parameter ranges.
 Candidate order is deterministic. Exported curves use a 0.1-second grid;
 convolution uses TR/50 and the supplied acquisition times. Kernels have discrete
 sum one. Peak-normalizing them would change the interpretation of trial betas.
@@ -238,11 +242,12 @@ does not install handlers. Applications choose the destination and log level.
 `emit_event()` creates a lifecycle record; `append_event_history()` retains
 the most recent eight events in provenance.
 
-Records contain lifecycle metadata and correlation IDs rather than arrays,
-coefficients, or table contents. Metadata validation and error sanitization
-exclude absolute paths and sensitive execution details such as command lines,
-environment variables, usernames, and hostnames. Callers still need to ensure
-that relative source names and annotations are suitable for sharing.
+Structured fields carry lifecycle metadata and correlation IDs. Error handling
+is not yet uniform: conventional and grouped fits can pass `str(error)` to
+`emit_event()`, which preserves it. Prepared fits apply a separate sanitizer.
+Source/provenance metadata validation does not sanitize logger output. Inspect
+error messages and source annotations before sharing logs; a uniform logging
+policy remains planned work.
 
 ## BIDS metadata projection
 
@@ -266,7 +271,9 @@ the writer restore the previous output set if a later write fails. New adapters
 should use this path rather than writing their final files piecemeal.
 
 The publisher validates paths, protects supplied source paths, locks the output
-directory, stages and fsyncs files, and rolls back failed promotion. Existing
+directory, stages and fsyncs files, and rolls back failed promotion. Each file
+replacement is atomic, but the collection is not one atomic operation: readers
+that do not share the writer lock can observe partial promotion. Existing
 files are protected unless `overwrite=True`. Preflight known output collisions
 before expensive fitting, and still let the publisher perform its own checks.
 
@@ -295,8 +302,12 @@ For optimized HRFs, each run's NPZ stores `hrf_<id>` trial matrices, shared
 
 These archives cover all-run production fits. An HRF used only by an independent
 RT diagnostic may need reconstruction from the saved library, event timing,
-frame times, and nuisance matrix. A saved-map-to-selection loader has not yet
-been implemented. Standalone all-run response-delay and time-to-peak files in
+frame times, and nuisance matrix. The installed core has no general loader
+that reconstructs an
+`HrfSelectionResult` from image files. The session-reliability example can
+reuse compatible saved selection maps and provenance through its dedicated
+cache/import helpers; it does not provide a general selection-object loader.
+Standalone all-run response-delay and time-to-peak files in
 the development NSD dataset were created separately; automatic exports contain
 those quantities in the multi-map HRF parameter images.
 

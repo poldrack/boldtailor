@@ -362,7 +362,7 @@ def run_analysis(
     session="ses-nsd10",
     block_size=4096,
 ):
-    """Fit all session runs and atomically publish pooled maps and supporting files."""
+    """Fit session runs and publish maps with per-file replacement and rollback."""
     root = Path(bids_root).resolve()
     prep = (
         Path(fmriprep_root) if fmriprep_root else root / "derivatives/fmriprep-25.2.5"

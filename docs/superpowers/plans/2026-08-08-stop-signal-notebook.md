@@ -1,5 +1,8 @@
 # Stop-Signal Real-Data Notebook Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a tested, executable two-session notebook that demonstrates Boldtailor modeling, diagnostics, logging, provenance projection, and transactional derivative publication with real stop-signal fMRIPrep data.
@@ -1044,7 +1047,7 @@ setting `PERSIST_DERIVATIVES=True` writes only to
 - [ ] **Step 5: Link the notebook from README**
 
 Add a short `Examples` section linking
-`[Two-session stop-signal real-data notebook](examples/stop_signal_demo.ipynb)`.
+`[Two-session stop-signal real-data notebook](../../../examples/stop_signal_demo.ipynb)`.
 State that its default path is local and can be overridden with
 `BOLDTAILOR_BIDS_ROOT`.
 

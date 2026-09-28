@@ -1,5 +1,8 @@
 # Prepared-Design Estimation Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an immutable prepared-design input and a pure conventional fitting path that FitLins can call without exposing image, PyBIDS, Nipype, or FitLins objects to Boldtailor.

@@ -1,5 +1,8 @@
 # Task-Attributable Delta R-Squared Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 **Amended:** 2026-08-11. Task delta R-squared is an ordinary least-squares
 diagnostic for both the full and nuisance-only designs, independent of the
 noise model used for coefficient inference. This replaces the earlier

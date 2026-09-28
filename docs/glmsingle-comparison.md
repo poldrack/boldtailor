@@ -78,7 +78,10 @@ example additionally handles CIFTI loading and spatially matched exports.
 
 Raw beta magnitudes need care when comparing packages. Boldtailor normalizes
 HRF kernels to sum to one, whereas GLMsingle's library selector normalizes
-each HRF's peak to one. Boldtailor's `ridge_alpha` is a numerical penalty;
+each HRF's peak to one.
+[GLMsingle normalization FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#if-the-hrf-changes-from-voxel-to-voxel-doesn-t-that-pose-some-interpretation-difficulties-or-confounding-issues).
+
+Boldtailor's `ridge_alpha` is a numerical penalty;
 `ridge_fraction` uses a norm ratio in its nuisance-projected, raw trial
 coefficient basis. It does not apply GLMsingle's optional post-fit scaling and offset.
 Match signal scaling, timing, nuisance regressors,
@@ -94,7 +97,7 @@ the two packages has been run in this repository.
 
 The development checkout at `/Users/poldrack/Dropbox/code/GLMsingle` has a
 modular Python API that goes beyond the interface described in the 2022 paper
-and online documentation. It was inspected at revision
+and online documentation. This description is pinned to revision
 `1de98a92e80754ff549c87b5c5b815b1aab8148c` for this comparison.
 
 Its `HRFLibrarySelector` accepts an arbitrary sampled library and selects by

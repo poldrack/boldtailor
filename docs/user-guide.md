@@ -117,8 +117,10 @@ usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
 `design_matrices`, since one matrix no longer describes a whole run. Run indices
 are zero-based and result arrays preserve the input feature order.
 
-This option is available through the array API. The current NSD conventional
-command and stop-signal notebook use fixed HRFs. Adapting an image workflow
+This option is available through the array API. The standalone NSD conventional
+command and stop-signal notebook use fixed HRFs; the full NSD workflow
+notebook includes both canonical and selected-HRF conventional GLMs. Adapting
+an image workflow
 also requires saving each grouped design; the stop-signal `result_artifacts()`
 helper currently expects a common-HRF result.
 
@@ -237,11 +239,16 @@ first_run_betas = ridge.run_betas[0]
 trials = ridge.trial_table
 ```
 
+Both trial entry points return `SingleTrialResult`. Access fitted matrices
+through `result.design.matrices`; selected-HRF assignments and selection
+provenance are also on `result.design`. See [result migration](result-migration.md).
+
 Each beta array is **trials × features**. The trial table retains your event
 metadata and adds run labels, within-run event indices, session-wide trial
 indices, and unique trial IDs. Missing RT does not remove a trial from the fit.
 
-These fitting functions accept a nonnegative penalty. Trial regressors are
+The `ridge_alpha` option accepts a nonnegative normalized-column penalty.
+Trial regressors are
 adjusted for nuisances and scaled to unit length before regularization; returned
 betas are restored to the original signal scale. Nuisance coefficients are
 unpenalized. The value is an ordinary ridge penalty, not a fractional-ridge
@@ -266,6 +273,7 @@ from boldtailor.fractional_ridge import (
 )
 from boldtailor.single_trial import fit_single_trials
 
+# data must contain multiple runs; encode categorical predictors numerically.
 predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_fraction_candidates(
     data, predictors, fractions=[.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]
@@ -301,6 +309,9 @@ predictor exclusions never delete stimuli from the beta-series model. This objec
 not recovery of an unobserved ground-truth beta series. The shared-alpha CV
 API continues to use normalized columns and candidate-regularized targets.
 
+Both scorers require numeric predictor columns: encode category labels first.
+Use at least two runs with canonical HRFs, or three with an HRF library.
+
 The NSD notebook defaults to this approach, with separate odd/even outer
 evaluations and an all-run final refit. Its percentile curves summarize the
 candidate scores; they do not select a brain-wide fraction. Conventional
@@ -325,6 +336,7 @@ from boldtailor.single_trial import fit_single_trials
 
 # Supply only training runs here if reserving separate outer test runs.
 # Numeric tables have one row per original event, in exactly the same order.
+# data must contain multiple runs; encode categorical predictors numerically.
 predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_ridge_candidates(
     data, predictors, alphas=[0., .001, .01, .1, 1., 10., 100.]
@@ -454,8 +466,10 @@ Undefined selections use `-1` in Python and NaN in CIFTI maps.
 You can apply an in-memory selection to other runs with the same feature
 ordering using `fit_selected_hrfs()`. Supplying `feature_signature` to selection
 and fitting lets Boldtailor check an identifier for that ordering; the NSD
-example derives it from the CIFTI spatial axis. There is currently no loader
-that turns the saved HRF maps back into a reusable selection object.
+example derives it from the CIFTI spatial axis. The installed core has no
+general image-to-`HrfSelectionResult` loader.
+The NSD session-reliability notebook can reuse compatible saved maps and
+provenance through its dedicated cache/import helpers.
 
 ## Reaction-time checks
 

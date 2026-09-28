@@ -1,5 +1,9 @@
 # Scientific readability: array and result ownership
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Implementation base: `82ac3ff`. Work is on `refactor/scientific-readability`.
 Main and stash `c4cfbec5fccd5397ea650c550f5b485ea588c2cd` remain unchanged.
 The user approved the ownership implementation plan before execution.

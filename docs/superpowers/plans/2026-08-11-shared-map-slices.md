@@ -1,5 +1,8 @@
 # Shared Map Slices Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make all five stop-signal statistical maps use the same axial display mode and cut coordinates.

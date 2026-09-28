@@ -1,5 +1,9 @@
 # Expanded HRF selection validation — 2026-09-26
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../../README.md) for current API and methods guidance.
+
 The approved mean-stimulus selection design is implemented. The full
 sub-07/ses-nsd10 analysis completed and its saved results passed an independent
 numerical audit. Code was integrated by local fast-forward into main, preserving

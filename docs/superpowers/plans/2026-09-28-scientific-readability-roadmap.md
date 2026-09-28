@@ -1,10 +1,13 @@
 # Scientific readability refactor roadmap
 
+> **Development plan:** Includes proposed work as well as implemented changes.
+> See the [documentation index](../../README.md) for current API and methods guidance.
+
 **Approved design:** [scientific-readability-design](../specs/2026-09-28-scientific-readability-design.md).
 
 This roadmap keeps the full architectural scope visible. Each stage produces
 working software and receives a concrete implementation plan before execution.
-Stages 1 and 2 are implemented; the
+Stages 1 and 2 and the ownership/result/diagnostic portions of Stage 3 are implemented; the
 [numerical/CV plan](2026-09-28-scientific-readability-numerics.md) records the second
 stage. Later stages retain separate implementation plans. This is deliberate:
 decisions about the numerical interfaces should inform the later fit and
@@ -63,7 +66,7 @@ a scale-invariant decomposition separate from the raw regularization basis.
 
 The [ownership increment](2026-09-28-scientific-readability-ownership.md) is
 implemented: ordinary read-only arrays, direct internal prepared-design access,
-and local fractional-result ownership. The proposed
+and local fractional-result ownership. The implemented
 [result/diagnostic plan](2026-09-28-scientific-readability-results.md) consolidates
 candidate scores and trial results while sharing fit diagnostics. Lifecycle
 sharing is sequenced with Stage 4's logging/provenance changes because they

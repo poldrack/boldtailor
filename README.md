@@ -122,9 +122,10 @@ across runs.
 The published GLMsingle workflow selects HRFs by in-sample fit, then uses
 repeated conditions to tune data-derived denoising and fractional ridge.
 Boldtailor's HRF selection needs no repeated images, but assumes that a mean
-stimulus response transfers between runs. Its ridge CV predicts regularized
-beta series from trial variables such as trial type and RT, assuming that
-those relationships transfer across runs. See the
+stimulus response transfers between runs. Its ridge CV predicts trial
+beta series from variables such as trial type and RT. Fractional CV scores
+fixed OLS targets; shared-alpha CV scores candidate-regularized targets. Both
+assume that the predictor relationships transfer across runs. See the
 [GLMsingle comparison](docs/glmsingle-comparison.md) for the methods, assumptions,
 and differences from the locally developed GLMsingle API.
 
@@ -132,6 +133,8 @@ and differences from the locally developed GLMsingle API.
 
 - [User guide](docs/user-guide.md): model choices, timing, confounds, HRFs, and interpretation.
 - [API reference](docs/api.md): entry points, options, and returned values.
+- [Result migration](docs/result-migration.md): current result classes and design access.
+- [Documentation index](docs/README.md): current guides and dated development records.
 - [GLMsingle comparison](docs/glmsingle-comparison.md): HRFs, denoising, regularization, and validation.
 - [NSD guide](examples/NSD/README.md): commands and CIFTI output reference.
 - [NSD validation](docs/validation/nsd-session.md): recorded numerical checks and benchmarks.

@@ -1,8 +1,18 @@
 # Per-grayordinate fractional ridge validation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Validated on 2026-09-27 using `sub-07/ses-nsd10`. The checks establish numerical
 and workflow correctness on synthetic data and a bounded NSD subset; whole-brain
 runtime and scientific performance have not been evaluated.
+
+This historical real-data audit used normalized trial columns and
+candidate-regularized targets. Current fractional fitting uses raw coefficient
+norms and fixed OLS targets; see the [adoption record](fractional-defaults-2026-09-28.md)
+and [current methods](../user-guide.md#fractional-ridge-at-each-grayordinate).
+The measurements below have not been rerun under those newer defaults.
 
 ## Automated checks
 

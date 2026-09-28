@@ -1,5 +1,8 @@
 # Leakage-safe fractional-ridge ablation
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 **Goal:** Test whether fixed OLS targets, raw trial-column scaling, training-pooled
 fractions, and training-only affine calibration improve known beta recovery.
 User authorized execution on 2026-09-28. Production defaults stay unchanged.

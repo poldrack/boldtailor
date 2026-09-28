@@ -3,7 +3,9 @@
 Boldtailor now returns ordinary NumPy arrays instead of a float-array subclass
 or byte-buffer-backed masks and indices. All are owned copies marked read-only.
 Float64, int64, and bool dtypes, numerical values, shapes, and result field names
-are unchanged. Public table and dictionary accessors still return defensive
+were unchanged by the ownership refactor. The subsequent
+[result migration](result-migration.md) changes score and trial-design access
+paths. Public table and dictionary accessors still return defensive
 copies; nested event metadata remains isolated.
 
 Ordinary assignments still raise `ValueError`. Read-only flags protect against

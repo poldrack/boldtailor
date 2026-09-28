@@ -1,4 +1,4 @@
-"""Single-trial canonical-HRF models without repeated-stimulus tuning."""
+"""Single-trial shared or selected HRF models without repeated-stimulus tuning."""
 
 from collections.abc import Sequence
 import hashlib

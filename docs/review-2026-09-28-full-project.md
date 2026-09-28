@@ -1,5 +1,9 @@
 # Full project review: scientific accuracy, engineering, architecture
 
+> **Historical review:** Describes the reviewed working tree, including work
+> preserved separately from this branch. Findings may already be addressed.
+> See the [documentation index](README.md) and active refactor roadmap.
+
 **Date:** 2026-09-28
 **Scope:** all of `src/boldtailor/` (7,735 lines), `tests/` (11,249 lines),
 `examples/` (≈8,800 lines plus notebooks), packaging, and documentation.

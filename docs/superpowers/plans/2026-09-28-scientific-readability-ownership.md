@@ -1,5 +1,8 @@
 # Ordinary Array Ownership and Prepared-Design Access Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the preserved native execution method. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace special array immutability machinery with ordinary owned NumPy arrays and eliminate repeated copies of every prepared design during fitting.

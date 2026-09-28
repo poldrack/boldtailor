@@ -1,5 +1,8 @@
 # Task-Attributable Delta R-Squared Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **Historical plan:** The statistical definition in this completed plan was
 > superseded on 2026-08-11 by the amendment in
 > `docs/superpowers/specs/2026-08-09-task-delta-r2-design.md`. New work must use

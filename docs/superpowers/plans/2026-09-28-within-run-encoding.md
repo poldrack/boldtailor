@@ -1,5 +1,8 @@
 # Within-run encoding and run-specific intercepts
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 **Status:** Implemented and verified on `feat/within-run-encoding`, 2026-09-28.
 Full suite: 837 passed; four additional independent-review coverage tests passed.
 See `docs/validation/within-run-encoding-2026-09-28.md` for scientific results.

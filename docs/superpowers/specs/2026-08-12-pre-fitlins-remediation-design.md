@@ -1,5 +1,8 @@
 # Pre-FitLins Remediation Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 **Date:** 2026-08-12
 
 **Status:** Approved design

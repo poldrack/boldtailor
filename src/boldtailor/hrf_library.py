@@ -148,7 +148,7 @@ class HrfLibrary:
 
 
 def expanded_hrf_library():
-    """The notebook's 648 double-gamma kernels, plus the exact legacy anchor."""
+    """The original grid of 648 double-gamma kernels plus exact canonical SPM."""
     return HrfLibrary.from_parameters(
         product(
             (3, 4.5, 6),

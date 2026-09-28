@@ -1,7 +1,10 @@
 # Scientific readability refactor
 
+> **Development plan:** Includes proposed work as well as implemented changes.
+> See the [documentation index](../../README.md) for current API and methods guidance.
+
 Date: 2026-09-28
-Status: approved by the user on 2026-09-28; foundation, numerical, and ownership increments implemented; further fit/results work remains.
+Status: approved by the user on 2026-09-28; foundation, numerical, ownership, results, and shared-diagnostic increments implemented; lifecycle/logging, provenance, publication, and imaging work remains.
 
 ## Purpose and scope
 

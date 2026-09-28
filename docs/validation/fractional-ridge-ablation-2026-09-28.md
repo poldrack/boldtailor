@@ -1,5 +1,9 @@
 # Leakage-safe fractional-ridge ablation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Date: 2026-09-28. Experimental implementation: `4a5820f`.
 Production fitting defaults are unchanged.
 

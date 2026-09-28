@@ -1,5 +1,9 @@
 # NSD workflow notebook validation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 The [full workflow notebook](../../examples/NSD/nsd_workflow.ipynb) was
 executed on 2026-09-27 using all 12 runs of `sub-07/ses-nsd10`, all 750
 trials, and the first 128 grayordinates. It used the full 649-candidate HRF

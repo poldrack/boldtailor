@@ -1,5 +1,9 @@
 # Scientific readability foundation validation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Implementation base: `531dac3`; scientific baseline: `57acff5`.
 Preserved work: stash `c4cfbec5fccd5397ea650c550f5b485ea588c2cd`, not applied.
 

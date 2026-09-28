@@ -1,5 +1,8 @@
 # Voxelwise fractional ridge implementation plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** Use superpowers:executing-plans, with tests committed before implementation and one final independent review.
 
 **Goal:** Choose a fractional ridge setting independently at each grayordinate using held-out trial encoding R², retaining nested HRF selection and outer-run evaluation.

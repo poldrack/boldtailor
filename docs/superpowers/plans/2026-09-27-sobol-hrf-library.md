@@ -1,5 +1,8 @@
 # Sobol HRF library implementation plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** Use superpowers:executing-plans for this approved change. Follow RED–GREEN and commit tests before implementation.
 
 **Goal:** Make the approved 512-sample Sobol HRF preview available through the API and NSD notebook.

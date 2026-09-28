@@ -1,6 +1,9 @@
 # Shared Scientific Results and Fit Diagnostics Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the preserved native execution method. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Development plan:** Includes proposed work as well as implemented changes.
+> See the [documentation index](../../README.md) for current API and methods guidance.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the preserved native execution method. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Remove duplicate scientific result containers and repeated conventional/prepared fit diagnostics while keeping numerical outputs easy to access.
 
@@ -10,7 +13,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-scientific-readability-design.md`
 
-**Status:** Proposed next increment; not implemented. Current verified base is `a1e1632` (789 tests).
+**Status:** All three tasks implemented from `d4b6783` (789-test baseline); 801 tests, formatting, installed-wheel verification, and independent review passed. See [validation](../../validation/scientific-readability-results-2026-09-28.md).
 
 ## Scope and sequencing
 
@@ -79,7 +82,7 @@ choosing one shared alpha and choosing a fraction per feature are distinct opera
 
 ## Task 1: Consolidate candidate scores
 
-- [ ] Add a schema test to `tests/test_result_schemas.py` using the shared `ridge_problem` fixture:
+- [x] Add a schema test to `tests/test_result_schemas.py` using the shared `ridge_problem` fixture:
 
 ```python
 from dataclasses import replace
@@ -119,7 +122,7 @@ def test_candidate_scores_name_the_grid_and_scientific_basis(ridge_problem, frac
   `.alphas`/`.fractions` fields. Run the new schema tests and both CV suites;
   expect missing-class/field failures. Commit tests.
 
-- [ ] Replace the two candidate-score classes with this one field layout:
+- [x] Replace the two candidate-score classes with this one field layout:
 
 ```python
 @dataclass(frozen=True)
@@ -143,7 +146,7 @@ class CandidateScores:
   does not re-sort arrays or reinterpret scores. Update NSD `_global_scores` to
   construct the same type after block assembly.
 
-- [ ] Migrate identified consumers by object type and surrounding use, not a global
+- [x] Migrate identified consumers by object type and surrounding use, not a global
   string replacement. Search all source, examples, tests, Markdown, and notebooks
   for old class names and candidate-result grid access. Keep serialized provenance
   `alphas`/`fractions` fields unchanged. Historical plans and review reports stay
@@ -151,13 +154,13 @@ class CandidateScores:
   Add the above migration table and a code
   example to `docs/result-migration.md`.
 
-- [ ] Run `uv run pytest tests/test_result_schemas.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_within_run_cv_isolation.py examples/NSD/test_ridge_workflow.py examples/NSD/test_fractional_workflow.py -q -W error`.
+- [x] Run `uv run pytest tests/test_result_schemas.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_within_run_cv_isolation.py examples/NSD/test_ridge_workflow.py examples/NSD/test_fractional_workflow.py -q -W error`.
   Existing independent oracle, leakage, block-size, and real-process tests must
   pass unchanged numerically. Format changed Python, check whitespace, and commit.
 
 ## Task 2: Compose one trial result with explicit design information
 
-- [ ] Add to `tests/test_result_schemas.py`:
+- [x] Add to `tests/test_result_schemas.py`:
 
 ```python
 @pytest.mark.parametrize("selected", [False, True])
@@ -232,7 +235,7 @@ def test_selected_trial_design_owns_arrays_and_mapping(selected_fixture):
   that every shared design uses canonical SPM. Run the new tests and affected
   trial suites; commit observed RED failures.
 
-- [ ] Define the two small containers in `single_trial_results.py`:
+- [x] Define the two small containers in `single_trial_results.py`:
 
 ```python
 @dataclass(frozen=True)
@@ -270,19 +273,19 @@ class SelectedTrialDesign:
   and now-unused imports. Both fitting entry points return `SingleTrialResult`.
   Use keyword constructors so scientific arrays cannot be confused by position.
 
-- [ ] Migrate single-trial consumers, including `_trial_designs` in the NSD workflow,
+- [x] Migrate single-trial consumers, including `_trial_designs` in the NSD workflow,
   using the documented access paths. Do not alter conventional `_glm_block` or
   `HrfAnalysisResult` access. Update result annotations and API documentation.
   Keep `.run_betas`, R², `.provenance`, `.trial_table`, and penalty access unchanged.
 
-- [ ] Run `uv run pytest tests/test_result_schemas.py tests/test_single_trial.py tests/test_selected_hrf_fit.py tests/test_fractional_ridge.py tests/test_hrf_glm.py examples/NSD -q -W error`.
+- [x] Run `uv run pytest tests/test_result_schemas.py tests/test_single_trial.py tests/test_selected_hrf_fit.py tests/test_fractional_ridge.py tests/test_hrf_glm.py examples/NSD -q -W error`.
   The conventional GLM suite guards against accidental migration of similarly
   named fields. Run full default pytest if notebook or validation-script consumers
   changed. Format, check the diff, and commit the unified result plus migration docs.
 
 ## Task 3: Share conventional/prepared diagnostics and contrast metadata
 
-- [ ] Add `tests/test_fit_diagnostics.py` boundary tests before extraction:
+- [x] Add `tests/test_fit_diagnostics.py` boundary tests before extraction:
 
 ```python
 import numpy as np
@@ -321,7 +324,7 @@ def test_contrast_metadata_preserves_expression_weights_and_ownership():
   without altering its boundary values. Run the new tests and observe missing
   interfaces; commit before extraction.
 
-- [ ] Extract, without changing formulas or messages, into `_fit_diagnostics.py`:
+- [x] Extract, without changing formulas or messages, into `_fit_diagnostics.py`:
 
 ```python
 TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
@@ -373,7 +376,7 @@ def contrast_metadata(contrasts):
   Remove the no-op `drift_order` dictionary overwrite from `_model_provenance`;
   a plain `activity.copy()` preserves the current fingerprint payload.
 
-- [ ] Run `uv run pytest tests/test_fit_diagnostics.py tests/test_fit.py tests/test_prepared_fit.py tests/test_logging.py tests/test_hrf_glm.py -q -W error`.
+- [x] Run `uv run pytest tests/test_fit_diagnostics.py tests/test_fit.py tests/test_prepared_fit.py tests/test_logging.py tests/test_hrf_glm.py -q -W error`.
   Existing parent-identity, event, provenance, and contrast tests must pass
   unchanged. Do not migrate logging policies or finite/NaN scientific rules.
   Format and commit after GREEN.

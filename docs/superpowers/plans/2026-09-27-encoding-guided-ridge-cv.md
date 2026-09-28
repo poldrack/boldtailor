@@ -1,5 +1,8 @@
 # Encoding-guided ridge selection implementation plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task by task. Use pytest RED–GREEN–Refactor and commit failing tests before implementation.
 
 **Goal:** Select the single-trial ridge penalty by how well a trial-level encoding model predicts regularized betas in held-out runs, using the 90th percentile of prediction R² across grayordinates.

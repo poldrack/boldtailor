@@ -194,12 +194,17 @@ contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
 `desc-notebookFractionalCV_predictors.tsv` saves exact predictors, original trial
 IDs and excluded rows. `desc-notebookFractionalCV_tuning.png` saves the descriptive
 score curves. The complete HRF library is saved with the notebook outputs.
+In Python,
+candidate scores expose `grid` and `regularization`; beta results expose
+designs through `design.matrices`. Saved artifact keys remain unchanged; see
+the [result migration guide](../../docs/result-migration.md).
 
 RT and trial type help choose shrinkage, so final all-run RT correlations are
-descriptive. Outer fractional scores assess prediction of noisy OLS beta targets, which
-can differ between candidate settings; they do not measure recovery of a common
-unobserved ground-truth response. Conventional GLMs and the across-session HRF
-reliability notebook are unchanged.
+descriptive. Outer fractional scores assess prediction of noisy OLS beta targets fixed
+across fractions within each split and HRF model. Targets can differ between
+canonical and optimized HRFs or between splits. These scores do not measure
+recovery of unobserved ground-truth responses. Conventional GLMs and the
+across-session HRF reliability notebook are unchanged.
 
 See the [fractional-ridge validation record](../../docs/validation/nsd-fractional-ridge.md)
 for automated tests and the bounded real-data audit.
@@ -419,7 +424,10 @@ parameter.
 
 Compare matching maps in the odd/even parameter images to assess reliability.
 The numeric HRF IDs are categorical labels; use the library table to interpret
-them. The current pipeline does not calculate reliability coefficients for you.
+them. The standalone expanded-HRF script exports parameter maps for comparison.
+The full workflow notebook computes odd/even curve correlations, and the
+session-reliability notebook computes across-session curve correlations and
+parameter variability. None of these outputs is an ICC.
 Standalone all-run response-delay and time-to-peak files in the development
 dataset were additional exports; new runs include both quantities in the
 parameter images above.

@@ -7,7 +7,8 @@ Import from the modules shown below, for example
 does not re-export these names. Modules beginning with `_` are implementation
 details. Returned numerical arrays are read-only; use `.copy()` to edit them.
 See the [ownership migration note](ownership-migration.md) for the ordinary-NumPy
-contract and its limits.
+contract and its limits. The [result migration guide](result-migration.md)
+lists changed candidate-score and single-trial access paths.
 
 ## Data and model specification
 
@@ -163,7 +164,7 @@ score_fraction_candidates(data, predictors, *, fractions, library=None,
 select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 ```
 
-`CandidateScores` has `regularization="fractional_ridge"`, `grid` in descending order, `cv_r2`,
+`CandidateScores` has `regularization="fractional_ridge"`, descending `grid`, `cv_r2`,
 `fold_sse`, `fold_sst`, `fold_hrf_indices`, `trial_masks`, `run_labels`, and
 `provenance`. Array dimensions match the normalized-ridge scores below, with
 fraction replacing alpha. Predictor requirements and nested HRF selection
@@ -202,7 +203,8 @@ requires at least two runs (`library=None`, canonical SPM), or three with an
 `HrfLibrary`. Supplied libraries trigger fresh HRF selection within each
 inner-training set. Supply only outer-training runs when nesting the call.
 
-`CandidateScores` contains `regularization="normalized_ridge"`, ascending `grid`, `cv_r2` (alpha × feature),
+`CandidateScores` contains `regularization="normalized_ridge"`, ascending
+`grid`, `cv_r2` (alpha × feature),
 `fold_sse` and `fold_sst` (validation run × alpha × feature),
 `fold_hrf_indices` (validation run × feature), `trial_masks`, `run_labels`,
 and `provenance`. Validation targets use the candidate's own regularization.
@@ -339,8 +341,11 @@ the analysis record, with optional draft BIDS provenance files.
 `boldtailor.publication.Artifact(path, payload)` describes a file to
 save. `publish_artifact_set(destination, artifacts, *, source_paths=(),
 overwrite=False, retain_incomplete=False, lock_timeout=30.0)` returns the saved
-paths. Existing files are protected by default; `source_paths` protects inputs
-from accidental replacement. Publication failures raise `PublicationError`.
+paths. Files are replaced individually under a writer lock; publication is
+not an atomic snapshot for concurrent readers. Existing files are protected by
+default; `source_paths` protects inputs from accidental replacement. Promotion
+failures raise `PublicationError`; invalid arguments and preflight collisions
+can raise `ValueError` or `FileExistsError` before publication starts.
 
 For example, after the README's fit, save a contrast array with its records:
 

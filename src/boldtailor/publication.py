@@ -82,7 +82,10 @@ def publish_artifact_set(
     retain_incomplete: bool = False,
     lock_timeout: float = 30.0,
 ) -> tuple[Path, ...]:
-    """Publish an artifact set atomically with rollback on promotion failure."""
+    """Publish with a writer lock, per-file replacement, and failure rollback.
+
+    The complete set is not an atomic snapshot for concurrent readers.
+    """
     requested = _prepare_artifacts(artifacts)
     sources = tuple(Path(path) for path in source_paths)
     root = Path(destination).absolute()

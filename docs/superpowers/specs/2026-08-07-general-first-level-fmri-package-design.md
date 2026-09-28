@@ -1,5 +1,8 @@
 # General First-Level fMRI Package Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 **Status:** Approved design
 
 **Date:** 2026-08-07

@@ -1,5 +1,8 @@
 # Readable Trial Estimation and CV Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the user's selected native execution method. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make trial estimation and candidate scoring readable without changing the statistical objective, coefficient units, or validation isolation.

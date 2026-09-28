@@ -136,7 +136,7 @@ def _alphas(s, ols, fractions):
 
 
 def fraction_beta_path(x, nuisance, signals, *, fractions):
-    """Stream candidate betas/alpha maps with one design decomposition."""
+    """Stream candidate betas/alpha maps using one prepared raw-basis solver."""
     grid = fraction_grid(fractions)
     prepared = prepare_fraction_betas(x, nuisance, signals)
     for fraction in grid:

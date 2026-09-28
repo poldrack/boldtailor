@@ -1,5 +1,9 @@
 # NSD session validation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 These measurements describe the September 2026 analyses of `sub-07/ses-nsd10`.
 For running an analysis, see the [NSD guide](../../examples/NSD/README.md).
 

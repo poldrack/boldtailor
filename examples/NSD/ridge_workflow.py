@@ -1,4 +1,4 @@
-"""Global NSD ridge tuning with independent odd/even evaluation."""
+"""NSD fraction or shared-alpha tuning with independent odd/even evaluation."""
 
 from numbers import Integral, Real
 from uuid import uuid4
@@ -432,7 +432,7 @@ def fit_cv_beta_series(
     n_jobs=1,
     encoding_mode="within_run",
 ):
-    """Tune globally on each training scope, then evaluate or refit at its alpha.
+    """Tune per-feature fractions or one shared alpha, then evaluate and refit.
 
     A library requests optimized HRFs; None uses canonical SPM. Sessions with
     optimized HRFs need three or more runs in each half. Returned outer betas,

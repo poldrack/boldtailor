@@ -1,5 +1,8 @@
 # Expanded HRF library and run-wise selection design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 Status: implemented and validated on 2026-09-26. See the
 [validation record](../validation/2026-09-26-hrf-selection.md) for results,
 review decisions, and the deferred diagnostic-only design archive enhancement.

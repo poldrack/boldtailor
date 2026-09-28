@@ -1,5 +1,8 @@
 # Stop-Signal Real-Data Notebook Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 ## Purpose
 
 Create an executable notebook that demonstrates the Boldtailor features implemented

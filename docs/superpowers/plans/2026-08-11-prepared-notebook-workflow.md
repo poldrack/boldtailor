@@ -1,5 +1,8 @@
 # Prepared-Design Stop-Signal Notebook Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the real-data stop-signal notebook perform its sole whole-brain fit through Boldtailor's prepared-design boundary while preserving its plots, derivatives, privacy, and event-level numerical results.

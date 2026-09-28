@@ -1,5 +1,8 @@
 # Shared Map Slices Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 ## Goal
 
 Display the aggregate R-squared and task-attributable delta R-squared maps on

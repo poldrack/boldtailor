@@ -1,5 +1,9 @@
 # Encoding-guided ridge CV validation
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Validated on 2026-09-27 using `sub-07/ses-nsd10`. This checks numerical
 correctness and output alignment on a bounded subset; it does not establish
 whole-brain scientific performance or the best production penalty grid.

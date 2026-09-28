@@ -1,5 +1,9 @@
 # Fractional-ridge defaults adopted on 2026-09-28
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 The user authorized updating production defaults following the
 [320-dataset ablation](fractional-ridge-ablation-2026-09-28.md).
 The chosen objective prioritizes within-run trial variation and encoding

@@ -1,5 +1,8 @@
 # Expanded HRF Selection Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** Use `superpowers:executing-plans` for direct
 > implementation. Use subagent-driven execution only if the user selects it.
 > Every implementation task follows RED–commit tests–GREEN–refactor.

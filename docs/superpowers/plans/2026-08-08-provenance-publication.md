@@ -1,5 +1,8 @@
 # Derivative Logging and Provenance Implementation Plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > Execution uses strict pytest RED-GREEN-Refactor cycles. Every task's tests
 > must be committed and observed failing before its production implementation
 > is written or committed.

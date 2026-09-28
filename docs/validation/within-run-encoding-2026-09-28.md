@@ -1,5 +1,9 @@
 # Within-run encoding evaluation, 2026-09-28
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Production encoding now defaults to shared trial-level slopes with separate
 training-run intercepts and centered residual scoring in held-out runs.
 `encoding_mode="absolute"` retains the historical shared-intercept objective.
@@ -13,8 +17,9 @@ uv run python examples/validation/ridge_objective_simulation.py --seeds 10 --out
 ```
 
 The original 480 scenarios (10 seeds × 48 settings), six runs, canonical HRF,
-alpha/fraction grids, and untouched outer runs are unchanged. See the
-[September 27 design](ridge-objectives-2026-09-27.md) for generator details.
+alpha/fraction grids, and untouched outer runs are unchanged. The referenced September 27 design
+(`ridge-objectives-2026-09-27.md`) is not included in this committed checkout.
+The current generator is [ridge_objective_simulation.py](../../examples/validation/ridge_objective_simulation.py).
 The fourth objective, `within_run`, combines within-run scoring with run-specific
 training intercepts. `current`, `centered`, and `fixed_ols` explicitly fit using
 `encoding_mode="absolute"`; `current` is the historical September 27 baseline.

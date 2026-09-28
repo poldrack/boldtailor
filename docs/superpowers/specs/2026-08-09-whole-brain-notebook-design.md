@@ -1,5 +1,8 @@
 # Whole-Brain Stop-Signal Notebook Design
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 ## Purpose
 
 Replace the stop-signal notebook's illustrative single-ROI workflow with a

@@ -1,5 +1,8 @@
 # Single-trial CIFTI maps and RT diagnostics implementation plan
 
+> **Development history:** This dated plan/design may describe proposed or
+> superseded behavior. Use the [documentation index](../../README.md) for current guidance.
+
 > **For agentic workers:** Use `superpowers:executing-plans` for direct implementation, or `superpowers:subagent-driven-development` if the user explicitly selects that execution method. Complete each task's RED–commit–GREEN–refactor cycle before continuing.
 
 **Goal:** Fit independent trial amplitudes with OLS and optional fixed ridge, publish NSD CIFTI maps, and assess RT associations without repetition-based tuning.
