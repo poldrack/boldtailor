@@ -3,8 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 import logging
-import os
-import re
 from types import MappingProxyType
 from uuid import uuid4
 
@@ -41,11 +39,6 @@ from boldtailor.results import (
     make_result,
     make_task_delta_r2_result,
 )
-
-_PATH_PATTERN = re.compile(r"(?<![\w.-])/(?:[^\s'\"<>]+)")
-_ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
-_OBJECT_REPR_PATTERN = re.compile(r"<[^>\n]*\bobject\b[^>\n]*>")
-_TRACEBACK_PATTERN = re.compile(r"Traceback \(most recent call last\):.*", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -177,7 +170,7 @@ def _comparison_with_lifecycle(
             "task_delta_r2_prepared_failed",
             stage="fit",
             level=logging.ERROR,
-            error=_sanitize_error(error),
+            error=error,
         )
         raise
     history = append_event_history(
@@ -199,7 +192,7 @@ def _log_comparison_validation_failure(
         "task_delta_r2_prepared_failed",
         stage="fit",
         level=logging.ERROR,
-        error=_sanitize_error(error),
+        error=error,
     )
 
 
@@ -372,7 +365,7 @@ def _fit_with_lifecycle(
             "fit_failed",
             stage="fit",
             level=logging.ERROR,
-            error=_sanitize_error(error),
+            error=error,
         )
         raise
     history = append_event_history(history, emit_event("fit_completed", stage="fit"))
@@ -396,7 +389,7 @@ def _log_validation_failure(
         "fit_failed",
         stage="fit",
         level=logging.ERROR,
-        error=_sanitize_error(error),
+        error=error,
     )
 
 
@@ -534,22 +527,3 @@ def _role_counts(roles: Mapping[str, str]) -> dict[str, int]:
         role: sum(value == role for value in roles.values())
         for role in ("task", "nuisance", "intercept", "other")
     }
-
-
-def _sanitize_error(error: Exception) -> str:
-    message = _TRACEBACK_PATTERN.sub("<redacted-traceback>", str(error))
-    message = _PATH_PATTERN.sub("<redacted>", message)
-    message = _OBJECT_REPR_PATTERN.sub("<redacted-object>", message)
-    message = _redact_environment_values(message)
-    return _ADDRESS_PATTERN.sub("<redacted-address>", message)
-
-
-def _redact_environment_values(message: str) -> str:
-    for name, value in os.environ.items():
-        if value and (len(value) >= 8 or _is_sensitive_environment_name(name)):
-            message = message.replace(value, "<redacted>")
-    return message
-
-
-def _is_sensitive_environment_name(name: str) -> bool:
-    return any(term in name.upper() for term in ("KEY", "PASSWORD", "SECRET", "TOKEN"))

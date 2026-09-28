@@ -155,7 +155,7 @@ def _prepare_analysis(
                 "normalization_failed",
                 stage="prepared_design",
                 level=logging.ERROR,
-                error=str(error),
+                error=error,
             )
             raise
         with bind_context(data_id=source_fingerprint):
@@ -202,7 +202,7 @@ def _prepare_analysis(
                     "normalization_failed",
                     stage="prepared_design",
                     level=logging.ERROR,
-                    error=str(error),
+                    error=error,
                 )
                 raise
             history = append_event_history(

@@ -111,7 +111,7 @@ def fit_selected_glm(data, model, selection, signature, model_settings):
             context = _prepare(data, model, selection, signature, model_settings)
             fits = _group_fits(data, model, selection, context)
         except Exception as error:
-            emit_event("fit_failed", stage="fit", level=logging.ERROR, error=str(error))
+            emit_event("fit_failed", stage="fit", level=logging.ERROR, error=error)
             raise
         history = append_event_history(
             history,
@@ -173,7 +173,7 @@ def selected_task_delta_r2(data, model, result, model_settings):
                 "task_delta_r2_failed",
                 stage="fit",
                 level=logging.ERROR,
-                error=str(error),
+                error=error,
             )
             raise
     provenance = _comparison_provenance(

@@ -91,7 +91,7 @@ def from_arrays(
                 "normalization_failed",
                 stage="data",
                 level=logging.ERROR,
-                error=str(error),
+                error=error,
             )
             raise
         with bind_context(data_id=data_id):
@@ -127,7 +127,7 @@ def from_arrays(
                     "normalization_failed",
                     stage="data",
                     level=logging.ERROR,
-                    error=str(error),
+                    error=error,
                 )
                 raise
             history = append_event_history(

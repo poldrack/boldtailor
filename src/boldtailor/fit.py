@@ -79,7 +79,7 @@ def fit(
                 "fit_failed",
                 stage="fit",
                 level=logging.ERROR,
-                error=str(error),
+                error=error,
             )
             raise
         history = append_event_history(
@@ -167,7 +167,7 @@ def task_delta_r2(
                 "task_delta_r2_failed",
                 stage="fit",
                 level=logging.ERROR,
-                error=str(error),
+                error=error,
             )
             raise
         history = append_event_history(

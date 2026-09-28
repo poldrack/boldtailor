@@ -9,6 +9,8 @@ import json
 import logging
 from types import MappingProxyType
 
+import numpy as np
+
 _LOGGER_NAME = "boldtailor"
 _EVENT_HISTORY_LIMIT = 8
 _SEQUENCE = itertools.count(1)
@@ -44,7 +46,7 @@ def emit_event(
     *,
     stage: str,
     level: int = logging.INFO,
-    error: str | None = None,
+    error: Exception | str | None = None,
     execution_id: str | None = None,
     data_id: str | None = None,
     analysis_id: str | None = None,
@@ -101,7 +103,7 @@ def _event_payload(
     event: str,
     stage: str,
     level: int,
-    error: str | None,
+    error: Exception | str | None,
     execution_id: str | None,
     data_id: str | None,
     analysis_id: str | None,
@@ -124,7 +126,7 @@ def _event_payload(
         )
     )
     if error is not None:
-        payload["error"] = error
+        payload["error_code"] = _error_code(error)
     return payload
 
 
@@ -139,7 +141,7 @@ def _history_entry(event: Mapping[str, object]) -> Mapping[str, object]:
         "data_id",
         "analysis_id",
         "run_index",
-        "error",
+        "error_code",
     )
     return {key: event[key] for key in keep if key in event}
 
@@ -153,3 +155,13 @@ def _timestamp() -> str:
             "Z",
         )
     )
+
+
+def _error_code(error: Exception | str) -> str:
+    if isinstance(error, (ArithmeticError, np.linalg.LinAlgError)):
+        return "numerical_failure"
+    if isinstance(error, (ValueError, TypeError)):
+        return "invalid_input"
+    if isinstance(error, OSError):
+        return "io_failure"
+    return "operation_failed"
