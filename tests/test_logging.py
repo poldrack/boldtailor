@@ -209,7 +209,7 @@ def test_fit_logs_structured_records_with_correlated_ids(caplog):
     assert fit_records[1]["execution_id"] == result.provenance.execution_id
     assert fit_records[0]["data_id"] == data.provenance.metadata_fingerprint
     assert fit_records[1]["data_id"] == data.provenance.metadata_fingerprint
-    assert fit_records[0]["analysis_id"] == result.provenance.analysis_fingerprint
+    assert "analysis_id" not in fit_records[0]
     assert fit_records[1]["analysis_id"] == result.provenance.analysis_fingerprint
 
 
@@ -302,10 +302,8 @@ def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
         record["data_id"] == data.provenance.metadata_fingerprint
         for record in comparison_records
     )
-    assert all(
-        record["analysis_id"] == comparison.provenance.analysis_fingerprint
-        for record in comparison_records
-    )
+    assert "analysis_id" not in comparison_records[0]
+    assert comparison_records[-1]["analysis_id"] == comparison.provenance.analysis_fingerprint
 
 
 def test_task_delta_r2_logs_failure_and_resets_context(caplog):
@@ -332,7 +330,7 @@ def test_task_delta_r2_logs_failure_and_resets_context(caplog):
     assert (
         comparison_records[0]["execution_id"] == comparison_records[1]["execution_id"]
     )
-    assert comparison_records[0]["analysis_id"] == comparison_records[1]["analysis_id"]
+    assert "analysis_id" not in comparison_records[0]
     assert comparison_records[1]["level"] == "ERROR"
     assert comparison_records[1]["error_code"] == "invalid_input"
     assert records[-1]["event"] == "after_task_delta_r2_failure"
@@ -351,7 +349,7 @@ def test_task_delta_r2_logs_provenance_failure_before_completion(
     def reject_provenance(*args, **kwargs):
         raise ValueError("comparison provenance cannot be frozen")
 
-    monkeypatch.setattr("boldtailor.fit.extend_provenance", reject_provenance)
+    monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject_provenance)
 
     with pytest.raises(ValueError, match="comparison provenance cannot be frozen"):
         task_delta_r2(data, model, full_result)

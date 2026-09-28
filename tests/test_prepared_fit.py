@@ -572,10 +572,8 @@ def test_fit_prepared_logs_lifecycle_and_resets_context(caplog, prepared_problem
         record["data_id"] == prepared.provenance.metadata_fingerprint
         for record in fit_records
     )
-    assert all(
-        record["analysis_id"] == result.provenance.analysis_fingerprint
-        for record in fit_records
-    )
+    assert "analysis_id" not in fit_records[0]
+    assert fit_records[-1]["analysis_id"] == result.provenance.analysis_fingerprint
     assert records[-1]["event"] == "after_prepared_fit"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
@@ -1200,10 +1198,8 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
         record["data_id"] == prepared.provenance.metadata_fingerprint
         for record in fit_records
     )
-    assert all(
-        record["analysis_id"] == comparison.provenance.analysis_fingerprint
-        for record in fit_records
-    )
+    assert "analysis_id" not in fit_records[0]
+    assert fit_records[-1]["analysis_id"] == comparison.provenance.analysis_fingerprint
     assert records[-1]["event"] == "after_prepared_comparison"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
@@ -1254,7 +1250,8 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
         "task_delta_r2_prepared_failed",
     ]
     assert comparison_id is not None
-    assert all(record["analysis_id"] == comparison_id for record in fit_records)
+    assert "analysis_id" not in fit_records[0]
+    assert fit_records[-1]["analysis_id"] == comparison_id
     assert all(
         record["data_id"] == prepared.provenance.metadata_fingerprint
         for record in fit_records
@@ -1369,3 +1366,87 @@ def test_prepared_fitting_uses_owned_designs_without_bulk_copy(
     ):
         pd.testing.assert_frame_equal(actual, expected)
     assert prepared.column_roles == original_roles
+
+
+@pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
+def test_prepared_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch, outcome):
+    import json
+    import logging
+    from dataclasses import replace
+
+    prepared, contrasts, metadata, full = prepared_delta_problem
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    caplog.clear()
+    failure = ValueError("private late result detail")
+
+    def reject(*args, **kwargs):
+        raise failure
+
+    if outcome == "late_failure":
+        monkeypatch.setattr("boldtailor.prepared_fit.make_result", reject)
+    if outcome == "success":
+        result = fit_prepared(prepared, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+    else:
+        with pytest.raises(ValueError) as caught:
+            if outcome == "early_failure":
+                fit_prepared(prepared, contrasts={}, model_metadata={"bad": object()})
+            else:
+                fit_prepared(prepared, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+        if outcome == "late_failure":
+            assert caught.value is failure
+    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    ending = "completed" if outcome == "success" else "failed"
+    assert [r["event"] for r in records] == ["fit_started", f"fit_{ending}"]
+    assert "analysis_id" not in records[0]
+    assert records[0]["execution_id"] == records[1]["execution_id"]
+    assert "private" not in caplog.text
+    if outcome == "success":
+        assert dict(result.provenance.events[-1]) == records[-1]
+        assert records[-1]["execution_id"] == result.provenance.execution_id
+        assert records[-1].get("analysis_id") == result.provenance.analysis_fingerprint
+        assert records[-1].get("data_id") == result.provenance.metadata_fingerprint
+        assert len(result.provenance.events) <= 8
+    else:
+        assert records[-1]["error_code"] == "invalid_input"
+
+
+@pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
+def test_prepared_comparison_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch, outcome):
+    import json
+    import logging
+    from dataclasses import replace
+
+    prepared, contrasts, metadata, full = prepared_delta_problem
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    caplog.clear()
+    failure = ValueError("private late result detail")
+
+    def reject(*args, **kwargs):
+        raise failure
+
+    if outcome == "late_failure":
+        monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject)
+    if outcome == "success":
+        result = task_delta_r2_prepared(prepared, full, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+    else:
+        with pytest.raises(ValueError) as caught:
+            if outcome == "early_failure":
+                task_delta_r2_prepared(prepared, full, contrasts=contrasts, model_metadata={"changed": True})
+            else:
+                task_delta_r2_prepared(prepared, full, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+        if outcome == "late_failure":
+            assert caught.value is failure
+    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    ending = "completed" if outcome == "success" else "failed"
+    assert [r["event"] for r in records] == ["task_delta_r2_prepared_started", f"task_delta_r2_prepared_{ending}"]
+    assert "analysis_id" not in records[0]
+    assert records[0]["execution_id"] == records[1]["execution_id"]
+    assert "private" not in caplog.text
+    if outcome == "success":
+        assert dict(result.provenance.events[-1]) == records[-1]
+        assert records[-1]["execution_id"] == result.provenance.execution_id
+        assert records[-1].get("analysis_id") == result.provenance.analysis_fingerprint
+        assert records[-1].get("data_id") == result.provenance.metadata_fingerprint
+        assert len(result.provenance.events) <= 8
+    else:
+        assert records[-1]["error_code"] == "invalid_input"

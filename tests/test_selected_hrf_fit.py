@@ -171,3 +171,46 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
     assert info["library_fingerprint"] == selection.library.fingerprint
     assert info["design_fingerprint"]
     assert info["hrf_assignment_fingerprint"]
+
+
+@pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
+def test_selected_trials_complete_lifecycle(selected_fixture, caplog, monkeypatch, outcome):
+    import json
+    import logging
+    from dataclasses import replace
+
+    data, selection = selected_fixture
+    from boldtailor.single_trial import fit_selected_hrfs
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    caplog.clear()
+    failure = ValueError("private late result detail")
+
+    def reject(*args, **kwargs):
+        raise failure
+
+    if outcome == "late_failure":
+        monkeypatch.setattr("boldtailor._selected_hrf_fit.SingleTrialResult", reject)
+    if outcome == "success":
+        result = fit_selected_hrfs(data, selection=selection, feature_signature="ordered-axis")
+    else:
+        with pytest.raises(ValueError) as caught:
+            if outcome == "early_failure":
+                fit_selected_hrfs(data, selection=selection, run_labels=[], feature_signature="ordered-axis")
+            else:
+                fit_selected_hrfs(data, selection=selection, feature_signature="ordered-axis")
+        if outcome == "late_failure":
+            assert caught.value is failure
+    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    ending = "completed" if outcome == "success" else "failed"
+    assert [r["event"] for r in records] == ["selected_hrf_single_trial_started", f"selected_hrf_single_trial_{ending}"]
+    assert "analysis_id" not in records[0]
+    assert records[0]["execution_id"] == records[1]["execution_id"]
+    assert "private" not in caplog.text
+    if outcome == "success":
+        assert dict(result.provenance.events[-1]) == records[-1]
+        assert records[-1]["execution_id"] == result.provenance.execution_id
+        assert records[-1].get("analysis_id") == result.provenance.analysis_fingerprint
+        assert records[-1].get("data_id") == result.provenance.metadata_fingerprint
+        assert len(result.provenance.events) <= 8
+    else:
+        assert records[-1]["error_code"] == "invalid_input"
