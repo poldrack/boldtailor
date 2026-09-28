@@ -205,3 +205,32 @@ def test_prepared_fraction_rejects_invalid_values(regression, fraction):
     prepared = fractional().prepare_fraction_betas(*regression)
     with pytest.raises(ValueError):
         prepared.betas_at(fraction)
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_fraction_results_own_arrays_without_solver_mutation(
+    selected_fixture, selected, monkeypatch
+):
+    from dataclasses import replace
+    from boldtailor import _fractional_ridge
+
+    data, selection = selected_fixture
+    fit = fit_selected_hrfs if selected else fit_single_trials
+    options = dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+
+    def forbidden(*args):
+        raise AssertionError("numerical module must not mutate a result instance")
+
+    monkeypatch.setattr(_fractional_ridge, "freeze_fraction_result", forbidden, raising=False)
+    result = fit(data, ridge_fraction=[1, 0.7, 0.4, 0.2, np.nan], **options)
+    fractions = result.ridge_fraction.copy()
+    alphas = tuple(a.copy() for a in result.run_ridge_alphas)
+    copied = replace(result, ridge_fraction=fractions, run_ridge_alphas=alphas)
+    fractions[:] = 0.1
+    for array in alphas:
+        array[:] = 999
+    np.testing.assert_array_equal(copied.ridge_fraction, result.ridge_fraction)
+    for actual, expected in zip(copied.run_ridge_alphas, result.run_ridge_alphas, strict=True):
+        np.testing.assert_array_equal(actual, expected)
+        assert not actual.flags.writeable
+    assert not copied.ridge_fraction.flags.writeable
