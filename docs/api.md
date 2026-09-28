@@ -162,7 +162,8 @@ select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 `fold_sse`, `fold_sst`, `fold_hrf_indices`, `trial_masks`, `run_labels`, and
 `provenance`. Array dimensions match `RidgeCandidateScores` below, with
 fraction replacing alpha. Predictor requirements and nested HRF selection
-are the same; targets use the candidate fraction.
+are the same; targets are fixed OLS betas under the training-selected HRF.
+Targets do not depend on the fraction grid.
 
 `FractionSelection` has the candidate `fractions`, per-feature
 `ridge_fraction`, `selected_r2`, `fraction_indices`, and `scoring_mask`.
@@ -174,7 +175,7 @@ Single-trial fit functions accept `ridge_fraction` as a scalar in `(0,1]` or
 a feature array (NaNs explicitly exclude features). Positive `ridge_alpha`
 and `ridge_fraction` are mutually exclusive. Fractional results add immutable
 `ridge_fraction` and `run_ridge_alphas` arrays, and set `ridge_alpha=None`.
-The norm ratio uses normalized trial coefficients after nuisance projection;
+The norm ratio uses raw trial coefficients after nuisance projection;
 the returned beta arrays use native signal units. See the
 [fractional-ridge guide](user-guide.md#fractional-ridge-at-each-grayordinate).
 

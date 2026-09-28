@@ -3,6 +3,13 @@
 Date: 2026-09-28. Experimental implementation: `4a5820f`.
 Production fitting defaults are unchanged.
 
+**Subsequent adoption (2026-09-28):** Following review of these results, the user
+authorized adopting raw coefficient norms and fixed OLS targets for production
+fractional ridge. Per-run fractions and no calibration were retained. The
+experiment and recommendation below describe the evidence before that decision;
+its archived `production_defaults_changed=false` records the experiment's scope.
+See the [adoption record](fractional-defaults-2026-09-28.md) for migration details.
+
 ## Findings
 
 Raw columns are the most promising change in this grid, particularly for

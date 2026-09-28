@@ -21,7 +21,7 @@ def tuning_provenance(scores, selection):
             name="voxelwise_encoding_fraction_selection",
             fractions=list(selection.fractions),
             objective="maximum_encoding_r2_per_grayordinate",
-            validation_target="candidate_fraction_regularized_betas",
+            validation_target="fixed_ols_betas",
             fraction_norm_basis=NORM_BASIS,
             selected_fraction_fingerprint=sha256(
                 np.asarray(selection.ridge_fraction, dtype="<f8").tobytes()

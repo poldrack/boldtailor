@@ -19,7 +19,7 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 | HRF selection | Predict each omitted run using a shared mean stimulus amplitude learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
 | Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
 | Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |
-| Cross-validation target | HRFs: nuisance-adjusted mean-stimulus time-series prediction. Ridge: held-out trial betas estimated with the same candidate penalty | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
+| Cross-validation target | HRFs: nuisance-adjusted mean-stimulus time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
 | Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
 
 GLMsingle's HRF selection itself does **not** use the repeated-condition
@@ -46,11 +46,11 @@ regression and ridge still affect the estimates.
 
 For ridge selection, Boldtailor fits a trial-level encoding model on training
 runs and predicts omitted-run betas. The NSD model uses trial type and RT, with
-an intercept for the shared task response. It selects each grayordinate's
-fraction using its highest pooled held-out R². The earlier shared-alpha
-workflow uses the 90th percentile across grayordinates. Each candidate is
-scored against betas estimated with that same regularization setting, so this measures
-predictability of regularized responses. It does not establish which penalty
+run-specific training intercepts and within-run centered scoring by default.
+It selects each grayordinate's fraction using its highest pooled held-out R²
+against fixed OLS beta targets. The shared-alpha workflow uses the 90th percentile
+across grayordinates and scores candidate-regularized targets. Neither objective
+establishes which penalty
 recovers the most accurate unobserved trial amplitudes. Image repeats are not
 needed, but the encoding relationship is assumed to transfer across runs.
 
@@ -79,8 +79,8 @@ example additionally handles CIFTI loading and spatially matched exports.
 Raw beta magnitudes need care when comparing packages. Boldtailor normalizes
 HRF kernels to sum to one, whereas GLMsingle's library selector normalizes
 each HRF's peak to one. Boldtailor's `ridge_alpha` is a numerical penalty;
-`ridge_fraction` uses a norm ratio in its nuisance-projected, normalized trial
-design. It does not apply GLMsingle's optional post-fit scaling and offset.
+`ridge_fraction` uses a norm ratio in its nuisance-projected, raw trial
+coefficient basis. It does not apply GLMsingle's optional post-fit scaling and offset.
 Match signal scaling, timing, nuisance regressors,
 kernel normalization, and score definitions before comparing results.
 
@@ -110,3 +110,6 @@ For implementation details in that checkout, see its `README.md`,
 `src/glmsingle/ridge/estimator.py`, and `src/glmsingle/persistence.py`.
 Boldtailor's corresponding entry points are listed in the
 [API reference](api.md#single-trial-fits).
+
+See the [fractional ablation](validation/fractional-ridge-ablation-2026-09-28.md)
+for the evidence and tradeoffs behind the current raw-basis, fixed-target defaults.

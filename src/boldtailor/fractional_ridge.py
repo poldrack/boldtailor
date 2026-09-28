@@ -46,11 +46,13 @@ def score_fraction_candidates(
     feature_signature=None,
     encoding_mode="within_run",
 ):
-    """Score same-fraction beta targets in held-out runs; no image repeats needed.
+    """Score fixed OLS beta targets in held-out runs; no image repeats needed.
 
     A supplied library selects HRFs only on each fold's training runs. Pass
     outer-training runs only when nesting this scorer. Fractions act on the
-    normalized trial coefficients; nuisance parameters remain unpenalized.
+    raw trial coefficients after nuisance projection; nuisance parameters remain
+    unpenalized. Only training betas use each candidate fraction; held-out OLS
+    targets use the same training-selected HRF for all candidates.
     """
     from boldtailor._ridge_cv import score_candidates
 

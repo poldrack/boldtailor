@@ -256,8 +256,8 @@ unidentifiable trial coefficients or no residual degrees of freedom are rejected
 
 Fractional ridge specifies how much coefficient length to retain relative to
 OLS. A fraction of 1 gives OLS; smaller fractions give stronger shrinkage.
-Boldtailor defines this ratio in its nuisance-projected, unit-L2 trial-design
-basis. Exported betas remain in native signal units. Confounds and the run
+Boldtailor defines this ratio using raw trial coefficients after nuisance
+projection; trial-design columns are not rescaled for fractional ridge. Exported betas remain in native signal units. Confounds and the run
 intercept remain unpenalized, and no post-fit scaling or offset is applied.
 
 ```python
@@ -292,12 +292,14 @@ selects HRFs using only its training runs. For final fitting, select HRFs on
 the complete training set and pass that selection and the fraction map to
 `fit_selected_hrfs`. Reserve outer test runs before calling either selector.
 
-Training and validation betas use the same candidate fraction. OLS defines
-the shrinkage scale; it is not the validation target. The encoding model is
+Training betas use each candidate fraction. Validation targets are fixed OLS
+betas, computed using the fold’s training-selected HRFs, even when fraction 1
+is absent from the candidate grid. OLS defines both the norm reference and the
+validation target. The encoding model is
 OLS with run-specific training intercepts and shared slopes for the supplied trial variables. Trial-level
-predictor exclusions never delete stimuli from the beta-series model. As with
-alpha CV, this objective measures predictability of regularized responses,
-not recovery of an unobserved ground-truth beta series.
+predictor exclusions never delete stimuli from the beta-series model. This objective measures prediction of noisy OLS trial estimates,
+not recovery of an unobserved ground-truth beta series. The shared-alpha CV
+API continues to use normalized columns and candidate-regularized targets.
 
 The NSD notebook defaults to this approach, with separate odd/even outer
 evaluations and an all-run final refit. Its percentile curves summarize the
@@ -503,3 +505,16 @@ for an example and the [developer guide](development.md) for storage details.
 | R² or HRF parameters are NaN | A constant signal, no variance after nuisance adjustment, or unavailable split evaluation; inspect metadata |
 | An output file already exists | Choose a new output directory for the example rather than overwriting a previous analysis |
 | Parallel fitting uses too much RAM | Reduce `--n-jobs` or `--block-size`; final beta arrays also occupy memory |
+
+### Fractional-ridge default migration (2026-09-28)
+
+Fractional fits now use raw coefficient norms and fixed OLS validation targets.
+Per-run alpha conversion, within-run scoring, run-specific training intercepts,
+and no affine calibration remain the defaults. The
+[ablation report](validation/fractional-ridge-ablation-2026-09-28.md) supports
+these choices for within-run recovery, with an absolute-amplitude tradeoff when
+run baselines differ. Recompute fraction selection and fits: existing fraction
+maps and implied alphas are not equivalent under the new coefficient basis.
+Provenance identifies `raw_trial_coefficients_after_nuisance_projection` and
+`fixed_ols_betas`. `encoding_mode="absolute"` changes the encoding objective;
+it does not restore the old fractional norm basis or validation targets.

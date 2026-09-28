@@ -143,13 +143,14 @@ each held-out run/feature mean residual for scoring only. Set
 `NSD_CONFIG["encoding_mode"] = "absolute"` to reproduce shared-intercept fitting
 and uncentered scoring. Inner and outer evaluations use the same mode.
 HRFs are selected on the training runs within each fold using mean-stimulus
-prediction. Both training and validation betas use the same candidate fraction.
+prediction. Training betas use the candidate fraction; validation targets are fixed OLS
+betas under the training-selected HRFs.
 
 A fraction of 1 gives OLS. Smaller fractions shrink the coefficient norm in the
-nuisance-projected, unit-L2 trial-design basis. Confounds remain unpenalized,
+raw trial-coefficient basis after nuisance projection. Confounds remain unpenalized,
 and the exported betas retain native units. The chosen fraction is fixed across
 runs, while the corresponding alpha is computed per run and grayordinate.
-OLS estimates define the fraction; they are not the validation targets.
+OLS estimates define both the fraction reference and the validation targets.
 
 Odd-run tuning evaluates on even runs, then the roles reverse. Separate all-run
 tuning supplies the final beta images. Canonical and optimized HRF models tune
@@ -186,7 +187,7 @@ contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
 | `_stat-foldhrfindex.dscalar.nii`, `_folds.npz` | Inner-training HRFs and validation SSE/SST |
 | `_stat-encodingpredictionr2.dscalar.nii` | Independent outer-test encoding R² |
 | `_stat-coefficients.dscalar.nii` | Training reference level (`task`), trial-type, and RT effects |
-| `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order training-reference predictions (without scoring offsets) and regularized betas |
+| `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order training-reference predictions (without scoring offsets) and OLS scoring targets (regularized targets for shared-alpha CV) |
 | `_loss.npz` | SSE/SST, training-run intercepts and predictor means, scoring offsets, and ordered run labels |
 | `_metadata.json`, `_provenance.json` | Run splits, transforms, norm definitions, sources and linked tuning identities |
 
@@ -195,7 +196,7 @@ IDs and excluded rows. `desc-notebookFractionalCV_tuning.png` saves the descript
 score curves. The complete HRF library is saved with the notebook outputs.
 
 RT and trial type help choose shrinkage, so final all-run RT correlations are
-descriptive. Outer scores assess prediction of regularized beta targets, which
+descriptive. Outer fractional scores assess prediction of noisy OLS beta targets, which
 can differ between candidate settings; they do not measure recovery of a common
 unobserved ground-truth response. Conventional GLMs and the across-session HRF
 reliability notebook are unchanged.

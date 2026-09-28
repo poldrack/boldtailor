@@ -227,6 +227,18 @@ def _tune(
     )
 
 
+def _fit_outer_trials(data, selection, labels, signature, options):
+    if selection is None:
+        return fit_single_trials(data, **options, run_labels=labels)
+    return fit_selected_hrfs(
+        data,
+        selection=selection,
+        **options,
+        run_labels=labels,
+        feature_signature=signature,
+    )
+
+
 def _outer_block(
     indices,
     runs,
@@ -254,20 +266,23 @@ def _outer_block(
     options = (
         {"ridge_fraction": alpha[indices]} if fractional else {"ridge_alpha": alpha}
     )
-    if selection is None:
-        fitted = fit_single_trials(data, **options, run_labels=labels)
-        ids = np.zeros(len(indices), dtype=int)
-    else:
-        fitted = fit_selected_hrfs(
-            data,
-            selection=selection,
-            **options,
-            run_labels=labels,
-            feature_signature=signature,
+    fitted = _fit_outer_trials(data, selection, labels, signature, options)
+    ids = (
+        np.zeros(len(indices), dtype=int)
+        if selection is None
+        else selection.hrf_indices
+    )
+    scoring_betas = list(fitted.run_betas)
+    if fractional:
+        # Retain training-selected HRFs; held-out responses only define OLS targets.
+        ols_options = dict(
+            ridge_fraction=np.where(np.isfinite(alpha[indices]), 1.0, np.nan)
         )
-        ids = selection.hrf_indices
+        ols = _fit_outer_trials(data, selection, labels, signature, ols_options)
+        for r in test:
+            scoring_betas[r] = ols.run_betas[r]
     encoded = evaluate_trial_encoding(
-        fitted.run_betas,
+        scoring_betas,
         predictors,
         train_runs=train,
         test_runs=test,
@@ -285,6 +300,7 @@ def _outer_block(
         predictor_means=encoded.predictor_means,
         predictions=encoded.predictions,
         betas=[fitted.run_betas[r] for r in test],
+        targets=[scoring_betas[r] for r in test],
         hrf_indices=ids,
         trial_masks=encoded.trial_masks,
         run_ridge_alphas=fitted.run_ridge_alphas,
@@ -328,7 +344,7 @@ def _evaluate(
             ridge_fraction=np.array(alpha),
             run_ridge_alphas=np.full((len(runs), n), np.nan),
         )
-    for key in ("betas", "predictions"):
+    for key in ("betas", "predictions", "targets"):
         result[key] = [
             np.full((len(runs[r].events), n), np.nan, dtype=np.float32) for r in test
         ]
@@ -358,7 +374,7 @@ def _evaluate(
             result["run_ridge_alphas"][:, indices] = np.asarray(
                 block["run_ridge_alphas"]
             )
-        for key in ("betas", "predictions"):
+        for key in ("betas", "predictions", "targets"):
             for target, values in zip(result[key], block[key], strict=True):
                 target[:, indices] = values
         result["train_run_predictor_means"] = block["train_run_predictor_means"]
@@ -420,8 +436,10 @@ def fit_cv_beta_series(
     """Tune globally on each training scope, then evaluate or refit at its alpha.
 
     A library requests optimized HRFs; None uses canonical SPM. Sessions with
-    optimized HRFs need three or more runs in each half. Returned outer betas
-    and predictions contain test runs only, in test_run_labels order.
+    optimized HRFs need three or more runs in each half. Returned outer betas,
+    targets and predictions contain test runs only, in test_run_labels order.
+    Betas retain the selected regularization. Fractional targets are OLS fits
+    under training-selected HRFs; shared-alpha targets equal the fitted betas.
     """
     validate_encoding_mode(encoding_mode)
     if (alphas is None) == (fractions is None):
@@ -497,7 +515,7 @@ def fit_cv_beta_series(
         result["provenance"].update(
             objective="maximum_encoding_r2_per_grayordinate",
             fractions=result["provenance"].pop("alphas"),
-            validation_target="candidate_fraction_regularized_betas",
+            validation_target="fixed_ols_betas",
             percentile_role="descriptive_only",
             fraction_norm_basis=NORM_BASIS,
         )

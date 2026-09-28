@@ -76,7 +76,7 @@ def tuning_artifacts(stem, brain, mode, scope, tuned, table):
         run_labels=list(scores.run_labels),
         fractions=list(scores.fractions),
         selection_rule="maximum_encoding_r2_per_grayordinate",
-        validation_target="candidate_fraction_regularized_betas",
+        validation_target="fixed_ols_betas",
         fraction_norm_basis=NORM_BASIS,
         percentile_role="descriptive_only",
         summary_percentile=tuned["summary_percentile"],

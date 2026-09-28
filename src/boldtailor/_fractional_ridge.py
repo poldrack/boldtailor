@@ -1,4 +1,4 @@
-"""Fractional ridge in the nuisance-projected, unit-column-norm basis."""
+"""Fractional ridge in the nuisance-projected, raw trial-coefficient basis."""
 
 from hashlib import sha256
 from numbers import Real
@@ -8,7 +8,7 @@ import numpy as np
 from boldtailor._arrays import immutable_float_array
 from boldtailor._single_trial_fit import TrialRunFit, _project_design, validate_alpha
 
-NORM_BASIS = "unit_l2_trial_coefficients_after_nuisance_projection"
+NORM_BASIS = "raw_trial_coefficients_after_nuisance_projection"
 
 
 def fraction_grid(values):
@@ -54,6 +54,7 @@ def regularization(ridge_alpha, ridge_fraction, n_features):
 def fraction_metadata(fractions):
     return dict(
         regularization="fractional_ridge",
+        normalization="none_after_nuisance_projection",
         fraction_norm_basis=NORM_BASIS,
         fraction_fingerprint=sha256(
             np.asarray(fractions, dtype="<f8").tobytes()
@@ -77,7 +78,11 @@ def freeze_fraction_result(result):
 
 def _prepare(x, nuisance, signals):
     x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    q, scale, u, s, vt, diagnostics = _project_design(x, n)
+    q, _, _, _, _, diagnostics = _project_design(x, n)
+    # Validate identifiability in a scale-invariant basis, then regularize raw betas.
+    u, s, vt = np.linalg.svd(x - q @ (q.T @ x), full_matrices=False)
+    scale = np.ones(x.shape[1])
+    diagnostics = dict(diagnostics, condition_number=float(s[0] / s[-1]))
     yr = y - q @ (q.T @ y)
     coordinates = u.T @ yr
     tolerance = max(x.shape) * np.finfo(float).eps * np.linalg.norm(y, axis=0)

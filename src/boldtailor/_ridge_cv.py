@@ -112,6 +112,18 @@ def _score_fold(
         _run_beta_path(data, r, prepared, ids, alphas, labels[r], fractional=fractional)
         for r in range(data.n_runs)
     ]
+    fixed_target = None
+    if fractional:
+        try:
+            fixed_target = next(
+                _run_beta_path(
+                    data, test, prepared, ids, [1.0], labels[test], fractional=True
+                )
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"validation {labels[test]}, beta run {labels[test]}: {error}"
+            ) from error
     losses, totals = [], []
     for alpha in alphas:
         betas = []
@@ -122,6 +134,8 @@ def _score_fold(
                 raise ValueError(
                     f"validation {labels[test]}, beta run {labels[r]}: {error}"
                 ) from error
+        if fractional:
+            betas[test] = fixed_target
         fit = evaluate_trial_encoding(
             betas,
             predictors,
@@ -192,7 +206,8 @@ def _provenance(
     if fractional:
         activity.update(
             name="encoding_guided_fractional_ridge_cv",
-            validation_target="candidate_fraction_regularized_betas",
+            validation_target="fixed_ols_betas",
+            normalization="none_after_nuisance_projection",
             fraction_norm_basis=NORM_BASIS,
             fractions=activity.pop("alphas"),
         )

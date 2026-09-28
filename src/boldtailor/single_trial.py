@@ -39,7 +39,8 @@ def fit_single_trials(
     condition labels are retained as metadata and never enter the design.
 
     Alternatively, ridge_fraction specifies the coefficient-norm ratio to OLS
-    in that normalized basis, as a scalar or one value per feature. Values must
+    in the raw trial-coefficient basis after nuisance projection, as a scalar or
+    one value per feature. Values must
     be in (0, 1]; NaNs in a feature map exclude features. A positive ridge_alpha
     cannot be combined with ridge_fraction. Fractional results include the
     selected fractions and implied alpha for each run and feature.

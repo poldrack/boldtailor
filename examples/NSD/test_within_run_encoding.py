@@ -57,6 +57,8 @@ def test_outer_oracle_blocks_and_export(
             else {"ridge_alpha": outer["ridge_alpha"]}
         )
         fitted = fit_single_trials(data, **fit_options)
+        # Fractional CV now scores fixed OLS targets; alpha CV keeps fitted targets.
+        target_fit = fit_single_trials(data) if fractional else fitted
         xs = [predictors[r].to_numpy() for r in train]
         ys = [fitted.run_betas[r][:, :3] for r in train]
         ids = np.repeat(np.arange(len(train)), [len(x) for x in xs])
@@ -83,7 +85,9 @@ def test_outer_oracle_blocks_and_export(
                 + (predictors[r].to_numpy() - np.vstack(xs).mean(0)) @ oracle[-2:]
             )
             np.testing.assert_allclose(outer["predictions"][j][:, :3], raw, atol=1e-6)
-            residual = fitted.run_betas[r][:, :3] - raw
+            target = target_fit.run_betas[r][:, :3]
+            np.testing.assert_allclose(outer["targets"][j][:, :3], target, atol=1e-6)
+            residual = target - raw
             offset = residual.mean(0) if mode == "within_run" else np.zeros(3)
             np.testing.assert_allclose(
                 outer["scoring_offsets"][j, :3], offset, atol=1e-8

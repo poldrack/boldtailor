@@ -143,7 +143,7 @@ def _prediction_artifacts(stem, brain, descriptor, runs, outer):
     for i, label in enumerate(outer["test_run_labels"]):
         run = by_label[label]
         names = [f"{label}_trial-{j + 1:04d}" for j in range(len(run.events))]
-        for suffix, key in (("predictions", "predictions"), ("targets", "betas")):
+        for suffix, key in (("predictions", "predictions"), ("targets", "targets")):
             path = f"{directory}/{run.inputs.stem}_space-fsLR_den-91k_desc-notebook{descriptor}_{suffix}.dscalar.nii"
             artifacts.append(scalar_artifact(path, brain, outer[key][i], names))
     return artifacts
@@ -199,7 +199,7 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
                 trial_masks=[m.tolist() for m in outer["trial_masks"]],
                 trial_mask_run_labels=[r.label for r in runs],
                 validation_target=(
-                    "selected_fraction_regularized_betas"
+                    "fixed_ols_betas"
                     if fractional
                     else "selected_penalty_regularized_betas"
                 ),
@@ -214,9 +214,9 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
                     else {}
                 ),
                 interpretation=(
-                    "Within-run prediction of regularized beta variation; held-out means removed for scoring only"
+                    "Within-run prediction of target beta variation; held-out means removed for scoring only"
                     if outer["encoding_mode"] == "within_run"
-                    else "Absolute held-out encoding prediction of regularized beta targets"
+                    else "Absolute held-out encoding prediction of held-out beta targets"
                 ),
             ),
         ),
