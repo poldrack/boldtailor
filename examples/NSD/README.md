@@ -106,6 +106,32 @@ including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
 
+### Cortical surface figures
+
+The workflow notebook shows left/right lateral and medial views of full-model
+BOLD R² for both conventional GLMs and beta-series models, plus signed beta–RT
+correlations across all runs. The plots use existing fitted arrays, so the new
+cells can run in an active notebook kernel without refitting models. R² includes
+the confounds and pools errors across runs; it is distinct from the held-out
+trial-encoding score. RT correlations center betas and RT within each run and
+remain descriptive, particularly when RT helped tune ridge strength.
+
+By default, the notebook uses the subject's `space-fsLR_den-32k_midthickness`
+surfaces from fMRIPrep. Set `surface_meshes={"left": path, "right": path}` in
+the settings to use another matching fsLR mesh, such as an inflated surface.
+Native FreeSurfer and fsaverage meshes are not interchangeable with fsLR.
+Multiple anatomical matches require explicit paths. No template is downloaded.
+Set `surface_maps=False` to disable the figures; if neither matching bilateral
+surface pair nor explicit paths are available, plotting is skipped with a message.
+
+Values are placed using the CIFTI vertex IDs. Missing/unprocessed vertices and
+triangles touching them are gray, including the medial wall; subcortical values
+are omitted. R² uses a common 0–1 range, extended below zero if needed. RT uses a
+shared symmetric range across the displayed models. No significance threshold
+is applied. The final save cell writes `desc-notebookGLMR2Surface_plot.png`,
+`desc-notebookBetaR2Surface_plot.png`, and `desc-notebookRTSurface_plot.png` beside
+the CIFTI outputs. Resolved surface paths are retained in notebook metadata.
+
 ### Ridge selection and held-out encoding
 
 The notebook defaults to `ridge_mode="fractional_cv"`, with candidate fractions
