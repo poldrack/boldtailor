@@ -78,6 +78,20 @@ and diagnostics must not mutate them. Public accessors keep returning copies,
 and result construction still makes its own design copies. This avoids copying
 all runs' tables repeatedly inside each run's diagnostics.
 
+## Scientific result schemas
+
+`ridge_results.CandidateScores` owns the common cross-validation arrays and
+labels their rows with `grid` and an explicit `regularization` kind. Grid
+validation and sorting stay in the scoring functions; result construction
+does not reorder scores.
+
+`single_trial_results.SingleTrialResult` owns trial estimates, diagnostics,
+and penalty metadata. Its `design` is a `SharedTrialDesign` for one HRF across
+features or a `SelectedTrialDesign` for grouped HRF assignments. Each design
+container owns its matrices, so the result does not duplicate that copying
+logic. Common numerical fields stay directly on the result. See
+[result migration](result-migration.md) for API changes.
+
 ## Numerical conventions
 
 Conventional fits use Nilearn's OLS/AR(1) estimator and t contrasts. Each run

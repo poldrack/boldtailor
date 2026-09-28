@@ -23,3 +23,25 @@ Selection results retain `RidgeSelection.alphas` and
 `FractionSelection.fractions`: their selection operations differ. Saved
 scientific artifacts and provenance retain their `alphas` and `fractions`
 keys. Numerical values, ordering, ownership, and scoring definitions are unchanged.
+
+
+Single-trial fits now return `SingleTrialResult` for both shared and
+feature-specific HRFs. Common numerical fields stay directly on the result.
+
+| Before | After |
+| --- | --- |
+| shared trial result `.design_matrices` | `.design.matrices` (tuple of DataFrames) |
+| selected trial result `.group_designs` | `.design.matrices` (same `(run, hrf)` keys) |
+| selected trial result `.hrf_indices` | `.design.hrf_indices` |
+| selected trial result `.selection_provenance` | `.design.selection_provenance` |
+| `HrfSingleTrialResult` | `SingleTrialResult` with `SelectedTrialDesign` |
+
+`SharedTrialDesign` describes a design shared across features, including a
+shared custom HRF. `SelectedTrialDesign` holds the feature assignments,
+grouped matrices, and selection provenance. Both live in
+`boldtailor.single_trial_results`.
+
+`run_betas`, `trial_table`, R² arrays, `diagnostics`, penalty fields, and
+`provenance` keep their existing access paths. Arrays remain owned and
+read-only; public tables and design mappings are defensive copies.
+Conventional GLM results retain their existing design access paths.

@@ -135,7 +135,7 @@ fit_selected_hrfs(data, *, selection, ridge_alpha=0.0, run_labels=None,
 `fit_selected_hrfs` takes an `HrfSelectionResult`. The ridge penalty must be
 finite and nonnegative. All supplied confounds and a run intercept are included.
 
-`SingleTrialResult` and `HrfSingleTrialResult` both expose:
+Both fitting functions return `SingleTrialResult`, which exposes:
 
 - `run_betas`: tuple of trials × features arrays.
 - `trial_table`: original event metadata plus `trial_id`, `event_index`,
@@ -144,10 +144,13 @@ finite and nonnegative. All supplied confounds and a run intercept are included.
 - `full_r2`, `nuisance_r2`, `delta_r2`: pooled diagnostics.
 - `diagnostics`, `ridge_alpha`, and `provenance`.
 
-The fixed-HRF result also has `design_matrices`. The selected-HRF result
-instead has `group_designs`, keyed by `(run_index, hrf_id)`, as well as
-`hrf_indices` and `selection_provenance`. These grouped matrices include the
-trial columns followed by the nuisance columns.
+The `design` field contains a `SharedTrialDesign` for a fixed HRF (SPM or a
+custom candidate), or a `SelectedTrialDesign` for feature-specific HRFs.
+`design.matrices` returns a tuple of DataFrames for a shared design, or a
+dictionary keyed by `(run_index, hrf_id)` for selected designs. The selected
+container also exposes `design.hrf_indices` and `design.selection_provenance`.
+Matrices include trial columns followed by nuisance columns. See the
+[result migration guide](result-migration.md) for the previous access paths.
 
 ## Per-grayordinate fractional ridge
 

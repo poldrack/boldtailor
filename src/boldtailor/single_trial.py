@@ -21,7 +21,7 @@ from boldtailor._fractional_ridge import (
 from boldtailor.data import AnalysisData
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
-from boldtailor.single_trial_results import SingleTrialResult
+from boldtailor.single_trial_results import SingleTrialResult, SharedTrialDesign
 
 
 def fit_single_trials(
@@ -138,19 +138,19 @@ def _assemble_result(compiled, fits, alpha, provenance, fractions=None):
     full = r_squared(np.sum([f.full_sse for f in fits], axis=0), total)
     nuisance = r_squared(np.sum([f.nuisance_sse for f in fits], axis=0), total)
     return SingleTrialResult(
-        tuple(f.betas for f in fits),
-        trials,
-        tuple(designs),
-        tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
-        tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
-        full,
-        nuisance,
-        full - nuisance,
-        tuple(f.diagnostics for f in fits),
-        alpha,
-        provenance,
-        fractions,
-        (
+        run_betas=tuple(f.betas for f in fits),
+        _trial_table=trials,
+        design=SharedTrialDesign(tuple(designs)),
+        run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
+        run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
+        full_r2=full,
+        nuisance_r2=nuisance,
+        delta_r2=full - nuisance,
+        _diagnostics=tuple(f.diagnostics for f in fits),
+        ridge_alpha=alpha,
+        provenance=provenance,
+        ridge_fraction=fractions,
+        run_ridge_alphas=(
             None
             if fractions is None
             else tuple(f.diagnostics["ridge_alphas"] for f in fits)

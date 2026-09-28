@@ -132,9 +132,9 @@ def _collect_metadata(result, block, indices):
 
 def _trial_designs(result, runs, selection):
     if selection is None:
-        return {(i, 0): x for i, x in enumerate(result.design_matrices)}
+        return {(i, 0): x for i, x in enumerate(result.design.matrices)}
     designs = {}
-    for (i, hrf), values in result.group_designs.items():
+    for (i, hrf), values in result.design.matrices.items():
         trials = result.trial_table.query("run_index == @i").trial_id.tolist()
         columns = trials + list(runs[i].confounds.columns) + ["constant"]
         designs[i, hrf] = pd.DataFrame(

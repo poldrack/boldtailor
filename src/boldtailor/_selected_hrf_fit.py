@@ -16,7 +16,7 @@ from boldtailor._fractional_ridge import (
     fit_fraction_run,
     fraction_metadata,
 )
-from boldtailor.hrf_results import HrfSingleTrialResult
+from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
 from boldtailor.hrf_selection import run_labels_for
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
 
@@ -137,20 +137,20 @@ def fit_groups(
     provenance = _provenance(
         data, selection, labels, alpha, assignment, designs, fractions
     )
-    return HrfSingleTrialResult(
-        tuple(f[0] for f in fits),
-        trials,
-        selection.hrf_indices,
-        designs,
-        tuple(r_squared(f[1], f[3]) for f in fits),
-        tuple(r_squared(f[2], f[3]) for f in fits),
-        full,
-        null,
-        full - null,
-        tuple(d for f in fits for d in f[5]),
-        alpha,
-        selection.provenance,
-        provenance,
-        fractions,
-        None if fractions is None else tuple(f[6] for f in fits),
+    return SingleTrialResult(
+        run_betas=tuple(f[0] for f in fits),
+        _trial_table=trials,
+        design=SelectedTrialDesign(
+            selection.hrf_indices, designs, selection.provenance
+        ),
+        run_full_r2=tuple(r_squared(f[1], f[3]) for f in fits),
+        run_nuisance_r2=tuple(r_squared(f[2], f[3]) for f in fits),
+        full_r2=full,
+        nuisance_r2=null,
+        delta_r2=full - null,
+        _diagnostics=tuple(d for f in fits for d in f[5]),
+        ridge_alpha=alpha,
+        provenance=provenance,
+        ridge_fraction=fractions,
+        run_ridge_alphas=None if fractions is None else tuple(f[6] for f in fits),
     )

@@ -143,7 +143,7 @@ def _fit_trial_block(bounds, runs, root, models):
             ),
             provenance=[fit.provenance.to_dict()],
             trial_table=fit.trial_table,
-            designs=fit.design_matrices,
+            designs=fit.design.matrices,
             diagnostics=fit.diagnostics,
         )
     return results
