@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -140,16 +140,17 @@ class ProvenanceRecord:
             "events",
             _freeze_mapping_sequence(self.events),
         )
+        fingerprint = _metadata_fingerprint(self.sources)
         object.__setattr__(
             self,
             "warnings",
-            _augment_warnings(_freeze_mapping_sequence(self.warnings), self.sources),
+            _augment_warnings(_freeze_mapping_sequence(self.warnings), fingerprint),
         )
         object.__setattr__(self, "_extra", _freeze_mapping(self._extra, path_safe=True))
         object.__setattr__(
             self,
             "_metadata_fingerprint",
-            _metadata_fingerprint(self.sources),
+            fingerprint,
         )
 
     @property
@@ -230,15 +231,14 @@ def extend_provenance(
     warnings: Sequence[Mapping[str, object]],
     analysis_id: str | None,
 ) -> ProvenanceRecord:
-    payload = record.to_dict()
-    payload.update(
+    return replace(
+        record,
         execution_id=execution_id,
-        activities=[*payload["activities"], activity],
-        events=list(events),
-        warnings=[*payload["warnings"], *warnings],
-        analysis_fingerprint=analysis_id,
+        activities=(*record.activities, activity),
+        events=tuple(events),
+        warnings=(*record.warnings, *warnings),
+        _extra={**record._extra, "analysis_fingerprint": analysis_id},
     )
-    return ProvenanceRecord.from_dict(payload)
 
 
 def _copy_source_ref(value: SourceRef, name: str) -> SourceRef:
@@ -456,9 +456,9 @@ def _thaw(value: object) -> object:
 
 def _augment_warnings(
     warnings: tuple[Mapping[str, object], ...],
-    sources: Sequence[RunSources],
+    metadata_fingerprint: str | None,
 ) -> tuple[Mapping[str, object], ...]:
-    if _metadata_fingerprint(sources) is not None:
+    if metadata_fingerprint is not None:
         return warnings
     if any(warning.get("code") == _QUALITY_WARNING["code"] for warning in warnings):
         return warnings

@@ -325,10 +325,12 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
     from boldtailor.provenance import extend_provenance
 
     payload = _record_payload(extra_note={"labels": ["original"]})
-    payload["sources"].append({
-        "signal": _complete_source("signal", "run-02_signal.tsv").to_dict(),
-        "events": _complete_source("events", "run-02_events.tsv").to_dict(),
-    })
+    payload["sources"].append(
+        {
+            "signal": _complete_source("signal", "run-02_signal.tsv").to_dict(),
+            "events": _complete_source("events", "run-02_events.tsv").to_dict(),
+        }
+    )
     parent = ProvenanceRecord.from_dict(payload)
     activity = {"name": "fit", "settings": {"alpha": 0.1}}
     expected = parent.to_dict()
@@ -336,7 +338,9 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
     expected.update(
         execution_id=execution_id,
         activities=[*expected["activities"], deepcopy(activity)],
-        events=[], warnings=expected["warnings"], analysis_fingerprint="a" * 64,
+        events=[],
+        warnings=expected["warnings"],
+        analysis_fingerprint="a" * 64,
     )
 
     def reject_serialization(self):
@@ -345,8 +349,12 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
     with monkeypatch.context() as patch:
         patch.setattr(ProvenanceRecord, "to_dict", reject_serialization)
         extended = extend_provenance(
-            parent, execution_id=execution_id, activity=activity,
-            analysis_id="a" * 64, events=[], warnings=(),
+            parent,
+            execution_id=execution_id,
+            activity=activity,
+            analysis_id="a" * 64,
+            events=[],
+            warnings=(),
         )
     assert extended.to_dict() == expected
     assert extended.metadata_fingerprint == parent.metadata_fingerprint

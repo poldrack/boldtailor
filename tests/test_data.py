@@ -325,13 +325,23 @@ def test_normalization_builds_one_record(events, monkeypatch, caplog, complete):
 
     monkeypatch.setattr(module, "ProvenanceRecord", record)
     caplog.set_level(logging.INFO, logger="boldtailor")
-    result = from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0, sources=sources, provenance_metadata=metadata)
+    result = from_arrays(
+        np.arange(20.0).reshape(10, 2),
+        events,
+        tr=2.0,
+        sources=sources,
+        provenance_metadata=metadata,
+    )
     assert len(calls) == 1
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     assert dict(result.provenance.events[-1]) == records[-1]
     if complete:
         payload = {"sources": [s.to_dict() for s in sources]}
-        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        expected = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         assert result.provenance.metadata_fingerprint == expected
         assert not result.provenance.warnings
     else:
@@ -340,7 +350,9 @@ def test_normalization_builds_one_record(events, monkeypatch, caplog, complete):
 
 
 @pytest.mark.parametrize("outcome", ["success", "metadata", "constructor"])
-def test_normalization_catches_final_failures_and_isolates_context(events, caplog, monkeypatch, outcome):
+def test_normalization_catches_final_failures_and_isolates_context(
+    events, caplog, monkeypatch, outcome
+):
     import json
     import logging
     import boldtailor.data as module
@@ -356,23 +368,47 @@ def test_normalization_catches_final_failures_and_isolates_context(events, caplo
 
     if outcome == "constructor":
         monkeypatch.setattr(module.AnalysisData, "__init__", reject)
-    outer = dict(execution_id="outer", data_id="outer-data", analysis_id="outer-analysis", run_index=2)
+    outer = dict(
+        execution_id="outer",
+        data_id="outer-data",
+        analysis_id="outer-analysis",
+        run_index=2,
+    )
     with bind_context(**outer):
         if outcome == "success":
-            from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0, sources=sources, provenance_metadata=metadata)
+            from_arrays(
+                np.arange(20.0).reshape(10, 2),
+                events,
+                tr=2.0,
+                sources=sources,
+                provenance_metadata=metadata,
+            )
         else:
             with pytest.raises((ValueError, RuntimeError)) as caught:
-                from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0, sources=sources, provenance_metadata=metadata)
+                from_arrays(
+                    np.arange(20.0).reshape(10, 2),
+                    events,
+                    tr=2.0,
+                    sources=sources,
+                    provenance_metadata=metadata,
+                )
             if outcome == "constructor":
                 assert caught.value is failure
         restored = emit_event("after_normalization", stage="test")
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"][:-1]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ][:-1]
     ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["normalization_started", f"normalization_{ending}"]
+    assert [r["event"] for r in records] == [
+        "normalization_started",
+        f"normalization_{ending}",
+    ]
     for record in records:
         assert not {"data_id", "analysis_id", "run_index"} & record.keys()
         assert record["execution_id"] != "outer"
     if outcome != "success":
-        assert records[-1]["error_code"] == ("invalid_input" if outcome == "metadata" else "operation_failed")
+        assert records[-1]["error_code"] == (
+            "invalid_input" if outcome == "metadata" else "operation_failed"
+        )
     assert "private" not in caplog.text
     assert all(restored[k] == v for k, v in outer.items())

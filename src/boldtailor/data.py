@@ -11,8 +11,19 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import readonly_array
-from boldtailor.logging import append_event_history, bind_context, emit_event
-from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
+from boldtailor.logging import (
+    _emit_record,
+    _make_event,
+    append_event_history,
+    bind_context,
+    emit_event,
+)
+from boldtailor.provenance import (
+    ProvenanceRecord,
+    RunSources,
+    SourceRef,
+    _metadata_fingerprint,
+)
 
 _EVENT_COLUMNS = ("onset", "duration")
 
@@ -70,10 +81,10 @@ def from_arrays(
     provenance_metadata: Mapping[str, object] | None = None,
 ) -> AnalysisData:
     execution_id = str(uuid4())
-    history = ()
-    with bind_context(execution_id=execution_id):
+    data_id = None
+    with bind_context(execution_id=execution_id, inherit=False):
         history = append_event_history(
-            history,
+            (),
             emit_event("normalization_started", stage="data"),
         )
         try:
@@ -85,69 +96,54 @@ def from_arrays(
                 sources=sources,
                 include_confounds=confounds is not None,
             )
-            data_id = _data_id(execution_id, prepared_sources)
-        except ValueError as error:
-            emit_event(
-                "normalization_failed",
-                stage="data",
-                level=logging.ERROR,
-                error=error,
+            data_id = _metadata_fingerprint(prepared_sources)
+            prepared_signals = tuple(
+                _prepare_signal(values, run) for run, values in enumerate(run_signals)
             )
-            raise
-        with bind_context(data_id=data_id):
-            try:
-                prepared_signals = tuple(
-                    _prepare_signal(values, run)
-                    for run, values in enumerate(run_signals)
-                )
-                _validate_feature_counts(prepared_signals)
-                prepared_events = tuple(
-                    _prepare_events(frame, run) for run, frame in enumerate(run_events)
-                )
-                prepared_confounds = _prepare_confounds(confounds, prepared_signals)
-                prepared_times, timing_source = _prepare_timing(
-                    tr,
-                    frame_times,
-                    prepared_signals,
-                )
-                activity = _normalization_activity(
-                    timing_source=timing_source,
-                    n_runs=len(prepared_signals),
-                    n_features=prepared_signals[0].shape[1],
-                    provenance_metadata=provenance_metadata,
-                )
-                ProvenanceRecord(
-                    execution_id=execution_id,
-                    sources=prepared_sources,
-                    activities=(activity,),
-                    events=history,
-                )
-            except ValueError as error:
-                emit_event(
-                    "normalization_failed",
-                    stage="data",
-                    level=logging.ERROR,
-                    error=error,
-                )
-                raise
-            history = append_event_history(
-                history,
-                emit_event("normalization_completed", stage="data"),
+            _validate_feature_counts(prepared_signals)
+            prepared_events = tuple(
+                _prepare_events(frame, run) for run, frame in enumerate(run_events)
+            )
+            prepared_confounds = _prepare_confounds(confounds, prepared_signals)
+            prepared_times, timing_source = _prepare_timing(
+                tr,
+                frame_times,
+                prepared_signals,
+            )
+            activity = _normalization_activity(
+                timing_source=timing_source,
+                n_runs=len(prepared_signals),
+                n_features=prepared_signals[0].shape[1],
+                provenance_metadata=provenance_metadata,
+            )
+            completed = _make_event(
+                "normalization_completed", stage="data", data_id=data_id
             )
             provenance = ProvenanceRecord(
                 execution_id=execution_id,
                 sources=prepared_sources,
                 activities=(activity,),
-                events=history,
+                events=append_event_history(history, completed),
             )
-    return AnalysisData(
-        _signals=prepared_signals,
-        _events=prepared_events,
-        _confounds=prepared_confounds,
-        _frame_times=prepared_times,
-        _timing_source=timing_source,
-        _provenance=provenance,
-    )
+            result = AnalysisData(
+                _signals=prepared_signals,
+                _events=prepared_events,
+                _confounds=prepared_confounds,
+                _frame_times=prepared_times,
+                _timing_source=timing_source,
+                _provenance=provenance,
+            )
+        except Exception as error:
+            emit_event(
+                "normalization_failed",
+                stage="data",
+                level=logging.ERROR,
+                error=error,
+                data_id=data_id,
+            )
+            raise
+        _emit_record(completed)
+        return result
 
 
 def _as_signal_runs(
@@ -253,13 +249,6 @@ def _anonymous_sources(include_confounds: bool) -> RunSources:
         events=SourceRef(role="events"),
         confounds=SourceRef(role="confounds") if include_confounds else None,
     )
-
-
-def _data_id(execution_id: str, sources: Sequence[RunSources]) -> str | None:
-    return ProvenanceRecord(
-        execution_id=execution_id,
-        sources=sources,
-    ).metadata_fingerprint
 
 
 def _normalization_activity(
