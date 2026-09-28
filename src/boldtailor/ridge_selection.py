@@ -50,7 +50,14 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
 
 
 def score_ridge_candidates(
-    data, predictors, *, alphas, library=None, run_labels=None, feature_signature=None
+    data,
+    predictors,
+    *,
+    alphas,
+    library=None,
+    run_labels=None,
+    feature_signature=None,
+    encoding_mode="within_run",
 ):
     """Score candidate-regularized trial betas with leave-one-run-out encoding.
 
@@ -63,5 +70,11 @@ def score_ridge_candidates(
 
     grid = tuple(sorted(_alpha_grid(alphas)))
     return score_candidates(
-        data, predictors, grid, library, run_labels, feature_signature
+        data,
+        predictors,
+        grid,
+        library,
+        run_labels,
+        feature_signature,
+        encoding_mode=encoding_mode,
     )

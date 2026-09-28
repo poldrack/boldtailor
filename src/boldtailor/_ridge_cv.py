@@ -19,6 +19,8 @@ from boldtailor.trial_encoding import (
     _predictor_arrays,
     _training_design,
     evaluate_trial_encoding,
+    encoding_metadata,
+    validate_encoding_mode,
 )
 
 
@@ -33,7 +35,8 @@ def subset_runs(data, indices):
     )
 
 
-def _validate(data, predictors, library, signature):
+def _validate(data, predictors, library, signature, *, encoding_mode):
+    validate_encoding_mode(encoding_mode)
     if library is not None and not isinstance(library, HrfLibrary):
         raise ValueError("library must be an HrfLibrary or None for canonical SPM")
     minimum = 2 if library is None else 3
@@ -46,7 +49,12 @@ def _validate(data, predictors, library, signature):
     for test in range(data.n_runs):
         if masks[test].sum() < 2:
             raise ValueError(f"validation run {test} needs two complete predictor rows")
-        _training_design(arrays, masks, [r for r in range(data.n_runs) if r != test])
+        _training_design(
+            arrays,
+            masks,
+            [r for r in range(data.n_runs) if r != test],
+            encoding_mode=encoding_mode,
+        )
     return arrays, columns, masks
 
 
@@ -96,6 +104,7 @@ def _score_fold(
     test,
     *,
     fractional=False,
+    encoding_mode="within_run",
 ):
     train = [r for r in range(data.n_runs) if r != test]
     ids, selection_record = _fold_selection(data, library, labels, signature, train)
@@ -114,7 +123,11 @@ def _score_fold(
                     f"validation {labels[test]}, beta run {labels[r]}: {error}"
                 ) from error
         fit = evaluate_trial_encoding(
-            betas, predictors, train_runs=train, test_runs=[test]
+            betas,
+            predictors,
+            train_runs=train,
+            test_runs=[test],
+            encoding_mode=encoding_mode,
         )
         losses.append(fit.run_sse[0])
         totals.append(fit.run_sst[0])
@@ -122,6 +135,7 @@ def _score_fold(
         train=[labels[r] for r in train],
         validation=labels[test],
         predictor_means=fit.predictor_means.tolist(),
+        train_run_predictor_means=fit.train_run_predictor_means.tolist(),
         hrf_selection=selection_record,
     )
     return losses, totals, ids, record
@@ -148,13 +162,14 @@ def _provenance(
     ids,
     *,
     fractional=False,
+    encoding_mode="within_run",
 ):
     designs = []
     for e, t, n in zip(data.events, data.frame_times, data.confounds, strict=True):
         designs.extend([e[["onset", "duration"]], t, n])
     activity = dict(
         name="encoding_guided_ridge_cv",
-        score="pooled_within_run_trial_encoding_r2",
+        **encoding_metadata(encoding_mode),
         validation_target="candidate_regularized_betas",
         selection_statistic=True,
         alphas=list(alphas),
@@ -171,9 +186,7 @@ def _provenance(
         hrf_model="spm" if library is None else "inner_training_selected",
         normalization="unit_l2_after_nuisance_projection",
         beta_units="native_signal",
-        predictor_transform="center_on_pooled_complete_training_trials",
         nuisance="unpenalized_run_specific",
-        encoding_model="ols_with_shared_intercept",
         trial_masks=[np.isfinite(x).all(axis=1).tolist() for x in arrays],
     )
     if fractional:
@@ -204,8 +217,11 @@ def score_candidates(
     feature_signature,
     *,
     fractional=False,
+    encoding_mode="within_run",
 ):
-    arrays, columns, masks = _validate(data, predictors, library, feature_signature)
+    arrays, columns, masks = _validate(
+        data, predictors, library, feature_signature, encoding_mode=encoding_mode
+    )
     labels = run_labels_for(data, run_labels)
     prepared = None if library is None else prepare_runs(data, library)
     folds = [
@@ -219,6 +235,7 @@ def score_candidates(
             alphas,
             test,
             fractional=fractional,
+            encoding_mode=encoding_mode,
         )
         for test in range(data.n_runs)
     ]
@@ -235,6 +252,7 @@ def score_candidates(
         [f[3] for f in folds],
         ids,
         fractional=fractional,
+        encoding_mode=encoding_mode,
     )
     result_type = FractionCandidateScores if fractional else RidgeCandidateScores
     return result_type(

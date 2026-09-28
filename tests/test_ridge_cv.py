@@ -108,7 +108,9 @@ def augmented_beta(data, r, ids, library, alpha):
     return beta
 
 
-def reference_scores(data, predictors, library, alphas, *, ols_target=False, encoding_mode="within_run"):
+def reference_scores(
+    data, predictors, library, alphas, *, ols_target=False, encoding_mode="within_run"
+):
     masks = [np.isfinite(p).all(axis=1).to_numpy() for p in predictors]
     losses, totals, assignments = [], [], []
     for test in range(data.n_runs):
@@ -129,13 +131,15 @@ def reference_scores(data, predictors, library, alphas, *, ols_target=False, enc
             valid = np.isfinite(y).all(axis=0)
             intercepts = np.ones((len(x), 1))
             if encoding_mode == "within_run":
-                ids_run = np.repeat(np.arange(len(train)), [masks[r].sum() for r in train])
+                ids_run = np.repeat(
+                    np.arange(len(train)), [masks[r].sum() for r in train]
+                )
                 intercepts = np.eye(len(train))[ids_run]
             coefficients = np.linalg.lstsq(
                 np.column_stack([intercepts, x]), y[:, valid], rcond=None
             )[0]
             xtest = predictors[test].to_numpy()[masks[test]]
-            predicted = xtest @ coefficients[-x.shape[1]:]
+            predicted = xtest @ coefficients[-x.shape[1] :]
             if encoding_mode == "absolute":
                 predicted += coefficients[0]
             target_beta = (
@@ -148,7 +152,7 @@ def reference_scores(data, predictors, library, alphas, *, ols_target=False, enc
             residual = target - predicted
             if encoding_mode == "within_run":
                 residual -= residual.mean(0)
-            loss[valid] = np.sum(residual ** 2, axis=0)
+            loss[valid] = np.sum(residual**2, axis=0)
             total[valid] = np.sum((target - target.mean(axis=0)) ** 2, axis=0)
             fold_loss.append(loss)
             fold_total.append(total)
@@ -160,7 +164,9 @@ def reference_scores(data, predictors, library, alphas, *, ols_target=False, enc
 
 @pytest.mark.parametrize("optimized", [False, True])
 @pytest.mark.parametrize("encoding_mode", ["within_run", "absolute"])
-def test_cv_matches_independent_augmented_ols_and_encoding(ridge_problem, optimized, encoding_mode):
+def test_cv_matches_independent_augmented_ols_and_encoding(
+    ridge_problem, optimized, encoding_mode
+):
     data, predictors, library = ridge_problem
     library = library if optimized else None
     result = score(
@@ -250,8 +256,13 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
     np.testing.assert_array_equal(
         original_first.predictor_means, seen_encodings[12].predictor_means
     )
-    np.testing.assert_array_equal(original_first.train_run_intercepts, seen_encodings[12].train_run_intercepts)
-    np.testing.assert_array_equal(original_first.train_run_predictor_means, seen_encodings[12].train_run_predictor_means)
+    np.testing.assert_array_equal(
+        original_first.train_run_intercepts, seen_encodings[12].train_run_intercepts
+    )
+    np.testing.assert_array_equal(
+        original_first.train_run_predictor_means,
+        seen_encodings[12].train_run_predictor_means,
+    )
     assert not np.allclose(first.fold_sse[0, :, :4], changed.fold_sse[0, :, :4])
 
 
@@ -295,36 +306,54 @@ def test_validation_design_failure_names_fold_and_run(ridge_problem):
 @pytest.mark.parametrize("fractional", [False, True])
 def test_modes_identify_objective_and_default(ridge_problem, fractional):
     from boldtailor.fractional_ridge import score_fraction_candidates
+
     data, predictors, _ = ridge_problem
     function = score_fraction_candidates if fractional else score
-    options = {"fractions": [1, .5]} if fractional else {"alphas": [0, 1]}
+    options = {"fractions": [1, 0.5]} if fractional else {"alphas": [0, 1]}
     default = function(data, predictors, **options)
     within = function(data, predictors, encoding_mode="within_run", **options)
     absolute = function(data, predictors, encoding_mode="absolute", **options)
     np.testing.assert_array_equal(default.cv_r2, within.cv_r2)
     assert not np.allclose(within.cv_r2, absolute.cv_r2, equal_nan=True)
-    assert within.provenance.analysis_fingerprint != absolute.provenance.analysis_fingerprint
+    assert (
+        within.provenance.analysis_fingerprint
+        != absolute.provenance.analysis_fingerprint
+    )
     for mode, result in [("within_run", within), ("absolute", absolute)]:
         activity = result.provenance.to_dict()["activities"][-1]
         assert activity["encoding_mode"] == mode
         assert activity["encoding_objective_version"] == 2
-        assert activity["encoding_model"] == ("ols_with_run_specific_intercepts" if mode == "within_run" else "ols_with_shared_intercept")
+        assert activity["encoding_model"] == (
+            "ols_with_run_specific_intercepts"
+            if mode == "within_run"
+            else "ols_with_shared_intercept"
+        )
         fold = activity["folds"][0]
-        np.testing.assert_allclose(fold["train_run_predictor_means"], [p[np.isfinite(p).all(axis=1)].mean().to_numpy() for p in predictors[1:]])
+        np.testing.assert_allclose(
+            fold["train_run_predictor_means"],
+            [p[np.isfinite(p).all(axis=1)].mean().to_numpy() for p in predictors[1:]],
+        )
 
 
 @pytest.mark.parametrize("fractional", [False, True])
 @pytest.mark.parametrize("case", ["mode", "rank"])
-def test_encoding_preflight_precedes_hrf_fitting(ridge_problem, monkeypatch, fractional, case):
+def test_encoding_preflight_precedes_hrf_fitting(
+    ridge_problem, monkeypatch, fractional, case
+):
     from boldtailor.fractional_ridge import score_fraction_candidates
     import boldtailor._ridge_cv as cv
+
     data, predictors, library = ridge_problem
+
     def forbidden(*args, **kwargs):
         pytest.fail("invalid encoding design reached HRF fitting")
+
     monkeypatch.setattr(cv, "_fold_selection", forbidden)
     mode = "invalid" if case == "mode" else "within_run"
     if case == "rank":
-        predictors = [p.assign(response_time=float(r)) for r,p in enumerate(predictors)]
+        predictors = [
+            p.assign(response_time=float(r)) for r, p in enumerate(predictors)
+        ]
     function = score_fraction_candidates if fractional else score
     options = {"fractions": [1]} if fractional else {"alphas": [0]}
     with pytest.raises(ValueError, match="encoding_mode|rank"):

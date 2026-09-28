@@ -44,6 +44,7 @@ def score_fraction_candidates(
     library=None,
     run_labels=None,
     feature_signature=None,
+    encoding_mode="within_run",
 ):
     """Score same-fraction beta targets in held-out runs; no image repeats needed.
 
@@ -55,5 +56,12 @@ def score_fraction_candidates(
 
     grid = tuple(sorted(fraction_grid(fractions), reverse=True))
     return score_candidates(
-        data, predictors, grid, library, run_labels, feature_signature, fractional=True
+        data,
+        predictors,
+        grid,
+        library,
+        run_labels,
+        feature_signature,
+        fractional=True,
+        encoding_mode=encoding_mode,
     )

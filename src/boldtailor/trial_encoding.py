@@ -64,6 +64,36 @@ def validate_encoding_mode(encoding_mode):
     return encoding_mode
 
 
+def encoding_metadata(encoding_mode):
+    """Describe the objective consistently in CV and exported artifacts."""
+    within = validate_encoding_mode(encoding_mode) == "within_run"
+    return dict(
+        encoding_mode=encoding_mode,
+        encoding_objective_version=2,
+        score=(
+            "pooled_within_run_centered_trial_encoding_r2"
+            if within
+            else "pooled_within_run_trial_encoding_r2"
+        ),
+        encoding_model=(
+            "ols_with_run_specific_intercepts"
+            if within
+            else "ols_with_shared_intercept"
+        ),
+        predictor_transform=(
+            "center_within_each_complete_training_run"
+            if within
+            else "center_on_pooled_complete_training_trials"
+        ),
+        validation_intercept=(
+            "remove_per_run_feature_mean_residual_for_scoring_only"
+            if within
+            else "no_adjustment"
+        ),
+        prediction_reference="pooled_training_beta_mean_at_pooled_predictor_mean",
+    )
+
+
 def _center(values):
     # Subtract a reference first so exactly constant columns remain exactly zero.
     shifted = values - values[0]
