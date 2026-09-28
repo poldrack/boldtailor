@@ -71,3 +71,19 @@ to package `__init__.py` or production fitting. Log execution evidence in
 3. Calibration evaluated on the same held-out outcomes that estimated it.
 4. Candidate-dependent scores misrepresented as comparable scientific recovery.
 5. Seed/scenario/feature pseudoreplication or hidden poor-performing subgroups.
+
+## Execution complete
+
+- Solver tests: RED committed `a64ce7d`; GREEN implementation `82e8754`.
+- Runner tests: RED committed `3d2d92a`; GREEN implementation `4a5820f`.
+- Ten seeds × 32 scenarios complete: 16,320 selected rows and 38,400 candidates.
+- Independent review: no blockers. Report clarifies the realized-training-truth
+  slope reference; independent numeric audit verifies aggregation across all
+  scenarios and features within seeds before computing uncertainty.
+- Full suite: 860 passed in 169.91 s with warnings as errors. Black and
+  `git diff --check` passed.
+- Findings and full archive: `docs/validation/fractional-ridge-ablation-2026-09-28.md`
+  and its companion directory. Production defaults unchanged.
+- Reproduce using module invocation (`uv run python -m
+  examples.validation.fractional_ridge_ablation_simulation`); direct script-path
+  invocation does not put the repository's `examples` package on the import path.

@@ -1,0 +1,273 @@
+{
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "scenarios": [
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 4.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "uniform",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "white",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": false,
+      "offset": 1.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 0.0
+    },
+    {
+      "isi": 12.0,
+      "durations": "variable",
+      "noise": "ar_hetero",
+      "hrf_mismatch": true,
+      "offset": 1.0
+    }
+  ],
+  "n_trials": 24,
+  "features": [
+    "strong_linear",
+    "weak_linear",
+    "nonlinear"
+  ],
+  "train_runs": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "test_runs": [
+    4,
+    5
+  ],
+  "fractions": [
+    1.0,
+    0.8,
+    0.5,
+    0.2,
+    0.1
+  ],
+  "production_defaults_changed": false,
+  "pooled_alpha": "estimated_on_training_runs_and_frozen_for_held_out_runs",
+  "calibration": "post_selection_affine_fit_to_training_OLS_only",
+  "uncertainty": "paired_scenario_and_feature_averages_within_seed_then_SEM_across_seeds",
+  "versions": {
+    "boldtailor": "0.1.0",
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "nilearn": "0.14.0"
+  }
+}
