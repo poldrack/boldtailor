@@ -1,6 +1,8 @@
 """Fractional fits match an independent augmented-lstsq/root-finding oracle."""
 
+import gc
 import importlib
+import weakref
 
 import numpy as np
 import pytest
@@ -103,10 +105,15 @@ def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(
         )
 
 
-def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regression):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regression, prepared):
     x, n, y = regression
     y = np.column_stack([y, np.ones(len(y)) * 100, n[:, 1]])
     fit = fractional().fit_fraction_run(x, n, y, fractions=[0.5, np.nan, 0.5, 0.5])
+    if prepared:
+        betas, alphas = fractional().prepare_fraction_betas(x, n, y).solve([0.5, np.nan, 0.5, 0.5])
+        np.testing.assert_allclose(betas, fit.betas)
+        np.testing.assert_allclose(alphas, fit.diagnostics["ridge_alphas"])
     assert np.isfinite(fit.betas[:, 0]).all()
     assert np.isnan(fit.betas[:, 1:]).all()
     assert np.isnan(fit.diagnostics["ridge_alphas"][1:]).all()
@@ -122,6 +129,10 @@ def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regress
     _, shrunk, _ = next(
         fractional().fraction_beta_path(design, nuisance, signal, fractions=[0.4])
     )
+    if prepared:
+        solver = fractional().prepare_fraction_betas(design, nuisance, signal)
+        np.testing.assert_allclose(solver.betas_at(1), ols)
+        np.testing.assert_allclose(solver.betas_at(0.4), shrunk)
     assert np.linalg.norm(shrunk[:, 0]) / np.linalg.norm(ols[:, 0]) == pytest.approx(
         0.4, rel=1e-7
     )
@@ -188,3 +199,34 @@ def test_fraction_one_matches_existing_ols(selected_fixture):
     for a, b in zip(ordinary.run_betas, fractional_fit.run_betas):
         np.testing.assert_allclose(a, b, atol=1e-11)
     np.testing.assert_allclose(ordinary.full_r2, fractional_fit.full_r2, atol=1e-11)
+
+
+def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatch):
+    x, n, y = regression
+    prepared = fractional().prepare_fraction_betas(x, n, y)
+    expected = {
+        fraction: np.column_stack([
+            oracle(x, n, y[:, feature], fraction)[0]
+            for feature in range(y.shape[1])
+        ])
+        for fraction in (0.2, 1.0, 0.8)
+    }
+
+    def refactorization(*args, **kwargs):
+        raise AssertionError("candidate evaluation must reuse prepared SVD")
+
+    monkeypatch.setattr(np.linalg, "svd", refactorization)
+    for fraction in (0.2, 1.0, 0.8, 0.2):
+        betas = prepared.betas_at(fraction)
+        np.testing.assert_allclose(betas, expected[fraction], atol=1e-9)
+        reference = weakref.ref(betas)
+        del betas
+        gc.collect()
+        assert reference() is None
+
+
+@pytest.mark.parametrize("fraction", [0, -0.1, 1.1, np.inf, np.nan, True, [], [0.5, 0.5, 0.5]])
+def test_prepared_fraction_rejects_invalid_values(regression, fraction):
+    prepared = fractional().prepare_fraction_betas(*regression)
+    with pytest.raises(ValueError):
+        prepared.betas_at(fraction)
