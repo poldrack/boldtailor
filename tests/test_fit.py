@@ -362,7 +362,7 @@ def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
             )
 
 
-def test_fit_returns_strictly_immutable_arrays(single_run_problem):
+def test_fit_returns_readonly_arrays(single_run_problem):
     signals, events, design, model = single_run_problem
 
     result = fit(from_arrays(signals, events, tr=2.0), model)
@@ -386,8 +386,10 @@ def test_fit_returns_strictly_immutable_arrays(single_run_problem):
         result.one_sided_p_value("face_gt_house"),
     )
     for values in arrays:
-        with pytest.raises(ValueError, match="WRITEABLE"):
-            values.setflags(write=True)
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.flat[0] = 0
 
 
 def test_fit_owns_designs_and_exposes_immutable_provenance(single_run_problem):
@@ -668,8 +670,10 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
         assert values.dtype == np.dtype("float64")
         assert values.flags.owndata is True
         assert not np.shares_memory(values, full_result.r2)
-        with pytest.raises(ValueError, match="WRITEABLE"):
-            values.setflags(write=True)
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.flat[0] = 0
 
     returned = comparison.nuisance_design_matrices[0]
     returned.iloc[0, 0] = -99.0

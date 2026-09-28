@@ -89,8 +89,10 @@ def test_predictions_and_pooled_loss_match_independent_ols(encoding_runs):
         *result.predictions,
         *result.trial_masks,
     ]:
+        assert type(array) is np.ndarray
+        assert not array.flags.writeable
         with pytest.raises(ValueError):
-            array.setflags(write=True)
+            array.flat[0] = 0
 
 
 def test_validation_covariates_do_not_change_training_transform(encoding_runs):
@@ -229,8 +231,10 @@ def test_run_intercepts_and_scores_match_dummy_ols(offset_runs, mode):
         result.train_run_predictor_means,
         result.scoring_offsets,
     ):
+        assert type(array) is np.ndarray
+        assert not array.flags.writeable
         with pytest.raises(ValueError):
-            array.setflags(write=True)
+            array.flat[0] = 0
 
 
 @pytest.mark.parametrize("test_slope,expected", [(3, 1), (4, 15 / 16), (0.5, -24)])

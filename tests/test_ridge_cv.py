@@ -136,8 +136,10 @@ def test_cv_matches_independent_augmented_ols_and_encoding(
         result.fold_hrf_indices,
         result.trial_masks[0],
     ):
+        assert type(array) is np.ndarray
+        assert not array.flags.writeable
         with pytest.raises(ValueError):
-            array.setflags(write=True)
+            array.flat[0] = 0
 
 
 def test_validation_targets_use_candidate_penalty(ridge_problem):

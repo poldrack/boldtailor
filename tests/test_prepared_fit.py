@@ -391,8 +391,10 @@ def test_fit_prepared_owns_results_and_reports_prepared_design_provenance(
     )
     original = tuple(values.copy() for values in arrays)
     for values, expected in zip(arrays, original, strict=True):
-        with pytest.raises(ValueError, match="WRITEABLE"):
-            values.setflags(write=True)
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.flat[0] = 0
         with pytest.raises(ValueError):
             values[...] = 0.0
         np.testing.assert_array_equal(values, expected)
@@ -995,8 +997,10 @@ def test_task_delta_r2_prepared_returns_owned_immutable_arrays_and_copied_design
         assert values.flags.c_contiguous
         assert values.dtype == np.float64
         assert not values.flags.writeable
-        with pytest.raises(ValueError, match="WRITEABLE"):
-            values.setflags(write=True)
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.flat[0] = 0
 
 
 @pytest.mark.parametrize(

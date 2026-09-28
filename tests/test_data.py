@@ -115,7 +115,7 @@ def test_from_arrays_rejects_invalid_frame_times(events, frame_times, message):
         )
 
 
-def test_from_arrays_owns_strictly_immutable_copies(events):
+def test_from_arrays_owns_readonly_copies(events):
     signals = np.arange(20.0).reshape(10, 2)
     frame_times = np.arange(10, dtype=float) * 2.0
     confounds = pd.DataFrame({"motion": np.linspace(0.0, 1.0, 10)})
@@ -136,8 +136,10 @@ def test_from_arrays_owns_strictly_immutable_copies(events):
     assert data.events[0].loc[0, "trial_type"] == "face"
     assert data.confounds[0].loc[0, "motion"] == 0.0
     for values in (data.signals[0], data.frame_times[0]):
-        with pytest.raises(ValueError, match="WRITEABLE"):
-            values.setflags(write=True)
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
+        with pytest.raises(ValueError):
+            values.flat[0] = 0
 
 
 def test_from_arrays_owns_nested_tabular_payloads(events):

@@ -276,8 +276,10 @@ def test_results_owned_metadata_independent_and_fingerprinted(cv_fixture):
         result.canonical_cv_r2,
         result.delta_cv_r2,
     ):
+        assert type(array) is np.ndarray
+        assert not array.flags.writeable
         with pytest.raises(ValueError):
-            array.setflags(write=True)
+            array.flat[0] = 0
     table = result.eligibility
     table.loc[0, "reason"] = "changed"
     assert result.eligibility.loc[0, "reason"] != "changed"

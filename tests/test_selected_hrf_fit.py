@@ -156,8 +156,10 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
         result.hrf_indices,
         *result.group_designs.values(),
     ):
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
         with pytest.raises(ValueError):
-            values.setflags(write=True)
+            values.flat[0] = 0
     groups = result.group_designs
     groups.pop((0, 1))
     assert (0, 1) in result.group_designs

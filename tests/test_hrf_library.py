@@ -95,8 +95,10 @@ def test_library_owns_parameters_tables_and_curves():
     assert fingerprint != cls.from_parameters(parameters).fingerprint
     with pytest.raises(ValueError):
         library.curves[1, 20] = 0
+    assert type(library.curves) is np.ndarray
+    assert not library.curves.flags.writeable
     with pytest.raises(ValueError):
-        library.curves.setflags(write=True)
+        library.curves.flat[0] = 0
     with pytest.raises((FrozenInstanceError, AttributeError)):
         library.candidates = ()
 

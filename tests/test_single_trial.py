@@ -289,8 +289,10 @@ def test_run_labels_are_unique_and_checked(problem):
 def test_results_are_immutable_and_metadata_is_copied(problem):
     result = entry()(problem[0], ridge_alpha=0.1)
     for values in [*result.run_betas, result.full_r2, result.delta_r2]:
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
         with pytest.raises(ValueError):
-            values.setflags(write=True)
+            values.flat[0] = 0
     trials = result.trial_table
     trials.loc[0, "onset"] = -999
     assert result.trial_table.loc[0, "onset"] == 8

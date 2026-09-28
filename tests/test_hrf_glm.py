@@ -294,8 +294,10 @@ def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
         result.hrf_indices,
         result.effect("stimulus"),
     ):
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
         with pytest.raises(ValueError):
-            values.setflags(write=True)
+            values.flat[0] = 0
     design = result.group_designs[0, 1]
     design.iloc[:, :] = 0
     assert result.group_designs[0, 1].to_numpy().any()

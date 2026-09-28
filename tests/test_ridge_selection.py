@@ -38,8 +38,10 @@ def test_anatomical_mask_and_sort_preserve_candidate_identity():
     assert tuple(result.alphas) == (0.1, 10.0)
     np.testing.assert_allclose(result.objective_scores, [0.9, 0.8])
     for array in (result.scoring_mask, result.objective_scores):
+        assert type(array) is np.ndarray
+        assert not array.flags.writeable
         with pytest.raises(ValueError):
-            array.setflags(write=True)
+            array.flat[0] = 0
 
 
 def test_near_ties_prefer_smaller_penalty():

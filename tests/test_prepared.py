@@ -141,15 +141,17 @@ def test_prepared_analysis_accessors_return_defensive_copies(prepared_inputs):
     assert prepared.run_metadata[0]["subject"] == "01"
 
 
-def test_prepared_analysis_arrays_are_strictly_immutable(prepared_inputs):
+def test_prepared_analysis_arrays_are_readonly(prepared_inputs):
     prepared = _make_prepared(prepared_inputs)
     for values in (*prepared.signals, *prepared.frame_times):
         assert values.flags.owndata
         assert values.dtype == np.float64
         assert values.flags.c_contiguous
         assert not values.flags.writeable
+        assert type(values) is np.ndarray
+        assert not values.flags.writeable
         with pytest.raises(ValueError):
-            values.setflags(write=True)
+            values.flat[0] = 0
 
 
 @pytest.mark.parametrize(
