@@ -186,7 +186,9 @@ def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
 
 
 @pytest.mark.parametrize("optimized", [False, True])
-def test_prepared_fraction_run_betas_match_oracle_in_any_order(ridge_problem, optimized):
+def test_prepared_fraction_run_betas_match_oracle_in_any_order(
+    ridge_problem, optimized
+):
     from boldtailor import _ridge_cv as cv
 
     data, _, library = ridge_problem
@@ -199,10 +201,15 @@ def test_prepared_fraction_run_betas_match_oracle_in_any_order(ridge_problem, op
             if cid < 0 or np.ptp(data.signals[0][:, feature]) == 0:
                 continue
             x, n, _ = compile_trial_run(
-                data.events[0], data.frame_times[0], data.confounds[0], "run-01",
+                data.events[0],
+                data.frame_times[0],
+                data.confounds[0],
+                "run-01",
                 hrf=library.candidates[cid] if optimized else "spm",
             )
-            expected[:, feature] = oracle(np.asarray(x), np.asarray(n), data.signals[0][:, feature], fraction)[0]
+            expected[:, feature] = oracle(
+                np.asarray(x), np.asarray(n), data.signals[0][:, feature], fraction
+            )[0]
         np.testing.assert_allclose(path.betas_at(fraction), expected, atol=1e-9)
 
 
@@ -221,5 +228,8 @@ def test_fraction_cv_prepares_each_run_once_per_fold(ridge_problem, monkeypatch)
     result = module().score_fraction_candidates(data, predictors, fractions=[1.0, 0.5])
     assert calls == list(range(data.n_runs)) * data.n_runs
     expected = reference(data, predictors, None, [1.0, 0.5])
-    for actual, wanted in zip((result.cv_r2, result.fold_sse, result.fold_sst, result.fold_hrf_indices), expected):
+    for actual, wanted in zip(
+        (result.cv_r2, result.fold_sse, result.fold_sst, result.fold_hrf_indices),
+        expected,
+    ):
         np.testing.assert_allclose(actual, wanted, rtol=2e-7, atol=1e-8)

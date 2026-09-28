@@ -387,7 +387,9 @@ def test_encoding_preflight_precedes_hrf_fitting(
 
 
 @pytest.mark.parametrize("optimized", [False, True])
-def test_prepared_run_betas_preserve_feature_order_and_candidate_independence(ridge_problem, optimized):
+def test_prepared_run_betas_preserve_feature_order_and_candidate_independence(
+    ridge_problem, optimized
+):
     from boldtailor import _ridge_cv as cv
 
     data, _, library = ridge_problem

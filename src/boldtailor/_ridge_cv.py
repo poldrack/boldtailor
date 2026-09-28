@@ -1,5 +1,6 @@
 """Training-only HRF selection and streamed candidate beta-series prediction."""
 
+from dataclasses import dataclass
 from hashlib import sha256
 import json
 from uuid import uuid4
@@ -8,8 +9,8 @@ import numpy as np
 
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._single_trial_design import compile_trial_run
-from boldtailor._single_trial_fit import r_squared, trial_beta_path
-from boldtailor._fractional_ridge import fraction_beta_path, NORM_BASIS
+from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
+from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import run_labels_for, select_hrf
@@ -58,8 +59,25 @@ def _validate(data, predictors, library, signature, *, encoding_mode):
     return arrays, columns, masks
 
 
-def _run_beta_path(data, r, prepared, ids, alphas, label, *, fractional=False):
+@dataclass(frozen=True)
+class RunBetaPath:
+    """Prepared HRF groups, placed back into their original feature columns."""
+
+    shape: tuple[int, int]
+    groups: tuple
+
+    def betas_at(self, value):
+        betas = np.full(self.shape, np.nan)
+        for features, solver in self.groups:
+            betas[:, features] = solver.betas_at(value)
+        return betas
+
+
+def prepare_run_beta_path(data, run_index, prepared, ids, label, *, fractional=False):
+    """Prepare each selected HRF group once for this run and fold."""
+    r = run_index
     groups = []
+    prepare = prepare_fraction_betas if fractional else prepare_trial_betas
     if prepared is None:
         x, n, _ = compile_trial_run(
             data.events[r], data.frame_times[r], data.confounds[r], label
@@ -68,17 +86,8 @@ def _run_beta_path(data, r, prepared, ids, alphas, label, *, fractional=False):
         features = np.flatnonzero(ids == cid)
         if prepared is not None:
             x, n = prepared[r].trial_matrix(int(cid)), prepared[r].nuisance
-        path = (
-            fraction_beta_path(x, n, data.signals[r][:, features], fractions=alphas)
-            if fractional
-            else trial_beta_path(x, n, data.signals[r][:, features], alphas=alphas)
-        )
-        groups.append((features, path))
-    for alpha in alphas:
-        betas = np.full((len(data.events[r]), data.n_features), np.nan)
-        for features, path in groups:
-            betas[:, features] = next(path)[1]
-        yield betas
+        groups.append((features, prepare(x, n, data.signals[r][:, features])))
+    return RunBetaPath((len(data.events[r]), data.n_features), tuple(groups))
 
 
 def _fold_selection(data, library, labels, signature, train):
@@ -108,18 +117,22 @@ def _score_fold(
 ):
     train = [r for r in range(data.n_runs) if r != test]
     ids, selection_record = _fold_selection(data, library, labels, signature, train)
-    paths = [
-        _run_beta_path(data, r, prepared, ids, alphas, labels[r], fractional=fractional)
-        for r in range(data.n_runs)
-    ]
+    paths = []
+    for r in range(data.n_runs):
+        try:
+            paths.append(
+                prepare_run_beta_path(
+                    data, r, prepared, ids, labels[r], fractional=fractional
+                )
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"validation {labels[test]}, beta run {labels[r]}: {error}"
+            ) from error
     fixed_target = None
     if fractional:
         try:
-            fixed_target = next(
-                _run_beta_path(
-                    data, test, prepared, ids, [1.0], labels[test], fractional=True
-                )
-            )
+            fixed_target = paths[test].betas_at(1.0)
         except ValueError as error:
             raise ValueError(
                 f"validation {labels[test]}, beta run {labels[test]}: {error}"
@@ -129,13 +142,13 @@ def _score_fold(
         betas = []
         for r, path in enumerate(paths):
             try:
-                betas.append(next(path))
+                betas.append(
+                    fixed_target if fractional and r == test else path.betas_at(alpha)
+                )
             except ValueError as error:
                 raise ValueError(
                     f"validation {labels[test]}, beta run {labels[r]}: {error}"
                 ) from error
-        if fractional:
-            betas[test] = fixed_target
         fit = evaluate_trial_encoding(
             betas,
             predictors,
