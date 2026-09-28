@@ -168,7 +168,7 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
     assert records[1]["data_id"] is not None
     assert records[1]["level"] == "ERROR"
     assert records[1]["stage"] == "data"
-    assert records[1]["error"] == "run 0 event durations must be non-negative"
+    assert records[1]["error_code"] == "invalid_input"
     assert records[2].get("execution_id") is None
     assert records[2].get("data_id") is None
 
@@ -244,7 +244,7 @@ def test_fit_logs_failure_and_resets_context_after_exception(caplog):
     assert fit_records[0]["execution_id"] == fit_records[1]["execution_id"]
     assert fit_records[0]["data_id"] == data.provenance.metadata_fingerprint
     assert fit_records[1]["level"] == "ERROR"
-    assert fit_records[1]["error"].startswith("run 0 contrast 'missing'")
+    assert fit_records[1]["error_code"] == "invalid_input"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
     assert records[-1].get("analysis_id") is None
@@ -334,9 +334,7 @@ def test_task_delta_r2_logs_failure_and_resets_context(caplog):
     )
     assert comparison_records[0]["analysis_id"] == comparison_records[1]["analysis_id"]
     assert comparison_records[1]["level"] == "ERROR"
-    assert comparison_records[1]["error"] == (
-        "full result does not match data and model"
-    )
+    assert comparison_records[1]["error_code"] == "invalid_input"
     assert records[-1]["event"] == "after_task_delta_r2_failure"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
@@ -367,8 +365,38 @@ def test_task_delta_r2_logs_provenance_failure_before_completion(
         "task_delta_r2_started",
         "task_delta_r2_failed",
     ]
-    assert comparison_records[1]["error"] == ("comparison provenance cannot be frozen")
+    assert comparison_records[1]["error_code"] == "invalid_input"
     assert records[-1]["event"] == "after_task_delta_r2_provenance_failure"
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
     assert records[-1].get("analysis_id") is None
+
+
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (ValueError("private /home/person/data"), "invalid_input"),
+        (TypeError("private-value"), "invalid_input"),
+        (FloatingPointError("private-value"), "numerical_failure"),
+        (np.linalg.LinAlgError("private-value"), "numerical_failure"),
+        (OSError("private-value"), "io_failure"),
+        (RuntimeError("private-value"), "operation_failed"),
+        ("legacy private-value", "operation_failed"),
+    ],
+)
+def test_failure_events_export_only_fixed_categories(caplog, error, code):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    event = emit_event("fit_failed", stage="fit", level=logging.ERROR, error=error)
+    assert event["error_code"] == code
+    assert "error" not in event
+    assert "private" not in caplog.text
+
+
+def test_failure_logging_does_not_stringify_exceptions(caplog):
+    class UnprintableError(ValueError):
+        def __str__(self):
+            raise AssertionError("exception text must not be inspected")
+
+    event = emit_event("fit_failed", stage="fit", error=UnprintableError())
+    assert event["error_code"] == "invalid_input"
+    assert "UnprintableError" not in caplog.text

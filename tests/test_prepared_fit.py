@@ -623,10 +623,7 @@ def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
         "fit_started",
         "fit_failed",
     ]
-    assert (
-        fit_records[-1]["error"]
-        == "run 0 contrast 'missing' references missing regressor 'missing'"
-    )
+    assert fit_records[-1]["error_code"] == "invalid_input"
     assert records[-1]["event"] == "after_sanitized_failure"
     assert records[-1].get("execution_id") is None
 
@@ -781,10 +778,7 @@ def test_fit_prepared_ignores_empty_sensitive_environment_values(caplog, monkeyp
 
     records = _structured_records(caplog)
     failed = [record for record in records if record["event"] == "fit_failed"][-1]
-    assert (
-        failed["error"]
-        == "run 0 contrast 'missing' references missing regressor 'missing'"
-    )
+    assert failed["error_code"] == "invalid_input"
 
 
 def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
