@@ -44,6 +44,17 @@ class ModelSpec:
         return self._contrast_names
 
 
+def contrast_metadata(contrasts):
+    return {
+        name: (
+            {"kind": "expression", "value": value}
+            if isinstance(value, str)
+            else {"kind": "weights", "weights": dict(value)}
+        )
+        for name, value in contrasts.items()
+    }
+
+
 def _prepare_contrasts(
     contrasts: Mapping[str, ContrastValue],
 ) -> dict[str, ContrastValue]:

@@ -12,9 +12,22 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs, fit_r2_designs
+from boldtailor._fit_diagnostics import (
+    TASK_DELTA_R2_DEFINITION,
+    DIAGNOSTIC_NOISE_MODEL,
+    NESTED_OLS_TOLERANCE,
+    rank_warnings,
+    validate_nested_ols_delta,
+    validate_result_dimensions,
+)
 from boldtailor._software import package_version
 from boldtailor.logging import append_event_history, bind_context, emit_event
-from boldtailor.model import ContrastValue, _prepare_contrasts, _validate_noise_model
+from boldtailor.model import (
+    ContrastValue,
+    _prepare_contrasts,
+    _validate_noise_model,
+    contrast_metadata,
+)
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.provenance import (
     ProvenanceRecord,
@@ -33,9 +46,6 @@ _PATH_PATTERN = re.compile(r"(?<![\w.-])/(?:[^\s'\"<>]+)")
 _ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
 _OBJECT_REPR_PATTERN = re.compile(r"<[^>\n]*\bobject\b[^>\n]*>")
 _TRACEBACK_PATTERN = re.compile(r"Traceback \(most recent call last\):.*", re.DOTALL)
-_TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
-_DIAGNOSTIC_NOISE_MODEL = "ols"
-_NESTED_OLS_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -206,7 +216,7 @@ def _run_prepared_comparison(
     nuisance_designs = _nuisance_designs(prepared)
     full_r2 = _fit_prepared_r2(prepared, prepared._design_matrices)
     nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
-    _validate_nested_ols_delta(full_r2 - nuisance_r2)
+    validate_nested_ols_delta(full_r2 - nuisance_r2)
     comparison = make_task_delta_r2_result(
         full_r2=full_r2,
         nuisance_r2=nuisance_r2,
@@ -241,8 +251,8 @@ def _prepared_comparison_id(
         {
             "name": "task_delta_r2_prepared",
             "parent_analysis_id": parent_id,
-            "definition": _TASK_DELTA_R2_DEFINITION,
-            "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+            "definition": TASK_DELTA_R2_DEFINITION,
+            "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
             "inferential_noise_model": fit_spec.noise_model,
         },
     )
@@ -259,32 +269,7 @@ def _validate_prepared_parent(
         )
     if full_result.provenance.analysis_fingerprint != parent_id:
         raise ValueError("full result does not match prepared input and model")
-    _validate_prepared_result_dimensions(prepared, full_result)
-
-
-def _validate_prepared_result_dimensions(
-    prepared: PreparedDesignAnalysis,
-    full_result: AnalysisResult,
-) -> None:
-    designs = full_result.design_matrices
-    run_r2 = full_result.run_r2
-    if len(designs) != prepared.n_runs or len(run_r2) != prepared.n_runs:
-        raise ValueError("full result run dimensions do not match prepared input")
-    for run, (signal, design, values) in enumerate(
-        zip(prepared.signals, designs, run_r2, strict=True)
-    ):
-        if design.shape[0] != signal.shape[0]:
-            raise ValueError(
-                f"full result run {run} dimensions do not match prepared input"
-            )
-        if values.shape != (prepared.n_features,):
-            raise ValueError(
-                f"full result run {run} feature dimensions do not match prepared input"
-            )
-    if full_result.r2.shape != (prepared.n_features,):
-        raise ValueError("full result feature dimensions do not match prepared input")
-    if not np.isfinite(full_result.r2).all():
-        raise ValueError("full result r-squared values must be finite")
+    validate_result_dimensions(prepared, full_result, input_label="prepared input")
 
 
 def _nuisance_designs(
@@ -312,15 +297,10 @@ def _fit_prepared_r2(
     prepared: PreparedDesignAnalysis,
     designs: tuple[pd.DataFrame, ...],
 ) -> np.ndarray:
-    r2 = fit_r2_designs(prepared.signals, designs, _DIAGNOSTIC_NOISE_MODEL)
+    r2 = fit_r2_designs(prepared.signals, designs, DIAGNOSTIC_NOISE_MODEL)
     if not np.isfinite(r2).all():
         raise ValueError("diagnostic fit produced nonfinite r-squared values")
     return r2
-
-
-def _validate_nested_ols_delta(raw_delta_r2: np.ndarray) -> None:
-    if np.any(raw_delta_r2 < -_NESTED_OLS_TOLERANCE):
-        raise ValueError("nested OLS monotonicity violated")
 
 
 def _prepared_delta_activity(
@@ -334,11 +314,11 @@ def _prepared_delta_activity(
         "name": "task_delta_r2_prepared",
         "stage": "fit",
         "parent_analysis_id": parent_id,
-        "definition": _TASK_DELTA_R2_DEFINITION,
-        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "definition": TASK_DELTA_R2_DEFINITION,
+        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
         "inferential_noise_model": fit_spec.noise_model,
         "clip_policy": "numerical_roundoff_guard",
-        "roundoff_tolerance": _NESTED_OLS_TOLERANCE,
+        "roundoff_tolerance": NESTED_OLS_TOLERANCE,
         "nuisance_rule": "column roles nuisance or intercept",
         "runs": tuple(
             _prepared_delta_run_diagnostic(prepared, design, run)
@@ -483,7 +463,7 @@ def _model_identity(
 ) -> dict[str, object]:
     return {
         "kind": "prepared_design",
-        "contrasts": _provenance_contrasts(fit_spec.contrasts),
+        "contrasts": contrast_metadata(fit_spec.contrasts),
         "noise_model": fit_spec.noise_model,
         "metadata": dict(fit_spec.model_metadata),
         "design_fingerprint": prepared.design_fingerprint,
@@ -545,7 +525,7 @@ def _run_diagnostic(
         "design_rank": rank,
         "residual_dof": int(matrix.shape[0] - rank),
         "run_design_fingerprint": prepared.run_design_fingerprints[run],
-        "warnings": _rank_warnings(rank, matrix.shape[1], run),
+        "warnings": rank_warnings(rank, matrix.shape[1], run),
     }
 
 
@@ -554,12 +534,6 @@ def _role_counts(roles: Mapping[str, str]) -> dict[str, int]:
         role: sum(value == role for value in roles.values())
         for role in ("task", "nuisance", "intercept", "other")
     }
-
-
-def _rank_warnings(rank: int, columns: int, run: int) -> list[str]:
-    if rank == columns:
-        return []
-    return [f"run {run} design rank is {rank} for {columns} columns"]
 
 
 def _sanitize_error(error: Exception) -> str:
@@ -579,16 +553,3 @@ def _redact_environment_values(message: str) -> str:
 
 def _is_sensitive_environment_name(name: str) -> bool:
     return any(term in name.upper() for term in ("KEY", "PASSWORD", "SECRET", "TOKEN"))
-
-
-def _provenance_contrasts(
-    contrasts: Mapping[str, ContrastValue],
-) -> dict[str, object]:
-    return {
-        name: (
-            {"kind": "expression", "value": value}
-            if isinstance(value, str)
-            else {"kind": "weights", "weights": dict(value)}
-        )
-        for name, value in contrasts.items()
-    }

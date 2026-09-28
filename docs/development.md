@@ -118,6 +118,11 @@ Selected-HRF completion logs include the analysis identity. Start records use
 execution/source IDs because the identity is established during design
 compilation.
 
+Conventional and prepared fits share rank warnings, dimension validation,
+and nested-OLS thresholds in `_fit_diagnostics.py`. Their contrast provenance
+uses `model.contrast_metadata`. Fit-specific scientific operations remain
+visible in the entry points; grouped-HRF validation retains its NaN contract.
+
 Task-versus-nuisance diagnostics use nested OLS fits. Small negative differences
 from floating-point roundoff are clipped in `TaskDeltaR2Result.delta_r2`;
 `raw_delta_r2` retains the original values. Single-trial ridge comparisons use

@@ -9,10 +9,17 @@ from uuid import uuid4
 import numpy as np
 
 from boldtailor._conventional import ConventionalFit, fit_designs, fit_r2_designs
+from boldtailor._fit_diagnostics import (
+    TASK_DELTA_R2_DEFINITION,
+    DIAGNOSTIC_NOISE_MODEL,
+    rank_warnings,
+    validate_nested_ols_delta,
+    validate_result_dimensions,
+)
 from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor.logging import append_event_history, bind_context, emit_event
-from boldtailor.model import ContrastValue, ModelSpec
+from boldtailor.model import ModelSpec, contrast_metadata
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.hrf_glm_results import HrfAnalysisResult
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
@@ -22,10 +29,6 @@ from boldtailor.results import (
     make_result,
     make_task_delta_r2_result,
 )
-
-_TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
-_DIAGNOSTIC_NOISE_MODEL = "ols"
-_NESTED_OLS_TOLERANCE = 1e-12
 
 
 @dataclass(frozen=True)
@@ -128,16 +131,16 @@ def task_delta_r2(
         )
         try:
             _validate_parent_analysis(expected_parent_id, full_result)
-            _validate_full_result_dimensions(data, full_result)
+            validate_result_dimensions(data, full_result, input_label="data")
             full_designs = compile_designs(data, model)
             nuisance_designs = compile_nuisance_designs(data, model)
-            full_r2 = _fit_r2_analysis(data, full_designs, _DIAGNOSTIC_NOISE_MODEL)
+            full_r2 = _fit_r2_analysis(data, full_designs, DIAGNOSTIC_NOISE_MODEL)
             nuisance_r2 = _fit_r2_analysis(
                 data,
                 nuisance_designs,
-                _DIAGNOSTIC_NOISE_MODEL,
+                DIAGNOSTIC_NOISE_MODEL,
             )
-            _validate_nested_ols_delta(full_r2 - nuisance_r2)
+            validate_nested_ols_delta(full_r2 - nuisance_r2)
             comparison = make_task_delta_r2_result(
                 full_r2=full_r2,
                 nuisance_r2=nuisance_r2,
@@ -205,11 +208,6 @@ def _fit_r2_analysis(
     return r2
 
 
-def _validate_nested_ols_delta(raw_delta_r2: np.ndarray) -> None:
-    if np.any(raw_delta_r2 < -_NESTED_OLS_TOLERANCE):
-        raise ValueError("nested OLS monotonicity violated")
-
-
 def _validate_parent_analysis(
     expected_parent_id: str | None,
     full_result: AnalysisResult,
@@ -222,29 +220,6 @@ def _validate_parent_analysis(
         raise ValueError("full result does not match data and model")
 
 
-def _validate_full_result_dimensions(
-    data: AnalysisData,
-    full_result: AnalysisResult,
-) -> None:
-    designs = full_result.design_matrices
-    run_r2 = full_result.run_r2
-    if len(designs) != data.n_runs or len(run_r2) != data.n_runs:
-        raise ValueError("full result run dimensions do not match data")
-    for run, (signals, design, values) in enumerate(
-        zip(data.signals, designs, run_r2, strict=True)
-    ):
-        if design.shape[0] != signals.shape[0]:
-            raise ValueError(f"full result run {run} dimensions do not match data")
-        if values.shape != (data.n_features,):
-            raise ValueError(
-                f"full result run {run} feature dimensions do not match data"
-            )
-    if full_result.r2.shape != (data.n_features,):
-        raise ValueError("full result feature dimensions do not match data")
-    if not np.isfinite(full_result.r2).all():
-        raise ValueError("full result r-squared values must be finite")
-
-
 def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
     return _analysis_id(parent_id, _task_delta_r2_settings(model))
 
@@ -252,9 +227,9 @@ def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
 def _task_delta_r2_settings(model: ModelSpec) -> dict[str, object]:
     return {
         "name": "task_delta_r2",
-        "definition": _TASK_DELTA_R2_DEFINITION,
+        "definition": TASK_DELTA_R2_DEFINITION,
         "clip_below_zero": True,
-        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
         "inferential_noise_model": model.noise_model,
         "clip_policy": "numerical_roundoff_guard",
         "nuisance_model": _nuisance_model_settings(model),
@@ -268,14 +243,14 @@ def _nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
         "drift_model": model.drift_model,
         "high_pass": model.high_pass,
         "drift_order": model.drift_order,
-        "noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "noise_model": DIAGNOSTIC_NOISE_MODEL,
     }
 
 
 def _model_provenance(model: ModelSpec) -> _ModelProvenance:
     hrf_model, callable_warnings = _serialize_hrf(model.hrf_model)
     activity = {
-        "contrasts": _serialize_contrasts(model.contrasts),
+        "contrasts": contrast_metadata(model.contrasts),
         "confounds": list(model.confounds),
         "hrf_model": hrf_model,
         "drift_model": model.drift_model,
@@ -287,7 +262,7 @@ def _model_provenance(model: ModelSpec) -> _ModelProvenance:
     }
     fingerprint = None
     if not callable_warnings:
-        fingerprint = {**activity, "drift_order": model.drift_order}
+        fingerprint = activity.copy()
     return _ModelProvenance(activity, fingerprint, callable_warnings)
 
 
@@ -298,18 +273,6 @@ def _analysis_id(
     if model is None:
         return None
     return analysis_fingerprint(data_id, model)
-
-
-def _serialize_contrasts(
-    contrasts: Mapping[str, ContrastValue],
-) -> dict[str, object]:
-    return {name: _serialize_contrast(value) for name, value in contrasts.items()}
-
-
-def _serialize_contrast(value: ContrastValue) -> dict[str, object]:
-    if isinstance(value, str):
-        return {"kind": "expression", "value": value}
-    return {"kind": "weights", "weights": dict(value)}
 
 
 def _serialize_hrf(
@@ -370,9 +333,9 @@ def _task_delta_r2_activity(
         "name": "task_delta_r2",
         "stage": "fit",
         "parent_analysis_id": parent_id,
-        "definition": _TASK_DELTA_R2_DEFINITION,
+        "definition": TASK_DELTA_R2_DEFINITION,
         "clip_below_zero": True,
-        "diagnostic_noise_model": _DIAGNOSTIC_NOISE_MODEL,
+        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
         "inferential_noise_model": model.noise_model,
         "clip_policy": "numerical_roundoff_guard",
         "nuisance_model": _nuisance_model_settings(model),
@@ -393,7 +356,7 @@ def _run_diagnostic(
 ) -> dict[str, object]:
     matrix = compiled.matrix.to_numpy()
     rank = int(np.linalg.matrix_rank(matrix))
-    warnings = _rank_warnings(rank, matrix.shape[1], run)
+    warnings = rank_warnings(rank, matrix.shape[1], run)
     return {
         "timing_source": data.timing_source,
         "n_scans": matrix.shape[0],
@@ -405,12 +368,6 @@ def _run_diagnostic(
         "min_onset_cutoff": compiled.min_onset_cutoff,
         "warnings": warnings,
     }
-
-
-def _rank_warnings(rank: int, columns: int, run: int) -> list[str]:
-    if rank == columns:
-        return []
-    return [f"run {run} design rank is {rank} for {columns} columns"]
 
 
 def _design_provenance(compiled: CompiledDesign) -> dict[str, int | float]:
