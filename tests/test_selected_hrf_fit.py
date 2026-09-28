@@ -19,7 +19,7 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
     result = fit_selected_hrfs(
         data, selection=selection, ridge_alpha=alpha, feature_signature="ordered-axis"
     )
-    np.testing.assert_array_equal(result.hrf_indices, selection.hrf_indices)
+    np.testing.assert_array_equal(result.design.hrf_indices, selection.hrf_indices)
     sses = []
     nulls = []
     totals = []
@@ -57,7 +57,7 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
             # Custom convolution may use equivalent floating-point summation;
             # exact canonical compatibility is tested separately.
             np.testing.assert_allclose(
-                result.group_designs[r, int(cid)], matrix, rtol=1e-11, atol=2e-14
+                result.design.matrices[r, int(cid)], matrix, rtol=1e-11, atol=2e-14
             )
             sse.append(np.sum((y[:, v] - matrix @ expected) ** 2))
             null.append(
@@ -153,20 +153,20 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
     )
     for values in (
         *result.run_betas,
-        result.hrf_indices,
-        *result.group_designs.values(),
+        result.design.hrf_indices,
+        *result.design.matrices.values(),
     ):
         assert type(values) is np.ndarray
         assert not values.flags.writeable
         with pytest.raises(ValueError):
             values.flat[0] = 0
-    groups = result.group_designs
+    groups = result.design.matrices
     groups.pop((0, 1))
-    assert (0, 1) in result.group_designs
+    assert (0, 1) in result.design.matrices
     table = result.trial_table
     table.loc[0, "details"]["tags"].append(999)
     assert result.trial_table.loc[0, "details"] == {"tags": [0]}
-    assert result.selection_provenance == selection.provenance
+    assert result.design.selection_provenance == selection.provenance
     info = result.provenance.to_dict()["activities"][-1]
     assert info["library_fingerprint"] == selection.library.fingerprint
     assert info["design_fingerprint"]

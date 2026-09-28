@@ -296,9 +296,9 @@ def test_results_are_readonly_and_metadata_is_copied(problem):
     trials = result.trial_table
     trials.loc[0, "onset"] = -999
     assert result.trial_table.loc[0, "onset"] == 8
-    design = result.design_matrices[0]
+    design = result.design.matrices[0]
     design.iloc[0, 0] = -999
-    assert result.design_matrices[0].iloc[0, 0] != -999
+    assert result.design.matrices[0].iloc[0, 0] != -999
     diagnostics = result.diagnostics
     diagnostics[0]["rank"] = -1
     assert result.diagnostics[0]["rank"] > 0
