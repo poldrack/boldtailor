@@ -61,6 +61,11 @@ a scale-invariant decomposition separate from the raw regularization basis.
 
 ## Stage 3: Fits and results with less bookkeeping
 
+The first increment is the proposed [ownership plan](2026-09-28-scientific-readability-ownership.md): ordinary read-only arrays, direct internal
+prepared-design access, and local fractional-result ownership. It is not yet
+implemented. Result-schema consolidation and lifecycle/diagnostic sharing form
+the subsequent increment, so their contracts can build on this ownership model.
+
 Primary files: `fit.py`, `prepared_fit.py`, `single_trial.py`, `_hrf_glm.py`,
 `_selected_hrf_fit.py`, `prepared.py`, `data.py`, `_arrays.py`, `results.py`,
 `single_trial_results.py`, `hrf_results.py`, `hrf_glm_results.py`, `ridge_results.py`.

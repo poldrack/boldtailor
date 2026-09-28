@@ -82,4 +82,29 @@ The full architectural roadmap is not yet complete.
 
 ## Independent review
 
-Pending whole-stage review.
+An independent reviewer examined `03f00eb..7151ddd`, the surrounding encoding
+code, original baseline solver, tests, and execution decisions. Verdict: ready
+to merge, with no critical, important, or minor findings requiring changes.
+The refactoring branch remains unmerged while later roadmap work continues.
+
+The reviewer also compared the original and new normalized solver at alpha
+0, 0.1, and 2 with increasingly collinear columns. Relative coefficient
+changes stayed below 5.7e-16, and both versions rejected the most degenerate
+case. At an extreme 1e-12 column perturbation, OLS residual SSE differed by
+up to 6.45e-5 because enormous opposing coefficients amplify cancellation;
+regularized SSE differences stayed below 1.5e-14. The reviewer judged this
+expected numerical sensitivity, not changed science or identifiability.
+These observations do not promise bitwise-identical results for arbitrary
+ill-conditioned inputs.
+
+Matters explicitly set aside by the reviewer are resolved as follows:
+
+- Constant-feature SSE conventions remain the committed baseline's zeros for
+  normalized fits; changing them is a separate scientific change. This keeps
+  the known convention until that change is explicitly integrated.
+- Stashed scientific changes remain unapplied and preserved; this stage does
+  not claim the broader stashed remediation is present.
+- Ownership, fit bookkeeping, provenance/publication, and notebooks remain
+  later roadmap work; the next ownership increment has its own proposed plan.
+- Remote CI remains unexecuted without a remote. Local verification is recorded,
+  and no claim of clean Linux-runner success is made.
