@@ -2,7 +2,6 @@
 
 from hashlib import sha256
 import json
-from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -18,7 +17,8 @@ from boldtailor._fractional_ridge import (
 )
 from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
 from boldtailor.hrf_selection import run_labels_for
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor.provenance import analysis_fingerprint
+from boldtailor._fit_lifecycle import fit_operation
 
 
 def _tables(data, labels):
@@ -78,7 +78,7 @@ def _fit_run(run, y, ids, alpha, run_index, fractions=None):
     return betas, full, null, total, designs, diagnostics, alphas
 
 
-def _provenance(data, selection, labels, alpha, assignment, designs, fractions=None):
+def _fit_activity(data, selection, labels, alpha, assignment, designs, fractions=None):
     digest = sha256()
     for key, values in sorted(designs.items()):
         digest.update(json.dumps(key).encode())
@@ -106,51 +106,49 @@ def _provenance(data, selection, labels, alpha, assignment, designs, fractions=N
     )
     if fractions is not None:
         activity.update(fraction_metadata(fractions))
-    return extend_provenance(
-        data.provenance,
-        execution_id=str(uuid4()),
-        activity=activity,
-        events=data.provenance.events,
-        warnings=(),
-        analysis_id=analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        ),
-    )
+    return activity
 
 
 def fit_groups(
     data, selection, ridge_alpha, run_labels, feature_signature, *, ridge_fraction=None
 ):
-    alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
-    assignment = validate_selection(data, selection, feature_signature)
-    labels = run_labels_for(data, run_labels)
-    trials = _tables(data, labels)
-    runs = prepare_runs(data, selection.library)
-    fits = [
-        _fit_run(run, y, selection.hrf_indices, alpha, r, fractions)
-        for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
-    ]
-    designs = {k: v for f in fits for k, v in f[4].items()}
-    total = sum(f[3] for f in fits)
-    full = r_squared(sum(f[1] for f in fits), total)
-    null = r_squared(sum(f[2] for f in fits), total)
-    provenance = _provenance(
-        data, selection, labels, alpha, assignment, designs, fractions
-    )
-    return SingleTrialResult(
-        run_betas=tuple(f[0] for f in fits),
-        _trial_table=trials,
-        design=SelectedTrialDesign(
-            selection.hrf_indices, designs, selection.provenance
-        ),
-        run_full_r2=tuple(r_squared(f[1], f[3]) for f in fits),
-        run_nuisance_r2=tuple(r_squared(f[2], f[3]) for f in fits),
-        full_r2=full,
-        nuisance_r2=null,
-        delta_r2=full - null,
-        _diagnostics=tuple(d for f in fits for d in f[5]),
-        ridge_alpha=alpha,
-        provenance=provenance,
-        ridge_fraction=fractions,
-        run_ridge_alphas=None if fractions is None else tuple(f[6] for f in fits),
-    )
+    with fit_operation("selected_hrf_single_trial", data.provenance) as operation:
+        alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
+        assignment = validate_selection(data, selection, feature_signature)
+        labels = run_labels_for(data, run_labels)
+        trials = _tables(data, labels)
+        runs = prepare_runs(data, selection.library)
+        fits = [
+            _fit_run(run, y, selection.hrf_indices, alpha, r, fractions)
+            for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
+        ]
+        designs = {k: v for f in fits for k, v in f[4].items()}
+        total = sum(f[3] for f in fits)
+        full = r_squared(sum(f[1] for f in fits), total)
+        null = r_squared(sum(f[2] for f in fits), total)
+        activity = _fit_activity(
+            data, selection, labels, alpha, assignment, designs, fractions
+        )
+        provenance = operation.provenance(
+            activity,
+            analysis_id=analysis_fingerprint(
+                data.provenance.metadata_fingerprint, activity
+            ),
+        )
+        return SingleTrialResult(
+            run_betas=tuple(f[0] for f in fits),
+            _trial_table=trials,
+            design=SelectedTrialDesign(
+                selection.hrf_indices, designs, selection.provenance
+            ),
+            run_full_r2=tuple(r_squared(f[1], f[3]) for f in fits),
+            run_nuisance_r2=tuple(r_squared(f[2], f[3]) for f in fits),
+            full_r2=full,
+            nuisance_r2=null,
+            delta_r2=full - null,
+            _diagnostics=tuple(d for f in fits for d in f[5]),
+            ridge_alpha=alpha,
+            provenance=provenance,
+            ridge_fraction=fractions,
+            run_ridge_alphas=None if fractions is None else tuple(f[6] for f in fits),
+        )

@@ -427,9 +427,14 @@ def test_shared_trials_complete_lifecycle(problem, caplog, monkeypatch, outcome)
                 entry()(data)
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["single_trial_started", f"single_trial_{ending}"]
+    assert [r["event"] for r in records] == [
+        "single_trial_started",
+        f"single_trial_{ending}",
+    ]
     assert "analysis_id" not in records[0]
     assert records[0]["execution_id"] == records[1]["execution_id"]
     assert "private" not in caplog.text

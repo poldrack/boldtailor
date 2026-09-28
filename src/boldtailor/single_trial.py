@@ -3,8 +3,6 @@
 from collections.abc import Sequence
 import hashlib
 import json
-import logging
-from uuid import uuid4
 
 import nilearn
 import numpy as np
@@ -19,8 +17,8 @@ from boldtailor._fractional_ridge import (
     fraction_metadata,
 )
 from boldtailor.data import AnalysisData
-from boldtailor.logging import append_event_history, bind_context, emit_event
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor._fit_lifecycle import fit_operation
+from boldtailor.provenance import analysis_fingerprint
 from boldtailor.single_trial_results import SingleTrialResult, SharedTrialDesign
 
 
@@ -45,61 +43,43 @@ def fit_single_trials(
     cannot be combined with ridge_fraction. Fractional results include the
     selected fractions and implied alpha for each run and feature.
     """
-    alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
-    labels = (
-        tuple(run_labels)
-        if run_labels is not None
-        else tuple(f"run-{i + 1:02d}" for i in range(data.n_runs))
-    )
-    if (
-        len(labels) != data.n_runs
-        or not all(isinstance(x, str) for x in labels)
-        or len(set(labels)) != len(labels)
-    ):
-        raise ValueError("run labels must be unique and match the number of runs")
-    execution_id = str(uuid4())
-    history = data.provenance.events
-    with bind_context(
-        execution_id=execution_id, data_id=data.provenance.metadata_fingerprint
-    ):
-        history = append_event_history(
-            history, emit_event("single_trial_started", stage="fit")
+    with fit_operation("single_trial", data.provenance) as operation:
+        alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
+        labels = (
+            tuple(run_labels)
+            if run_labels is not None
+            else tuple(f"run-{i + 1:02d}" for i in range(data.n_runs))
         )
-        try:
-            compiled = tuple(
-                compile_trial_run(*args, hrf=hrf)
-                for args in zip(
-                    data.events, data.frame_times, data.confounds, labels, strict=True
-                )
+        if (
+            len(labels) != data.n_runs
+            or not all(isinstance(x, str) for x in labels)
+            or len(set(labels)) != len(labels)
+        ):
+            raise ValueError("run labels must be unique and match the number of runs")
+        compiled = tuple(
+            compile_trial_run(*args, hrf=hrf)
+            for args in zip(
+                data.events, data.frame_times, data.confounds, labels, strict=True
             )
-            fits = tuple(
-                (
-                    fit_trial_run(x, n, y, alpha=alpha)
-                    if fractions is None
-                    else fit_fraction_run(x, n, y, fractions=fractions)
-                )
-                for (x, n, _), y in zip(compiled, data.signals, strict=True)
-            )
-        except Exception:
-            emit_event("single_trial_failed", stage="fit", level=logging.ERROR)
-            raise
-        history = append_event_history(
-            history, emit_event("single_trial_completed", stage="fit")
         )
-    activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf)
-    if fractions is not None:
-        activity.update(fraction_metadata(fractions))
-    provenance = extend_provenance(
-        data.provenance,
-        execution_id=execution_id,
-        activity=activity,
-        events=history,
-        warnings=(),
-        analysis_id=analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        ),
-    )
-    return _assemble_result(compiled, fits, alpha, provenance, fractions)
+        fits = tuple(
+            (
+                fit_trial_run(x, n, y, alpha=alpha)
+                if fractions is None
+                else fit_fraction_run(x, n, y, fractions=fractions)
+            )
+            for (x, n, _), y in zip(compiled, data.signals, strict=True)
+        )
+        activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf)
+        if fractions is not None:
+            activity.update(fraction_metadata(fractions))
+        provenance = operation.provenance(
+            activity,
+            analysis_id=analysis_fingerprint(
+                data.provenance.metadata_fingerprint, activity
+            ),
+        )
+        return _assemble_result(compiled, fits, alpha, provenance, fractions)
 
 
 def _model_metadata(compiled, times, labels, alpha, hrf="spm"):

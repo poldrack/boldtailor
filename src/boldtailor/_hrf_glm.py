@@ -1,8 +1,6 @@
 """Fit conventional models in HRF groups and restore input feature order."""
 
 from dataclasses import dataclass, fields, replace
-import logging
-from uuid import uuid4
 
 import numpy as np
 
@@ -14,8 +12,8 @@ from boldtailor._hrf_glm_design import (
     group_diagnostics,
 )
 from boldtailor.hrf_glm_results import HrfAnalysisResult, _masked_delta_result
-from boldtailor.logging import append_event_history, bind_context, emit_event
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor._fit_lifecycle import fit_operation
+from boldtailor.provenance import analysis_fingerprint
 from boldtailor.results import _ContrastResult
 
 
@@ -99,33 +97,18 @@ def _assemble(data, model, selection, context, fits, provenance):
     )
 
 
-def fit_selected_glm(data, model, selection, signature, model_settings):
-    execution_id = str(uuid4())
-    with bind_context(
-        execution_id=execution_id, data_id=data.provenance.metadata_fingerprint
-    ):
-        history = append_event_history(
-            data.provenance.events, emit_event("fit_started", stage="fit")
+def fit_selected_glm(data, model, selection, signature):
+    from boldtailor.fit import _model_provenance
+
+    with fit_operation("fit", data.provenance) as operation:
+        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        context = _prepare(data, model, selection, signature, settings)
+        operation.analysis_id = context.analysis_id
+        fits = _group_fits(data, model, selection, context)
+        provenance = operation.provenance(
+            context.activity, analysis_id=context.analysis_id
         )
-        try:
-            context = _prepare(data, model, selection, signature, model_settings)
-            fits = _group_fits(data, model, selection, context)
-        except Exception as error:
-            emit_event("fit_failed", stage="fit", level=logging.ERROR, error=error)
-            raise
-        history = append_event_history(
-            history,
-            emit_event("fit_completed", stage="fit", analysis_id=context.analysis_id),
-        )
-    provenance = extend_provenance(
-        data.provenance,
-        execution_id=execution_id,
-        activity=context.activity,
-        events=history,
-        warnings=(),
-        analysis_id=context.analysis_id,
-    )
-    return _assemble(data, model, selection, context, fits, provenance)
+        return _assemble(data, model, selection, context, fits, provenance)
 
 
 def _validate_parent(data, result, context):
@@ -150,48 +133,27 @@ def _ols_comparison(data, selection, context):
     return full, nuisance, nuisance_designs
 
 
-def selected_task_delta_r2(data, model, result, model_settings):
-    execution_id = str(uuid4())
-    selection = result.hrf_selection
-    with bind_context(
-        execution_id=execution_id, data_id=data.provenance.metadata_fingerprint
-    ):
-        history = append_event_history(
-            result.provenance.events, emit_event("task_delta_r2_started", stage="fit")
+def selected_task_delta_r2(data, model, result):
+    from boldtailor.fit import _model_provenance
+
+    with fit_operation("task_delta_r2", result.provenance) as operation:
+        selection = result.hrf_selection
+        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        context = _prepare(
+            data, model, selection, selection.feature_signature, settings
         )
-        try:
-            context = _prepare(
-                data, model, selection, selection.feature_signature, model_settings
-            )
-            _validate_parent(data, result, context)
-            full, nuisance, designs = _ols_comparison(data, selection, context)
-            comparison = _masked_delta_result(
-                full, nuisance, designs, result.provenance
-            )
-        except Exception as error:
-            emit_event(
-                "task_delta_r2_failed",
-                stage="fit",
-                level=logging.ERROR,
-                error=error,
-            )
-            raise
-    provenance = _comparison_provenance(
-        result, model, comparison, context, execution_id, history
-    )
-    completed = emit_event(
-        "task_delta_r2_completed",
-        stage="fit",
-        execution_id=execution_id,
-        data_id=data.provenance.metadata_fingerprint,
-        analysis_id=provenance.analysis_fingerprint,
-    )
-    provenance = replace(provenance, events=append_event_history(history, completed))
-    return replace(comparison, _provenance=provenance)
+        _validate_parent(data, result, context)
+        full, nuisance, designs = _ols_comparison(data, selection, context)
+        comparison = _masked_delta_result(full, nuisance, designs, result.provenance)
+        activity = _comparison_activity(model, comparison, context)
+        provenance = operation.provenance(
+            activity, analysis_id=analysis_fingerprint(context.analysis_id, activity)
+        )
+        return replace(comparison, _provenance=provenance)
 
 
-def _comparison_provenance(result, model, comparison, context, execution_id, history):
-    activity = dict(
+def _comparison_activity(model, comparison, context):
+    return dict(
         name="task_delta_r2",
         stage="fit",
         parent_analysis_id=context.analysis_id,
@@ -201,12 +163,4 @@ def _comparison_provenance(result, model, comparison, context, execution_id, his
         clip_below_zero=True,
         clip_policy="numerical_roundoff_guard",
         undefined_features=int(np.count_nonzero(~np.isfinite(comparison.delta_r2))),
-    )
-    return extend_provenance(
-        result.provenance,
-        execution_id=execution_id,
-        activity=activity,
-        events=history,
-        warnings=(),
-        analysis_id=analysis_fingerprint(context.analysis_id, activity),
     )

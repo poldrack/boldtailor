@@ -878,7 +878,9 @@ def test_ordinary_complete_lifecycle(delta_r2_problem, caplog, monkeypatch, outc
                 fit(data, model)
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
     assert [r["event"] for r in records] == ["fit_started", f"fit_{ending}"]
     assert "analysis_id" not in records[0]
@@ -915,14 +917,26 @@ def test_comparison_complete_lifecycle(delta_r2_problem, caplog, monkeypatch, ou
     else:
         with pytest.raises(ValueError) as caught:
             if outcome == "early_failure":
-                task_delta_r2(data, replace(model, noise_model="ar1" if model.noise_model == "ols" else "ols"), full)
+                task_delta_r2(
+                    data,
+                    replace(
+                        model,
+                        noise_model="ar1" if model.noise_model == "ols" else "ols",
+                    ),
+                    full,
+                )
             else:
                 task_delta_r2(data, model, full)
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["task_delta_r2_started", f"task_delta_r2_{ending}"]
+    assert [r["event"] for r in records] == [
+        "task_delta_r2_started",
+        f"task_delta_r2_{ending}",
+    ]
     assert "analysis_id" not in records[0]
     assert records[0]["execution_id"] == records[1]["execution_id"]
     assert "private" not in caplog.text

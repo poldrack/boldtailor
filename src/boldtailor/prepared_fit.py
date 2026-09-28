@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-import logging
 from types import MappingProxyType
-from uuid import uuid4
 
 import numpy as np
 import pandas as pd
@@ -19,7 +17,7 @@ from boldtailor._fit_diagnostics import (
     validate_result_dimensions,
 )
 from boldtailor._software import package_version
-from boldtailor.logging import append_event_history, bind_context, emit_event
+from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import (
     ContrastValue,
     _prepare_contrasts,
@@ -28,10 +26,8 @@ from boldtailor.model import (
 )
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.provenance import (
-    ProvenanceRecord,
     _freeze_mapping,
     analysis_fingerprint,
-    extend_provenance,
 )
 from boldtailor.results import (
     AnalysisResult,
@@ -55,26 +51,27 @@ def fit_prepared(
     noise_model: str = "ar1",
     model_metadata: Mapping[str, object] | None = None,
 ) -> AnalysisResult:
-    execution_id = str(uuid4())
-    data_id = prepared.provenance.metadata_fingerprint
-    history = prepared.provenance.events
-    with bind_context(execution_id=execution_id, data_id=data_id):
-        try:
-            fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
-            model = _model_identity(prepared, fit_spec)
-            analysis_id = analysis_fingerprint(data_id, model)
-        except Exception as error:
-            _log_validation_failure(history, error)
-            raise
-        with bind_context(analysis_id=analysis_id):
-            return _fit_with_lifecycle(
-                prepared,
-                fit_spec,
-                model,
-                execution_id,
-                analysis_id,
-                history,
-            )
+    with fit_operation("fit", prepared.provenance) as operation:
+        fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
+        model = _model_identity(prepared, fit_spec)
+        operation.analysis_id = analysis_fingerprint(
+            prepared.provenance.metadata_fingerprint, model
+        )
+        designs = prepared._design_matrices
+        numerical = fit_designs(
+            prepared.signals, designs, fit_spec.contrasts, fit_spec.noise_model
+        )
+        provenance = operation.provenance(
+            _fit_activity(prepared, model), analysis_id=operation.analysis_id
+        )
+        return make_result(
+            numerical.contrasts,
+            designs,
+            _prepared_design_provenance(prepared),
+            tuple(run.r2 for run in numerical.run_fits),
+            numerical.aggregate_r2,
+            provenance,
+        )
 
 
 def task_delta_r2_prepared(
@@ -85,48 +82,35 @@ def task_delta_r2_prepared(
     noise_model: str = "ar1",
     model_metadata: Mapping[str, object] | None = None,
 ) -> TaskDeltaR2Result:
-    return _compare_prepared_models(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model=noise_model,
-        model_metadata=model_metadata,
-    )
-
-
-def _compare_prepared_models(
-    prepared: PreparedDesignAnalysis,
-    full_result: AnalysisResult,
-    *,
-    contrasts: Mapping[str, ContrastValue],
-    noise_model: str,
-    model_metadata: Mapping[str, object] | None,
-) -> TaskDeltaR2Result:
-    execution_id = str(uuid4())
-    data_id = prepared.provenance.metadata_fingerprint
-    history = full_result.provenance.events
-    with bind_context(execution_id=execution_id, data_id=data_id):
-        try:
-            fit_spec, parent_id, comparison_id = _prepare_comparison_identity(
-                prepared,
-                contrasts,
-                noise_model,
-                model_metadata,
-                data_id,
-            )
-        except Exception as error:
-            _log_comparison_validation_failure(history, error)
-            raise
-        with bind_context(analysis_id=comparison_id):
-            return _comparison_with_lifecycle(
-                prepared,
-                full_result,
-                fit_spec,
-                parent_id,
-                comparison_id,
-                execution_id,
-                history,
-            )
+    with fit_operation("task_delta_r2_prepared", full_result.provenance) as operation:
+        fit_spec, parent_id, comparison_id = _prepare_comparison_identity(
+            prepared,
+            contrasts,
+            noise_model,
+            model_metadata,
+            prepared.provenance.metadata_fingerprint,
+        )
+        operation.analysis_id = comparison_id
+        _validate_prepared_parent(prepared, full_result, parent_id)
+        nuisance_designs = _nuisance_designs(prepared)
+        full_r2 = _fit_prepared_r2(prepared, prepared._design_matrices)
+        nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
+        validate_nested_ols_delta(full_r2 - nuisance_r2)
+        comparison = make_task_delta_r2_result(
+            full_r2=full_r2,
+            nuisance_r2=nuisance_r2,
+            nuisance_designs=nuisance_designs,
+            provenance=full_result.provenance,
+        )
+        activity = _prepared_delta_activity(
+            prepared,
+            fit_spec,
+            nuisance_designs,
+            comparison,
+            parent_id,
+        )
+        provenance = operation.provenance(activity, analysis_id=comparison_id)
+        return replace(comparison, _provenance=provenance)
 
 
 def _prepare_comparison_identity(
@@ -140,98 +124,6 @@ def _prepare_comparison_identity(
     parent_id = analysis_fingerprint(data_id, _model_identity(prepared, fit_spec))
     comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
     return fit_spec, parent_id, comparison_id
-
-
-def _comparison_with_lifecycle(
-    prepared: PreparedDesignAnalysis,
-    full_result: AnalysisResult,
-    fit_spec: _PreparedFitSpec,
-    parent_id: str | None,
-    comparison_id: str | None,
-    execution_id: str,
-    history: tuple[Mapping[str, object], ...],
-) -> TaskDeltaR2Result:
-    history = append_event_history(
-        history,
-        emit_event("task_delta_r2_prepared_started", stage="fit"),
-    )
-    try:
-        comparison, provenance = _run_prepared_comparison(
-            prepared,
-            full_result,
-            fit_spec,
-            parent_id,
-            comparison_id,
-            execution_id,
-            history,
-        )
-    except Exception as error:
-        emit_event(
-            "task_delta_r2_prepared_failed",
-            stage="fit",
-            level=logging.ERROR,
-            error=error,
-        )
-        raise
-    history = append_event_history(
-        history,
-        emit_event("task_delta_r2_prepared_completed", stage="fit"),
-    )
-    return replace(comparison, _provenance=_with_events(provenance, history))
-
-
-def _log_comparison_validation_failure(
-    history: tuple[Mapping[str, object], ...],
-    error: Exception,
-) -> None:
-    append_event_history(
-        history,
-        emit_event("task_delta_r2_prepared_started", stage="fit"),
-    )
-    emit_event(
-        "task_delta_r2_prepared_failed",
-        stage="fit",
-        level=logging.ERROR,
-        error=error,
-    )
-
-
-def _run_prepared_comparison(
-    prepared: PreparedDesignAnalysis,
-    full_result: AnalysisResult,
-    fit_spec: _PreparedFitSpec,
-    parent_id: str | None,
-    comparison_id: str | None,
-    execution_id: str,
-    history: tuple[Mapping[str, object], ...],
-) -> tuple[TaskDeltaR2Result, ProvenanceRecord]:
-    _validate_prepared_parent(prepared, full_result, parent_id)
-    nuisance_designs = _nuisance_designs(prepared)
-    full_r2 = _fit_prepared_r2(prepared, prepared._design_matrices)
-    nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
-    validate_nested_ols_delta(full_r2 - nuisance_r2)
-    comparison = make_task_delta_r2_result(
-        full_r2=full_r2,
-        nuisance_r2=nuisance_r2,
-        nuisance_designs=nuisance_designs,
-        provenance=full_result.provenance,
-    )
-    activity = _prepared_delta_activity(
-        prepared,
-        fit_spec,
-        nuisance_designs,
-        comparison,
-        parent_id,
-    )
-    provenance = extend_provenance(
-        full_result.provenance,
-        execution_id=execution_id,
-        activity=activity,
-        events=history,
-        warnings=(),
-        analysis_id=comparison_id,
-    )
-    return comparison, provenance
 
 
 def _prepared_comparison_id(
@@ -336,63 +228,6 @@ def _prepared_delta_run_diagnostic(
     return diagnostic
 
 
-def _fit_with_lifecycle(
-    prepared: PreparedDesignAnalysis,
-    fit_spec: _PreparedFitSpec,
-    model: Mapping[str, object],
-    execution_id: str,
-    analysis_id: str | None,
-    history: tuple[Mapping[str, object], ...],
-) -> AnalysisResult:
-    designs = prepared._design_matrices
-    history = append_event_history(history, emit_event("fit_started", stage="fit"))
-    try:
-        numerical = fit_designs(
-            prepared.signals,
-            designs,
-            fit_spec.contrasts,
-            fit_spec.noise_model,
-        )
-        provenance = _fit_provenance(
-            prepared,
-            execution_id=execution_id,
-            activity=_fit_activity(prepared, model),
-            events=history,
-            analysis_id=analysis_id,
-        )
-    except Exception as error:
-        emit_event(
-            "fit_failed",
-            stage="fit",
-            level=logging.ERROR,
-            error=error,
-        )
-        raise
-    history = append_event_history(history, emit_event("fit_completed", stage="fit"))
-    provenance = _with_events(provenance, history)
-    return make_result(
-        numerical.contrasts,
-        designs,
-        _prepared_design_provenance(prepared),
-        tuple(run.r2 for run in numerical.run_fits),
-        numerical.aggregate_r2,
-        provenance,
-    )
-
-
-def _log_validation_failure(
-    history: tuple[Mapping[str, object], ...],
-    error: Exception,
-) -> None:
-    append_event_history(history, emit_event("fit_started", stage="fit"))
-    emit_event(
-        "fit_failed",
-        stage="fit",
-        level=logging.ERROR,
-        error=error,
-    )
-
-
 def _prepare_fit_spec(
     contrasts: Mapping[str, ContrastValue],
     noise_model: str,
@@ -463,24 +298,6 @@ def _model_identity(
     }
 
 
-def _fit_provenance(
-    prepared: PreparedDesignAnalysis,
-    *,
-    execution_id: str,
-    activity: Mapping[str, object],
-    events: tuple[Mapping[str, object], ...],
-    analysis_id: str | None,
-) -> ProvenanceRecord:
-    return extend_provenance(
-        prepared.provenance,
-        execution_id=execution_id,
-        activity=activity,
-        events=events,
-        warnings=(),
-        analysis_id=analysis_id,
-    )
-
-
 def _fit_activity(
     prepared: PreparedDesignAnalysis,
     model: Mapping[str, object],
@@ -492,15 +309,6 @@ def _fit_activity(
         "model": model,
         "runs": tuple(_run_diagnostic(prepared, run) for run in range(prepared.n_runs)),
     }
-
-
-def _with_events(
-    provenance: ProvenanceRecord,
-    events: tuple[Mapping[str, object], ...],
-) -> ProvenanceRecord:
-    payload = provenance.to_dict()
-    payload["events"] = list(events)
-    return ProvenanceRecord.from_dict(payload)
 
 
 def _run_diagnostic(

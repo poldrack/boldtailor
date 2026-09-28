@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-import logging
 import sys
-from uuid import uuid4
 
 import numpy as np
 
@@ -18,11 +16,11 @@ from boldtailor._fit_diagnostics import (
 )
 from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
-from boldtailor.logging import append_event_history, bind_context, emit_event
+from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import ModelSpec, contrast_metadata
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.hrf_glm_results import HrfAnalysisResult
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor.provenance import analysis_fingerprint
 from boldtailor.results import (
     AnalysisResult,
     TaskDeltaR2Result,
@@ -54,54 +52,28 @@ def fit(
     if hrf_selection is not None:
         from boldtailor._hrf_glm import fit_selected_glm
 
-        settings = _model_provenance(replace(model, hrf_model=None)).activity
-        return fit_selected_glm(data, model, hrf_selection, feature_signature, settings)
-    if feature_signature is not None:
-        raise ValueError("feature_signature requires hrf_selection")
-    execution_id = str(uuid4())
-    model_provenance = _model_provenance(model)
-    data_id = data.provenance.metadata_fingerprint
-    analysis_id = _analysis_id(data_id, model_provenance.fingerprint)
-    history = data.provenance.events
-    with bind_context(
-        execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=analysis_id,
-    ):
-        history = append_event_history(
-            history,
-            emit_event("fit_started", stage="fit"),
+        return fit_selected_glm(data, model, hrf_selection, feature_signature)
+    with fit_operation("fit", data.provenance) as operation:
+        if feature_signature is not None:
+            raise ValueError("feature_signature requires hrf_selection")
+        model_provenance = _model_provenance(model)
+        operation.analysis_id = _analysis_id(
+            data.provenance.metadata_fingerprint, model_provenance.fingerprint
         )
-        try:
-            compiled, numerical = _fit_analysis(data, model)
-        except Exception as error:
-            emit_event(
-                "fit_failed",
-                stage="fit",
-                level=logging.ERROR,
-                error=error,
-            )
-            raise
-        history = append_event_history(
-            history,
-            emit_event("fit_completed", stage="fit"),
+        compiled, numerical = _fit_analysis(data, model)
+        provenance = operation.provenance(
+            _fit_activity(data, model_provenance.activity, compiled),
+            warnings=model_provenance.warnings,
+            analysis_id=operation.analysis_id,
         )
-    provenance = extend_provenance(
-        data.provenance,
-        execution_id=execution_id,
-        activity=_fit_activity(data, model_provenance.activity, compiled),
-        events=history,
-        warnings=model_provenance.warnings,
-        analysis_id=analysis_id,
-    )
-    return make_result(
-        numerical.contrasts,
-        tuple(design.matrix for design in compiled),
-        tuple(_design_provenance(design) for design in compiled),
-        tuple(run.r2 for run in numerical.run_fits),
-        numerical.aggregate_r2,
-        provenance,
-    )
+        return make_result(
+            numerical.contrasts,
+            tuple(design.matrix for design in compiled),
+            tuple(_design_provenance(design) for design in compiled),
+            tuple(run.r2 for run in numerical.run_fits),
+            numerical.aggregate_r2,
+            provenance,
+        )
 
 
 def task_delta_r2(
@@ -112,71 +84,38 @@ def task_delta_r2(
     if isinstance(full_result, HrfAnalysisResult):
         from boldtailor._hrf_glm import selected_task_delta_r2
 
-        settings = _model_provenance(replace(model, hrf_model=None)).activity
-        return selected_task_delta_r2(data, model, full_result, settings)
-    execution_id = str(uuid4())
-    model_provenance = _model_provenance(model)
-    data_id = data.provenance.metadata_fingerprint
-    expected_parent_id = _analysis_id(data_id, model_provenance.fingerprint)
-    comparison_id = _comparison_id(expected_parent_id, model)
-    history = full_result.provenance.events
-    with bind_context(
-        execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=comparison_id,
-    ):
-        history = append_event_history(
-            history,
-            emit_event("task_delta_r2_started", stage="fit"),
+        return selected_task_delta_r2(data, model, full_result)
+    with fit_operation("task_delta_r2", full_result.provenance) as operation:
+        model_provenance = _model_provenance(model)
+        data_id = data.provenance.metadata_fingerprint
+        expected_parent_id = _analysis_id(data_id, model_provenance.fingerprint)
+        operation.analysis_id = _comparison_id(expected_parent_id, model)
+        _validate_parent_analysis(expected_parent_id, full_result)
+        validate_result_dimensions(data, full_result, input_label="data")
+        full_designs = compile_designs(data, model)
+        nuisance_designs = compile_nuisance_designs(data, model)
+        full_r2 = _fit_r2_analysis(data, full_designs, DIAGNOSTIC_NOISE_MODEL)
+        nuisance_r2 = _fit_r2_analysis(
+            data,
+            nuisance_designs,
+            DIAGNOSTIC_NOISE_MODEL,
         )
-        try:
-            _validate_parent_analysis(expected_parent_id, full_result)
-            validate_result_dimensions(data, full_result, input_label="data")
-            full_designs = compile_designs(data, model)
-            nuisance_designs = compile_nuisance_designs(data, model)
-            full_r2 = _fit_r2_analysis(data, full_designs, DIAGNOSTIC_NOISE_MODEL)
-            nuisance_r2 = _fit_r2_analysis(
-                data,
-                nuisance_designs,
-                DIAGNOSTIC_NOISE_MODEL,
-            )
-            validate_nested_ols_delta(full_r2 - nuisance_r2)
-            comparison = make_task_delta_r2_result(
-                full_r2=full_r2,
-                nuisance_r2=nuisance_r2,
-                nuisance_designs=tuple(design.matrix for design in nuisance_designs),
-                provenance=full_result.provenance,
-            )
-            activity = _task_delta_r2_activity(
-                data,
-                model,
-                nuisance_designs,
-                comparison,
-                expected_parent_id,
-            )
-            provenance = extend_provenance(
-                full_result.provenance,
-                execution_id=execution_id,
-                activity=activity,
-                events=history,
-                warnings=(),
-                analysis_id=comparison_id,
-            )
-        except Exception as error:
-            emit_event(
-                "task_delta_r2_failed",
-                stage="fit",
-                level=logging.ERROR,
-                error=error,
-            )
-            raise
-        history = append_event_history(
-            history,
-            emit_event("task_delta_r2_completed", stage="fit"),
+        validate_nested_ols_delta(full_r2 - nuisance_r2)
+        comparison = make_task_delta_r2_result(
+            full_r2=full_r2,
+            nuisance_r2=nuisance_r2,
+            nuisance_designs=tuple(design.matrix for design in nuisance_designs),
+            provenance=full_result.provenance,
         )
-        provenance = replace(provenance, events=history)
-        comparison = replace(comparison, _provenance=provenance)
-    return comparison
+        activity = _task_delta_r2_activity(
+            data,
+            model,
+            nuisance_designs,
+            comparison,
+            expected_parent_id,
+        )
+        provenance = operation.provenance(activity, analysis_id=operation.analysis_id)
+        return replace(comparison, _provenance=provenance)
 
 
 def _fit_analysis(

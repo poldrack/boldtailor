@@ -1369,7 +1369,9 @@ def test_prepared_fitting_uses_owned_designs_without_bulk_copy(
 
 
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
-def test_prepared_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch, outcome):
+def test_prepared_complete_lifecycle(
+    prepared_delta_problem, caplog, monkeypatch, outcome
+):
     import json
     import logging
     from dataclasses import replace
@@ -1385,16 +1387,25 @@ def test_prepared_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch
     if outcome == "late_failure":
         monkeypatch.setattr("boldtailor.prepared_fit.make_result", reject)
     if outcome == "success":
-        result = fit_prepared(prepared, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+        result = fit_prepared(
+            prepared, contrasts=contrasts, noise_model="ar1", model_metadata=metadata
+        )
     else:
         with pytest.raises(ValueError) as caught:
             if outcome == "early_failure":
                 fit_prepared(prepared, contrasts={}, model_metadata={"bad": object()})
             else:
-                fit_prepared(prepared, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+                fit_prepared(
+                    prepared,
+                    contrasts=contrasts,
+                    noise_model="ar1",
+                    model_metadata=metadata,
+                )
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
     assert [r["event"] for r in records] == ["fit_started", f"fit_{ending}"]
     assert "analysis_id" not in records[0]
@@ -1411,7 +1422,9 @@ def test_prepared_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch
 
 
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
-def test_prepared_comparison_complete_lifecycle(prepared_delta_problem, caplog, monkeypatch, outcome):
+def test_prepared_comparison_complete_lifecycle(
+    prepared_delta_problem, caplog, monkeypatch, outcome
+):
     import json
     import logging
     from dataclasses import replace
@@ -1427,18 +1440,40 @@ def test_prepared_comparison_complete_lifecycle(prepared_delta_problem, caplog, 
     if outcome == "late_failure":
         monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject)
     if outcome == "success":
-        result = task_delta_r2_prepared(prepared, full, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+        result = task_delta_r2_prepared(
+            prepared,
+            full,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata=metadata,
+        )
     else:
         with pytest.raises(ValueError) as caught:
             if outcome == "early_failure":
-                task_delta_r2_prepared(prepared, full, contrasts=contrasts, model_metadata={"changed": True})
+                task_delta_r2_prepared(
+                    prepared,
+                    full,
+                    contrasts=contrasts,
+                    model_metadata={"changed": True},
+                )
             else:
-                task_delta_r2_prepared(prepared, full, contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+                task_delta_r2_prepared(
+                    prepared,
+                    full,
+                    contrasts=contrasts,
+                    noise_model="ar1",
+                    model_metadata=metadata,
+                )
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["task_delta_r2_prepared_started", f"task_delta_r2_prepared_{ending}"]
+    assert [r["event"] for r in records] == [
+        "task_delta_r2_prepared_started",
+        f"task_delta_r2_prepared_{ending}",
+    ]
     assert "analysis_id" not in records[0]
     assert records[0]["execution_id"] == records[1]["execution_id"]
     assert "private" not in caplog.text

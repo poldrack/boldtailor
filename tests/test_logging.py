@@ -303,7 +303,10 @@ def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
         for record in comparison_records
     )
     assert "analysis_id" not in comparison_records[0]
-    assert comparison_records[-1]["analysis_id"] == comparison.provenance.analysis_fingerprint
+    assert (
+        comparison_records[-1]["analysis_id"]
+        == comparison.provenance.analysis_fingerprint
+    )
 
 
 def test_task_delta_r2_logs_failure_and_resets_context(caplog):
@@ -349,7 +352,9 @@ def test_task_delta_r2_logs_provenance_failure_before_completion(
     def reject_provenance(*args, **kwargs):
         raise ValueError("comparison provenance cannot be frozen")
 
-    monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject_provenance)
+    monkeypatch.setattr(
+        "boldtailor._fit_lifecycle.extend_provenance", reject_provenance
+    )
 
     with pytest.raises(ValueError, match="comparison provenance cannot be frozen"):
         task_delta_r2(data, model, full_result)

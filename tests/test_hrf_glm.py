@@ -487,7 +487,9 @@ def test_selected_glm_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, o
                 _selected_fit(data, model, selection)
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
     assert [r["event"] for r in records] == ["fit_started", f"fit_{ending}"]
     assert "analysis_id" not in records[0]
@@ -504,7 +506,9 @@ def test_selected_glm_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, o
 
 
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
-def test_selected_comparison_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, outcome):
+def test_selected_comparison_complete_lifecycle(
+    hrf_glm_problem, caplog, monkeypatch, outcome
+):
     import json
     import logging
     from dataclasses import replace
@@ -530,9 +534,14 @@ def test_selected_comparison_complete_lifecycle(hrf_glm_problem, caplog, monkeyp
                 task_delta_r2(data, model, full)
         if outcome == "late_failure":
             assert caught.value is failure
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    records = [
+        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
+    ]
     ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["task_delta_r2_started", f"task_delta_r2_{ending}"]
+    assert [r["event"] for r in records] == [
+        "task_delta_r2_started",
+        f"task_delta_r2_{ending}",
+    ]
     assert "analysis_id" not in records[0]
     assert records[0]["execution_id"] == records[1]["execution_id"]
     assert "private" not in caplog.text
