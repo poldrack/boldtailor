@@ -20,8 +20,7 @@ def test_source_checkout_version_is_explicitly_unknown(monkeypatch):
 
 
 def test_source_import_does_not_require_own_distribution_metadata():
-    code = textwrap.dedent(
-        """
+    code = textwrap.dedent("""
         from importlib import metadata
         installed_version = metadata.version
         def version(name):
@@ -32,8 +31,7 @@ def test_source_import_does_not_require_own_distribution_metadata():
         import boldtailor.prepared
         import boldtailor.prepared_fit
         import boldtailor.bids_provenance
-        """
-    )
+        """)
     completed = subprocess.run(
         [sys.executable, "-c", code], text=True, capture_output=True, timeout=30
     )
@@ -41,8 +39,7 @@ def test_source_import_does_not_require_own_distribution_metadata():
 
 
 def test_imports_do_not_query_versions():
-    code = textwrap.dedent(
-        """
+    code = textwrap.dedent("""
         import importlib
         from importlib import metadata
         names = (
@@ -55,8 +52,7 @@ def test_imports_do_not_query_versions():
         metadata.version = unexpected
         for module in modules:
             importlib.reload(module)
-        """
-    )
+        """)
     completed = subprocess.run(
         [sys.executable, "-c", code], text=True, capture_output=True, timeout=30
     )

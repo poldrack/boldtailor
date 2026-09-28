@@ -847,16 +847,13 @@ def test_fit_prepared_never_writes_to_the_filesystem(monkeypatch, prepared_probl
             raise AssertionError("unexpected write through os.open")
         return real_os_open(path, flags, *args, **kwargs)
 
-    def fail_path_open(*args, **kwargs):
-        raise AssertionError("unexpected Path.open")
-
     def fail_write(*args, **kwargs):
         raise AssertionError("unexpected Path write")
 
     monkeypatch.setattr(builtins, "open", guarded_open)
     monkeypatch.setattr(io, "open", guarded_io_open)
     monkeypatch.setattr(os, "open", fail_os_open)
-    monkeypatch.setattr(Path, "open", fail_path_open)
+    # Path.open delegates to the guarded io.open: allow reads, reject writes.
     monkeypatch.setattr(Path, "write_text", fail_write)
     monkeypatch.setattr(Path, "write_bytes", fail_write)
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from importlib.metadata import version as package_version
 import logging
 import os
 import re
@@ -13,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs, fit_r2_designs
+from boldtailor._software import package_version
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.model import ContrastValue, _prepare_contrasts, _validate_noise_model
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -36,9 +36,6 @@ _TRACEBACK_PATTERN = re.compile(r"Traceback \(most recent call last\):.*", re.DO
 _TASK_DELTA_R2_DEFINITION = "full_r2 - nuisance_r2"
 _DIAGNOSTIC_NOISE_MODEL = "ols"
 _NESTED_OLS_TOLERANCE = 1e-12
-_NUMERICAL_BACKEND = MappingProxyType(
-    {"name": "nilearn", "version": package_version("nilearn")}
-)
 
 
 @dataclass(frozen=True)
@@ -517,7 +514,7 @@ def _fit_activity(
     return {
         "name": "fit_prepared",
         "stage": "fit",
-        "numerical_backend": dict(_NUMERICAL_BACKEND),
+        "numerical_backend": {"name": "nilearn", "version": package_version("nilearn")},
         "model": model,
         "runs": tuple(_run_diagnostic(prepared, run) for run in range(prepared.n_runs)),
     }

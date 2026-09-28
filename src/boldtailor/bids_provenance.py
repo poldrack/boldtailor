@@ -7,10 +7,10 @@ import re
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
+from boldtailor._software import package_version
 from boldtailor.provenance import ProvenanceRecord
 
 STABLE_BIDS_VERSION = "1.11.1"
-BOLDTAILOR_VERSION = "0.1.0"
 BEP028_DRAFT_IDENTIFIER = "BEP028"
 BEP028_DRAFT_SNAPSHOT = "02172700aac8d1bdd67b45191f43533f426848dc"
 BEP028_SUPPORTED_SUBSET = (
@@ -146,7 +146,7 @@ def _draft_graph(
     software: dict[str, object] = {
         "Id": software_id,
         "Label": "Boldtailor",
-        "Version": BOLDTAILOR_VERSION,
+        "Version": package_version("boldtailor"),
     }
     if code_url is not None:
         software["AlternativeIdentifier"] = [code_url]
@@ -284,7 +284,7 @@ def _generated_by(
 ) -> dict[str, object]:
     generated: dict[str, object] = {
         "Name": "Boldtailor",
-        "Version": BOLDTAILOR_VERSION,
+        "Version": package_version("boldtailor"),
     }
     if code_url is not None:
         generated["CodeURL"] = _validate_uri(code_url, "code_url")

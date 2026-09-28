@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
-from importlib.metadata import version as package_version
 import json
 import logging
 from types import MappingProxyType
@@ -13,6 +12,7 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
+from boldtailor._software import package_version
 from boldtailor.data import (
     _as_signal_runs,
     _prepare_signal,
@@ -31,9 +31,6 @@ from boldtailor.provenance import (
 ColumnRole = Literal["task", "nuisance", "intercept", "other"]
 _COLUMN_ROLES = frozenset({"task", "nuisance", "intercept", "other"})
 _DESIGN_ID_SCHEMA = "boldtailor.prepared-design/1"
-_SOFTWARE_VERSIONS = MappingProxyType(
-    {name: package_version(name) for name in ("boldtailor", "numpy", "pandas")}
-)
 
 
 @dataclass(frozen=True)
@@ -260,7 +257,9 @@ def _normalization_activity(
         "run_design_fingerprints": list(run_fingerprints),
         "design_fingerprint": design_fingerprint,
         "run_metadata": [_thaw(metadata) for metadata in run_metadata],
-        "software_versions": dict(_SOFTWARE_VERSIONS),
+        "software_versions": {
+            name: package_version(name) for name in ("boldtailor", "numpy", "pandas")
+        },
     }
     if provenance_metadata is not None:
         activity["metadata"] = _thaw(provenance_metadata)
