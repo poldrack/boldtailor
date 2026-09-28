@@ -308,6 +308,11 @@ def test_modes_identify_objective_and_default(ridge_problem, fractional):
     from boldtailor.fractional_ridge import score_fraction_candidates
 
     data, predictors, _ = ridge_problem
+    from boldtailor.provenance import RunSources, SourceRef
+    def source(role, run):
+        return SourceRef(role=role, uri=f"run-{run}/{role}.tsv", media_type="text/tab-separated-values", byte_size=128, modified_at="2026-09-28T00:00:00Z")
+    sources = [RunSources(signal=source("signal",r), events=source("events",r), confounds=source("confounds",r)) for r in range(data.n_runs)]
+    data = from_arrays(data.signals, data.events, frame_times=data.frame_times, confounds=data.confounds, sources=sources)
     function = score_fraction_candidates if fractional else score
     options = {"fractions": [1, 0.5]} if fractional else {"alphas": [0, 1]}
     default = function(data, predictors, **options)
