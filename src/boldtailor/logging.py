@@ -27,6 +27,7 @@ def bind_context(
     data_id: str | None = None,
     analysis_id: str | None = None,
     run_index: int | None = None,
+    inherit: bool = True,
 ) -> Iterator[None]:
     updates = _context_updates(
         execution_id=execution_id,
@@ -34,7 +35,8 @@ def bind_context(
         analysis_id=analysis_id,
         run_index=run_index,
     )
-    token = _LOG_CONTEXT.set({**_LOG_CONTEXT.get(), **updates})
+    parent = _LOG_CONTEXT.get() if inherit else {}
+    token = _LOG_CONTEXT.set({**parent, **updates})
     try:
         yield
     finally:
@@ -52,7 +54,7 @@ def emit_event(
     analysis_id: str | None = None,
     run_index: int | None = None,
 ) -> Mapping[str, object]:
-    payload = _event_payload(
+    payload = _make_event(
         event=event,
         stage=stage,
         level=level,
@@ -62,11 +64,17 @@ def emit_event(
         analysis_id=analysis_id,
         run_index=run_index,
     )
+    _emit_record(payload)
+    return payload
+
+
+def _emit_record(payload: Mapping[str, object]) -> None:
     logging.getLogger(_LOGGER_NAME).log(
-        level,
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+        logging.getLevelName(payload["level"]),
+        json.dumps(
+            dict(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ),
     )
-    return MappingProxyType(payload)
 
 
 def append_event_history(
@@ -98,17 +106,17 @@ def _context_updates(
     return updates
 
 
-def _event_payload(
-    *,
+def _make_event(
     event: str,
+    *,
     stage: str,
-    level: int,
-    error: Exception | str | None,
-    execution_id: str | None,
-    data_id: str | None,
-    analysis_id: str | None,
-    run_index: int | None,
-) -> dict[str, object]:
+    level: int = logging.INFO,
+    error: Exception | str | None = None,
+    execution_id: str | None = None,
+    data_id: str | None = None,
+    analysis_id: str | None = None,
+    run_index: int | None = None,
+) -> Mapping[str, object]:
     payload: dict[str, object] = {
         "timestamp": _timestamp(),
         "sequence": next(_SEQUENCE),
@@ -127,7 +135,7 @@ def _event_payload(
     )
     if error is not None:
         payload["error_code"] = _error_code(error)
-    return payload
+    return MappingProxyType(payload)
 
 
 def _history_entry(event: Mapping[str, object]) -> Mapping[str, object]:

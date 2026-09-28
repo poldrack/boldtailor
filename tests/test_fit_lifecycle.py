@@ -49,8 +49,12 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
     from boldtailor.logging import bind_context, emit_event
 
     caplog.set_level(logging.INFO, logger="boldtailor")
-    outer = dict(execution_id="outer", data_id="outer-data",
-                 analysis_id="outer-analysis", run_index=9)
+    outer = dict(
+        execution_id="outer",
+        data_id="outer-data",
+        analysis_id="outer-analysis",
+        run_index=9,
+    )
     failure = ValueError("private child detail")
     with bind_context(**outer):
         try:
@@ -63,7 +67,8 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
         restored = emit_event("after_child", stage="fit")
     child_records = [json.loads(r.getMessage()) for r in caplog.records[:-1]]
     assert [r["event"] for r in child_records] == [
-        "fit_started", "fit_failed" if fail else "fit_completed"
+        "fit_started",
+        "fit_failed" if fail else "fit_completed",
     ]
     for record in child_records:
         assert record["execution_id"] != "outer"
@@ -102,7 +107,9 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     from boldtailor.logging import emit_event
 
     caplog.set_level(logging.INFO, logger="boldtailor")
-    parent = replace(parent_record, events=tuple({"event": f"old_{i}"} for i in range(8)))
+    parent = replace(
+        parent_record, events=tuple({"event": f"old_{i}"} for i in range(8))
+    )
     with fit_operation("outer", parent) as outer:
         with fit_operation("inner", parent) as inner:
             inner_record = inner.provenance({"name": "inner"}, analysis_id="b" * 64)
@@ -113,6 +120,8 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     assert inner.execution_id != outer.execution_id
     for record, name in [(inner_record, "inner"), (outer_record, "outer")]:
         assert [e["event"] for e in record.events] == [
-            *(f"old_{i}" for i in range(2, 8)), f"{name}_started", f"{name}_completed"
+            *(f"old_{i}" for i in range(2, 8)),
+            f"{name}_started",
+            f"{name}_completed",
         ]
         assert record.events[-1]["execution_id"] == record.execution_id
