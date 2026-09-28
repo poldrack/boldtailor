@@ -63,16 +63,18 @@ a scale-invariant decomposition separate from the raw regularization basis.
 
 The [ownership increment](2026-09-28-scientific-readability-ownership.md) is
 implemented: ordinary read-only arrays, direct internal prepared-design access,
-and local fractional-result ownership. Result-schema consolidation and
-lifecycle/diagnostic sharing remain the subsequent increment, building on this
-ownership model.
+and local fractional-result ownership. The proposed
+[result/diagnostic plan](2026-09-28-scientific-readability-results.md) consolidates
+candidate scores and trial results while sharing fit diagnostics. Lifecycle
+sharing is sequenced with Stage 4's logging/provenance changes because they
+modify the same event and exception boundaries; it remains required work.
 
 Primary files: `fit.py`, `prepared_fit.py`, `single_trial.py`, `_hrf_glm.py`,
 `_selected_hrf_fit.py`, `prepared.py`, `data.py`, `_arrays.py`, `results.py`,
 `single_trial_results.py`, `hrf_results.py`, `hrf_glm_results.py`, `ridge_results.py`.
 
-Share lifecycle operations without hiding statistical steps inside a general
-pipeline executor. Consolidate nested-OLS validation, rank diagnostics, and
+Keep statistical steps visible in fit entry points; shared lifecycle operations
+are implemented with Stage 4. Consolidate nested-OLS validation, rank diagnostics, and
 contrast serialization. Internal access to a prepared run must not copy every
 run's tables. Use owned arrays with normal read-only flags and explicitly
 document their limits. Remove cross-module frozen-object mutation.
@@ -92,7 +94,9 @@ migrations accompany result-schema changes.
 Primary files: `provenance.py`, `logging.py`, `publication.py`,
 `bids_provenance.py`, and fit callers.
 
-Remove redundant records and unused event-history construction. Apply one
+Share lifecycle operations through a small context manager while keeping
+statistical work explicit in each caller. Remove redundant records and unused
+event-history construction. Apply one
 structured logging policy at the boundary; raw exceptions remain available to
 callers, not exported logs. Preserve useful model, split, ordering, and version
 metadata. Label metadata-based comparison checks accurately.
