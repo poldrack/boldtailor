@@ -54,7 +54,7 @@ def test_selector_rejects_misaligned_inputs(case):
         module().select_ridge_fractions(scores, fractions, feature_mask=mask)
 
 
-def reference(data, predictors, library, fractions):
+def reference(data, predictors, library, fractions, encoding_mode="within_run"):
     masks = [np.isfinite(p.to_numpy()).all(1) for p in predictors]
     losses, totals, assignments = [], [], []
     for test in range(data.n_runs):
@@ -87,15 +87,24 @@ def reference(data, predictors, library, fractions):
                 betas.append(beta)
             xtrain = np.vstack([predictors[r].to_numpy()[masks[r]] for r in train])
             mean = xtrain.mean(0)
-            x = np.column_stack([np.ones(len(xtrain)), xtrain - mean])
+            intercepts = np.ones((len(xtrain), 1))
+            if encoding_mode == "within_run":
+                ids_run = np.repeat(np.arange(len(train)), [masks[r].sum() for r in train])
+                intercepts = np.eye(len(train))[ids_run]
+            x = np.column_stack([intercepts, xtrain - mean])
             y = np.vstack([betas[r][masks[r]] for r in train])
             valid = np.isfinite(y).all(0)
             coef = np.full((x.shape[1], data.n_features), np.nan)
             coef[:, valid] = np.linalg.lstsq(x, y[:, valid], rcond=None)[0]
             test_x = predictors[test].to_numpy()[masks[test]]
-            predicted = np.column_stack([np.ones(len(test_x)), test_x - mean]) @ coef
+            predicted = (test_x - mean) @ coef[-xtrain.shape[1]:]
+            if encoding_mode == "absolute":
+                predicted += coef[0]
             target = betas[test][masks[test]]
-            fold_loss.append(np.sum((target - predicted) ** 2, 0))
+            residual = target - predicted
+            if encoding_mode == "within_run":
+                residual -= residual.mean(0)
+            fold_loss.append(np.sum(residual ** 2, 0))
             fold_total.append(np.sum((target - target.mean(0)) ** 2, 0))
         losses.append(fold_loss)
         totals.append(fold_total)
@@ -104,13 +113,14 @@ def reference(data, predictors, library, fractions):
 
 
 @pytest.mark.parametrize("optimized", [False, True])
-def test_fraction_cv_matches_nested_same_fraction_oracle(ridge_problem, optimized):
+@pytest.mark.parametrize("encoding_mode", ["within_run", "absolute"])
+def test_fraction_cv_matches_nested_same_fraction_oracle(ridge_problem, optimized, encoding_mode):
     data, predictors, library = ridge_problem
     library = library if optimized else None
     result = module().score_fraction_candidates(
-        data, predictors, fractions=[0.3, 1, 0.7], library=library
+        data, predictors, fractions=[0.3, 1, 0.7], library=library, encoding_mode=encoding_mode
     )
-    expected = reference(data, predictors, library, [1, 0.7, 0.3])
+    expected = reference(data, predictors, library, [1, 0.7, 0.3], encoding_mode)
     for actual, wanted in zip(
         (result.cv_r2, result.fold_sse, result.fold_sst, result.fold_hrf_indices),
         expected,
