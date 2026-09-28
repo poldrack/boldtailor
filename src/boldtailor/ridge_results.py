@@ -1,6 +1,7 @@
 """Owned numerical results for trial encoding and ridge selection."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -70,8 +71,9 @@ class RidgeSelection:
 
 
 @dataclass(frozen=True)
-class RidgeCandidateScores:
-    alphas: tuple[float, ...]
+class CandidateScores:
+    regularization: Literal["normalized_ridge", "fractional_ridge"]
+    grid: tuple[float, ...]
     cv_r2: np.ndarray
     fold_sse: np.ndarray
     fold_sst: np.ndarray
@@ -81,36 +83,10 @@ class RidgeCandidateScores:
     provenance: ProvenanceRecord
 
     def __post_init__(self):
-        for name in ("alphas", "run_labels"):
+        if self.regularization not in ("normalized_ridge", "fractional_ridge"):
+            raise ValueError("unknown regularization kind")
+        for name in ("grid", "run_labels"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
-        for name in ("cv_r2", "fold_sse", "fold_sst"):
-            object.__setattr__(self, name, readonly_array(getattr(self, name)))
-        object.__setattr__(
-            self,
-            "fold_hrf_indices",
-            readonly_array(self.fold_hrf_indices, dtype=np.int64),
-        )
-        object.__setattr__(
-            self,
-            "trial_masks",
-            tuple(readonly_array(m, dtype=bool) for m in self.trial_masks),
-        )
-
-
-@dataclass(frozen=True)
-class FractionCandidateScores:
-    fractions: tuple[float, ...]
-    cv_r2: np.ndarray
-    fold_sse: np.ndarray
-    fold_sst: np.ndarray
-    fold_hrf_indices: np.ndarray
-    trial_masks: tuple[np.ndarray, ...]
-    run_labels: tuple[str, ...]
-    provenance: ProvenanceRecord
-
-    def __post_init__(self):
-        object.__setattr__(self, "fractions", tuple(self.fractions))
-        object.__setattr__(self, "run_labels", tuple(self.run_labels))
         for name in ("cv_r2", "fold_sse", "fold_sst"):
             object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(

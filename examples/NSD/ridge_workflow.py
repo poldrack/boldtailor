@@ -9,8 +9,7 @@ import pandas as pd
 from boldtailor._ridge_cv import subset_runs
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.provenance import ProvenanceRecord
-from boldtailor.ridge_results import RidgeCandidateScores
-from boldtailor.ridge_results import FractionCandidateScores
+from boldtailor.ridge_results import CandidateScores
 from boldtailor._fractional_ridge import fraction_grid, NORM_BASIS
 from boldtailor.fractional_ridge import (
     score_fraction_candidates,
@@ -177,16 +176,16 @@ def _global_scores(
             ),
         ),
     )
-    result_type = FractionCandidateScores if fractional else RidgeCandidateScores
-    return result_type(
-        alphas,
-        scores,
-        sse,
-        sst,
-        assignments,
-        result.trial_masks,
-        tuple(r.label for r in runs),
-        provenance,
+    return CandidateScores(
+        regularization="fractional_ridge" if fractional else "normalized_ridge",
+        grid=alphas,
+        cv_r2=scores,
+        fold_sse=sse,
+        fold_sst=sst,
+        fold_hrf_indices=assignments,
+        trial_masks=result.trial_masks,
+        run_labels=tuple(r.label for r in runs),
+        provenance=provenance,
     )
 
 
@@ -214,9 +213,9 @@ def _tune(
         encoding_mode,
     )
     selection = (
-        select_ridge_fractions(scores.cv_r2, scores.fractions)
+        select_ridge_fractions(scores.cv_r2, scores.grid)
         if fractional
-        else select_ridge_penalty(scores.cv_r2, scores.alphas, percentile=percentile)
+        else select_ridge_penalty(scores.cv_r2, scores.grid, percentile=percentile)
     )
     return dict(
         scores=scores,

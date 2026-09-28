@@ -160,9 +160,9 @@ score_fraction_candidates(data, predictors, *, fractions, library=None,
 select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 ```
 
-`FractionCandidateScores` has `fractions` in descending order, `cv_r2`,
+`CandidateScores` has `regularization="fractional_ridge"`, `grid` in descending order, `cv_r2`,
 `fold_sse`, `fold_sst`, `fold_hrf_indices`, `trial_masks`, `run_labels`, and
-`provenance`. Array dimensions match `RidgeCandidateScores` below, with
+`provenance`. Array dimensions match the normalized-ridge scores below, with
 fraction replacing alpha. Predictor requirements and nested HRF selection
 are the same; targets are fixed OLS betas under the training-selected HRF.
 Targets do not depend on the fraction grid.
@@ -199,7 +199,7 @@ requires at least two runs (`library=None`, canonical SPM), or three with an
 `HrfLibrary`. Supplied libraries trigger fresh HRF selection within each
 inner-training set. Supply only outer-training runs when nesting the call.
 
-`RidgeCandidateScores` contains sorted `alphas`, `cv_r2` (alpha × feature),
+`CandidateScores` contains `regularization="normalized_ridge"`, ascending `grid`, `cv_r2` (alpha × feature),
 `fold_sse` and `fold_sst` (validation run × alpha × feature),
 `fold_hrf_indices` (validation run × feature), `trial_masks`, `run_labels`,
 and `provenance`. Validation targets use the candidate's own regularization.

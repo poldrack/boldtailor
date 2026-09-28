@@ -91,7 +91,7 @@ def _tuning_artifacts(stem, brain, mode, scope, result, table):
             "encodingcvr2",
             brain,
             scores.cv_r2,
-            [f"encoding_inner_cv_r2_alpha-{a:g}" for a in scores.alphas],
+            [f"encoding_inner_cv_r2_alpha-{a:g}" for a in scores.grid],
         ),
         _map(
             stem,
@@ -119,7 +119,7 @@ def _tuning_artifacts(stem, brain, mode, scope, result, table):
             base + "_metadata.json",
             dict(
                 run_labels=list(scores.run_labels),
-                alphas=list(scores.alphas),
+                alphas=list(scores.grid),
                 selected_alpha=selected.ridge_alpha,
                 percentile=selected.percentile,
                 objective_scores=selected.objective_scores.tolist(),

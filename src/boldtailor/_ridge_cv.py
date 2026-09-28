@@ -15,7 +15,7 @@ from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import run_labels_for, select_hrf
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
-from boldtailor.ridge_results import RidgeCandidateScores, FractionCandidateScores
+from boldtailor.ridge_results import CandidateScores
 from boldtailor.trial_encoding import (
     _predictor_arrays,
     _training_design,
@@ -282,14 +282,14 @@ def score_candidates(
         fractional=fractional,
         encoding_mode=encoding_mode,
     )
-    result_type = FractionCandidateScores if fractional else RidgeCandidateScores
-    return result_type(
-        alphas,
-        r_squared(losses.sum(axis=0), totals.sum(axis=0)),
-        losses,
-        totals,
-        ids,
-        masks,
-        labels,
-        provenance,
+    return CandidateScores(
+        regularization="fractional_ridge" if fractional else "normalized_ridge",
+        grid=alphas,
+        cv_r2=r_squared(losses.sum(axis=0), totals.sum(axis=0)),
+        fold_sse=losses,
+        fold_sst=totals,
+        fold_hrf_indices=ids,
+        trial_masks=masks,
+        run_labels=labels,
+        provenance=provenance,
     )

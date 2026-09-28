@@ -16,7 +16,9 @@ def test_candidate_scores_name_the_grid_and_scientific_basis(ridge_problem, frac
     options = {"fractions": [0.3, 1, 0.7]} if fractional else {"alphas": [1, 0, 0.1]}
     result = function(data, predictors, **options)
     assert type(result) is ridge_results.CandidateScores
-    assert result.regularization == ("fractional_ridge" if fractional else "normalized_ridge")
+    assert result.regularization == (
+        "fractional_ridge" if fractional else "normalized_ridge"
+    )
     assert result.grid == ((1.0, 0.7, 0.3) if fractional else (0.0, 0.1, 1.0))
     assert result.cv_r2.shape == (3, data.n_features)
     np.testing.assert_allclose(

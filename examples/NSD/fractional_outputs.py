@@ -14,7 +14,7 @@ def tuning_rows(mode, scope, tuned):
     summaries = (
         np.percentile(scores.cv_r2[:, mask], percentile, axis=1)
         if mask.any()
-        else np.full(len(scores.fractions), np.nan)
+        else np.full(len(scores.grid), np.nan)
     )
     return [
         dict(
@@ -26,7 +26,7 @@ def tuning_rows(mode, scope, tuned):
             grayordinates=int(mask.sum()),
             selected_grayordinates=int(np.count_nonzero(selected.ridge_fraction == f)),
         )
-        for f, r in zip(scores.fractions, summaries, strict=True)
+        for f, r in zip(scores.grid, summaries, strict=True)
     ]
 
 
@@ -74,7 +74,7 @@ def tuning_artifacts(stem, brain, mode, scope, tuned, table):
     ids = np.where(scores.fold_hrf_indices >= 0, scores.fold_hrf_indices, np.nan)
     metadata = dict(
         run_labels=list(scores.run_labels),
-        fractions=list(scores.fractions),
+        fractions=list(scores.grid),
         selection_rule="maximum_encoding_r2_per_grayordinate",
         validation_target="fixed_ols_betas",
         fraction_norm_basis=NORM_BASIS,
@@ -94,7 +94,7 @@ def tuning_artifacts(stem, brain, mode, scope, tuned, table):
             "encodingcvr2",
             brain,
             scores.cv_r2,
-            [f"encoding_inner_cv_r2_fraction-{f:g}" for f in scores.fractions],
+            [f"encoding_inner_cv_r2_fraction-{f:g}" for f in scores.grid],
         ),
         _map(
             stem,

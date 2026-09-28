@@ -270,7 +270,7 @@ predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_fraction_candidates(
     data, predictors, fractions=[.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]
 )
-choice = select_ridge_fractions(scores.cv_r2, scores.fractions)
+choice = select_ridge_fractions(scores.cv_r2, scores.grid)
 betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
 ```
 
@@ -329,7 +329,7 @@ predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_ridge_candidates(
     data, predictors, alphas=[0., .001, .01, .1, 1., 10., 100.]
 )
-choice = select_ridge_penalty(scores.cv_r2, scores.alphas, percentile=90)
+choice = select_ridge_penalty(scores.cv_r2, scores.grid, percentile=90)
 betas = fit_single_trials(data, ridge_alpha=choice.ridge_alpha)
 ```
 
