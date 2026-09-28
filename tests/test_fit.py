@@ -681,8 +681,10 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
 
 
 def test_task_delta_r2_rejects_broken_nested_ols_monotonicity():
+    from boldtailor._fit_diagnostics import validate_nested_ols_delta
+
     with pytest.raises(ValueError, match="nested OLS monotonicity"):
-        fit_module._validate_nested_ols_delta(np.array([-1.1e-12]))
+        validate_nested_ols_delta(np.array([-1.1e-12]))
 
 
 def test_make_task_delta_r2_result_clips_and_owns_values(delta_r2_problem):
