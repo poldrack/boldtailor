@@ -15,3 +15,8 @@ weights, trial grouping, numerical parity, and privacy checks were preserved.
 
 The remaining interactive-view contract is retained: the committed tests require
 three contrast views, one aggregate R² view, and one task ΔR² view.
+
+After fixture correction: two runtime tests failed (`0` interactive views instead
+of `5`), while the metadata test passed. Tests were committed as `bc3ee16` before
+adding views. GREEN: all 47 tests in `tests/test_stop_signal_demo.py` passed
+with warnings treated as errors. Black and whitespace checks also passed.
