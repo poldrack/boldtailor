@@ -403,3 +403,14 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
     event = emit_event("fit_failed", stage="fit", error=UnprintableError())
     assert event["error_code"] == "invalid_input"
     assert "UnprintableError" not in caplog.text
+
+
+@pytest.mark.parametrize("level", [15, 25, 35, 45])
+def test_emit_event_preserves_custom_numeric_levels(caplog, level):
+    caplog.set_level(1, logger="boldtailor")
+    event = emit_event("custom_event", stage="test", level=level)
+    records = [r for r in caplog.records if r.name == "boldtailor"]
+    assert len(records) == 1
+    assert records[0].levelno == level
+    assert json.loads(records[0].getMessage()) == dict(event)
+    assert event["level"] == logging.getLevelName(level)
