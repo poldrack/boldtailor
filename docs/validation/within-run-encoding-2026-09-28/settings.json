@@ -1,0 +1,59 @@
+{
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "train_runs": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "test_runs": [
+    4,
+    5
+  ],
+  "alphas": [
+    0.0,
+    0.1,
+    1.0,
+    10.0,
+    100.0,
+    10000.0,
+    100000000.0
+  ],
+  "fractions": [
+    1.0,
+    0.8,
+    0.5,
+    0.2,
+    0.1
+  ],
+  "n_trials": 40,
+  "tr": 1.6,
+  "objectives": [
+    "current",
+    "centered",
+    "fixed_ols",
+    "within_run"
+  ],
+  "scenarios_per_seed": 48,
+  "default_changed": true,
+  "production_encoding_mode": "within_run",
+  "historical_current": "2026-09-27 shared-intercept absolute objective",
+  "encoding_objective_version": 2,
+  "versions": {
+    "boldtailor": "0.1.0",
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "nilearn": "0.14.0"
+  }
+}

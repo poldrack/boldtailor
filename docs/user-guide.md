@@ -294,7 +294,7 @@ the complete training set and pass that selection and the fraction map to
 
 Training and validation betas use the same candidate fraction. OLS defines
 the shrinkage scale; it is not the validation target. The encoding model is
-OLS with a shared task intercept and the supplied trial variables. Trial-level
+OLS with run-specific training intercepts and shared slopes for the supplied trial variables. Trial-level
 predictor exclusions never delete stimuli from the beta-series model. As with
 alpha CV, this objective measures predictability of regularized responses,
 not recovery of an unobserved ground-truth beta series.
@@ -312,8 +312,9 @@ fractional workflow above selects independently at each location.
 
 When trial variables should explain response variation, choose a penalty by
 how well those variables predict beta estimates in new runs. For NSD the
-encoding model is `beta ~ trial_type + response_time`, with a shared intercept.
-The intercept is the mean task response; do not supply another all-ones column.
+encoding model is `beta ~ run + trial_type + response_time`, with a separate
+training-run intercept and shared trial-type/RT slopes. Do not supply another
+all-ones column; the encoder handles intercepts.
 The encoding model uses OLS. Ridge applies to beta estimation.
 
 ```python
@@ -337,17 +338,22 @@ HRFs on the complete training set and pass that assignment and
 canonical HRFs or three for optimized HRFs.
 
 For each penalty, both training and validation beta series use that penalty.
-Predictor centering and encoding coefficients are learned only on training
-runs. The score is `1 - sum(SSE) / sum(within-run SST)` over validation trials
-and runs; negative values are retained. The 90th percentile is taken across a
+Predictors and betas are centered separately within each training run before
+fitting shared slopes. The score is `1 - sum(SSE) / sum(within-run SST)` over
+validation trials and runs, where SSE uses residuals centered within each
+validation run and feature. Negative values are retained. Validation outcomes
+supply only the scoring offset; they never train slopes or change predictions. The 90th percentile is taken across a
 common finite grayordinate mask. One penalty applies to the whole mask. With
 parallel blocks, combine candidate score maps before choosing the penalty;
 averaging block percentiles gives a different objective.
 
 Nonfinite predictor rows are omitted from encoding, while their stimuli stay
 in beta estimation. The NSD adapter also excludes nonpositive RT from encoding.
-Training predictors must have full rank; incomplete features and constant
-targets have undefined scores. Ties within `1e-12` favor the smallest penalty.
+Training predictors must have full rank after within-run centering, with at
+least one complete row per training run and more complete rows than the number
+of run intercepts plus slopes. Predictors varying only between runs are
+unidentifiable. A one-row run supplies no slope information. Incomplete features
+and constant targets have undefined scores. Ties within `1e-12` favor the smallest penalty.
 Zero is a valid winner. The candidate grid and percentile are configurable.
 
 These are selection scores for predictability of the **regularized** responses.

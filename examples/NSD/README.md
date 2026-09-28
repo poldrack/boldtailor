@@ -137,7 +137,11 @@ the CIFTI outputs. Resolved surface paths are retained in notebook metadata.
 The notebook defaults to `ridge_mode="fractional_cv"`, with candidate fractions
 0.1 through 1. Each grayordinate selects the fraction maximizing its own pooled
 held-out encoding R². Ties favor the larger fraction. The encoding model uses
-an intercept (`task`), binary trial type, and RT; no repeated images are needed.
+separate training-run intercepts and shared binary-trial-type and RT slopes;
+no repeated images are needed. The default `encoding_mode="within_run"` removes
+each held-out run/feature mean residual for scoring only. Set
+`NSD_CONFIG["encoding_mode"] = "absolute"` to reproduce shared-intercept fitting
+and uncentered scoring. Inner and outer evaluations use the same mode.
 HRFs are selected on the training runs within each fold using mean-stimulus
 prediction. Both training and validation betas use the same candidate fraction.
 
@@ -181,8 +185,9 @@ contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
 | `_stat-scoringmask.dscalar.nii` | Common eligibility mask across candidates |
 | `_stat-foldhrfindex.dscalar.nii`, `_folds.npz` | Inner-training HRFs and validation SSE/SST |
 | `_stat-encodingpredictionr2.dscalar.nii` | Independent outer-test encoding R² |
-| `_stat-coefficients.dscalar.nii` | Training encoding intercept, trial-type, and RT effects |
-| `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order outer-test predictions and regularized betas |
+| `_stat-coefficients.dscalar.nii` | Training reference level (`task`), trial-type, and RT effects |
+| `_predictions.dscalar.nii`, `_targets.dscalar.nii` | Original-order training-reference predictions (without scoring offsets) and regularized betas |
+| `_loss.npz` | SSE/SST, training-run intercepts and predictor means, scoring offsets, and ordered run labels |
 | `_metadata.json`, `_provenance.json` | Run splits, transforms, norm definitions, sources and linked tuning identities |
 
 `desc-notebookFractionalCV_predictors.tsv` saves exact predictors, original trial

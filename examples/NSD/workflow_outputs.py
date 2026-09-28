@@ -178,15 +178,18 @@ def _beta_artifacts(stem, brain, betas, runs):
 def _ridge_metadata(settings, results):
     if not results:
         return None
+    from boldtailor.trial_encoding import encoding_metadata
+
     definition = next(iter(results.values()))["provenance"]
     return dict(
+        **encoding_metadata(definition["encoding_mode"]),
         validation_target=definition["validation_target"],
         objective=definition["objective"],
         percentile=settings.get("ridge_percentile", 90.0),
         percentile_role=definition.get("percentile_role", "selection_objective"),
         fraction_norm_basis=definition.get("fraction_norm_basis"),
         encoding_predictors=["task", "trial_type", "response_time"],
-        task="Shared trial-encoding intercept, not an additional all-ones column",
+        task="Pooled training beta mean, used as the prediction reference level",
         outer_splits="odd_to_even_and_even_to_odd",
         final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",
     )

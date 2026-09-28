@@ -153,7 +153,8 @@ From `boldtailor.fractional_ridge`:
 
 ```text
 score_fraction_candidates(data, predictors, *, fractions, library=None,
-                          run_labels=None, feature_signature=None)
+                          run_labels=None, feature_signature=None,
+                      encoding_mode="within_run")
 select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 ```
 
@@ -183,7 +184,8 @@ From `boldtailor.ridge_selection`:
 
 ```text
 score_ridge_candidates(data, predictors, *, alphas, library=None,
-                      run_labels=None, feature_signature=None)
+                      run_labels=None, feature_signature=None,
+                      encoding_mode="within_run")
 select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=None)
 ```
 
@@ -210,17 +212,46 @@ interpolation. Ties within `1e-12` choose the smaller alpha, including zero.
 From `boldtailor.trial_encoding`:
 
 ```text
-evaluate_trial_encoding(beta_runs, predictors, *, train_runs, test_runs)
+evaluate_trial_encoding(beta_runs, predictors, *, train_runs, test_runs,
+                        encoding_mode="within_run")
 ```
 
-This fits pooled training-run OLS coefficients and predicts disjoint test runs.
-Split indices are zero-based. Centering comes from training predictors only;
-validation beta means are not refitted. `TrialEncodingResult` contains
-`coefficients` (intercept first), `predictor_means`, `predictor_names`,
+The default `encoding_mode="within_run"` fits shared OLS slopes with a separate
+intercept for each training run. Both predictors and betas are centered within
+each training run over complete predictor rows. Validation residuals are centered
+within each test run and feature for scoring only. SSE and within-run SST are
+pooled before division; negative R² is retained. `encoding_mode="absolute"`
+reproduces the original shared-intercept fit and uncentered residual loss. Both
+candidate scorers accept the same mode and default.
+
+Split indices are zero-based. `TrialEncodingResult` contains `coefficients`
+(shape `(1+p, features)`), pooled training `predictor_means`, `predictor_names`,
 `train_runs`, `test_runs`, `trial_masks`, `predictions` (test runs in requested
-order, original trial rows), `run_sse`, `run_sst`, and pooled `r2`.
-Excluded trial predictions and undefined feature scores are NaN. Numerical
-result arrays are owned and read-only.
+order, original trial rows), `run_sse`, `run_sst`, and pooled `r2`. Its additional
+required fields are:
+
+- `encoding_mode`: the selected objective.
+- `train_run_predictor_means`: `(training runs, p)`, in `train_runs` order.
+- `train_run_intercepts`: `(training runs, features)`, intercepts in raw predictor
+  coordinates; absolute mode repeats its shared intercept.
+- `scoring_offsets`: `(test runs, features)`, the mean residual removed for
+  within-run scoring, or zero in absolute mode; invalid entries are NaN.
+
+The first coefficient, named `task`, is the pooled training beta mean. In
+within-run mode this is a reference level, not a common fitted run intercept.
+Predictions equal `coefficients[0] + (X - predictor_means) @ coefficients[1:]`
+and never include scoring offsets. Within-run predictions depend only on training
+outcomes and test predictors; test beta validity affects scores, not predictions.
+Numerical arrays are owned and read-only. Direct construction of the result
+dataclass now requires the additional fields; existing field order is preserved.
+
+Within-run fitting requires at least one complete row per training run, positive
+residual degrees of freedom (`total complete rows > training runs + p`), and full
+rank after within-run predictor centering. A one-row training run supplies only
+an intercept; a predictor varying exclusively between runs is unidentifiable.
+Each test run needs at least two complete predictor rows. Nonfinite betas on
+included rows invalidate the affected feature fit/score; constant test targets
+have undefined R². Excluded trial predictions remain NaN.
 
 ## HRF libraries, selection, and evaluation
 
