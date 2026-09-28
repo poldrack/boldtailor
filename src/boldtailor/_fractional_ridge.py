@@ -1,5 +1,6 @@
 """Fractional ridge in the nuisance-projected, raw trial-coefficient basis."""
 
+from dataclasses import dataclass
 from hashlib import sha256
 from numbers import Real
 
@@ -76,19 +77,55 @@ def freeze_fraction_result(result):
         )
 
 
-def _prepare(x, nuisance, signals):
+@dataclass(frozen=True)
+class PreparedFractionBetas:
+    """Raw trial-coefficient basis and signal coordinates for fractional ridge."""
+
+    trial_design: np.ndarray
+    nuisance: np.ndarray
+    signals: np.ndarray
+    projected_signals: np.ndarray
+    singular_values: np.ndarray
+    right_vectors: np.ndarray
+    ols_coordinates: np.ndarray
+    valid: np.ndarray
+    diagnostics: dict
+
+    def solve(self, fractions):
+        """Return trial betas and implied alpha for each feature's fraction."""
+        fractions = fraction_map(fractions, self.signals.shape[1])
+        valid = self.valid & np.isfinite(fractions)
+        betas = np.full((self.trial_design.shape[1], self.signals.shape[1]), np.nan)
+        alphas = np.full(self.signals.shape[1], np.nan)
+        if valid.any():
+            s, ols = self.singular_values, self.ols_coordinates[:, valid]
+            alpha = _alphas(s, ols, fractions[valid])
+            attenuation = (s * s)[:, None] / ((s * s)[:, None] + alpha)
+            betas[:, valid] = self.right_vectors.T @ (ols * attenuation)
+            alphas[valid] = alpha
+        return betas, alphas
+
+    def betas_at(self, fraction):
+        """Evaluate a fraction without retaining candidate outputs."""
+        return self.solve(fraction)[0]
+
+
+def prepare_fraction_betas(x, nuisance, signals):
+    """Validate in normalized coordinates, then prepare the raw coefficient SVD."""
     x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
     design = _project_design(x, n)
-    q, diagnostics = design.nuisance_basis, design.diagnostics
-    # Validate identifiability in a scale-invariant basis, then regularize raw betas.
+    q = design.nuisance_basis
+    # Rank validation must be scale invariant. Fractional shrinkage instead uses
+    # raw trial amplitudes: column normalization would change the requested norm.
     u, s, vt = np.linalg.svd(x - q @ (q.T @ x), full_matrices=False)
-    scale = np.ones(x.shape[1])
-    diagnostics = dict(diagnostics, condition_number=float(s[0] / s[-1]))
+    diagnostics = dict(design.diagnostics, condition_number=float(s[0] / s[-1]))
     yr = y - q @ (q.T @ y)
     coordinates = u.T @ yr
     tolerance = max(x.shape) * np.finfo(float).eps * np.linalg.norm(y, axis=0)
     valid = (np.ptp(y, axis=0) > 0) & (np.linalg.norm(coordinates, axis=0) > tolerance)
-    return x, n, y, yr, scale, s, vt, coordinates / s[:, None], valid, diagnostics
+    return PreparedFractionBetas(
+        x, n, y, yr, s, vt, coordinates / s[:, None], valid, diagnostics
+    )
 
 
 def _alphas(s, ols, fractions):
@@ -111,33 +148,19 @@ def _alphas(s, ols, fractions):
     return alphas
 
 
-def _solve(prepared, fractions):
-    x, _, y, _, scale, s, vt, ols, valid, _ = prepared
-    valid = valid & np.isfinite(fractions)
-    betas = np.full((x.shape[1], y.shape[1]), np.nan)
-    alphas = np.full(y.shape[1], np.nan)
-    if valid.any():
-        alpha = _alphas(s, ols[:, valid], fractions[valid])
-        attenuation = (s * s)[:, None] / ((s * s)[:, None] + alpha)
-        betas[:, valid] = (vt.T @ (ols[:, valid] * attenuation)) / scale[:, None]
-        alphas[valid] = alpha
-    return betas, alphas
-
-
 def fraction_beta_path(x, nuisance, signals, *, fractions):
     """Stream candidate betas/alpha maps with one design decomposition."""
     grid = fraction_grid(fractions)
-    prepared = _prepare(x, nuisance, signals)
+    prepared = prepare_fraction_betas(x, nuisance, signals)
     for fraction in grid:
-        betas, alphas = _solve(prepared, np.full(prepared[2].shape[1], fraction))
+        betas, alphas = prepared.solve(fraction)
         yield fraction, betas, alphas
 
 
 def fit_fraction_run(x, nuisance, signals, *, fractions):
-    prepared = _prepare(x, nuisance, signals)
-    x, n, y, yr, _, _, _, _, _, diagnostics = prepared
-    fractions = fraction_map(fractions, y.shape[1])
-    betas, alphas = _solve(prepared, fractions)
+    prepared = prepare_fraction_betas(x, nuisance, signals)
+    x, n, y = prepared.trial_design, prepared.nuisance, prepared.signals
+    betas, alphas = prepared.solve(fractions)
     valid = np.isfinite(alphas)
     gamma = np.full((n.shape[1], y.shape[1]), np.nan)
     full, null, total = (np.full(y.shape[1], np.nan) for _ in range(3))
@@ -145,7 +168,7 @@ def fit_fraction_run(x, nuisance, signals, *, fractions):
         remainder = y[:, valid] - x @ betas[:, valid]
         gamma[:, valid] = np.linalg.lstsq(n, remainder, rcond=None)[0]
         full[valid] = np.sum((remainder - n @ gamma[:, valid]) ** 2, axis=0)
-        null[valid] = np.sum(yr[:, valid] ** 2, axis=0)
+        null[valid] = np.sum(prepared.projected_signals[:, valid] ** 2, axis=0)
         total[valid] = np.sum((y[:, valid] - y[:, valid].mean(0)) ** 2, axis=0)
     return TrialRunFit(
         betas,
@@ -153,5 +176,5 @@ def fit_fraction_run(x, nuisance, signals, *, fractions):
         full,
         null,
         total,
-        dict(diagnostics, ridge_alphas=alphas, fraction_norm_basis=NORM_BASIS),
+        dict(prepared.diagnostics, ridge_alphas=alphas, fraction_norm_basis=NORM_BASIS),
     )

@@ -106,12 +106,16 @@ def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(
 
 
 @pytest.mark.parametrize("prepared", [False, True])
-def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regression, prepared):
+def test_fraction_solver_handles_ill_conditioning_and_undefined_features(
+    regression, prepared
+):
     x, n, y = regression
     y = np.column_stack([y, np.ones(len(y)) * 100, n[:, 1]])
     fit = fractional().fit_fraction_run(x, n, y, fractions=[0.5, np.nan, 0.5, 0.5])
     if prepared:
-        betas, alphas = fractional().prepare_fraction_betas(x, n, y).solve([0.5, np.nan, 0.5, 0.5])
+        betas, alphas = (
+            fractional().prepare_fraction_betas(x, n, y).solve([0.5, np.nan, 0.5, 0.5])
+        )
         np.testing.assert_allclose(betas, fit.betas)
         np.testing.assert_allclose(alphas, fit.diagnostics["ridge_alphas"])
     assert np.isfinite(fit.betas[:, 0]).all()
@@ -205,10 +209,9 @@ def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatc
     x, n, y = regression
     prepared = fractional().prepare_fraction_betas(x, n, y)
     expected = {
-        fraction: np.column_stack([
-            oracle(x, n, y[:, feature], fraction)[0]
-            for feature in range(y.shape[1])
-        ])
+        fraction: np.column_stack(
+            [oracle(x, n, y[:, feature], fraction)[0] for feature in range(y.shape[1])]
+        )
         for fraction in (0.2, 1.0, 0.8)
     }
 
@@ -225,7 +228,9 @@ def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatc
         assert reference() is None
 
 
-@pytest.mark.parametrize("fraction", [0, -0.1, 1.1, np.inf, np.nan, True, [], [0.5, 0.5, 0.5]])
+@pytest.mark.parametrize(
+    "fraction", [0, -0.1, 1.1, np.inf, np.nan, True, [], [0.5, 0.5, 0.5]]
+)
 def test_prepared_fraction_rejects_invalid_values(regression, fraction):
     prepared = fractional().prepare_fraction_betas(*regression)
     with pytest.raises(ValueError):

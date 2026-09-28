@@ -24,7 +24,9 @@ def prepare_runs(designs, signals, *, basis):
         raise ValueError("basis must be raw or normalized")
     prepared = []
     for (x, n), y in zip(designs, signals, strict=True):
-        q, scale, u, s, vt, _ = _project_design(x, n)
+        design = _project_design(x, n)
+        q, scale = design.nuisance_basis, design.column_scale
+        u, s, vt = design.left_vectors, design.singular_values, design.right_vectors
         if basis == "raw":
             scale = np.ones(x.shape[1])
             u, s, vt = np.linalg.svd(x - q @ (q.T @ x), full_matrices=False)
