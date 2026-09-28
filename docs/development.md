@@ -9,15 +9,35 @@ Use Python 3.12 or later and uv:
 
 ```bash
 uv sync --group dev
-uv run pytest tests examples/NSD -q -W error
+uv run pytest -q -W error
 uv run black --check src tests examples/NSD examples/stop_signal_demo.py
 uv run git diff --check
 ```
 
-`uv run pytest` alone collects the core `tests/` directory. Include
-`examples/NSD` to exercise the CIFTI workflows and real-process parallel tests.
+`uv run pytest` collects both `tests/` and `examples/NSD`, including the CIFTI
+workflows and real-process parallel tests. The explicit command
+`uv run pytest tests examples/NSD -q -W error` runs the same suite.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
+
+CI runs the full suite with warnings treated as errors and checks Python
+formatting on a clean Python 3.12 runner. It also builds and tests the installed
+wheel in an isolated environment, without the checkout's editable installation
+or notebook development dependencies:
+
+```bash
+uv build --wheel
+uv run --isolated --no-project --with ./dist/boldtailor-0.1.0-py3-none-any.whl python tests/check_installed_package.py
+```
+
+The smoke check verifies an installed-package import, absence of `ipykernel`,
+and a synthetic OLS fit against NumPy least squares. Update the wheel filename
+when changing the package version. Notebook execution uses `ipykernel` from the
+development dependency group, not the library's runtime requirements.
+
+Software versions are resolved when provenance is created. An uninstalled
+Boldtailor checkout reports its own version as `unknown`; missing dependency
+metadata still raises an error rather than inventing a version.
 
 Keep functions short and separate numerical work from file I/O. All
 `__init__.py` files stay empty. For behavioral changes, write and run failing

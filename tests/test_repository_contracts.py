@@ -14,10 +14,3 @@ def test_project_uses_uv_managed_src_layout():
     assert config["tool"]["setuptools"]["package-dir"] == {"": "src"}
     assert config["tool"]["setuptools"]["packages"]["find"]["where"] == ["src"]
     assert (ROOT / "uv.lock").is_file()
-
-
-def test_package_initializer_is_empty():
-    initializer = ROOT / "src" / "boldtailor" / "__init__.py"
-
-    assert initializer.is_file()
-    assert initializer.read_text() == ""

@@ -1,6 +1,6 @@
 # Scientific Readability Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Establish a passing, portable baseline for simplifying Boldtailor without mixing in the preserved scientific remediation.
 
@@ -59,7 +59,7 @@ runtime metadata; Task 3 makes those checks portable and automatic.
 prepared fit boundary, output artifact names, and statistical definitions.
 No numerical package API changes.
 
-- [ ] Run the already committed failing regressions:
+- [x] Run the already committed failing regressions:
 
 ```sh
 uv run pytest tests/test_stop_signal_demo.py -q -W error -k 'variance_partition_prepared_runtime or variance_partition_notebook_publishes'
@@ -69,7 +69,7 @@ Expected RED: three failures for undefined `go_success`. These tests are already
 committed, satisfying the tests-before-implementation requirement. Record their
 commit (`57acff5`), command, and failure in the validation note before editing.
 
-- [ ] Record the demonstrated test error: `_configure_notebook_fixture` changes
+- [x] Record the demonstrated test error: `_configure_notebook_fixture` changes
   `go_success`/`go_failure` into `go`; the committed notebook has neither that
   event contract nor the new `stop_success_vs_go` contrast. Correct only the
   erroneous fixture/expectations, retaining all metadata and parity checks:
@@ -94,7 +94,7 @@ git add tests/test_stop_signal_demo.py docs/validation/scientific-readability-fo
 git commit -m "test: align notebook fixtures with committed scientific model"
 ```
 
-- [ ] Preserve the committed interactive-view requirement. The current notebook
+- [x] Preserve the committed interactive-view requirement. The current notebook
   does not call `view_img`, while its tests assert five views. Add those views
   in the results cell. Use the same images as the static plots:
 
@@ -137,7 +137,7 @@ by committed tests; it does not restore the stash's numerical or timing changes.
 Before writing, read `_assert_interactive_view_contract` for its full image and
 argument contract. Do not weaken it to make absent views pass.
 
-- [ ] Run all notebook/example tests and then the complete baseline suite:
+- [x] Run all notebook/example tests and then the complete baseline suite:
 
 ```sh
 uv run pytest tests/test_stop_signal_demo.py -q -W error
@@ -161,7 +161,7 @@ modify `prepared.py`, `prepared_fit.py`, `bids_provenance.py`, and
 only missing metadata for `boldtailor` returns `"unknown"`. No cache, import-time
 metadata lookup, or version constant in `__init__.py`.
 
-- [ ] Add these tests to `tests/test_software.py`:
+- [x] Add these tests to `tests/test_software.py`:
 
 ```python
 import importlib
@@ -247,7 +247,7 @@ def test_projection_uses_installed_version(
     assert next(x for x in software if x["Label"] == "Boldtailor")["Version"] == "9.8.7"
 ```
 
-- [ ] Run RED and commit tests before adding `_software.py`:
+- [x] Run RED and commit tests before adding `_software.py`:
 
 ```sh
 uv run pytest tests/test_software.py tests/test_bids_provenance.py -q -W error
@@ -258,7 +258,7 @@ git commit -m "test: require lazy and accurate software versions"
 Expected: missing helper/source import failure, import-time metadata lookup,
 and hardcoded projection version.
 
-- [ ] Implement the small helper:
+- [x] Implement the small helper:
 
 ```python
 """Software versions for provenance, resolved only when requested."""
@@ -295,7 +295,7 @@ directly. Replace both uses of `BOLDTAILOR_VERSION` in `bids_provenance.py` with
 `package_version("boldtailor")`; delete the constant. Keep MappingProxyType
 imports if other code still uses them. Do not change provenance field names.
 
-- [ ] Run the affected suites and commit after GREEN:
+- [x] Run the affected suites and commit after GREEN:
 
 ```sh
 uv run pytest tests/test_software.py tests/test_bids_provenance.py tests/test_prepared.py tests/test_prepared_fit.py -q -W error
@@ -315,7 +315,7 @@ git commit -m "refactor: resolve software versions at provenance creation"
 The core installed distribution imports and performs a synthetic OLS fit without
 ipykernel. Notebook execution dependencies remain in the dev group.
 
-- [ ] Add `tests/test_distribution.py`:
+- [x] Add `tests/test_distribution.py`:
 
 ```python
 from importlib import metadata
@@ -335,7 +335,7 @@ def test_all_package_initializers_are_empty():
 Capture default collection before the config change with
 `uv run pytest --collect-only -q`: NSD tests are absent.
 
-- [ ] Add a standalone wheel smoke script `tests/check_installed_package.py`:
+- [x] Add a standalone wheel smoke script `tests/check_installed_package.py`:
 
 ```python
 """Run explicitly in an isolated environment containing the built wheel."""
@@ -382,14 +382,14 @@ uv run --isolated --no-project --with ./dist/boldtailor-0.1.0-py3-none-any.whl p
 The isolated environment must install the wheel, not resolve the editable project.
 The script checks the imported module path and an independent OLS reference.
 
-- [ ] Commit both failing checks before implementation:
+- [x] Commit both failing checks before implementation:
 
 ```sh
 git add tests/test_distribution.py tests/check_installed_package.py
 git commit -m "test: require a standalone library without notebook dependencies"
 ```
 
-- [ ] Remove `ipykernel>=7.3.0` from runtime dependencies, retain it in dev, set
+- [x] Remove `ipykernel>=7.3.0` from runtime dependencies, retain it in dev, set
   pytest `testpaths = ["tests", "examples/NSD"]`, then run `uv lock` and
   `uv sync --locked --group dev`. Keep the existing pythonpath setting until
   the shared-oracle migration in Stage 2; avoid silently breaking fixture imports.
@@ -405,7 +405,7 @@ build/
 dist/
 ```
 
-- [ ] Add `.github/workflows/tests.yml`:
+- [x] Add `.github/workflows/tests.yml`:
 
 ```yaml
 name: tests
@@ -435,7 +435,7 @@ validation. Consolidate the existing repository-contract initializer test with
 the recursive one rather than keeping duplicates. Keep meaningful supported
 Python/layout constraints; do not add tests pinning YAML text or action versions.
 
-- [ ] Run GREEN and final stage checks:
+- [x] Run GREEN and final stage checks:
 
 ```sh
 uv run pytest --collect-only -q

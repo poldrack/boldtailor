@@ -34,3 +34,40 @@ The affected suite exposed an existing test error: the no-filesystem-writes test
 blocked all `Path.open` calls, including reads of installed metadata. Its existing
 `io.open` guard already intercepts `Path.open` and rejects all write modes. The
 blanket ban was removed, retaining write guards for builtins/io/os and Path writes.
+GREEN: all 105 affected software, BIDS, prepared-data, and prepared-fit tests
+passed with warnings treated as errors. The changed files passed Black.
+
+## Packaging and collection
+
+RED: the runtime-dependency test failed because installed metadata required
+`ipykernel`; the isolated baseline-wheel check also failed because `ipykernel`
+was installed. Both checks were committed as `7611c91` before packaging changes.
+The new recursive initializer check replaces the old single-file check.
+
+Default collection before the config change contained 621 core tests (including
+new checks), with no NSD tests. Afterward it contains 760 tests, including all
+140 NSD tests; the one-test difference is the consolidated initializer check.
+The runtime-dependency tests now pass. The lockfile only removes the two runtime
+references to ipykernel; all dependency versions are unchanged.
+
+During synchronization, uv warned that the locked Nilearn 0.14.0 release is yanked
+for casting cleaned signals to integers when extracting integer-valued images.
+Changing scientific dependency versions is outside this foundation stage. Treat
+integer-image use as an outstanding dependency issue, not as validated by these
+synthetic floating-point regression checks.
+
+## Final foundation checks
+
+- `uv run pytest -q -W error`: **760 passed** in 170.70 seconds, including NSD.
+- `uv run black --check src tests examples/NSD examples/stop_signal_demo.py`:
+  all 107 Python files passed. Notebook JSON is checked by its execution tests;
+  Black does not format notebooks in this environment.
+- `uv build --wheel --quiet`: built the wheel successfully.
+- `uv run --isolated --no-project --with ./dist/boldtailor-0.1.0-py3-none-any.whl
+  python tests/check_installed_package.py`: exit 0, installed-package import,
+  no ipykernel, and OLS coefficients matched independent NumPy least squares.
+- `git diff --check`: passed.
+
+GitHub Actions configuration is present but has not run remotely; this checkout
+has no configured remote. The preserved stash is unchanged. No numerical
+estimator or statistical objective was modified in this foundation stage.
