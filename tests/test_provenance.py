@@ -318,3 +318,38 @@ def test_serialized_record_excludes_digest_and_sensitive_runtime_strings():
     assert "/Users/poldrack/Dropbox/code/boldtailor" not in serialized
     assert Path.home().name not in serialized
     assert socket.gethostname() not in serialized
+
+
+def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
+    from copy import deepcopy
+    from boldtailor.provenance import extend_provenance
+
+    payload = _record_payload(extra_note={"labels": ["original"]})
+    payload["sources"].append({
+        "signal": _complete_source("signal", "run-02_signal.tsv").to_dict(),
+        "events": _complete_source("events", "run-02_events.tsv").to_dict(),
+    })
+    parent = ProvenanceRecord.from_dict(payload)
+    activity = {"name": "fit", "settings": {"alpha": 0.1}}
+    expected = parent.to_dict()
+    execution_id = "123e4567-e89b-12d3-a456-426614174001"
+    expected.update(
+        execution_id=execution_id,
+        activities=[*expected["activities"], deepcopy(activity)],
+        events=[], warnings=expected["warnings"], analysis_fingerprint="a" * 64,
+    )
+
+    def reject_serialization(self):
+        raise AssertionError("extension must not serialize its parent")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ProvenanceRecord, "to_dict", reject_serialization)
+        extended = extend_provenance(
+            parent, execution_id=execution_id, activity=activity,
+            analysis_id="a" * 64, events=[], warnings=(),
+        )
+    assert extended.to_dict() == expected
+    assert extended.metadata_fingerprint == parent.metadata_fingerprint
+    activity["settings"]["alpha"] = 99
+    payload["extra_note"]["labels"].append("changed")
+    assert extended.to_dict() == expected

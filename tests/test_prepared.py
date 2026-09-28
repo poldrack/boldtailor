@@ -479,3 +479,75 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
         warning["code"] == "provenance_quality"
         for warning in anonymous.provenance.warnings
     )
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_normalization_builds_one_record(prepared_inputs, monkeypatch, caplog, complete):
+    import hashlib
+    import json
+    import logging
+    import boldtailor.prepared as module
+
+    sources = _complete_sources() if complete else None
+    metadata = {"purpose": "normalization"}
+    original = module.ProvenanceRecord
+    calls = []
+
+    def record(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls.append(result)
+        return result
+
+    monkeypatch.setattr(module, "ProvenanceRecord", record)
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    result = _make_prepared(prepared_inputs, sources=sources, provenance_metadata=metadata)
+    assert len(calls) == 1
+    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"]
+    assert dict(result.provenance.events[-1]) == records[-1]
+    if complete:
+        payload = {"sources": [s.to_dict() for s in sources]}
+        expected = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        assert result.provenance.metadata_fingerprint == expected
+        assert not result.provenance.warnings
+    else:
+        assert result.provenance.metadata_fingerprint is None
+        assert [w["code"] for w in result.provenance.warnings] == ["provenance_quality"]
+
+
+@pytest.mark.parametrize("outcome", ["success", "metadata", "constructor"])
+def test_normalization_catches_final_failures_and_isolates_context(prepared_inputs, caplog, monkeypatch, outcome):
+    import json
+    import logging
+    import boldtailor.prepared as module
+    from boldtailor.logging import bind_context, emit_event
+
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    sources = None
+    metadata = {"bad": object()} if outcome == "metadata" else {}
+    failure = RuntimeError("private constructor failure")
+
+    def reject(*args, **kwargs):
+        raise failure
+
+    if outcome == "constructor":
+        monkeypatch.setattr(module.PreparedDesignAnalysis, "__init__", reject)
+    outer = dict(execution_id="outer", data_id="outer-data", analysis_id="outer-analysis", run_index=2)
+    with bind_context(**outer):
+        if outcome == "success":
+            _make_prepared(prepared_inputs, sources=sources, provenance_metadata=metadata)
+        else:
+            with pytest.raises((ValueError, RuntimeError)) as caught:
+                _make_prepared(prepared_inputs, sources=sources, provenance_metadata=metadata)
+            if outcome == "constructor":
+                assert caught.value is failure
+        restored = emit_event("after_normalization", stage="test")
+    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"][:-1]
+    ending = "completed" if outcome == "success" else "failed"
+    assert [r["event"] for r in records] == ["normalization_started", f"normalization_{ending}"]
+    for record in records:
+        assert not {"data_id", "analysis_id", "run_index"} & record.keys()
+        assert record["execution_id"] != "outer"
+    if outcome != "success":
+        assert records[-1]["error_code"] == ("invalid_input" if outcome == "metadata" else "operation_failed")
+    assert "private" not in caplog.text
+    assert all(restored[k] == v for k, v in outer.items())
