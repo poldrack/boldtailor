@@ -185,3 +185,55 @@ def test_notebook_surface_cells_render_existing_results_and_register_exports(
         assert all(p.stat().st_size > 1000 for p in saved)
     finally:
         plt.close("all")
+
+
+def test_inline_notebook_displays_each_surface_figure_once(
+    cortical_axis, surface_files, tmp_path
+):
+    import nbformat
+    from nbclient import NotebookClient
+    from pathlib import Path
+
+    root, meshes = surface_files
+    path = Path(__file__).with_name("nsd_workflow.ipynb")
+    cells = {c.id: c for c in nbformat.read(path, as_version=4).cells}
+    image_path = tmp_path / "axis.dscalar.nii"
+    nib.save(
+        nib.Cifti2Image(
+            np.zeros((1, len(cortical_axis))),
+            header=nib.Cifti2Header.from_axes(
+                (nib.cifti2.ScalarAxis(["test"]), cortical_axis)
+            ),
+        ),
+        image_path,
+    )
+    setup = f"""%matplotlib inline
+from pathlib import Path
+import sys
+sys.path.insert(0, {str(path.parents[2])!r})
+import numpy as np
+import nibabel as nib
+from IPython.display import display
+settings = {{"subject": "sub-07", "surface_meshes": {str({k: str(v) for k, v in meshes.items()})}}}
+prep = Path({str(root)!r})
+brain = nib.load({str(image_path)!r}).header.get_axis(1)
+model = dict(r2=np.full((3, 8), .2), rt={{"all": np.linspace(-.2, .3, 8)}})
+glms = {{"CanonicalGLM": model, "OptimizedGLM": model}}
+beta_models = {{"CanonicalTrialOLS": model, "OptimizedTrialFractionalCV": model}}
+figures = {{}}
+"""
+    notebook = nbformat.v4.new_notebook(
+        cells=[
+            nbformat.v4.new_code_cell(setup),
+            *[
+                cells[key]
+                for key in ("glm-surface-maps", "beta-surface-maps", "rt-surface-maps")
+            ],
+        ]
+    )
+    executed = NotebookClient(notebook, timeout=60, kernel_name="python3").execute()
+    for cell in executed.cells[1:]:
+        images = [o for o in cell.outputs if "image/png" in o.get("data", {})]
+        assert (
+            len(images) == 1
+        ), f"{cell.id} should display its surface figure exactly once"
