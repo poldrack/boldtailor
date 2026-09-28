@@ -122,7 +122,7 @@ def test_split_matches_augmented_oracle(runs, basis, scope, fraction):
             np.testing.assert_allclose(actual["test_alphas"][r - 2], a, atol=1e-7)
 
 
-def test_baseline_agrees_with_production(runs):
+def test_raw_per_run_ablation_agrees_with_production(runs):
     designs, signals, predictors = runs
     exp = experiment()
     fits = [
@@ -133,7 +133,7 @@ def test_baseline_agrees_with_production(runs):
         fits, predictors, train_runs=[0, 1], test_runs=[2, 3]
     )
     actual = exp.fit_split(
-        exp.prepare_runs(designs, signals, basis="normalized"),
+        exp.prepare_runs(designs, signals, basis="raw"),
         predictors,
         train=[0, 1],
         test=[2, 3],

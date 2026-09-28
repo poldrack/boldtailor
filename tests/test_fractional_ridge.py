@@ -33,8 +33,7 @@ def regression():
 
 def oracle(x, n, y, fraction):
     """Solve augmented regression directly, not through the production SVD."""
-    residual = x - n @ np.linalg.lstsq(n, x, rcond=None)[0]
-    scale = np.linalg.norm(residual, axis=0)
+    scale = np.ones(x.shape[1])
     matrix = np.column_stack([x / scale, n])
 
     def coefficients(alpha):
@@ -70,6 +69,10 @@ def test_fraction_path_matches_requested_norm_and_oracle(regression):
             expected, _, alpha = oracle(x, n, y[:, v], fraction)
             np.testing.assert_allclose(betas[:, v], expected, atol=1e-9)
             np.testing.assert_allclose(alphas[v], alpha, rtol=1e-8, atol=1e-10)
+    np.testing.assert_allclose(
+        np.linalg.norm(outputs[1][1], axis=0) / np.linalg.norm(outputs[0][1], axis=0),
+        0.8, atol=1e-10,
+    )
     assert abs(outputs[1][2][0] - outputs[1][2][1]) > 0.01
 
 
@@ -118,10 +121,7 @@ def test_fraction_solver_handles_ill_conditioning_and_undefined_features(regress
     _, shrunk, _ = next(
         fractional().fraction_beta_path(design, nuisance, signal, fractions=[0.4])
     )
-    scale = np.linalg.norm(design - design.mean(0), axis=0)
-    assert np.linalg.norm(shrunk[:, 0] * scale) / np.linalg.norm(
-        ols[:, 0] * scale
-    ) == pytest.approx(0.4, rel=1e-7)
+    assert np.linalg.norm(shrunk[:, 0]) / np.linalg.norm(ols[:, 0]) == pytest.approx(0.4, rel=1e-7)
 
 
 @pytest.mark.parametrize(
@@ -168,6 +168,9 @@ def test_public_fraction_fits_keep_trial_units_and_hrf_groups(
         result.provenance.to_dict()["activities"][-1]["regularization"]
         == "fractional_ridge"
     )
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["fraction_norm_basis"] == "raw_trial_coefficients_after_nuisance_projection"
+    assert activity["normalization"] == "none_after_nuisance_projection"
     with pytest.raises(ValueError):
         fit(data, ridge_alpha=0.1, ridge_fraction=0.5, **kwargs)
 

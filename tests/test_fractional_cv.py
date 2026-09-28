@@ -1,4 +1,4 @@
-"""Fraction selection is featurewise and targets use matched shrinkage."""
+"""Fraction selection is featurewise and targets use fixed OLS estimates."""
 
 import importlib
 
@@ -82,7 +82,7 @@ def reference(data, predictors, library, fractions, encoding_mode="within_run"):
                         hrf=hrf,
                     )
                     beta[:, v] = oracle(
-                        np.asarray(x), np.asarray(n), data.signals[r][:, v], fraction
+                        np.asarray(x), np.asarray(n), data.signals[r][:, v], 1.0 if r == test else fraction
                     )[0]
                 betas.append(beta)
             xtrain = np.vstack([predictors[r].to_numpy()[masks[r]] for r in train])
@@ -116,7 +116,7 @@ def reference(data, predictors, library, fractions, encoding_mode="within_run"):
 
 @pytest.mark.parametrize("optimized", [False, True])
 @pytest.mark.parametrize("encoding_mode", ["within_run", "absolute"])
-def test_fraction_cv_matches_nested_same_fraction_oracle(
+def test_fraction_cv_matches_nested_fixed_ols_oracle(
     ridge_problem, optimized, encoding_mode
 ):
     data, predictors, library = ridge_problem
@@ -138,7 +138,7 @@ def test_fraction_cv_matches_nested_same_fraction_oracle(
     assert not result.cv_r2.flags.writeable
     assert not result.trial_masks[0][2]
     activity = result.provenance.to_dict()["activities"][-1]
-    assert activity["validation_target"] == "candidate_fraction_regularized_betas"
+    assert activity["validation_target"] == "fixed_ols_betas"
     assert activity["fractions"] == [1.0, 0.7, 0.3]
     assert "alphas" not in activity
 
@@ -165,3 +165,15 @@ def test_inner_validation_data_does_not_change_hrf_or_training_transform(ridge_p
     b = changed.provenance.to_dict()["activities"][-1]["folds"][0]
     assert a["predictor_means"] == b["predictor_means"]
     assert not np.allclose(original.fold_sse[0], changed.fold_sse[0], equal_nan=True)
+
+
+def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
+    data, predictors, _ = ridge_problem
+    first = module().score_fraction_candidates(data, predictors, fractions=[0.7, 0.3])
+    second = module().score_fraction_candidates(data, predictors, fractions=[1, 0.7])
+    np.testing.assert_allclose(first.fold_sst[:, 0], first.fold_sst[:, 1])
+    np.testing.assert_allclose(first.fold_sst[:, 0], second.fold_sst[:, 0])
+    np.testing.assert_allclose(first.fold_sse[:, 0], second.fold_sse[:, 1])
+    activity = first.provenance.to_dict()["activities"][-1]
+    assert activity["normalization"] == "none_after_nuisance_projection"
+    assert activity["fraction_norm_basis"] == "raw_trial_coefficients_after_nuisance_projection"

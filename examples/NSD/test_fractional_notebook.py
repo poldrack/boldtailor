@@ -65,7 +65,7 @@ def test_notebook_default_executes_fractional_cv(six_run_dataset, tmp_path):
     )
     assert (
         metadata["ridge_cv"]["validation_target"]
-        == "candidate_fraction_regularized_betas"
+        == "fixed_ols_betas"
     )
     assert metadata["ridge_cv"]["objective"] == "maximum_encoding_r2_per_grayordinate"
     assert metadata["ridge_cv"]["percentile_role"] == "descriptive_only"

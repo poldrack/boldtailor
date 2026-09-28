@@ -12,6 +12,7 @@ from boldtailor.fractional_ridge import (
     select_ridge_fractions,
 )
 from boldtailor.hrf_selection import select_hrf
+from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
@@ -53,6 +54,23 @@ def test_fraction_workflow_matches_whole_array_and_exports(
         np.testing.assert_allclose(actual.ridge_fraction, expected.ridge_fraction)
         np.testing.assert_allclose(actual.selected_r2, expected.selected_r2, atol=1e-10)
     data = load_block(runs, root, np.arange(4))
+    # Outer scores use OLS targets with HRFs learned only on outer training runs.
+    train, test = [0, 2, 4], [1, 3, 5]
+    chosen = result["tuning"]["odd"]["selection"].ridge_fraction
+    outer_selection = None if library is None else select_hrf(
+        load_block([runs[r] for r in train], root, np.arange(4)), library=library
+    )
+    fitter = fit_single_trials if outer_selection is None else fit_selected_hrfs
+    kwargs = {} if outer_selection is None else {"selection": outer_selection}
+    shrunk = fitter(data, ridge_fraction=chosen, **kwargs)
+    ols = fitter(data, ridge_fraction=np.where(np.isfinite(chosen), 1., np.nan), **kwargs)
+    mixed = [ols.run_betas[r] if r in test else shrunk.run_betas[r] for r in range(6)]
+    outer = evaluate_trial_encoding(mixed, trial_predictors(runs), train_runs=train, test_runs=test)
+    actual_outer = result["evaluation"]["odd_to_even"]
+    np.testing.assert_allclose(actual_outer["run_sse"], outer.run_sse, atol=1e-8)
+    np.testing.assert_allclose(actual_outer["run_sst"], outer.run_sst, atol=1e-8)
+    for actual_beta, r in zip(actual_outer["betas"], test):
+        np.testing.assert_allclose(actual_beta, shrunk.run_betas[r], atol=1e-8)
     fractions = result["tuning"]["all"]["selection"].ridge_fraction
     selection = None if library is None else select_hrf(data, library=library)
     expected = (
@@ -108,7 +126,7 @@ def test_fraction_workflow_matches_whole_array_and_exports(
         ).read_text()
     )
     assert metadata["selection_rule"] == "maximum_encoding_r2_per_grayordinate"
-    assert metadata["validation_target"] == "candidate_fraction_regularized_betas"
+    assert metadata["validation_target"] == "fixed_ols_betas"
     assert metadata["percentile_role"] == "descriptive_only"
     table = tuning_table({mode: result})
     assert table.groupby("scope").selected_grayordinates.sum().tolist() == [3, 3, 3]
