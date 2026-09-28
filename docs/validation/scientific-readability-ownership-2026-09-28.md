@@ -28,7 +28,17 @@ Full suite after this change: `uv run pytest -q -W error`: **786 passed** in
 
 ## Prepared-design access
 
-Pending implementation and verification.
+RED: the multi-run fit/comparison regression failed at the public bulk-copy
+accessor (1 failed, 51 deselected); tests committed as `00bf062`. The regression
+blocks internal use of the public bulk design/role accessors, compares both
+full and nuisance R² with the existing oracle, and verifies original tables
+and roles are unchanged.
+
+GREEN: `uv run --no-cache --no-sync pytest tests/test_prepared.py
+tests/test_prepared_fit.py tests/test_fit.py tests/test_logging.py -q -W error`:
+**121 passed** in 0.52 seconds. Formatting and whitespace checks passed.
+Internal fitting reads the owned private tables; public accessors and result
+construction still copy tables. No wrapper or new public accessor was added.
 
 ## Fractional result ownership
 

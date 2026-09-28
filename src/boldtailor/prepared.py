@@ -35,6 +35,12 @@ _DESIGN_ID_SCHEMA = "boldtailor.prepared-design/1"
 
 @dataclass(frozen=True)
 class PreparedDesignAnalysis:
+    """Owned inputs with defensive public table accessors.
+
+    Package fitting code reads `_design_matrices` and `_column_roles` directly
+    to avoid copying all runs per diagnostic. It must never mutate those values.
+    """
+
     _signals: tuple[np.ndarray, ...]
     _design_matrices: tuple[pd.DataFrame, ...]
     _frame_times: tuple[np.ndarray, ...]

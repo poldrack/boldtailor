@@ -72,6 +72,12 @@ before editing it. Mutable table/dictionary accessors return defensive copies,
 including nested event metadata. Private containers are not a public mutation
 interface.
 
+Prepared fitting reads `PreparedDesignAnalysis._design_matrices` and
+`_column_roles` internally. These are already owned at construction; fitting
+and diagnostics must not mutate them. Public accessors keep returning copies,
+and result construction still makes its own design copies. This avoids copying
+all runs' tables repeatedly inside each run's diagnostics.
+
 ## Numerical conventions
 
 Conventional fits use Nilearn's OLS/AR(1) estimator and t contrasts. Each run

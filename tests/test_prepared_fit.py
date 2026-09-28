@@ -1340,7 +1340,9 @@ def test_prepared_fitting_uses_owned_designs_without_bulk_copy(
     original_roles = prepared.column_roles
     expected_full = _ols_r2_oracle(prepared.signals, original_designs)
     nuisance_designs = tuple(
-        design.loc[:, [name for name in design if roles[name] in {"nuisance", "intercept"}]]
+        design.loc[
+            :, [name for name in design if roles[name] in {"nuisance", "intercept"}]
+        ]
         for design, roles in zip(original_designs, original_roles, strict=True)
     )
     expected_null = _ols_r2_oracle(prepared.signals, nuisance_designs)
@@ -1349,15 +1351,27 @@ def test_prepared_fitting_uses_owned_designs_without_bulk_copy(
         raise AssertionError("internal fitting copied every prepared table")
 
     with monkeypatch.context() as patch:
-        patch.setattr(PreparedDesignAnalysis, "design_matrices", property(bulk_copy_forbidden))
-        patch.setattr(PreparedDesignAnalysis, "column_roles", property(bulk_copy_forbidden))
-        full = fit_prepared(prepared, contrasts=contrasts, noise_model="ols", model_metadata=metadata)
+        patch.setattr(
+            PreparedDesignAnalysis, "design_matrices", property(bulk_copy_forbidden)
+        )
+        patch.setattr(
+            PreparedDesignAnalysis, "column_roles", property(bulk_copy_forbidden)
+        )
+        full = fit_prepared(
+            prepared, contrasts=contrasts, noise_model="ols", model_metadata=metadata
+        )
         delta = task_delta_r2_prepared(
-            prepared, full, contrasts=contrasts, noise_model="ols", model_metadata=metadata
+            prepared,
+            full,
+            contrasts=contrasts,
+            noise_model="ols",
+            model_metadata=metadata,
         )
     np.testing.assert_allclose(full.r2, expected_full)
     np.testing.assert_allclose(delta.full_r2, expected_full)
     np.testing.assert_allclose(delta.nuisance_r2, expected_null)
-    for actual, expected in zip(prepared.design_matrices, original_designs, strict=True):
+    for actual, expected in zip(
+        prepared.design_matrices, original_designs, strict=True
+    ):
         pd.testing.assert_frame_equal(actual, expected)
     assert prepared.column_roles == original_roles

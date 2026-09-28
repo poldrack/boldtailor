@@ -204,7 +204,7 @@ def _run_prepared_comparison(
 ) -> tuple[TaskDeltaR2Result, ProvenanceRecord]:
     _validate_prepared_parent(prepared, full_result, parent_id)
     nuisance_designs = _nuisance_designs(prepared)
-    full_r2 = _fit_prepared_r2(prepared, prepared.design_matrices)
+    full_r2 = _fit_prepared_r2(prepared, prepared._design_matrices)
     nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
     _validate_nested_ols_delta(full_r2 - nuisance_r2)
     comparison = make_task_delta_r2_result(
@@ -292,7 +292,7 @@ def _nuisance_designs(
 ) -> tuple[pd.DataFrame, ...]:
     designs = []
     for run, (matrix, roles) in enumerate(
-        zip(prepared.design_matrices, prepared.column_roles, strict=True)
+        zip(prepared._design_matrices, prepared._column_roles, strict=True)
     ):
         if "other" in roles.values():
             raise ValueError(
@@ -371,11 +371,12 @@ def _fit_with_lifecycle(
     analysis_id: str | None,
     history: tuple[Mapping[str, object], ...],
 ) -> AnalysisResult:
+    designs = prepared._design_matrices
     history = append_event_history(history, emit_event("fit_started", stage="fit"))
     try:
         numerical = fit_designs(
             prepared.signals,
-            prepared.design_matrices,
+            designs,
             fit_spec.contrasts,
             fit_spec.noise_model,
         )
@@ -398,7 +399,7 @@ def _fit_with_lifecycle(
     provenance = _with_events(provenance, history)
     return make_result(
         numerical.contrasts,
-        prepared.design_matrices,
+        designs,
         _prepared_design_provenance(prepared),
         tuple(run.r2 for run in numerical.run_fits),
         numerical.aggregate_r2,
@@ -533,14 +534,14 @@ def _run_diagnostic(
     prepared: PreparedDesignAnalysis,
     run: int,
 ) -> dict[str, object]:
-    design = prepared.design_matrices[run]
+    design = prepared._design_matrices[run]
     matrix = design.to_numpy()
     rank = int(np.linalg.matrix_rank(matrix))
     return {
         "n_scans": int(matrix.shape[0]),
         "n_features": int(prepared.signals[run].shape[1]),
         "design_columns": list(design.columns),
-        "role_counts": _role_counts(prepared.column_roles[run]),
+        "role_counts": _role_counts(prepared._column_roles[run]),
         "design_rank": rank,
         "residual_dof": int(matrix.shape[0] - rank),
         "run_design_fingerprint": prepared.run_design_fingerprints[run],
