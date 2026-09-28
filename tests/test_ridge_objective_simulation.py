@@ -51,7 +51,12 @@ def test_simulation_records_both_regularizers_and_four_objectives():
     rows, candidates = scenario_rows(0, 4.0, 1.5, 0.3, 0.5, 1.0)
     assert len(rows) == 8
     assert len(candidates) == 48
-    assert {r["objective"] for r in rows} == {"current", "centered", "fixed_ols", "within_run"}
+    assert {r["objective"] for r in rows} == {
+        "current",
+        "centered",
+        "fixed_ols",
+        "within_run",
+    }
     assert {r["regularizer"] for r in rows} == {"alpha", "fraction"}
     for row in rows:
         assert np.isfinite(row["beta_rmse"])
@@ -77,51 +82,61 @@ def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
         betas, predictors, train_runs=[0, 1], test_runs=[2], encoding_mode=encoding_mode
     )
     expected = evaluate_trial_encoding(
-        matched, predictors, train_runs=[0, 1], test_runs=[2], encoding_mode=encoding_mode
+        matched,
+        predictors,
+        train_runs=[0, 1],
+        test_runs=[2],
+        encoding_mode=encoding_mode,
     )
     np.testing.assert_allclose(actual.r2, expected.r2, atol=1e-7)
 
 
-
 def test_historical_objectives_keep_shared_intercept_fit():
     from examples.validation.ridge_objective_simulation import evaluate_candidate
-    x = [np.arange(5.) + 10*r for r in range(3)]
-    predictors = [pd.DataFrame({'x': v}) for v in x]
-    betas = [(3*v+20*r)[:,None] for r,v in enumerate(x)]
+
+    x = [np.arange(5.0) + 10 * r for r in range(3)]
+    predictors = [pd.DataFrame({"x": v}) for v in x]
+    betas = [(3 * v + 20 * r)[:, None] for r, v in enumerate(x)]
     train_x = np.concatenate(x[:2])
     train_y = np.concatenate(betas[:2])
-    oracle = np.linalg.lstsq(np.column_stack([np.ones(10), train_x]),train_y,rcond=None)[0]
-    for objective in ['current','centered','fixed_ols']:
-        actual = evaluate_candidate(betas,predictors,[0,1],[2],objective,betas)
-        np.testing.assert_allclose(actual['coefficients'][1:],oracle[1:])
-        np.testing.assert_allclose(actual['predictions'][0],np.column_stack([np.ones(5),x[2]])@oracle)
-    within = evaluate_candidate(betas,predictors,[0,1],[2],'within_run',betas)
-    np.testing.assert_allclose(within['coefficients'][1:],[[3]])
-    np.testing.assert_allclose(within['r2'],[1])
-    assert abs(oracle[1,0]-3) > 1
+    oracle = np.linalg.lstsq(
+        np.column_stack([np.ones(10), train_x]), train_y, rcond=None
+    )[0]
+    for objective in ["current", "centered", "fixed_ols"]:
+        actual = evaluate_candidate(betas, predictors, [0, 1], [2], objective, betas)
+        np.testing.assert_allclose(actual["coefficients"][1:], oracle[1:])
+        np.testing.assert_allclose(
+            actual["predictions"][0], np.column_stack([np.ones(5), x[2]]) @ oracle
+        )
+    within = evaluate_candidate(betas, predictors, [0, 1], [2], "within_run", betas)
+    np.testing.assert_allclose(within["coefficients"][1:], [[3]])
+    np.testing.assert_allclose(within["r2"], [1])
+    assert abs(oracle[1, 0] - 3) > 1
 
 
 def test_recovery_metrics_center_each_run_before_pooling():
     from examples.validation.ridge_objective_simulation import _recovery_metrics
-    true = [np.array([r+1.,r+3.,r+5.])[:,None] for r in range(6)]
-    estimated = [2*y+100*r for r,y in enumerate(true)]
-    metrics = _recovery_metrics(estimated,true)
-    assert metrics['within_run_beta_rmse'] == pytest.approx(np.sqrt(8/3))
-    assert metrics['within_run_amplitude_ratio'] == pytest.approx(2)
-    flat = [np.ones((3,1)) for _ in range(6)]
-    undefined = _recovery_metrics(flat,flat)
-    assert np.isnan(undefined['within_run_amplitude_ratio'])
-    assert np.isnan(undefined['within_run_correlation'])
+
+    true = [np.array([r + 1.0, r + 3.0, r + 5.0])[:, None] for r in range(6)]
+    estimated = [2 * y + 100 * r for r, y in enumerate(true)]
+    metrics = _recovery_metrics(estimated, true)
+    assert metrics["within_run_beta_rmse"] == pytest.approx(np.sqrt(8 / 3))
+    assert metrics["within_run_amplitude_ratio"] == pytest.approx(2)
+    flat = [np.ones((3, 1)) for _ in range(6)]
+    undefined = _recovery_metrics(flat, flat)
+    assert np.isnan(undefined["within_run_amplitude_ratio"])
+    assert np.isnan(undefined["within_run_correlation"])
 
 
 def test_confounding_stress_experiment_recovers_known_slopes():
     from examples.validation.ridge_objective_simulation import confounding_stress
+
     rows = confounding_stress()
-    assert {r['objective'] for r in rows} == {'current','centered','within_run'}
+    assert {r["objective"] for r in rows} == {"current", "centered", "within_run"}
     assert len(rows) == 6
     for row in rows:
-        if row['objective'] == 'within_run':
-            assert row['slope'] == pytest.approx(3)
-            assert row['outer_r2'] == pytest.approx(1)
-        elif row['offset_increment']:
-            assert abs(row['slope']-3) > 1
+        if row["objective"] == "within_run":
+            assert row["slope"] == pytest.approx(3)
+            assert row["outer_r2"] == pytest.approx(1)
+        elif row["offset_increment"]:
+            assert abs(row["slope"] - 3) > 1

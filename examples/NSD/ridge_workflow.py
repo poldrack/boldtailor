@@ -22,7 +22,11 @@ from boldtailor.ridge_selection import (
     select_ridge_penalty,
 )
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
-from boldtailor.trial_encoding import evaluate_trial_encoding
+from boldtailor.trial_encoding import (
+    evaluate_trial_encoding,
+    encoding_metadata,
+    validate_encoding_mode,
+)
 from .nsd_hrf import spatial_signature
 from .parallel_blocks import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
@@ -99,7 +103,16 @@ def _signature(runs, indices):
     return spatial_signature(runs[0].image.header.get_axis(1), indices)
 
 
-def _score_block(indices, runs, root, predictors, library, alphas, fractional=False):
+def _score_block(
+    indices,
+    runs,
+    root,
+    predictors,
+    library,
+    alphas,
+    fractional=False,
+    encoding_mode="within_run",
+):
     scorer = score_fraction_candidates if fractional else score_ridge_candidates
     return scorer(
         load_block(runs, root, indices),
@@ -108,11 +121,20 @@ def _score_block(indices, runs, root, predictors, library, alphas, fractional=Fa
         library=library,
         run_labels=[r.label for r in runs],
         feature_signature=_signature(runs, indices),
+        encoding_mode=encoding_mode,
     )
 
 
 def _global_scores(
-    runs, root, predictors, blocks, library, alphas, n_jobs, fractional=False
+    runs,
+    root,
+    predictors,
+    blocks,
+    library,
+    alphas,
+    n_jobs,
+    fractional=False,
+    encoding_mode="within_run",
 ):
     n_features = runs[0].image.shape[1]
     shape = (len(runs), len(alphas), n_features)
@@ -123,7 +145,7 @@ def _global_scores(
     for indices, result in map_blocks(
         _score_block,
         blocks,
-        args=(runs, root, predictors, library, alphas, fractional),
+        args=(runs, root, predictors, library, alphas, fractional, encoding_mode),
         n_jobs=n_jobs,
     ):
         sse[:, :, indices], sst[:, :, indices] = result.fold_sse, result.fold_sst
@@ -144,6 +166,7 @@ def _global_scores(
         activities=(
             dict(
                 name="nsd_global_encoding_ridge_cv",
+                **encoding_metadata(encoding_mode),
                 **(
                     {"fractions": list(alphas)}
                     if fractional
@@ -177,9 +200,18 @@ def _tune(
     percentile,
     n_jobs,
     fractional=False,
+    encoding_mode="within_run",
 ):
     scores = _global_scores(
-        runs, root, predictors, blocks, library, alphas, n_jobs, fractional
+        runs,
+        root,
+        predictors,
+        blocks,
+        library,
+        alphas,
+        n_jobs,
+        fractional,
+        encoding_mode,
     )
     selection = (
         select_ridge_fractions(scores.cv_r2, scores.fractions)
@@ -196,7 +228,16 @@ def _tune(
 
 
 def _outer_block(
-    indices, runs, root, predictors, library, alpha, train, test, fractional=False
+    indices,
+    runs,
+    root,
+    predictors,
+    library,
+    alpha,
+    train,
+    test,
+    fractional=False,
+    encoding_mode="within_run",
 ):
     data = load_block(runs, root, indices)
     labels, signature = [r.label for r in runs], _signature(runs, indices)
@@ -226,9 +267,17 @@ def _outer_block(
         )
         ids = selection.hrf_indices
     encoded = evaluate_trial_encoding(
-        fitted.run_betas, predictors, train_runs=train, test_runs=test
+        fitted.run_betas,
+        predictors,
+        train_runs=train,
+        test_runs=test,
+        encoding_mode=encoding_mode,
     )
     return dict(
+        encoding_mode=encoding_mode,
+        train_run_intercepts=encoded.train_run_intercepts,
+        train_run_predictor_means=encoded.train_run_predictor_means,
+        scoring_offsets=encoded.scoring_offsets,
         encoding_r2=encoded.r2,
         run_sse=encoded.run_sse,
         run_sst=encoded.run_sst,
@@ -257,9 +306,13 @@ def _evaluate(
     test,
     n_jobs,
     fractional=False,
+    encoding_mode="within_run",
 ):
     n = runs[0].image.shape[1]
     result = dict(
+        encoding_mode=encoding_mode,
+        train_run_intercepts=np.full((len(train), n), np.nan),
+        scoring_offsets=np.full((len(test), n), np.nan),
         encoding_r2=np.full(n, np.nan),
         coefficients=np.full((3, n), np.nan),
         run_sse=np.full((len(test), n), np.nan),
@@ -279,9 +332,27 @@ def _evaluate(
         result[key] = [
             np.full((len(runs[r].events), n), np.nan, dtype=np.float32) for r in test
         ]
-    args = (runs, root, predictors, library, alpha, train, test, fractional)
+    args = (
+        runs,
+        root,
+        predictors,
+        library,
+        alpha,
+        train,
+        test,
+        fractional,
+        encoding_mode,
+    )
     for indices, block in map_blocks(_outer_block, blocks, args=args, n_jobs=n_jobs):
-        for key in ("encoding_r2", "coefficients", "run_sse", "run_sst", "hrf_indices"):
+        for key in (
+            "encoding_r2",
+            "coefficients",
+            "run_sse",
+            "run_sst",
+            "hrf_indices",
+            "train_run_intercepts",
+            "scoring_offsets",
+        ):
             result[key][..., indices] = block[key]
         if fractional:
             result["run_ridge_alphas"][:, indices] = np.asarray(
@@ -290,6 +361,7 @@ def _evaluate(
         for key in ("betas", "predictions"):
             for target, values in zip(result[key], block[key], strict=True):
                 target[:, indices] = values
+        result["train_run_predictor_means"] = block["train_run_predictor_means"]
         result["predictor_means"], result["trial_masks"] = (
             block["predictor_means"],
             block["trial_masks"],
@@ -343,6 +415,7 @@ def fit_cv_beta_series(
     block_size=4096,
     max_grayordinates=None,
     n_jobs=1,
+    encoding_mode="within_run",
 ):
     """Tune globally on each training scope, then evaluate or refit at its alpha.
 
@@ -350,6 +423,7 @@ def fit_cv_beta_series(
     optimized HRFs need three or more runs in each half. Returned outer betas
     and predictions contain test runs only, in test_run_labels order.
     """
+    validate_encoding_mode(encoding_mode)
     if (alphas is None) == (fractions is None):
         raise ValueError("provide exactly one of alphas or fractions")
     fractional = fractions is not None
@@ -374,6 +448,7 @@ def fit_cv_beta_series(
             percentile,
             n_jobs,
             fractional,
+            encoding_mode,
         )
         result["tuning"][scope] = selected
         alpha = (
@@ -394,6 +469,7 @@ def fit_cv_beta_series(
                 halves[target],
                 n_jobs,
                 fractional,
+                encoding_mode,
             )
             result["evaluation"][f"{scope}_to_{target}"][
                 "tuning_analysis_fingerprint"
@@ -407,7 +483,8 @@ def fit_cv_beta_series(
     result["final"] = _final_fit(runs, root, blocks, library, alpha, n_jobs, fractional)
     link_final_provenance(result["final"], result["tuning"]["all"]["provenance"])
     result["provenance"] = dict(
-        objective="percentile_of_pooled_within_run_trial_encoding_r2",
+        **encoding_metadata(encoding_mode),
+        objective="percentile_of_" + encoding_metadata(encoding_mode)["score"],
         percentile=percentile,
         alphas=list(alphas),
         validation_target="candidate_regularized_betas",
