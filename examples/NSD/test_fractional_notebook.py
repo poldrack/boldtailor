@@ -63,10 +63,7 @@ def test_notebook_default_executes_fractional_cv(six_run_dataset, tmp_path):
             p for p in files if p.name.endswith("desc-notebook_metadata.json")
         ).read_text()
     )
-    assert (
-        metadata["ridge_cv"]["validation_target"]
-        == "fixed_ols_betas"
-    )
+    assert metadata["ridge_cv"]["validation_target"] == "fixed_ols_betas"
     assert metadata["ridge_cv"]["objective"] == "maximum_encoding_r2_per_grayordinate"
     assert metadata["ridge_cv"]["percentile_role"] == "descriptive_only"
     for mode in ("Canonical", "Optimized"):

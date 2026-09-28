@@ -82,7 +82,10 @@ def reference(data, predictors, library, fractions, encoding_mode="within_run"):
                         hrf=hrf,
                     )
                     beta[:, v] = oracle(
-                        np.asarray(x), np.asarray(n), data.signals[r][:, v], 1.0 if r == test else fraction
+                        np.asarray(x),
+                        np.asarray(n),
+                        data.signals[r][:, v],
+                        1.0 if r == test else fraction,
                     )[0]
                 betas.append(beta)
             xtrain = np.vstack([predictors[r].to_numpy()[masks[r]] for r in train])
@@ -176,4 +179,7 @@ def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
     np.testing.assert_allclose(first.fold_sse[:, 0], second.fold_sse[:, 1])
     activity = first.provenance.to_dict()["activities"][-1]
     assert activity["normalization"] == "none_after_nuisance_projection"
-    assert activity["fraction_norm_basis"] == "raw_trial_coefficients_after_nuisance_projection"
+    assert (
+        activity["fraction_norm_basis"]
+        == "raw_trial_coefficients_after_nuisance_projection"
+    )

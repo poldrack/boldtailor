@@ -57,16 +57,26 @@ def test_fraction_workflow_matches_whole_array_and_exports(
     # Outer scores use OLS targets with HRFs learned only on outer training runs.
     train, test = [0, 2, 4], [1, 3, 5]
     chosen = result["tuning"]["odd"]["selection"].ridge_fraction
-    outer_selection = None if library is None else select_hrf(
-        load_block([runs[r] for r in train], root, np.arange(4)), library=library
+    outer_selection = (
+        None
+        if library is None
+        else select_hrf(
+            load_block([runs[r] for r in train], root, np.arange(4)), library=library
+        )
     )
     fitter = fit_single_trials if outer_selection is None else fit_selected_hrfs
     kwargs = {} if outer_selection is None else {"selection": outer_selection}
     shrunk = fitter(data, ridge_fraction=chosen, **kwargs)
-    ols = fitter(data, ridge_fraction=np.where(np.isfinite(chosen), 1., np.nan), **kwargs)
+    ols = fitter(
+        data, ridge_fraction=np.where(np.isfinite(chosen), 1.0, np.nan), **kwargs
+    )
     mixed = [ols.run_betas[r] if r in test else shrunk.run_betas[r] for r in range(6)]
-    outer = evaluate_trial_encoding(mixed, trial_predictors(runs), train_runs=train, test_runs=test)
+    outer = evaluate_trial_encoding(
+        mixed, trial_predictors(runs), train_runs=train, test_runs=test
+    )
     actual_outer = result["evaluation"]["odd_to_even"]
+    for target_beta, r in zip(actual_outer["targets"], test):
+        np.testing.assert_allclose(target_beta, ols.run_betas[r], atol=2e-6)
     np.testing.assert_allclose(actual_outer["run_sse"], outer.run_sse, atol=1e-8)
     np.testing.assert_allclose(actual_outer["run_sst"], outer.run_sst, atol=1e-8)
     for actual_beta, r in zip(actual_outer["betas"], test):
@@ -114,6 +124,21 @@ def test_fraction_workflow_matches_whole_array_and_exports(
             image.get_fdata()[0],
             result["tuning"][scope.lower()]["selection"].ridge_fraction,
         )
+    for scope in ("odd_to_even", "even_to_odd"):
+        outer = result["evaluation"][scope]
+        descriptor = (
+            mode + "FractionalCV" + "".join(w.title() for w in scope.split("_"))
+        )
+        for label, targets in zip(outer["test_run_labels"], outer["targets"]):
+            run = next(r for r in runs if r.label == label)
+            path = next(
+                p
+                for p in paths
+                if run.inputs.stem in p.name
+                and descriptor in p.name
+                and p.name.endswith("_targets.dscalar.nii")
+            )
+            np.testing.assert_allclose(nib.load(path).get_fdata(), targets, atol=1e-6)
     alpha_path = next(
         p for p in paths if "TrialFractionalCV_stat-ridgealpha." in p.name
     )
