@@ -65,8 +65,14 @@ positions remain intact. Existing independent numerical oracle tests also pass.
   python tests/check_installed_package.py`: exit 0. Installed-package location,
   absence of ipykernel, and independent OLS comparison passed.
 
-Independent review is pending. Scientific result schema and metadata fields
-remain unchanged by this increment. Remote CI and the locked Nilearn integer-image
+An independent reviewer inspected `82ac3ff..dba8e67`, the surrounding ownership
+paths, and the installed Nilearn OLS/AR1 backend paths. Verdict: ready to merge;
+no critical, important, or minor findings. The reviewer confirmed that internal
+fitting does not mutate prepared inputs and result construction still owns its
+design tables. It did not repeat the full suite. The branch remains unmerged
+while the architectural roadmap continues.
+
+Scientific result schema and metadata fields remain unchanged by this increment. Remote CI and the locked Nilearn integer-image
 limitation remain unverified/outstanding as recorded in foundation validation.
 
 ## Execution decisions
@@ -78,3 +84,15 @@ limitation remain unverified/outstanding as recorded in foundation validation.
 - The changed write-flag assertion is an approved requirement change. Ordinary
   arrays are protected against accidental assignment, not deliberate flag changes.
   No numerical test was weakened or tolerance changed to accommodate this work.
+
+
+The review explicitly set aside three matters, resolved as follows:
+
+- Deliberate flag changes and private-state mutation are outside the approved
+  ownership guarantee. Plain read-only arrays prevent accidental assignment;
+  callers must copy before editing. Deliberate mutation can invalidate results.
+- Result-schema consolidation, shared fit lifecycle/diagnostics, publication,
+  and packaged imaging remain outstanding roadmap work. This increment does
+  not claim to resolve those architectural issues.
+- Remote CI has not run; local verification is recorded without claiming a
+  clean Linux-runner result.

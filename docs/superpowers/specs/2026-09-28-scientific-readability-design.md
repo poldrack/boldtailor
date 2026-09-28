@@ -1,7 +1,7 @@
 # Scientific readability refactor
 
 Date: 2026-09-28
-Status: approved by the user on 2026-09-28; foundation and numerical stages implemented; ownership increment planned.
+Status: approved by the user on 2026-09-28; foundation, numerical, and ownership increments implemented; further fit/results work remains.
 
 ## Purpose and scope
 
