@@ -64,13 +64,13 @@ def emit_event(
         analysis_id=analysis_id,
         run_index=run_index,
     )
-    _emit_record(payload)
+    _emit_record(payload, level=level)
     return payload
 
 
-def _emit_record(payload: Mapping[str, object]) -> None:
+def _emit_record(payload: Mapping[str, object], *, level: int = logging.INFO) -> None:
     logging.getLogger(_LOGGER_NAME).log(
-        logging.getLevelName(payload["level"]),
+        level,
         json.dumps(
             dict(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
         ),
