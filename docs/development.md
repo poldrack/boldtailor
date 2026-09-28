@@ -242,12 +242,28 @@ does not install handlers. Applications choose the destination and log level.
 `emit_event()` creates a lifecycle record; `append_event_history()` retains
 the most recent eight events in provenance.
 
-Structured fields carry lifecycle metadata and correlation IDs. Error handling
-is not yet uniform: conventional and grouped fits can pass `str(error)` to
-`emit_event()`, which preserves it. Prepared fits apply a separate sanitizer.
-Source/provenance metadata validation does not sanitize logger output. Inspect
-error messages and source annotations before sharing logs; a uniform logging
-policy remains planned work.
+Fit and comparison entry points use the private `fit_operation()` context
+manager. Their statistical steps remain explicit in each caller. The context
+owns execution IDs and events; provenance and result construction both occur
+inside its failure boundary. A pending completion is included in final
+provenance and emitted only after result construction succeeds. Start records
+omit `analysis_id`; completion includes it when metadata identity is available.
+Each nested fit or normalization starts a fresh ID scope and restores its
+caller’s context on exit. Ordinary `bind_context()` remains additive unless
+called with `inherit=False`.
+
+Failure records export an `error_code`: `invalid_input`, `numerical_failure`,
+`io_failure`, or `operation_failed`. Exceptions are re-raised unchanged for
+callers. The logging boundary never exports exception text or inspects the
+environment; the prepared-fit sanitizer has been removed. Event names, IDs,
+and annotations are caller-supplied metadata, so this is not a blanket privacy
+guarantee. Existing saved records retain their old fields. See the
+[lifecycle migration](lifecycle-migration.md) for event prefixes and category rules.
+
+Input normalization constructs one final provenance record. Extension creates
+a validated record directly, avoiding a parent-record serialization round trip.
+Source identity formulas, scientific activities, and quality warnings are
+preserved; source fingerprints describe metadata, not BOLD contents.
 
 ## BIDS metadata projection
 

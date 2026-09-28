@@ -365,8 +365,12 @@ saved = publish_artifact_set("example-results", artifacts)
 ```
 
 Logging uses the standard Python logger named `boldtailor`. Configure handlers
-in your application. Contributor-facing identity, logging, and publication
-details are in the [developer guide](development.md).
+in your application. Fit and comparison attempts emit start and completion or
+failure events, with completion delayed until the result exists. Start records
+omit analysis identity; completion includes it when available. New failure
+records contain `error_code` instead of exception text; callers still receive
+the original exception. See the [lifecycle migration](lifecycle-migration.md)
+and [developer guide](development.md) for event names and identity rules.
 
 ## Example workflows
 

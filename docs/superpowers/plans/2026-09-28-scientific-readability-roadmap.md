@@ -7,7 +7,7 @@
 
 This roadmap keeps the full architectural scope visible. Each stage produces
 working software and receives a concrete implementation plan before execution.
-Stages 1 and 2 and the ownership/result/diagnostic portions of Stage 3 are implemented; the
+Stages 1–3 and the lifecycle/logging/provenance portion of Stage 4 are implemented; the
 [numerical/CV plan](2026-09-28-scientific-readability-numerics.md) records the second
 stage. Later stages retain separate implementation plans. This is deliberate:
 decisions about the numerical interfaces should inform the later fit and
@@ -70,7 +70,7 @@ and local fractional-result ownership. The implemented
 [result/diagnostic plan](2026-09-28-scientific-readability-results.md) consolidates
 candidate scores and trial results while sharing fit diagnostics. Lifecycle
 sharing is sequenced with Stage 4's logging/provenance changes because they
-modify the same event and exception boundaries; it remains required work.
+modify the same event and exception boundaries; this increment is now implemented.
 
 Primary files: `fit.py`, `prepared_fit.py`, `single_trial.py`, `_hrf_glm.py`,
 `_selected_hrf_fit.py`, `prepared.py`, `data.py`, `_arrays.py`, `results.py`,
@@ -95,7 +95,7 @@ migrations accompany result-schema changes.
 ## Stage 4: Proportionate provenance and publication
 
 The [fit lifecycle, logging, and provenance plan](2026-09-28-scientific-readability-lifecycle.md)
-is prepared for review. It covers shared lifecycle boundaries, categorical
+is implemented. It covers shared lifecycle boundaries, categorical
 failure logs, and removal of redundant provenance construction. Publication
 remains a separate increment.
 

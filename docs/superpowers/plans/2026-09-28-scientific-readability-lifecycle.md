@@ -1,6 +1,6 @@
 # Fit Lifecycle, Logging, and Provenance Implementation Plan
 
-> **For agentic workers:** Use `superpowers:executing-plans` with the preserved native execution method. Implement inline, with one independent review after the complete increment. Steps use checkbox (`- [ ]`) syntax.
+> **For agentic workers:** Use `superpowers:executing-plans` with the preserved native execution method. Implement inline, with one independent review after the complete increment. Steps use checkbox (`- [x]`) syntax.
 
 **Goal:** Make fitting code easier to read by sharing lifecycle bookkeeping, reporting failures consistently, and removing redundant provenance construction.
 
@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-scientific-readability-design.md`
 
-**Status:** Proposed implementation plan. Base `139274e`; 801 tests passed before this increment. The architecture is already approved; this document supplies the concrete next increment.
+**Status:** Implemented; final verification and independent review are recorded in `docs/validation/scientific-readability-lifecycle-2026-09-28.md`. Base `3188f7f`; 801 tests passed before this increment.
 
 ## Global constraints
 
@@ -90,7 +90,7 @@ For both input constructors, compute source metadata identity directly using the
 
 ## Task 1: One error policy at the logging boundary
 
-- [ ] Add the following tests to `tests/test_logging.py`; keep the existing logger-configuration and context tests.
+- [x] Add the following tests to `tests/test_logging.py`; keep the existing logger-configuration and context tests.
 
 ```python
 @pytest.mark.parametrize(
@@ -123,28 +123,28 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
     assert "UnprintableError" not in caplog.text
 ```
 
-- [ ] Update existing assertions on newly emitted `record["error"]` to `error_code`, retaining assertions about the raw raised exception, paths, values, context restoration, and absence of data in logs. Do not alter historical `ProvenanceRecord.from_dict` round-trip expectations.
-- [ ] Run `uv run pytest tests/test_logging.py tests/test_prepared_fit.py -q -W error`; observe missing category/unsafe formatting failures and commit tests.
-- [ ] Add `_error_code(error)` using the table above. `_event_payload` stores the category instead of text; `_history_entry` retains `error_code`. Change current normalization/fit callers from `error=str(error)` and `error=_sanitize_error(error)` to `error=error`. Remove prepared-fit regex/environment sanitizers and their now-unused imports.
+- [x] Update existing assertions on newly emitted `record["error"]` to `error_code`, retaining assertions about the raw raised exception, paths, values, context restoration, and absence of data in logs. Do not alter historical `ProvenanceRecord.from_dict` round-trip expectations.
+- [x] Run `uv run pytest tests/test_logging.py tests/test_prepared_fit.py -q -W error`; observe missing category/unsafe formatting failures and commit tests.
+- [x] Add `_error_code(error)` using the table above. `_event_payload` stores the category instead of text; `_history_entry` retains `error_code`. Change current normalization/fit callers from `error=str(error)` and `error=_sanitize_error(error)` to `error=error`. Remove prepared-fit regex/environment sanitizers and their now-unused imports.
 
 ```python
 def _error_code(error):
-    if isinstance(error, (ValueError, TypeError)):
-        return "invalid_input"
     if isinstance(error, (ArithmeticError, np.linalg.LinAlgError)):
         return "numerical_failure"
+    if isinstance(error, (ValueError, TypeError)):
+        return "invalid_input"
     if isinstance(error, OSError):
         return "io_failure"
     return "operation_failed"
 ```
 
-- [ ] Add `docs/lifecycle-migration.md`: new `error_code` values, removal of exported text, original exceptions unchanged, historical records unchanged. Run the same targeted suites, format, and commit after GREEN.
+- [x] Add `docs/lifecycle-migration.md`: new `error_code` values, removal of exported text, original exceptions unchanged, historical records unchanged. Run the same targeted suites, format, and commit after GREEN.
 
 ## Task 2: A small shared fit-operation context
 
 **Interfaces:** Private `fit_operation(name, parent)` yields an operation with `execution_id`, `analysis_id`, and `provenance(activity, *, analysis_id, warnings=())`. Parent is a `ProvenanceRecord`; its source fingerprint and event history initialize the operation. The returned provenance is constructed once and already includes the prospective completion event.
 
-- [ ] Create `tests/test_fit_lifecycle.py` with a fixture returning `ProvenanceRecord(execution_id=str(uuid4()))`. Import only public record types and the new private lifecycle module, not another test module.
+- [x] Create `tests/test_fit_lifecycle.py` with a fixture returning `ProvenanceRecord(execution_id=str(uuid4()))`. Import only public record types and the new private lifecycle module, not another test module.
 
 ```python
 def test_late_constructor_failure_never_logs_completion(caplog, parent_record):
@@ -178,8 +178,8 @@ def test_completion_matches_returned_provenance(caplog, parent_record):
     assert completed["analysis_id"] == record.analysis_fingerprint
 ```
 
-- [ ] Add parametrized success/failure tests under `bind_context(execution_id="outer", data_id="outer-data", analysis_id="outer-analysis", run_index=9)`: an anonymous child omits the latter three fields; an event after child exit restores all four outer values. Add a child-inside-child test with distinct UUIDs and no cross-contamination. Verify history retains its last eight events.
-- [ ] Add a provenance-construction failure test by injecting a raising `extend_provenance`; assert original exception and only start/failure. A context exited without preparing provenance raises `RuntimeError` and logs failure. Preparing provenance twice likewise raises rather than emitting duplicate completions.
+- [x] Add parametrized success/failure tests under `bind_context(execution_id="outer", data_id="outer-data", analysis_id="outer-analysis", run_index=9)`: an anonymous child omits the latter three fields; an event after child exit restores all four outer values. Add a child-inside-child test with distinct UUIDs and no cross-contamination. Verify history retains its last eight events.
+- [x] Add a provenance-construction failure test by injecting a raising `extend_provenance`; assert original exception and only start/failure. A context exited without preparing provenance raises `RuntimeError` and logs failure. Preparing provenance twice likewise raises rather than emitting duplicate completions.
 
 ```python
 @pytest.mark.parametrize("fail", [False, True])
@@ -235,9 +235,9 @@ def test_invalid_finalization_logs_failure(caplog, parent_record, monkeypatch, m
     assert records[-1]["error_code"] == "operation_failed"
 ```
 
-- [ ] Run `uv run pytest tests/test_fit_lifecycle.py -q -W error`, observe absent-module failures, commit tests.
-- [ ] In `logging.py`, extract `_emit_record(payload)` from `emit_event`; retain one JSON serialization path. Extract `_make_event(...)` with the existing event fields and defaults so a completion can be prepared without emission. Add `inherit=True` to `bind_context`; when false, start from an empty mapping rather than the outer context.
-- [ ] Implement `_fit_lifecycle.py` using a dataclass and context manager, not callbacks for scientific work or result-type introspection. The control flow is:
+- [x] Run `uv run pytest tests/test_fit_lifecycle.py -q -W error`, observe absent-module failures, commit tests.
+- [x] In `logging.py`, extract `_emit_record(payload)` from `emit_event`; retain one JSON serialization path. Extract `_make_event(...)` with the existing event fields and defaults so a completion can be prepared without emission. Add `inherit=True` to `bind_context`; when false, start from an empty mapping rather than the outer context.
+- [x] Implement `_fit_lifecycle.py` using a dataclass and context manager, not callbacks for scientific work or result-type introspection. The control flow is:
 
 ```python
 @contextmanager
@@ -267,13 +267,13 @@ def fit_operation(name, parent):
 
 `FitOperation` stores `name`, `parent`, fresh `execution_id`, `analysis_id=None`, `history=()`, and `completed=None`. Its `provenance` method rejects a second call, sets `analysis_id`, prepares a completion using `_make_event`, calls `extend_provenance` with `append_event_history(history, completion)`, then stores the pending completion and returns the record. Set `completed` only after successful record construction. The caller immediately constructs/returns its result inside the context. No extra array copies and no mutable result attachment hook.
 
-- [ ] Run `uv run pytest tests/test_fit_lifecycle.py tests/test_logging.py -q -W error`; format and commit GREEN.
+- [x] Run `uv run pytest tests/test_fit_lifecycle.py tests/test_logging.py -q -W error`; format and commit GREEN.
 
 ## Task 3: Migrate all fit and comparison paths
 
-- [ ] Add integration coverage beside the existing fixtures in `tests/test_fit.py`, `tests/test_prepared_fit.py`, `tests/test_hrf_glm.py`, `tests/test_single_trial.py`, and `tests/test_selected_hrf_fit.py`. Use each file's actual fitting fixture; do not import those test modules from one another.
-- [ ] For each of the eight tabled entry points, assert one start and completion on success, matching final execution/source/analysis identities, bounded history, and omission of an unknown start analysis ID. Compare scientific outputs using the existing oracles without tolerance changes.
-- [ ] Exercise late construction failure at these real boundaries: `fit.make_result`, `prepared_fit.make_result`, `_hrf_glm._assemble`, `single_trial._assemble_result`, and `_selected_hrf_fit.SingleTrialResult`. Each injected constructor raises the same sentinel exception; check exception identity and absence of a completion. For each comparison, inject failure in its shared provenance extension after its numerical comparison exists. Use this assertion pattern with a local fixture/call for the owning API:
+- [x] Add integration coverage beside the existing fixtures in `tests/test_fit.py`, `tests/test_prepared_fit.py`, `tests/test_hrf_glm.py`, `tests/test_single_trial.py`, and `tests/test_selected_hrf_fit.py`. Use each file's actual fitting fixture; do not import those test modules from one another.
+- [x] For each of the eight tabled entry points, assert one start and completion on success, matching final execution/source/analysis identities, bounded history, and omission of an unknown start analysis ID. Compare scientific outputs using the existing oracles without tolerance changes.
+- [x] Exercise late construction failure at these real boundaries: `fit.make_result`, `prepared_fit.make_result`, `_hrf_glm._assemble`, `single_trial._assemble_result`, and `_selected_hrf_fit.SingleTrialResult`. Each injected constructor raises the same sentinel exception; check exception identity and absence of a completion. For each comparison, inject failure in its shared provenance extension after its numerical comparison exists. Use this assertion pattern with a local fixture/call for the owning API:
 
 ```python
 failure = ValueError("private late result failure")
@@ -291,8 +291,8 @@ assert [r["event"] for r in records] == ["fit_started", "fit_failed"]
 assert "private" not in caplog.text
 ```
 
-- [ ] Also exercise early failures: incompatible feature signature, invalid trial penalty/run labels, invalid prepared contrasts/model metadata, and mismatched comparison parent. These must start/fail even when no analysis identity was computed. Commit observed RED tests before migration.
-- [ ] Put scientific work inside `with fit_operation(...)`. Example conventional flow:
+- [x] Also exercise early failures: incompatible feature signature, invalid trial penalty/run labels, invalid prepared contrasts/model metadata, and mismatched comparison parent. These must start/fail even when no analysis identity was computed. Commit observed RED tests before migration.
+- [x] Put scientific work inside `with fit_operation(...)`. Example conventional flow:
 
 ```python
 with fit_operation("fit", data.provenance) as operation:
@@ -316,15 +316,15 @@ with fit_operation("fit", data.provenance) as operation:
 
 Keep `fit`'s selected-HRF dispatch outside the ordinary-fit context so dispatch creates only one pair of events. Move ordinary `feature_signature` rejection inside its context. Dispatch does not precompute fallible model metadata outside the selected path: move that calculation into the selected operation or pass the model and calculate there.
 
-- [ ] Flatten prepared lifecycle wrappers into `fit_prepared` and `task_delta_r2_prepared`; retain `_prepare_fit_spec`, identity, design, diagnostic, and activity helpers. Remove `_fit_with_lifecycle`, `_comparison_with_lifecycle`, validation-only log helpers, `_with_events`, and the provenance forwarding wrapper. Eliminate discarded history updates.
-- [ ] For selected GLMs, retain `_prepare`, `_group_fits`, `_assemble`, and `_ols_comparison`. Convert `_comparison_provenance` to an activity builder and compute the same comparison fingerprint from `context.analysis_id` plus that activity. Put assembly and final comparison replacement inside the context.
-- [ ] For shared trials, move regularization/label validation and `_model_metadata` inside the context. For selected trials, change `_provenance` into an activity builder; keep its design digest and selection payload identical, and wrap `fit_groups` with the new selected-trial lifecycle. Pass final provenance to `SingleTrialResult` once.
-- [ ] Existing comparison construction may use its parent provenance temporarily to compute diagnostic summaries; retain this where needed. Replace only the final comparison's provenance inside the boundary. Do not introduce a generic result mutation protocol.
-- [ ] Run `uv run pytest tests/test_fit_lifecycle.py tests/test_logging.py tests/test_fit.py tests/test_prepared_fit.py tests/test_hrf_glm.py tests/test_single_trial.py tests/test_selected_hrf_fit.py tests/test_fractional_ridge.py tests/test_ridge_cv.py tests/test_fractional_cv.py -q -W error`. Document changed start IDs and selected-trial events; format and commit GREEN.
+- [x] Flatten prepared lifecycle wrappers into `fit_prepared` and `task_delta_r2_prepared`; retain `_prepare_fit_spec`, identity, design, diagnostic, and activity helpers. Remove `_fit_with_lifecycle`, `_comparison_with_lifecycle`, validation-only log helpers, `_with_events`, and the provenance forwarding wrapper. Eliminate discarded history updates.
+- [x] For selected GLMs, retain `_prepare`, `_group_fits`, `_assemble`, and `_ols_comparison`. Convert `_comparison_provenance` to an activity builder and compute the same comparison fingerprint from `context.analysis_id` plus that activity. Put assembly and final comparison replacement inside the context.
+- [x] For shared trials, move regularization/label validation and `_model_metadata` inside the context. For selected trials, change `_provenance` into an activity builder; keep its design digest and selection payload identical, and wrap `fit_groups` with the new selected-trial lifecycle. Pass final provenance to `SingleTrialResult` once.
+- [x] Existing comparison construction may use its parent provenance temporarily to compute diagnostic summaries; retain this where needed. Replace only the final comparison's provenance inside the boundary. Do not introduce a generic result mutation protocol.
+- [x] Run `uv run pytest tests/test_fit_lifecycle.py tests/test_logging.py tests/test_fit.py tests/test_prepared_fit.py tests/test_hrf_glm.py tests/test_single_trial.py tests/test_selected_hrf_fit.py tests/test_fractional_ridge.py tests/test_ridge_cv.py tests/test_fractional_cv.py -q -W error`. Document changed start IDs and selected-trial events; format and commit GREEN.
 
 ## Task 4: Remove redundant provenance records and serialization
 
-- [ ] Extend `tests/test_provenance.py` with a record-extension test that computes its expected serialized result before temporarily replacing `ProvenanceRecord.to_dict` with a raising function. Call `extend_provenance` and require matching fields without serializing the parent. Include an additive extension field, nested activity input mutated afterward, source ordering, and existing quality warning. Restore the method before checking canonical JSON. This tests the removed round-trip cost as well as semantic equivalence.
+- [x] Extend `tests/test_provenance.py` with a record-extension test that computes its expected serialized result before temporarily replacing `ProvenanceRecord.to_dict` with a raising function. Call `extend_provenance` and require matching fields without serializing the parent. Include an additive extension field, nested activity input mutated afterward, source ordering, and existing quality warning. Restore the method before checking canonical JSON. This tests the removed round-trip cost as well as semantic equivalence.
 
 ```python
 def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
@@ -358,8 +358,8 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
     assert extended.to_dict() == expected
 ```
 
-- [ ] In data/prepared tests, instrument the module's `ProvenanceRecord` constructor with a counting wrapper around the real class. Assert one construction for successful normalization with complete and anonymous sources, unchanged source fingerprint/quality warning, and exact completion event parity. Also test rejected non-JSON metadata and injected final input-object construction failures: no completed log, original exception re-raised. Commit RED tests.
-- [ ] Implement direct record extension:
+- [x] In data/prepared tests, instrument the module's `ProvenanceRecord` constructor with a counting wrapper around the real class. Assert one construction for successful normalization with complete and anonymous sources, unchanged source fingerprint/quality warning, and exact completion event parity. Also test rejected non-JSON metadata and injected final input-object construction failures: no completed log, original exception re-raised. Commit RED tests.
+- [x] Implement direct record extension:
 
 ```python
 return replace(
@@ -374,9 +374,9 @@ return replace(
 
 Add `replace` to the dataclass import. Preserve all constructor validation. Reuse the existing `_metadata_fingerprint(sources)` function directly in data/prepared normalization; delete `_data_id`/`_source_fingerprint` wrappers that allocate records just to read their fingerprints.
 
-- [ ] In each input constructor, after normalization succeeds, use `_make_event` to prepare completion, create final provenance with that bounded history, then construct the owned input object within the existing try boundary. Catch `Exception` consistently and pass the exception object to `emit_event`. Emit the prepared completion only after construction succeeds, then return the constructed input. Remove the discarded record validation call; final record construction performs that validation. Use a fresh context for each normalization attempt.
-- [ ] Avoid repeated source hashing inside `ProvenanceRecord.__post_init__`: compute the metadata fingerprint once after source ownership and pass its availability into `_augment_warnings`. Keep canonical bytes/hash definitions unchanged.
-- [ ] Run `uv run pytest tests/test_provenance.py tests/test_data.py tests/test_prepared.py tests/test_logging.py tests/test_prepared_fit.py tests/test_bids_provenance.py -q -W error`. Format and commit GREEN.
+- [x] In each input constructor, after normalization succeeds, use `_make_event` to prepare completion, create final provenance with that bounded history, then construct the owned input object within the existing try boundary. Catch `Exception` consistently and pass the exception object to `emit_event`. Emit the prepared completion only after construction succeeds, then return the constructed input. Remove the discarded record validation call; final record construction performs that validation. Use a fresh context for each normalization attempt.
+- [x] Avoid repeated source hashing inside `ProvenanceRecord.__post_init__`: compute the metadata fingerprint once after source ownership and pass its availability into `_augment_warnings`. Keep canonical bytes/hash definitions unchanged.
+- [x] Run `uv run pytest tests/test_provenance.py tests/test_data.py tests/test_prepared.py tests/test_logging.py tests/test_prepared_fit.py tests/test_bids_provenance.py -q -W error`. Format and commit GREEN.
 
 ## Completion and documentation
 
