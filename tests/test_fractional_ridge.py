@@ -216,12 +216,16 @@ def test_fraction_results_own_arrays_without_solver_mutation(
 
     data, selection = selected_fixture
     fit = fit_selected_hrfs if selected else fit_single_trials
-    options = dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+    options = (
+        dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+    )
 
     def forbidden(*args):
         raise AssertionError("numerical module must not mutate a result instance")
 
-    monkeypatch.setattr(_fractional_ridge, "freeze_fraction_result", forbidden, raising=False)
+    monkeypatch.setattr(
+        _fractional_ridge, "freeze_fraction_result", forbidden, raising=False
+    )
     result = fit(data, ridge_fraction=[1, 0.7, 0.4, 0.2, np.nan], **options)
     fractions = result.ridge_fraction.copy()
     alphas = tuple(a.copy() for a in result.run_ridge_alphas)
@@ -230,7 +234,9 @@ def test_fraction_results_own_arrays_without_solver_mutation(
     for array in alphas:
         array[:] = 999
     np.testing.assert_array_equal(copied.ridge_fraction, result.ridge_fraction)
-    for actual, expected in zip(copied.run_ridge_alphas, result.run_ridge_alphas, strict=True):
+    for actual, expected in zip(
+        copied.run_ridge_alphas, result.run_ridge_alphas, strict=True
+    ):
         np.testing.assert_array_equal(actual, expected)
         assert not actual.flags.writeable
     assert not copied.ridge_fraction.flags.writeable

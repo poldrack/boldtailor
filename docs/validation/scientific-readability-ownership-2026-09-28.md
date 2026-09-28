@@ -42,13 +42,32 @@ construction still copy tables. No wrapper or new public accessor was added.
 
 ## Fractional result ownership
 
-Pending implementation and verification.
+RED: both canonical and selected-HRF result construction called the forbidden
+numerical-module mutation hook (2 failed, 23 deselected). Tests were committed
+as `9837b12`. Each result now owns its optional fraction and implied-alpha
+arrays locally in `__post_init__`; `freeze_fraction_result` was removed.
+
+GREEN: `uv run --no-cache --no-sync pytest tests/test_fractional_ridge.py
+tests/test_single_trial.py tests/test_selected_hrf_fit.py -q -W error`:
+**69 passed** in 1.40 seconds. The new regression supplies writable arrays via
+`dataclasses.replace`, mutates their originals, and checks owned values and NaN
+positions remain intact. Existing independent numerical oracle tests also pass.
 
 ## Final verification and independent review
 
-Pending. Scientific result schema and metadata fields remain unchanged by this
-increment. Remote CI and the locked Nilearn integer-image limitation remain
-unverified/outstanding as recorded in foundation validation.
+- Final `uv run pytest -q -W error`: **789 passed** in 167.88 seconds, including
+  notebook execution, NSD workflows, and real-process serial/parallel checks.
+- `uv run black --check src tests examples/NSD examples/stop_signal_demo.py`:
+  all 110 files passed.
+- `git diff --check`: passed.
+- `uv build --wheel --quiet`: exit 0.
+- `uv run --isolated --no-project --with ./dist/boldtailor-0.1.0-py3-none-any.whl
+  python tests/check_installed_package.py`: exit 0. Installed-package location,
+  absence of ipykernel, and independent OLS comparison passed.
+
+Independent review is pending. Scientific result schema and metadata fields
+remain unchanged by this increment. Remote CI and the locked Nilearn integer-image
+limitation remain unverified/outstanding as recorded in foundation validation.
 
 ## Execution decisions
 

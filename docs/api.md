@@ -6,6 +6,8 @@ Import from the modules shown below, for example
 `from boldtailor.single_trial import fit_single_trials`. The top-level package
 does not re-export these names. Modules beginning with `_` are implementation
 details. Returned numerical arrays are read-only; use `.copy()` to edit them.
+See the [ownership migration note](ownership-migration.md) for the ordinary-NumPy
+contract and its limits.
 
 ## Data and model specification
 

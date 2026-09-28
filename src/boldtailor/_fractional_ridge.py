@@ -6,7 +6,6 @@ from numbers import Real
 
 import numpy as np
 
-from boldtailor._arrays import readonly_array
 from boldtailor._single_trial_fit import TrialRunFit, _project_design, validate_alpha
 
 NORM_BASIS = "raw_trial_coefficients_after_nuisance_projection"
@@ -63,18 +62,6 @@ def fraction_metadata(fractions):
         ridge_fraction=[float(f) if np.isfinite(f) else None for f in fractions],
         implied_alpha="computed_separately_for_each_run_and_feature",
     )
-
-
-def freeze_fraction_result(result):
-    if result.ridge_fraction is not None:
-        object.__setattr__(
-            result, "ridge_fraction", readonly_array(result.ridge_fraction)
-        )
-        object.__setattr__(
-            result,
-            "run_ridge_alphas",
-            tuple(readonly_array(a) for a in result.run_ridge_alphas),
-        )
 
 
 @dataclass(frozen=True)

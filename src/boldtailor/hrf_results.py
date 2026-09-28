@@ -79,9 +79,15 @@ class HrfSingleTrialResult:
     run_ridge_alphas: tuple[np.ndarray, ...] | None = None
 
     def __post_init__(self):
-        from boldtailor._fractional_ridge import freeze_fraction_result
-
-        freeze_fraction_result(self)
+        if self.ridge_fraction is not None:
+            object.__setattr__(
+                self, "ridge_fraction", readonly_array(self.ridge_fraction)
+            )
+            object.__setattr__(
+                self,
+                "run_ridge_alphas",
+                tuple(readonly_array(a) for a in self.run_ridge_alphas),
+            )
         for name in ("run_betas", "run_full_r2", "run_nuisance_r2"):
             object.__setattr__(
                 self, name, tuple(readonly_array(a) for a in getattr(self, name))
