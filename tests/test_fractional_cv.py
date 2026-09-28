@@ -137,7 +137,7 @@ def test_fraction_cv_matches_nested_fixed_ols_oracle(
         expected,
     ):
         np.testing.assert_allclose(actual, wanted, rtol=2e-7, atol=1e-8)
-    assert result.fractions == (1.0, 0.7, 0.3)
+    assert result.grid == (1.0, 0.7, 0.3)
     assert not result.cv_r2.flags.writeable
     assert not result.trial_masks[0][2]
     activity = result.provenance.to_dict()["activities"][-1]

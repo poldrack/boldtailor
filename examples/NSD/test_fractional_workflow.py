@@ -49,7 +49,7 @@ def test_fraction_workflow_matches_whole_array_and_exports(
             library=library,
             fractions=[0.3, 0.7, 1],
         )
-        expected = select_ridge_fractions(scores.cv_r2, scores.fractions)
+        expected = select_ridge_fractions(scores.cv_r2, scores.grid)
         actual = result["tuning"][scope]["selection"]
         np.testing.assert_allclose(actual.ridge_fraction, expected.ridge_fraction)
         np.testing.assert_allclose(actual.selected_r2, expected.selected_r2, atol=1e-10)

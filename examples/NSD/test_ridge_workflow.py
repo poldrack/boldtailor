@@ -94,7 +94,7 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
         )
         assert (
             result["tuning"][scope]["selection"].ridge_alpha
-            == select_ridge_penalty(expected.cv_r2, expected.alphas).ridge_alpha
+            == select_ridge_penalty(expected.cv_r2, expected.grid).ridge_alpha
         )
     data = load_block(runs, root, np.arange(4))
     final_alpha = result["tuning"]["all"]["selection"].ridge_alpha

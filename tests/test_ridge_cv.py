@@ -127,7 +127,7 @@ def test_cv_matches_independent_augmented_ols_and_encoding(
         result.cv_r2, 1 - expected_sse.sum(axis=0) / expected_sst.sum(axis=0), atol=1e-9
     )
     np.testing.assert_array_equal(result.fold_hrf_indices, assignments)
-    assert tuple(result.alphas) == (0.0, 0.1, 1.0)
+    assert tuple(result.grid) == (0.0, 0.1, 1.0)
     assert len(result.trial_masks[0]) == 8 and result.trial_masks[0].sum() == 7
     assert np.isnan(result.cv_r2[:, -1]).all()
     for array in (
