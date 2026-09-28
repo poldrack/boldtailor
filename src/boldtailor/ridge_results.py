@@ -26,9 +26,22 @@ class TrialEncodingResult:
     run_sse: np.ndarray
     run_sst: np.ndarray
     r2: np.ndarray
+    encoding_mode: str
+    train_run_predictor_means: np.ndarray
+    train_run_intercepts: np.ndarray
+    scoring_offsets: np.ndarray
 
     def __post_init__(self):
-        for name in ("coefficients", "predictor_means", "run_sse", "run_sst", "r2"):
+        for name in (
+            "coefficients",
+            "predictor_means",
+            "run_sse",
+            "run_sst",
+            "r2",
+            "train_run_predictor_means",
+            "train_run_intercepts",
+            "scoring_offsets",
+        ):
             object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
         object.__setattr__(
             self,
