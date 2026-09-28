@@ -71,3 +71,38 @@ synthetic floating-point regression checks.
 GitHub Actions configuration is present but has not run remotely; this checkout
 has no configured remote. The preserved stash is unchanged. No numerical
 estimator or statistical objective was modified in this foundation stage.
+
+## Independent review and execution decisions
+
+An independent reviewer inspected `531dac3..4ffc5bd`, including surrounding
+code and test history. Verdict: ready to merge, with no critical or important
+findings. The branch remains available for the subsequent refactoring stages;
+it has not been merged into main.
+
+One minor test improvement is deferred: `test_imports_do_not_query_versions`
+reloads the three consumer modules but not `_software` itself. Current helper
+code has no eager lookup; including it in the guarded reload set would catch
+a future eager dependency-version lookup added to that helper.
+
+Execution decisions:
+
+- Used the user-requested refactoring branch in the current checkout. This has
+  less filesystem isolation than an additional worktree; exact-path staging
+  kept existing user files out of commits.
+- Recorded completed successful test runs directly instead of rerunning them
+  solely through the skill's ledger script. This sacrifices automated ledger
+  recording, not test evidence.
+- Corrected the no-writes test to allow metadata reads through Path.open while
+  retaining its io.open write guard. This enforces a no-writes contract rather
+  than an all-I/O ban, consistent with the test's stated purpose.
+
+The reviewer set aside three matters, resolved as follows:
+
+- Broader architectural work, numerical/CV changes, and the preserved stash are
+  separate stages. The foundation does not resolve those outstanding issues;
+  the next numerical-stage plan is proposed for review.
+- The yanked Nilearn release remains locked under the approved dependency freeze.
+  Integer-image behavior requires a separate dependency/scientific validation
+  change and remains a real limitation of this baseline.
+- Remote CI could not be exercised without a configured remote. Local commands
+  passed, but Linux-runner success is not claimed.
