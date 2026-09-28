@@ -1,7 +1,7 @@
 # Scientific readability refactor
 
 Date: 2026-09-28
-Status: draft for review; implementation has not started.
+Status: approved by the user on 2026-09-28; implementation planning in progress.
 
 ## Purpose and scope
 
@@ -33,7 +33,12 @@ uncommitted scientific remediation is already present in main.
 
 The committed-only suite finished with 752 passed and three failed notebook
 tests. Each failure concerns a `stop_vs_go` contrast referring to `go_success`
-in a prepared design that lacks that column. With explicit user approval,
+in a prepared design that lacks that column. Inspection during planning traced
+this to the notebook test helper rewriting both go-event labels to `go`, while
+the committed notebook still uses the original labels. The tests also expect
+the uncommitted notebook's contrast names and interactive views. Treat this
+as a baseline integration mismatch, not a numerical-estimator failure.
+With explicit user approval,
 main was fast-forwarded to `57acff5` despite these known failures, then
 `refactor/scientific-readability` was created from that commit. Address the
 baseline failures explicitly before claiming a passing refactor suite.
