@@ -78,7 +78,8 @@ def freeze_fraction_result(result):
 
 def _prepare(x, nuisance, signals):
     x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    q, _, _, _, _, diagnostics = _project_design(x, n)
+    design = _project_design(x, n)
+    q, diagnostics = design.nuisance_basis, design.diagnostics
     # Validate identifiability in a scale-invariant basis, then regularize raw betas.
     u, s, vt = np.linalg.svd(x - q @ (q.T @ x), full_matrices=False)
     scale = np.ones(x.shape[1])

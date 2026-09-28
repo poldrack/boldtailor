@@ -180,7 +180,9 @@ def test_beta_path_retains_solver_rejections(case, prepared):
 
 def test_prepared_trial_betas_do_not_retain_outputs(problem):
     data, x, ns = problem
-    solver = entry("_single_trial_fit", "prepare_trial_betas")(x, ns[0], data.signals[0])
+    solver = entry("_single_trial_fit", "prepare_trial_betas")(
+        x, ns[0], data.signals[0]
+    )
     beta = solver.betas_at(0.1)
     reference = weakref.ref(beta)
     del beta

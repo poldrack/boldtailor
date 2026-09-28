@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from numbers import Real
 
 import numpy as np
-from nilearn.glm.first_level import run_glm
 
 
 @dataclass(frozen=True)
@@ -15,6 +14,50 @@ class TrialRunFit:
     nuisance_sse: np.ndarray
     total_ss: np.ndarray
     diagnostics: dict
+
+
+@dataclass(frozen=True)
+class ProjectedTrialDesign:
+    """SVD of unit-norm trial columns after removing the nuisance span."""
+
+    nuisance_basis: np.ndarray
+    column_scale: np.ndarray
+    left_vectors: np.ndarray
+    singular_values: np.ndarray
+    right_vectors: np.ndarray
+    diagnostics: dict
+
+
+@dataclass(frozen=True)
+class PreparedTrialBetas:
+    """Signal coordinates shared by all normalized ridge candidates."""
+
+    design: ProjectedTrialDesign
+    coordinates: np.ndarray
+    varying: np.ndarray
+    shape: tuple[int, int]
+
+    def betas_at(self, alpha):
+        """Return trial-by-feature coefficients without retaining the output."""
+        alpha = validate_alpha(alpha)
+        d = self.design
+        s = d.singular_values
+        attenuation = 1 / s if alpha == 0 else s / (s * s + alpha)
+        coefficients = d.right_vectors.T @ (attenuation[:, None] * self.coordinates)
+        betas = np.full(self.shape, np.nan)
+        betas[:, self.varying] = coefficients / d.column_scale[:, None]
+        return betas
+
+
+def prepare_trial_betas(x, nuisance, signals):
+    """Project signals and factor the normalized trial design once."""
+    x, nuisance, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
+    design = _project_design(x, nuisance)
+    varying = np.ptp(y, axis=0) > 0
+    values = y[:, varying]
+    q = design.nuisance_basis
+    coordinates = design.left_vectors.T @ (values - q @ (q.T @ values))
+    return PreparedTrialBetas(design, coordinates, varying, (x.shape[1], y.shape[1]))
 
 
 def validate_alpha(alpha):
@@ -51,66 +94,42 @@ def _project_design(x, nuisance):
         residual_dof=dof,
         condition_number=float(s[0] / s[-1]),
     )
-    return q, scale, u, s, vt, diagnostics
+    return ProjectedTrialDesign(q, scale, u, s, vt, diagnostics)
 
 
 def fit_trial_run(x, nuisance, signals, *, alpha):
     """Fit all trials together; alpha acts on unit-norm projected columns."""
     alpha = validate_alpha(alpha)
     x, nuisance, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    q, scale, u, s, vt, diagnostics = _project_design(x, nuisance)
-    varying = np.ptp(y, axis=0) > 0
+    prepared = prepare_trial_betas(x, nuisance, y)
+    q = prepared.design.nuisance_basis
+    varying = prepared.varying
     values = y[:, varying]
-    betas = np.full((x.shape[1], y.shape[1]), np.nan)
+    betas = prepared.betas_at(alpha)
     gamma = np.full((nuisance.shape[1], y.shape[1]), np.nan)
     full_sse = np.zeros(y.shape[1])
     nuisance_sse = np.zeros(y.shape[1])
     total_ss = np.zeros(y.shape[1])
     if values.shape[1]:
         yr = values - q @ (q.T @ values)
-        if alpha == 0:
-            # Match the normalized span used for rank validation and ridge.
-            # Raw nuisance units must not determine which trials are retained.
-            xs = (x - q @ (q.T @ x)) / scale
-            _, fits = run_glm(yr, xs, noise_model="ols")
-            beta = fits[0.0].theta / scale[:, None]
-        else:
-            weights = (vt.T * (s / (s * s + alpha))) @ (u.T @ yr)
-            beta = weights / scale[:, None]
+        beta = betas[:, varying]
         coefficients = np.linalg.lstsq(nuisance, values - x @ beta, rcond=None)[0]
         betas[:, varying], gamma[:, varying] = beta, coefficients
         residual = values - x @ beta - nuisance @ coefficients
         full_sse[varying] = np.sum(residual**2, axis=0)
         nuisance_sse[varying] = np.sum(yr**2, axis=0)
         total_ss[varying] = np.sum((values - values.mean(axis=0)) ** 2, axis=0)
-    return TrialRunFit(betas, gamma, full_sse, nuisance_sse, total_ss, diagnostics)
+    return TrialRunFit(
+        betas, gamma, full_sse, nuisance_sse, total_ss, prepared.design.diagnostics
+    )
 
 
 def trial_beta_path(x, nuisance, signals, *, alphas):
-    """Yield trial betas while reusing the projected design and signal coordinates.
-
-    Constant features remain NaN. The alpha-zero branch matches fit_trial_run;
-    all observed-signal intermediates are local to this iterator.
-    """
+    """Yield candidates using one prepared normalized solver."""
     alphas = tuple(validate_alpha(a) for a in alphas)
-    x, nuisance, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    q, scale, u, s, vt, _ = _project_design(x, nuisance)
-    varying = np.ptp(y, axis=0) > 0
-    values = y[:, varying]
-    yr = values - q @ (q.T @ values)
-    coordinates = u.T @ yr
+    prepared = prepare_trial_betas(x, nuisance, signals)
     for alpha in alphas:
-        betas = np.full((x.shape[1], y.shape[1]), np.nan)
-        if values.shape[1]:
-            if alpha == 0:
-                xs = (x - q @ (q.T @ x)) / scale
-                _, fits = run_glm(yr, xs, noise_model="ols")
-                beta = fits[0.0].theta / scale[:, None]
-            else:
-                weights = (vt.T * (s / (s * s + alpha))) @ coordinates
-                beta = weights / scale[:, None]
-            betas[:, varying] = beta
-        yield alpha, betas
+        yield alpha, prepared.betas_at(alpha)
 
 
 def r_squared(sse, total_ss):
