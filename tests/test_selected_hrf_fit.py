@@ -2,7 +2,6 @@
 
 from dataclasses import replace
 import numpy as np
-import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 
@@ -10,50 +9,6 @@ from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.single_trial import fit_single_trials
-
-
-@pytest.fixture
-def selected_fixture():
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
-    events = []
-    signals = []
-    times = []
-    confounds = []
-    for r in range(3):
-        t = 0.775 + 1.6 * np.arange(75 + r * 3)
-        e = pd.DataFrame(
-            dict(
-                onset=[30.1 + r, 8.2 + r, 53.3 + r],
-                duration=[1.2, 3.0, 2.0],
-                image=[4, 4, 5],
-                response_time=[1.1, np.nan, 0.7],
-                details=[{"tags": [r]}, None, None],
-            )
-        )
-        n = pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t))))
-        columns = []
-        for cid in [1, 0, 1, 2]:
-            c = library.candidates[cid]
-            x = np.column_stack(
-                [
-                    compute_regressor(
-                        np.array([[o], [d], [1.0]]), "spm" if cid == 0 else c.kernel, t
-                    )[0][:, 0]
-                    for o, d in zip(e.onset, e.duration, strict=True)
-                ]
-            )
-            columns.append(x @ np.array([2.9, 3.0, 3.1]) + n.motion * (r + 1) + 50)
-        y = np.column_stack([*columns, np.ones(len(t)) * 100])
-        events.append(e)
-        times.append(t)
-        confounds.append(n)
-        signals.append(y)
-    data = from_arrays(signals, events, frame_times=times, confounds=confounds)
-    selection = select_hrf(data, library=library, feature_signature="ordered-axis")
-    np.testing.assert_array_equal(selection.hrf_indices, [1, 0, 1, 2, -1])
-    return data, selection
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])

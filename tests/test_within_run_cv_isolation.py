@@ -6,7 +6,7 @@ import pytest
 import boldtailor._ridge_cv as cv
 from boldtailor.fractional_ridge import score_fraction_candidates
 from boldtailor.ridge_selection import score_ridge_candidates
-from test_ridge_cv import ridge_problem, subset  # noqa: F401
+from tests.oracles import subset_runs as subset
 
 
 @pytest.mark.parametrize("fractional", [False, True])

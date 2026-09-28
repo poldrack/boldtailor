@@ -4,6 +4,12 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
+from nilearn.glm.first_level import compute_regressor
+
+from boldtailor._single_trial_design import compile_trial_run
+from boldtailor.data import from_arrays
+from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_selection import select_hrf
 
 SESSIONS = ("ses-02", "ses-04")
 AFFINE = np.array(
@@ -86,3 +92,95 @@ def stop_signal_bids_dataset(tmp_path):
         '{"Name":"fixture","BIDSVersion":"1.11.1"}\n'
     )
     return root
+
+
+@pytest.fixture
+def ridge_problem():
+    library = HrfLibrary.from_parameters(
+        [[4, 12, 0.8, 1, 5, 0, 36], [6, 16, 1.5, 2, 8, 1, 36]]
+    )
+    rng = np.random.default_rng(273)
+    signals, events, times, confounds, predictors = [], [], [], [], []
+    for r in range(6):
+        t = 0.75 + 1.5 * np.arange(86 + 3 * r)
+        p = pd.DataFrame(
+            dict(response_time=rng.uniform(0.3, 1.8, 8), trial_type=np.arange(8) % 2)
+        )
+        e = p.assign(
+            onset=8 + np.arange(8) * 8.3 + 0.1 * r,
+            duration=1.5,
+            stimulus_id=np.arange(8) + 8 * r,
+        )
+        n = pd.DataFrame(
+            dict(
+                motion=np.sin(np.arange(len(t)) / 8 + r),
+                drift=np.linspace(-1, 1, len(t)),
+            )
+        )
+        columns = []
+        for v in range(4):
+            x, _, _ = compile_trial_run(
+                e, t, n, f"run-{r}", hrf=library.candidates[v % 3]
+            )
+            beta = (
+                2 + 0.8 * p.response_time - 0.6 * p.trial_type + rng.normal(0, 0.5, 8)
+            )
+            columns.append(x.to_numpy() @ beta + rng.normal(0, 0.04, len(t)))
+        y = np.column_stack(columns) + 25 + n.motion.to_numpy()[:, None] * 0.3
+        signals.append(np.column_stack([y, np.full(len(t), 25.0)]))
+        if r == 0:
+            p.loc[2, "response_time"] = np.nan
+            e.loc[2, "response_time"] = np.nan
+        predictors.append(p)
+        events.append(e)
+        times.append(t)
+        confounds.append(n)
+    return (
+        from_arrays(signals, events, frame_times=times, confounds=confounds),
+        predictors,
+        library,
+    )
+
+
+@pytest.fixture
+def selected_fixture():
+    library = HrfLibrary.from_parameters(
+        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+    )
+    events = []
+    signals = []
+    times = []
+    confounds = []
+    for r in range(3):
+        t = 0.775 + 1.6 * np.arange(75 + r * 3)
+        e = pd.DataFrame(
+            dict(
+                onset=[30.1 + r, 8.2 + r, 53.3 + r],
+                duration=[1.2, 3.0, 2.0],
+                image=[4, 4, 5],
+                response_time=[1.1, np.nan, 0.7],
+                details=[{"tags": [r]}, None, None],
+            )
+        )
+        n = pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t))))
+        columns = []
+        for cid in [1, 0, 1, 2]:
+            c = library.candidates[cid]
+            x = np.column_stack(
+                [
+                    compute_regressor(
+                        np.array([[o], [d], [1.0]]), "spm" if cid == 0 else c.kernel, t
+                    )[0][:, 0]
+                    for o, d in zip(e.onset, e.duration, strict=True)
+                ]
+            )
+            columns.append(x @ np.array([2.9, 3.0, 3.1]) + n.motion * (r + 1) + 50)
+        y = np.column_stack([*columns, np.ones(len(t)) * 100])
+        events.append(e)
+        times.append(t)
+        confounds.append(n)
+        signals.append(y)
+    data = from_arrays(signals, events, frame_times=times, confounds=confounds)
+    selection = select_hrf(data, library=library, feature_signature="ordered-axis")
+    np.testing.assert_array_equal(selection.hrf_indices, [1, 0, 1, 2, -1])
+    return data, selection

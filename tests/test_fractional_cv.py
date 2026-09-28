@@ -7,8 +7,8 @@ import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.hrf_selection import select_hrf
-from test_fractional_ridge import oracle
-from test_ridge_cv import ridge_problem, subset  # noqa: F401
+from tests.oracles import fractional_beta_oracle as oracle
+from tests.oracles import subset_runs as subset
 
 
 def module():

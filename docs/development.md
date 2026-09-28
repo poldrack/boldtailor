@@ -103,6 +103,34 @@ normalizes projected trial columns to unit L2 norm, applies a fixed penalty,
 then restores coefficient units. Nuisance coefficients are unpenalized.
 Trial identifiability and positive residual degrees of freedom are required.
 
+The trial solvers separate preparation from candidate evaluation. For a run,
+`x` has shape `(scans, trials)`, nuisance columns have shape `(scans, confounds)`,
+and signals have shape `(scans, features)`. `_single_trial_fit` removes the
+nuisance span and stores the normalized design's SVD in `ProjectedTrialDesign`.
+`PreparedTrialBetas.betas_at(alpha)` uses stored signal coordinates to return
+fresh `(trials, features)` coefficients. Alpha zero uses the same decomposition
+for OLS. Full fits recover nuisance coefficients and sums of squares separately.
+
+Fractional ridge uses `PreparedFractionBetas` in `_fractional_ridge`. Its rank
+check uses normalized columns, but its decomposition for shrinkage uses raw
+projected columns. This distinction preserves the requested ratio of raw trial
+coefficient norms to their OLS norms. `solve` returns betas and feature-specific
+implied alphas; `betas_at` returns only betas. Neither solver retains candidate
+outputs. The older `trial_beta_path` and `fraction_beta_path` iterators remain
+thin adapters for validation scripts.
+
+In `_ridge_cv`, `RunBetaPath` groups features by their training-selected HRF and
+restores their original column positions. Each fold prepares each run once,
+then explicitly evaluates a requested candidate. Fractional CV evaluates the
+validation run at fraction one once and retains that fixed OLS target;
+normalized ridge CV evaluates its validation target at each candidate alpha.
+Only one candidate's beta arrays are assembled at a time. HRF selection and
+encoding training still use only the training runs.
+
+Shared numerical references live in `tests/oracles.py`: independent augmented
+least squares and root finding provide checks against the production SVD.
+Reusable synthetic datasets are pytest fixtures in `tests/conftest.py`.
+
 HRF ID 0 dispatches to the exact Nilearn SPM kernel with 32-second support.
 The default custom grid adds 648 double-gamma candidates with 36-second support.
 Candidate order is deterministic. Exported curves use a 0.1-second grid;

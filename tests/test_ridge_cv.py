@@ -3,13 +3,12 @@
 import importlib
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
-from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
+from tests.oracles import subset_runs as subset
 
 
 def score(*args, **kwargs):
@@ -17,64 +16,6 @@ def score(*args, **kwargs):
     if not hasattr(module, "score_ridge_candidates"):
         pytest.fail("Missing run-wise encoding ridge CV")
     return module.score_ridge_candidates(*args, **kwargs)
-
-
-@pytest.fixture
-def ridge_problem():
-    library = HrfLibrary.from_parameters(
-        [[4, 12, 0.8, 1, 5, 0, 36], [6, 16, 1.5, 2, 8, 1, 36]]
-    )
-    rng = np.random.default_rng(273)
-    signals, events, times, confounds, predictors = [], [], [], [], []
-    for r in range(6):
-        t = 0.75 + 1.5 * np.arange(86 + 3 * r)
-        p = pd.DataFrame(
-            dict(response_time=rng.uniform(0.3, 1.8, 8), trial_type=np.arange(8) % 2)
-        )
-        e = p.assign(
-            onset=8 + np.arange(8) * 8.3 + 0.1 * r,
-            duration=1.5,
-            stimulus_id=np.arange(8) + 8 * r,
-        )
-        n = pd.DataFrame(
-            dict(
-                motion=np.sin(np.arange(len(t)) / 8 + r),
-                drift=np.linspace(-1, 1, len(t)),
-            )
-        )
-        columns = []
-        for v in range(4):
-            x, _, _ = compile_trial_run(
-                e, t, n, f"run-{r}", hrf=library.candidates[v % 3]
-            )
-            beta = (
-                2 + 0.8 * p.response_time - 0.6 * p.trial_type + rng.normal(0, 0.5, 8)
-            )
-            columns.append(x.to_numpy() @ beta + rng.normal(0, 0.04, len(t)))
-        y = np.column_stack(columns) + 25 + n.motion.to_numpy()[:, None] * 0.3
-        signals.append(np.column_stack([y, np.full(len(t), 25.0)]))
-        if r == 0:
-            p.loc[2, "response_time"] = np.nan
-            e.loc[2, "response_time"] = np.nan
-        predictors.append(p)
-        events.append(e)
-        times.append(t)
-        confounds.append(n)
-    return (
-        from_arrays(signals, events, frame_times=times, confounds=confounds),
-        predictors,
-        library,
-    )
-
-
-def subset(data, indices, *, signals=None, events=None):
-    return from_arrays(
-        [(data.signals if signals is None else signals)[i] for i in indices],
-        [(data.events if events is None else events)[i] for i in indices],
-        frame_times=[data.frame_times[i] for i in indices],
-        confounds=[data.confounds[i] for i in indices],
-        sources=[data.provenance.sources[i] for i in indices],
-    )
 
 
 def augmented_beta(data, r, ids, library, alpha):

@@ -1,6 +1,6 @@
 # Readable Trial Estimation and CV Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the user's selected native execution method. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for the user's selected native execution method. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make trial estimation and candidate scoring readable without changing the statistical objective, coefficient units, or validation isolation.
 
@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-scientific-readability-design.md`
 
-**Status:** Proposed next stage; not implemented. Follow the completed foundation stage and retain native execution.
+**Status:** Implemented and verified; independent stage review pending.
 
 ## Global Constraints
 
@@ -71,7 +71,7 @@ implied-alpha vector. Each evaluation returns a fresh output array.
 **Files:** `_single_trial_fit.py`, `_fractional_ridge.py` (consume named state),
 `tests/test_single_trial.py`.
 
-- [ ] Add a regression using the existing `problem` fixture. Its independent
+- [x] Add a regression using the existing `problem` fixture. Its independent
   augmented least-squares calculation also pins nonuniform column scaling:
 
 ```python
@@ -106,7 +106,7 @@ tests over the old adapter and new prepared interface. Keep their expected
 values and tolerances. Run `uv run pytest tests/test_single_trial.py -q -W error`;
 observe missing-interface failures and commit tests.
 
-- [ ] Add a `ProjectedTrialDesign` dataclass with fields `nuisance_basis`,
+- [x] Add a `ProjectedTrialDesign` dataclass with fields `nuisance_basis`,
   `column_scale`, `left_vectors`, `singular_values`, `right_vectors`, and
   `diagnostics`. Have `_project_design` return this object instead of six tuple
   entries, retaining the existing projection, rank thresholds, and positive-dof
@@ -138,7 +138,7 @@ def betas_at(self, alpha):
   formula paths. Do not change zero SSE handling for constant features in this
   baseline; the preserved scientific remediation is a separate change.
 
-- [ ] Run normalized, fractional, selected-HRF, and CV regressions. The existing
+- [x] Run normalized, fractional, selected-HRF, and CV regressions. The existing
   factorization-count test still observes `_project_design`; preserve it.
   Format changed Python, run `git diff --check`, and commit the implementation.
 
@@ -146,7 +146,7 @@ def betas_at(self, alpha):
 
 **Files:** `_fractional_ridge.py`, `tests/test_fractional_ridge.py`.
 
-- [ ] Add this test using the existing `regression` fixture and independent
+- [x] Add this test using the existing `regression` fixture and independent
   `oracle` (its import changes in Task 4):
 
 ```python
@@ -175,7 +175,7 @@ def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatc
   tests to exercise the prepared object too. Add the same weak-reference output
   ownership check as Task 1. Run RED and commit tests before implementation.
 
-- [ ] Replace `_prepare`'s positional tuple with `PreparedFractionBetas` fields:
+- [x] Replace `_prepare`'s positional tuple with `PreparedFractionBetas` fields:
   `trial_design`, `nuisance`, `signals`, `projected_signals`, `singular_values`,
   `right_vectors`, `ols_coordinates`, `valid`, `diagnostics`.
   Reuse `_project_design` for scale-aware validation, then perform the raw SVD
@@ -194,7 +194,7 @@ def betas_at(self, fraction):
   `fraction_beta_path` becomes a validated-grid adapter to this object;
   `fit_fraction_run` uses its fields for unchanged nuisance and SSE calculations.
 
-- [ ] Run `uv run pytest tests/test_fractional_ridge.py tests/test_fractional_cv.py
+- [x] Run `uv run pytest tests/test_fractional_ridge.py tests/test_fractional_cv.py
   tests/test_fractional_ridge_ablation.py tests/test_fractional_ablation_simulation.py
   -q -W error`, format, check the diff, and commit after GREEN.
 
@@ -202,7 +202,7 @@ def betas_at(self, fraction):
 
 **Files:** `_ridge_cv.py`, `tests/test_ridge_cv.py`, `tests/test_fractional_cv.py`.
 
-- [ ] Add tests of `prepare_run_beta_path` using canonical designs from the
+- [x] Add tests of `prepare_run_beta_path` using canonical designs from the
   `ridge_problem` fixture. For normalized mode compare to `augmented_beta`;
   for fractional mode compare each feature to the augmented/root-finding oracle.
   Evaluate grids in forward, reverse, and repeated order, keeping the constant
@@ -234,7 +234,7 @@ def test_fraction_cv_prepares_each_run_once_per_fold(ridge_problem, monkeypatch)
   Keep the existing oracle, fixed-target-grid, and held-out isolation tests as
   the scientific gates; call counting alone is insufficient. Run RED and commit.
 
-- [ ] Replace `_run_beta_path` with `RunBetaPath` storing shape and groups of
+- [x] Replace `_run_beta_path` with `RunBetaPath` storing shape and groups of
   `(feature_indices, prepared_solver)`. Prepare each group's solver using Task 1
   or Task 2 according to `fractional`. Its only evaluation method is:
 
@@ -254,7 +254,7 @@ def betas_at(self, value):
   Retain fold/run context in exceptions from both preparation and evaluation.
   Keep candidate aggregation, predictor centering, and provenance unchanged.
 
-- [ ] Run both CV suites, `test_within_run_cv_isolation.py`, and all NSD ridge/
+- [x] Run both CV suites, `test_within_run_cv_isolation.py`, and all NSD ridge/
   fractional workflow tests. Confirm serial/parallel and block-size equivalence.
   Run the complete default suite and formatter before committing.
 
@@ -265,7 +265,7 @@ def betas_at(self, value):
 `test_fractional_ridge.py`, `test_fractional_cv.py`, and
 `test_within_run_cv_isolation.py`.
 
-- [ ] Move `ridge_problem` and `selected_fixture` into `tests/conftest.py`, with
+- [x] Move `ridge_problem` and `selected_fixture` into `tests/conftest.py`, with
   their existing fixture decorators and required imports. Move `oracle` from
   `test_fractional_ridge.py` into `tests/oracles.py` as `fractional_beta_oracle`;
   move `subset` from `test_ridge_cv.py` there as `subset_runs`. Keep their bodies
@@ -281,7 +281,7 @@ from tests.oracles import subset_runs as subset
   test relocation, not product implementation. No artificial failing test is
   needed to test the test files. Keep the package initializer empty.
 
-- [ ] Run the affected numerical/CV suites, then full default pytest. Confirm
+- [x] Run the affected numerical/CV suites, then full default pytest. Confirm
   no `from test_...` imports remain in `tests/`. Do not remove `pythonpath` from
   pytest config until example imports have moved into the package in Stage 5.
   Document array dimensions, raw versus normalized bases, and the candidate

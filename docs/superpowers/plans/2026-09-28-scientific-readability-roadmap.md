@@ -4,8 +4,9 @@
 
 This roadmap keeps the full architectural scope visible. Each stage produces
 working software and receives a concrete implementation plan before execution.
-Stage 1 is implemented; Stage 2 has a proposed
-[numerical/CV plan](2026-09-28-scientific-readability-numerics.md). This is deliberate:
+Stages 1 and 2 are implemented; the
+[numerical/CV plan](2026-09-28-scientific-readability-numerics.md) records the second
+stage. Later stages retain separate implementation plans. This is deliberate:
 decisions about the numerical interfaces should inform the later fit and
 workflow plans, rather than locking all of them into a large speculative rewrite.
 

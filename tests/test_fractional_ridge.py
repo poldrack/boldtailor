@@ -6,11 +6,10 @@ import weakref
 
 import numpy as np
 import pytest
-from scipy.optimize import brentq
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
-from test_selected_hrf_fit import selected_fixture  # noqa: F401
+from tests.oracles import fractional_beta_oracle as oracle
 
 
 def fractional():
@@ -31,35 +30,6 @@ def regression():
     y = x @ np.array([[2, -4], [0.3, 2], [-1, 3], [4, 0.1]])
     y += rng.normal(size=y.shape) * 0.03 + n @ np.array([[100, 50], [9, 1], [0, 0]])
     return x, n, y
-
-
-def oracle(x, n, y, fraction):
-    """Solve augmented regression directly, not through the production SVD."""
-    scale = np.ones(x.shape[1])
-    matrix = np.column_stack([x / scale, n])
-
-    def coefficients(alpha):
-        penalty = np.column_stack(
-            [np.sqrt(alpha) * np.eye(x.shape[1]), np.zeros((x.shape[1], n.shape[1]))]
-        )
-        return np.linalg.lstsq(
-            np.vstack([matrix, penalty]), np.r_[y, np.zeros(x.shape[1])], rcond=None
-        )[0]
-
-    baseline = np.linalg.norm(coefficients(0)[: x.shape[1]])
-    alpha = (
-        0
-        if fraction == 1
-        else brentq(
-            lambda a: np.linalg.norm(coefficients(a)[: x.shape[1]]) / baseline
-            - fraction,
-            0,
-            1e7,
-            xtol=1e-13,
-        )
-    )
-    coef = coefficients(alpha)
-    return coef[: x.shape[1]] / scale, coef[x.shape[1] :], alpha
 
 
 def test_fraction_path_matches_requested_norm_and_oracle(regression):
