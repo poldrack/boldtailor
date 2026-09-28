@@ -54,8 +54,8 @@ CONTRAST_EXPRESSIONS = {
 }
 NOTEBOOK_CONTRAST_EXPRESSIONS = {
     "successful_inhibition": "stop_success - stop_failure",
-    "stop_success_vs_go": "stop_success - go",
-    "go_success_vs_baseline": "go",
+    "stop_vs_go": "(stop_success + stop_failure) - go_success",
+    "go_success_vs_baseline": "go_success",
 }
 MASK_METADATA = {
     "strategy": "intersection",
@@ -803,12 +803,6 @@ SESSIONS = ("ses-02", "ses-04")
 DEFAULT_SESSIONS = SESSIONS
 RUN = "run-01"
 """
-    for events_path in bids_root.glob("sub-s4/ses-*/func/*_events.tsv"):
-        events = pd.read_csv(events_path, sep="\t")
-        events["trial_type"] = events["trial_type"].replace(
-            {"go_success": "go", "go_failure": "go"}
-        )
-        events.to_csv(events_path, sep="\t", index=False)
 
 
 def _discover(root, session="ses-02"):
@@ -1549,7 +1543,7 @@ def test_variance_partition_prepared_runtime_executes_against_fixture(
     _assert_display_contract(executed)
     _assert_prepared_runtime_contract(executed)
     assert "successful_inhibition" in rendered
-    assert "stop_success_vs_go" in rendered
+    assert "stop_vs_go" in rendered
     assert "go_success_vs_baseline" in rendered
     assert "common_voxel_count" in rendered
     assert "estimated_signal_memory_gib" in rendered
