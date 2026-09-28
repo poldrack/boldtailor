@@ -1,4 +1,6 @@
+import gc
 import importlib
+import weakref
 
 import numpy as np
 import pandas as pd
@@ -103,7 +105,8 @@ def test_normalized_ridge_leaves_nuisance_unpenalized():
 
 
 @pytest.mark.parametrize("ill_conditioned", [False, True])
-def test_beta_path_matches_augmented_ols(problem, ill_conditioned):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_beta_path_matches_augmented_ols(problem, ill_conditioned, prepared):
     data, x, ns = problem
     x = x * [1.0, 2.0, 3.0, 4.0]
     if ill_conditioned:
@@ -111,8 +114,12 @@ def test_beta_path_matches_augmented_ols(problem, ill_conditioned):
     n = np.column_stack([ns[0], ns[0][:, 0]])
     y = np.column_stack([data.signals[0], np.full(len(x), 30.0)])
     scale = np.linalg.norm(x - n @ np.linalg.lstsq(n, x, rcond=None)[0], axis=0)
-    alphas = [2.0, 0.0, 0.1]
-    path = list(beta_path(x, n, y, alphas))
+    alphas = [2.0, 0.0, 0.1, 2.0]
+    if prepared:
+        solver = entry("_single_trial_fit", "prepare_trial_betas")(x, n, y)
+        path = [(alpha, solver.betas_at(alpha)) for alpha in alphas]
+    else:
+        path = list(beta_path(x, n, y, alphas))
     assert [a for a, _ in path] == alphas
     for alpha, beta in path:
         augmented = np.vstack(
@@ -151,7 +158,8 @@ def test_beta_path_factors_design_once(problem, monkeypatch):
 
 
 @pytest.mark.parametrize("case", ["rank", "support", "dof", "alpha"])
-def test_beta_path_retains_solver_rejections(case):
+@pytest.mark.parametrize("prepared", [False, True])
+def test_beta_path_retains_solver_rejections(case, prepared):
     x = np.arange(12.0).reshape(6, 2)
     n, y = np.ones((6, 1)), np.arange(6.0)[:, None]
     if case == "support":
@@ -161,7 +169,23 @@ def test_beta_path_retains_solver_rejections(case):
     elif case == "alpha":
         x = np.eye(6)[:, :2]
     with pytest.raises(ValueError):
-        list(beta_path(x, n, y, [-1.0] if case == "alpha" else [0.0, 0.1]))
+        alphas = [-1.0] if case == "alpha" else [0.0, 0.1]
+        if prepared:
+            solver = entry("_single_trial_fit", "prepare_trial_betas")(x, n, y)
+            for alpha in alphas:
+                solver.betas_at(alpha)
+        else:
+            list(beta_path(x, n, y, alphas))
+
+
+def test_prepared_trial_betas_do_not_retain_outputs(problem):
+    data, x, ns = problem
+    solver = entry("_single_trial_fit", "prepare_trial_betas")(x, ns[0], data.signals[0])
+    beta = solver.betas_at(0.1)
+    reference = weakref.ref(beta)
+    del beta
+    gc.collect()
+    assert reference() is None
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 2.0])
