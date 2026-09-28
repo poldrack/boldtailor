@@ -63,9 +63,14 @@ memory. Example workflows own dataset discovery, image loading, spatial axes,
 and image reconstruction. The prepared-design API is the entry point for
 externally compiled designs; it does not perform BIDS parsing or transformations.
 
-Public result arrays are owned and read-only. Mutable table/dictionary
-accessors return copies. Preserve that behavior when adding result fields.
-Private containers are not an alternative public mutation interface.
+Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
+`_arrays.readonly_array`. Float values use float64, indices use int64, and masks
+use bool. Construction copies inputs; accessing an array does not copy it again.
+These flags prevent accidental writes. Deliberately re-enabling writes can
+invalidate the owning analysis and its provenance assumptions. Copy an array
+before editing it. Mutable table/dictionary accessors return defensive copies,
+including nested event metadata. Private containers are not a public mutation
+interface.
 
 ## Numerical conventions
 

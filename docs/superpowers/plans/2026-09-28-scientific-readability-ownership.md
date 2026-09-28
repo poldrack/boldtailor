@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-scientific-readability-design.md`
 
-**Status:** Proposed next implementation increment, not implemented.
+**Status:** Approved by the user; implementation in progress.
 
 This is the ownership portion of roadmap Stage 3. Result-schema consolidation
 and shared fit lifecycle/diagnostics remain the next portion of Stage 3; they

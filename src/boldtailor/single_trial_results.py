@@ -1,4 +1,4 @@
-"""Owned, immutable single-trial numerical results."""
+"""Owned, read-only single-trial numerical results."""
 
 from copy import deepcopy
 from dataclasses import dataclass
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import immutable_float_array
+from boldtailor._arrays import readonly_array
 from boldtailor.data import _owned_table
 from boldtailor.provenance import ProvenanceRecord
 
@@ -33,10 +33,10 @@ class SingleTrialResult:
         freeze_fraction_result(self)
         for name in ("run_betas", "run_full_r2", "run_nuisance_r2"):
             object.__setattr__(
-                self, name, tuple(immutable_float_array(a) for a in getattr(self, name))
+                self, name, tuple(readonly_array(a) for a in getattr(self, name))
             )
         for name in ("full_r2", "nuisance_r2", "delta_r2"):
-            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+            object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(self, "_trial_table", _owned_table(self._trial_table))
         object.__setattr__(
             self,

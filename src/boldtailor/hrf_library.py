@@ -11,7 +11,7 @@ import pandas as pd
 from nilearn.glm.first_level.hemodynamic_models import spm_hrf
 from scipy.stats import gamma, qmc
 
-from boldtailor._arrays import immutable_float_array
+from boldtailor._arrays import readonly_array
 
 PARAMETER_NAMES = (
     "response_delay",
@@ -67,7 +67,7 @@ class HrfCandidate:
     def kernel(self, tr, oversampling=50):
         dt = _sampling(tr, oversampling)
         if self.kind == "spm":
-            return immutable_float_array(spm_hrf(tr, oversampling))
+            return readonly_array(spm_hrf(tr, oversampling))
         a, b, c, d, ratio, onset, duration = self.parameters
         # TR inferred from frame differences carries roundoff; do not add an
         # extra tail sample when duration/dt is numerically an integer.
@@ -85,7 +85,7 @@ class HrfCandidate:
             or abs(total) <= np.finfo(float).eps * np.abs(values).sum()
         ):
             raise ValueError("HRF kernel must be finite with nonzero sum")
-        return immutable_float_array(values / total)
+        return readonly_array(values / total)
 
 
 @dataclass(frozen=True)
@@ -114,9 +114,9 @@ class HrfLibrary:
         identity = [(c.id, c.kind, c.parameters) for c in candidates]
         digest = sha256(json.dumps(identity).encode() + curves.tobytes()).hexdigest()
         object.__setattr__(self, "candidates", candidates)
-        object.__setattr__(self, "curves", immutable_float_array(curves))
+        object.__setattr__(self, "curves", readonly_array(curves))
         object.__setattr__(
-            self, "times", immutable_float_array(np.arange(curves.shape[1]) * 0.1)
+            self, "times", readonly_array(np.arange(curves.shape[1]) * 0.1)
         )
         object.__setattr__(self, "fingerprint", digest)
 

@@ -173,7 +173,7 @@ index -1. An entirely invalid block returns undefined maps.
 
 Single-trial fit functions accept `ridge_fraction` as a scalar in `(0,1]` or
 a feature array (NaNs explicitly exclude features). Positive `ridge_alpha`
-and `ridge_fraction` are mutually exclusive. Fractional results add immutable
+and `ridge_fraction` are mutually exclusive. Fractional results add read-only
 `ridge_fraction` and `run_ridge_alphas` arrays, and set `ridge_alpha=None`.
 The norm ratio uses raw trial coefficients after nuisance projection;
 the returned beta arrays use native signal units. See the
@@ -243,7 +243,9 @@ within-run mode this is a reference level, not a common fitted run intercept.
 Predictions equal `coefficients[0] + (X - predictor_means) @ coefficients[1:]`
 and never include scoring offsets. Within-run predictions depend only on training
 outcomes and test predictors; test beta validity affects scores, not predictions.
-Numerical arrays are owned and read-only. Direct construction of the result
+Numerical arrays are owned, ordinary NumPy arrays marked read-only. This protects
+against accidental writes; it does not prevent deliberate flag changes. Use
+`.copy()` before editing. Direct construction of the result
 dataclass now requires the additional fields; existing field order is preserved.
 
 Within-run fitting requires at least one complete row per training run, positive

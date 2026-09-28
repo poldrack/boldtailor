@@ -972,7 +972,7 @@ def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
     assert comparison.raw_min == pytest.approx(expected_raw.min())
 
 
-def test_task_delta_r2_prepared_returns_owned_immutable_arrays_and_copied_designs(
+def test_task_delta_r2_prepared_returns_owned_readonly_arrays_and_copied_designs(
     prepared_delta_problem,
 ):
     prepared, contrasts, metadata, full_result = prepared_delta_problem

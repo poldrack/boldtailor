@@ -8,7 +8,7 @@ from types import MappingProxyType
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import immutable_float_array
+from boldtailor._arrays import readonly_array
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
 from boldtailor.results import _AnalysisAccessors, _ContrastResult, TaskDeltaR2Result
@@ -30,16 +30,16 @@ class HrfAnalysisResult(_AnalysisAccessors):
         contrasts = {
             name: _ContrastResult(
                 **{
-                    field.name: immutable_float_array(getattr(values, field.name))
+                    field.name: readonly_array(getattr(values, field.name))
                     for field in fields(_ContrastResult)
                 }
             )
             for name, values in self._contrasts.items()
         }
         object.__setattr__(self, "_contrasts", MappingProxyType(contrasts))
-        object.__setattr__(self, "_r2", immutable_float_array(self._r2))
+        object.__setattr__(self, "_r2", readonly_array(self._r2))
         object.__setattr__(
-            self, "_run_r2", tuple(immutable_float_array(a) for a in self._run_r2)
+            self, "_run_r2", tuple(readonly_array(a) for a in self._run_r2)
         )
         object.__setattr__(self, "_group_designs", self.group_designs)
         object.__setattr__(
@@ -76,10 +76,10 @@ def _masked_delta_result(full, nuisance, designs, provenance):
     if np.any(raw[defined] < -1e-12):
         raise ValueError("nested OLS monotonicity violated")
     return TaskDeltaR2Result(
-        immutable_float_array(full),
-        immutable_float_array(nuisance),
-        immutable_float_array(raw),
-        immutable_float_array(np.maximum(raw, 0)),
+        readonly_array(full),
+        readonly_array(nuisance),
+        readonly_array(raw),
+        readonly_array(np.maximum(raw, 0)),
         int(np.count_nonzero(raw[defined] < 0)),
         float(raw[defined].min()) if defined.any() else float("nan"),
         tuple(design.copy(deep=True) for design in designs),

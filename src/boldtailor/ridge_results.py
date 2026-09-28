@@ -4,14 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._arrays import immutable_float_array
-from boldtailor.hrf_results import immutable_indices
+from boldtailor._arrays import readonly_array
 from boldtailor.provenance import ProvenanceRecord
-
-
-def immutable_bool_array(values):
-    array = np.asarray(values, dtype=bool)
-    return np.frombuffer(array.tobytes(), dtype=bool).reshape(array.shape)
 
 
 @dataclass(frozen=True)
@@ -42,16 +36,16 @@ class TrialEncodingResult:
             "train_run_intercepts",
             "scoring_offsets",
         ):
-            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+            object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(
             self,
             "predictions",
-            tuple(immutable_float_array(a) for a in self.predictions),
+            tuple(readonly_array(a) for a in self.predictions),
         )
         object.__setattr__(
             self,
             "trial_masks",
-            tuple(immutable_bool_array(a) for a in self.trial_masks),
+            tuple(readonly_array(a, dtype=bool) for a in self.trial_masks),
         )
         for name in ("predictor_names", "train_runs", "test_runs"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
@@ -68,10 +62,10 @@ class RidgeSelection:
     def __post_init__(self):
         object.__setattr__(self, "alphas", tuple(self.alphas))
         object.__setattr__(
-            self, "objective_scores", immutable_float_array(self.objective_scores)
+            self, "objective_scores", readonly_array(self.objective_scores)
         )
         object.__setattr__(
-            self, "scoring_mask", immutable_bool_array(self.scoring_mask)
+            self, "scoring_mask", readonly_array(self.scoring_mask, dtype=bool)
         )
 
 
@@ -90,14 +84,16 @@ class RidgeCandidateScores:
         for name in ("alphas", "run_labels"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
         for name in ("cv_r2", "fold_sse", "fold_sst"):
-            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+            object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(
-            self, "fold_hrf_indices", immutable_indices(self.fold_hrf_indices)
+            self,
+            "fold_hrf_indices",
+            readonly_array(self.fold_hrf_indices, dtype=np.int64),
         )
         object.__setattr__(
             self,
             "trial_masks",
-            tuple(immutable_bool_array(m) for m in self.trial_masks),
+            tuple(readonly_array(m, dtype=bool) for m in self.trial_masks),
         )
 
 
@@ -116,14 +112,16 @@ class FractionCandidateScores:
         object.__setattr__(self, "fractions", tuple(self.fractions))
         object.__setattr__(self, "run_labels", tuple(self.run_labels))
         for name in ("cv_r2", "fold_sse", "fold_sst"):
-            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+            object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(
-            self, "fold_hrf_indices", immutable_indices(self.fold_hrf_indices)
+            self,
+            "fold_hrf_indices",
+            readonly_array(self.fold_hrf_indices, dtype=np.int64),
         )
         object.__setattr__(
             self,
             "trial_masks",
-            tuple(immutable_bool_array(m) for m in self.trial_masks),
+            tuple(readonly_array(m, dtype=bool) for m in self.trial_masks),
         )
 
 
@@ -138,10 +136,12 @@ class FractionSelection:
     def __post_init__(self):
         object.__setattr__(self, "fractions", tuple(self.fractions))
         for name in ("ridge_fraction", "selected_r2"):
-            object.__setattr__(self, name, immutable_float_array(getattr(self, name)))
+            object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(
-            self, "fraction_indices", immutable_indices(self.fraction_indices)
+            self,
+            "fraction_indices",
+            readonly_array(self.fraction_indices, dtype=np.int64),
         )
         object.__setattr__(
-            self, "scoring_mask", immutable_bool_array(self.scoring_mask)
+            self, "scoring_mask", readonly_array(self.scoring_mask, dtype=bool)
         )

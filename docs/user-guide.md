@@ -518,3 +518,19 @@ maps and implied alphas are not equivalent under the new coefficient basis.
 Provenance identifies `raw_trial_coefficients_after_nuisance_projection` and
 `fixed_ols_betas`. `encoding_mode="absolute"` changes the encoding objective;
 it does not restore the old fractional norm basis or validation targets.
+
+
+## Editing returned arrays
+
+Numeric outputs are ordinary NumPy arrays with their writeable flag disabled.
+To edit values for a subsequent analysis, make a copy:
+
+```python
+editable_betas = result.run_betas[0].copy()
+editable_betas[:, 0] = 0
+```
+
+Construction owns input arrays, and table/dictionary accessors return copies.
+Array access itself does not make another copy. Deliberately enabling writes
+on an exposed array can invalidate its owning result or analysis and the
+assumptions behind its provenance. The supported editing pattern is `.copy()`.

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
-from boldtailor._arrays import immutable_float_array
+from boldtailor._arrays import readonly_array
 from boldtailor.provenance import ProvenanceRecord
 
 DesignProvenance = Mapping[str, int | float | str]
@@ -156,8 +156,8 @@ def make_result(
         _design_provenance=tuple(
             MappingProxyType(dict(values)) for values in design_provenance
         ),
-        _run_r2=tuple(immutable_float_array(values) for values in run_r2),
-        _r2=immutable_float_array(r2),
+        _run_r2=tuple(readonly_array(values) for values in run_r2),
+        _r2=readonly_array(r2),
         _provenance=provenance,
     )
 
@@ -172,8 +172,8 @@ def make_task_delta_r2_result(
     full, nuisance = _validate_r2_pair(full_r2, nuisance_r2)
     raw, clipped = _delta_r2_arrays(full, nuisance)
     return TaskDeltaR2Result(
-        _full_r2=immutable_float_array(full),
-        _nuisance_r2=immutable_float_array(nuisance),
+        _full_r2=readonly_array(full),
+        _nuisance_r2=readonly_array(nuisance),
         _raw_delta_r2=raw,
         _delta_r2=clipped,
         _negative_voxel_count=int(np.count_nonzero(raw < 0.0)),
@@ -213,7 +213,7 @@ def _delta_r2_arrays(
         clipped_values = np.maximum(raw_values, 0.0)
     if not np.isfinite(raw_values).all() or not np.isfinite(clipped_values).all():
         raise ValueError("derived delta r-squared values must be finite")
-    return immutable_float_array(raw_values), immutable_float_array(clipped_values)
+    return readonly_array(raw_values), readonly_array(clipped_values)
 
 
 def _copy_nuisance_designs(
@@ -243,9 +243,9 @@ def _is_finite_numeric_design(frame: pd.DataFrame) -> bool:
 
 def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
     return _ContrastResult(
-        effect=immutable_float_array(contrast.effect_size()),
-        variance=immutable_float_array(contrast.effect_variance()),
-        stat=immutable_float_array(contrast.stat()),
-        z_score=immutable_float_array(contrast.z_score()),
-        one_sided_p_value=immutable_float_array(contrast.p_value()),
+        effect=readonly_array(contrast.effect_size()),
+        variance=readonly_array(contrast.effect_variance()),
+        stat=readonly_array(contrast.stat()),
+        z_score=readonly_array(contrast.z_score()),
+        one_sided_p_value=readonly_array(contrast.p_value()),
     )

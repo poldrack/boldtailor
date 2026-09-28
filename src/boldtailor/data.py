@@ -10,7 +10,7 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import immutable_float_array
+from boldtailor._arrays import readonly_array
 from boldtailor.logging import append_event_history, bind_context, emit_event
 from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
 
@@ -188,7 +188,7 @@ def _prepare_signal(values: np.ndarray, run: int) -> np.ndarray:
         raise ValueError(f"run {run} signals must be numeric and finite") from error
     if not finite:
         raise ValueError(f"run {run} signals must be finite")
-    return immutable_float_array(array)
+    return readonly_array(array)
 
 
 def _validate_feature_counts(signals: tuple[np.ndarray, ...]) -> None:
@@ -301,7 +301,7 @@ def _prepare_timing(
     if tr is not None:
         tr_value = _prepare_tr(tr)
         times = tuple(
-            immutable_float_array(np.arange(run.shape[0]) * tr_value) for run in signals
+            readonly_array(np.arange(run.shape[0]) * tr_value) for run in signals
         )
         return times, "tr"
     run_times = _as_frame_time_runs(frame_times)
@@ -343,4 +343,4 @@ def _prepare_frame_times(values: np.ndarray, n_timepoints: int, run: int) -> np.
         raise ValueError(f"run {run} frame_times must be strictly increasing")
     if array.size != n_timepoints:
         raise ValueError(f"run {run} frame_times must contain {n_timepoints} entries")
-    return immutable_float_array(array)
+    return readonly_array(array)
