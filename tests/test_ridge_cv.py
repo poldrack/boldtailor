@@ -384,3 +384,16 @@ def test_encoding_preflight_precedes_hrf_fitting(
     options = {"fractions": [1]} if fractional else {"alphas": [0]}
     with pytest.raises(ValueError, match="encoding_mode|rank"):
         function(data, predictors, library=library, encoding_mode=mode, **options)
+
+
+@pytest.mark.parametrize("optimized", [False, True])
+def test_prepared_run_betas_preserve_feature_order_and_candidate_independence(ridge_problem, optimized):
+    from boldtailor import _ridge_cv as cv
+
+    data, _, library = ridge_problem
+    prepared = cv.prepare_runs(data, library) if optimized else None
+    ids = np.array([2, 0, 1, -1, 0]) if optimized else np.zeros(data.n_features, int)
+    path = cv.prepare_run_beta_path(data, 0, prepared, ids, "run-01")
+    for alpha in [0.0, 0.1, 2.0, 2.0, 0.1, 0.0]:
+        expected = augmented_beta(data, 0, ids, library if optimized else None, alpha)
+        np.testing.assert_allclose(path.betas_at(alpha), expected, atol=1e-9)

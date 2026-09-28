@@ -183,3 +183,43 @@ def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
         activity["fraction_norm_basis"]
         == "raw_trial_coefficients_after_nuisance_projection"
     )
+
+
+@pytest.mark.parametrize("optimized", [False, True])
+def test_prepared_fraction_run_betas_match_oracle_in_any_order(ridge_problem, optimized):
+    from boldtailor import _ridge_cv as cv
+
+    data, _, library = ridge_problem
+    prepared = cv.prepare_runs(data, library) if optimized else None
+    ids = np.array([2, 0, 1, -1, 0]) if optimized else np.zeros(data.n_features, int)
+    path = cv.prepare_run_beta_path(data, 0, prepared, ids, "run-01", fractional=True)
+    for fraction in [1.0, 0.7, 0.2, 0.2, 0.7, 1.0]:
+        expected = np.full((len(data.events[0]), data.n_features), np.nan)
+        for feature, cid in enumerate(ids):
+            if cid < 0 or np.ptp(data.signals[0][:, feature]) == 0:
+                continue
+            x, n, _ = compile_trial_run(
+                data.events[0], data.frame_times[0], data.confounds[0], "run-01",
+                hrf=library.candidates[cid] if optimized else "spm",
+            )
+            expected[:, feature] = oracle(np.asarray(x), np.asarray(n), data.signals[0][:, feature], fraction)[0]
+        np.testing.assert_allclose(path.betas_at(fraction), expected, atol=1e-9)
+
+
+def test_fraction_cv_prepares_each_run_once_per_fold(ridge_problem, monkeypatch):
+    from boldtailor import _ridge_cv as cv
+
+    data, predictors, _ = ridge_problem
+    calls = []
+    original = cv.prepare_run_beta_path
+
+    def observe(data, run_index, *args, **kwargs):
+        calls.append(run_index)
+        return original(data, run_index, *args, **kwargs)
+
+    monkeypatch.setattr(cv, "prepare_run_beta_path", observe)
+    result = module().score_fraction_candidates(data, predictors, fractions=[1.0, 0.5])
+    assert calls == list(range(data.n_runs)) * data.n_runs
+    expected = reference(data, predictors, None, [1.0, 0.5])
+    for actual, wanted in zip((result.cv_r2, result.fold_sse, result.fold_sst, result.fold_hrf_indices), expected):
+        np.testing.assert_allclose(actual, wanted, rtol=2e-7, atol=1e-8)
