@@ -119,8 +119,8 @@ def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_
     assert all(p.read_bytes() == original for p, original in before.items())
 
 
-@pytest.mark.parametrize("mode", ["cv", "off"])
-def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode):
+@pytest.mark.parametrize("mode,encoding_mode", [("cv","within_run"),("cv","absolute"),("off","within_run")])
+def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode, encoding_mode):
     root, prep = six_run_dataset
     output = tmp_path / f"notebook-{mode}"
     config = dict(
@@ -130,6 +130,7 @@ def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode):
         block_size=2,
         n_jobs=1,
         ridge_mode=mode,
+        encoding_mode=encoding_mode,
         ridge_alphas=[0.0, 0.1],
         hrf_n_samples=2,
         hrf_seed=0,
@@ -173,3 +174,4 @@ def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode):
     assert metadata["ridge_cv"]["validation_target"] == "candidate_regularized_betas"
     assert metadata["ridge_cv"]["percentile"] == 90.0
     assert metadata["noise_model"] == "ols"
+    assert metadata["ridge_cv"]["encoding_mode"] == encoding_mode
