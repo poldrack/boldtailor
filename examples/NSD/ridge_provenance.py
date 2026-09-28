@@ -6,6 +6,7 @@ from uuid import uuid4
 import numpy as np
 from boldtailor.ridge_results import FractionSelection
 from boldtailor._fractional_ridge import NORM_BASIS
+from boldtailor.trial_encoding import encoding_metadata
 
 from boldtailor.provenance import (
     ProvenanceRecord,
@@ -29,6 +30,10 @@ def tuning_provenance(scores, selection):
         )
     else:
         activity = _alpha_activity(selection)
+    mode = scores.provenance.to_dict()["activities"][-1]["encoding_mode"]
+    activity.update(encoding_metadata(mode))
+    if not isinstance(selection, FractionSelection):
+        activity["objective"] = "percentile_of_" + activity["score"]
     activity.update(
         run_labels=list(scores.run_labels),
         scoring_mask_fingerprint=sha256(selection.scoring_mask.tobytes()).hexdigest(),
@@ -71,6 +76,7 @@ def link_final_provenance(result, decision):
         )
         activity = dict(
             name="encoding_guided_ridge_refit",
+            **encoding_metadata(decision.to_dict()["activities"][-1]["encoding_mode"]),
             tuning_scope="all",
             selected_alpha=result["ridge_alpha"],
             tuning_execution_id=decision.execution_id,

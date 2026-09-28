@@ -1,6 +1,7 @@
 """Auditable ridge selection scores, held-out predictions, and tuning plots."""
 
 from pathlib import Path
+from boldtailor.trial_encoding import encoding_metadata
 
 from matplotlib.figure import Figure
 import numpy as np
@@ -172,11 +173,24 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
             ["task", "trial_type", "response_time"],
         ),
         _map(stem, descriptor, "hrfindex", brain, ids[None], ["training_hrf_id"]),
-        npz_artifact(base + "_loss.npz", sse=outer["run_sse"], sst=outer["run_sst"]),
+        npz_artifact(
+            base + "_loss.npz",
+            sse=outer["run_sse"],
+            sst=outer["run_sst"],
+            train_run_intercepts=outer["train_run_intercepts"],
+            train_run_predictor_means=outer["train_run_predictor_means"],
+            scoring_offsets=outer["scoring_offsets"],
+            train_run_labels=np.asarray(outer["train_run_labels"]),
+            test_run_labels=np.asarray(outer["test_run_labels"]),
+        ),
         json_artifact(base + "_provenance.json", outer["provenance"]),
         json_artifact(
             base + "_metadata.json",
             dict(
+                **encoding_metadata(outer["encoding_mode"]),
+                task_coefficient="pooled_training_beta_mean",
+                train_run_intercept_coordinates="raw_predictors",
+                predictions_include_scoring_offsets=False,
                 train_run_labels=outer["train_run_labels"],
                 test_run_labels=outer["test_run_labels"],
                 ridge_alpha=outer["ridge_alpha"],
@@ -199,7 +213,11 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
                     if fractional
                     else {}
                 ),
-                interpretation="Held-out encoding prediction of this pipeline's regularized beta targets",
+                interpretation=(
+                    "Within-run prediction of regularized beta variation; held-out means removed for scoring only"
+                    if outer["encoding_mode"] == "within_run"
+                    else "Absolute held-out encoding prediction of regularized beta targets"
+                ),
             ),
         ),
     ]
