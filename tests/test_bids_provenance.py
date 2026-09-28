@@ -95,6 +95,25 @@ def projection_options():
     }
 
 
+def test_projection_uses_installed_version(
+    monkeypatch, provenance_record, projection_options
+):
+    from importlib import metadata
+
+    original = metadata.version
+    monkeypatch.setattr(
+        metadata,
+        "version",
+        lambda name: "9.8.7" if name == "boldtailor" else original(name),
+    )
+    files = project_bids_provenance(provenance_record, **projection_options)
+    description = json.loads(files["dataset_description.json"])
+    generated = description["GeneratedBy"]
+    assert next(x for x in generated if x["Name"] == "Boldtailor")["Version"] == "9.8.7"
+    software = json.loads(files["prov/prov-boldtailor_soft.json"])["Software"]
+    assert next(x for x in software if x["Label"] == "Boldtailor")["Version"] == "9.8.7"
+
+
 def _fixture_projection():
     return {
         path.relative_to(FIXTURE_ROOT).as_posix(): path.read_bytes()
