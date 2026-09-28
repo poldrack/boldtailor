@@ -94,6 +94,11 @@ migrations accompany result-schema changes.
 
 ## Stage 4: Proportionate provenance and publication
 
+The [fit lifecycle, logging, and provenance plan](2026-09-28-scientific-readability-lifecycle.md)
+is prepared for review. It covers shared lifecycle boundaries, categorical
+failure logs, and removal of redundant provenance construction. Publication
+remains a separate increment.
+
 Primary files: `provenance.py`, `logging.py`, `publication.py`,
 `bids_provenance.py`, and fit callers.
 
