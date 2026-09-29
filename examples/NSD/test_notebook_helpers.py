@@ -58,7 +58,9 @@ def test_paths_derive_from_root_without_creating_directories(
     assert not root.exists()
 
 
-def test_explicit_paths_override_environment(no_path_environment, monkeypatch, tmp_path):
+def test_explicit_paths_override_environment(
+    no_path_environment, monkeypatch, tmp_path
+):
     for name in ("NSD_BIDS_ROOT", "NSD_FMRIPREP_ROOT", "NSD_OUTPUT_ROOT"):
         monkeypatch.setenv(name, str(tmp_path / "environment"))
     overrides = {
@@ -86,7 +88,8 @@ def test_library_plot_preserves_curves_and_peak_colors(library):
         axis.collections[0].get_segments()[0][:, 1], library.curves[1]
     )
     np.testing.assert_array_equal(
-        axis.collections[0].get_array(), library.parameter_table.peak_time.to_numpy()[1:]
+        axis.collections[0].get_array(),
+        library.parameter_table.peak_time.to_numpy()[1:],
     )
 
 
@@ -100,22 +103,28 @@ def test_design_plot_retains_original_acquisition_times():
 
 
 def test_glm_comparison_uses_paired_values_and_signed_difference():
-    canonical = {"r2": np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])}
+    canonical = {
+        "r2": np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])
+    }
     optimized = {"r2": np.array([[0.4, 0.5, 0.6], [0.1, 0.1, 0.1], [0.3, 0.4, 0.5]])}
     table, fig = helper("workflow_plots").glm_comparison(
         {"CanonicalGLM": canonical, "OptimizedGLM": optimized}
     )
-    row = table[(table.model == "CanonicalGLM") & (table.statistic == "full R²")].iloc[0]
+    row = table[(table.model == "CanonicalGLM") & (table.statistic == "full R²")].iloc[
+        0
+    ]
     assert row.n == 2
     assert row["median"] == pytest.approx(0.5)
-    np.testing.assert_allclose(fig.axes[0].collections[0].get_offsets(), [[0.2, 0.4], [0.8, 0.6]])
+    np.testing.assert_allclose(
+        fig.axes[0].collections[0].get_offsets(), [[0.2, 0.4], [0.8, 0.6]]
+    )
     assert sum(p.get_height() for p in fig.axes[1].patches) == 2
     assert fig.axes[1].get_xlim()[0] < -0.2
 
 
 @pytest.mark.parametrize("missing", [False, True])
 def test_parameter_agreement_excludes_unpaired_and_constant_values(library, missing):
-    odd = np.array([0, 1, np.nan, 0.])
+    odd = np.array([0, 1, np.nan, 0.0])
     even = np.array([0, 1, 1, np.nan])
     if missing:
         odd[:] = np.nan
@@ -127,7 +136,9 @@ def test_parameter_agreement_excludes_unpaired_and_constant_values(library, miss
     if not missing:
         # Canonical duration is 32 s and the custom HRF is 36 s; onset is
         # the constant parameter in this fixture (zero for both curves).
-        assert np.isnan(table.loc[table.parameter == "onset_delay", "pearson_r"].iloc[0])
+        assert np.isnan(
+            table.loc[table.parameter == "onset_delay", "pearson_r"].iloc[0]
+        )
     assert len(fig.axes) == len(table)
 
 

@@ -70,9 +70,12 @@ identified by the review. The proposed order is:
 4. Simplify provenance, logging, and output publication against a documented
    local scientific-workflow contract. Keep useful reproducibility metadata;
    remove redundant record construction and conflicting privacy rules.
-5. Move reusable imaging operations into the package, make notebooks narrative
-   clients, and replace notebook instrumentation with direct module tests and
-   a small execution smoke test. Update migration documentation throughout.
+5. Keep imaging and dataset adapters in examples; make notebooks narrative
+   clients of small example-local helpers. The user explicitly revised this
+   boundary: no `boldtailor.nsd` or new imaging-format API in the core.
+   Test presentation helpers directly and retain synthetic notebook execution
+   checks. Keep scientific settings and fit calls visible in the notebooks.
+   Update migration documentation throughout.
 
 ## Numerical code and containers
 

@@ -126,24 +126,25 @@ substitute for a clear output schema.
 Exit: injected publish failures preserve prior files; output guarantees and
 limitations match implementation; privacy behavior is consistent across fits.
 
-## Stage 5: Package imaging workflows and simplify notebooks
+## Stage 5: Simplify notebooks while keeping imaging in examples
 
-Promote reusable NIfTI functions from `examples/stop_signal_demo.py` into
-`src/boldtailor/nifti.py`. Promote the 21 non-test Python modules currently in
-`examples/NSD/` into `src/boldtailor/nsd/`, retaining their focused responsibilities
-initially. Keep the new subpackage initializer empty. Make plotting dependencies
-an explicit imaging extra and use direct dependencies for library imports.
+The user revised the original packaging proposal: keep NSD/CIFTI helpers in
+`examples/NSD/` and NIfTI operations in `examples/stop_signal_demo.py`.
+Boldtailor remains an array-modeling library. Do not introduce `boldtailor.nsd`,
+`boldtailor.nifti`, or a new imaging extra as part of this refactor.
 
-Move NSD tests into `tests/nsd/`, adjust imports, and test installed-package use.
-Move notebook-instrumented scientific assertions into direct library tests;
-retain one synthetic-data notebook execution smoke test. Preserve scientific
-artifact values, spatial axes, feature order, source protection, and real-process
-serial/parallel equivalence. Make BIDS paths environment-supplied with actionable
-errors. Strip stored notebook outputs and personal paths from shared examples.
+Execute [the notebook plan](2026-09-28-scientific-readability-notebooks.md).
+Extract plotting and path configuration into small example-local functions,
+with direct behavior tests. Keep model specification, HRF construction,
+selection and fit calls visible. Retain synthetic notebook executions for
+the different supported workflows. Preserve scientific artifact values,
+spatial axes, feature order, source protection, and parallel equivalence.
+Replace personal NSD notebook paths with explicit configuration or environment
+variables, and clear stored outputs.
 
-Exit: scientists can read a notebook's analysis sequence without dynamic import
-or plotting audit code; reusable workflows can be imported from an installed
-wheel; default pytest still runs the whole suite.
+Exit: notebooks read as scientific analysis sequences; format/dataset adapters
+remain checkout-local examples; the installed core acquires no new imaging API
+or dependencies; default pytest still runs the whole suite.
 
 ## Final branch review
 

@@ -65,6 +65,14 @@ memory. Example workflows own dataset discovery, image loading, spatial axes,
 and image reconstruction. The prepared-design API is the entry point for
 externally compiled designs; it does not perform BIDS parsing or transformations.
 
+Keep NSD and imaging-format adapters in the examples, outside the installed
+package. The NSD notebooks retain scientific settings and fitting calls;
+`examples/NSD/workflow_plots.py` and `session_hrf_plots.py` return presentation
+figures from fitted results. `notebook_paths.py` resolves explicit configuration
+and environment paths without file writes. See the [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
+These helpers use development dependencies; they add no runtime dependencies
+or public imaging API to Boldtailor.
+
 Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
 `_arrays.readonly_array`. Float values use float64, indices use int64, and masks
 use bool. Construction copies inputs; accessing an array does not copy it again.

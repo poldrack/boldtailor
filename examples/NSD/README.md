@@ -27,8 +27,8 @@ All runs need the same CIFTI spatial axis. The fMRIPrep directory must be
 inside the BIDS root. Event durations and acquisition offsets are read from
 the inputs; onsets are not rounded to whole volumes.
 
-The defaults analyze `sub-07/ses-nsd10` under `/Volumes/extdata1/NSD/BIDS`,
-read `derivatives/fmriprep-25.2.5`, and write to `derivatives/boldtailor`.
+The defaults analyze `sub-07/ses-nsd10`, read `derivatives/fmriprep-25.2.5`,
+and write to `derivatives/boldtailor` under the selected BIDS root.
 That session has 12 runs, 750 trials, and 91,282 grayordinates. The data are
 not included in this repository.
 
@@ -36,7 +36,24 @@ not included in this repository.
 
 Open [nsd_workflow.ipynb](nsd_workflow.ipynb) in your notebook editor after
 running `uv sync --group dev`, and select the checkout's `.venv` Python kernel.
-Edit the first cell's paths and execution settings, then run all cells. The
+Set `NSD_BIDS_ROOT` before starting the notebook kernel, then edit the first
+code cell's scientific and execution settings and run all cells. For example:
+
+```bash
+export NSD_BIDS_ROOT=/path/to/NSD/BIDS
+```
+
+Alternatively, add a cell before setup defining
+`NSD_CONFIG = {"bids_root": "/path/to/NSD/BIDS"}`. The session-reliability
+notebook uses `HRF_RELIABILITY_CONFIG` instead. Both accept `fmriprep_root`
+and `output_root` explicitly, or through `NSD_FMRIPREP_ROOT` and
+`NSD_OUTPUT_ROOT`. Explicit dictionary paths override environment values;
+otherwise derivative defaults follow the BIDS root. Missing BIDS configuration
+raises an actionable error before loading or writing data. These helpers do
+not read `.env` files. Standalone scripts retain their existing command-line
+defaults; supply path flags for your data.
+
+The
 default uses all grayordinates and four workers. Set `max_grayordinates=128`
 for a quick run through every stage using all runs and a small spatial subset.
 The HRF reliability stages require at least two odd and two even runs;
@@ -105,6 +122,22 @@ Beta-series fitting prints one start and one completion message per model,
 including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
+
+### Example helpers and the core library
+
+NSD file discovery, CIFTI loading/export, surfaces, and plotting stay under
+`examples/NSD/`; they are not installed as part of `boldtailor`. Run these
+notebooks from a repository checkout with the development dependencies.
+The core accepts arrays and scientific model specifications, independently
+of the dataset and imaging format.
+
+The notebooks keep model specification, HRF library construction, selection,
+CV settings, and fit calls visible. `workflow_plots.py` and
+`session_hrf_plots.py` handle figure details from already computed results;
+they return figures without fitting, displaying, or writing files.
+`notebook_paths.py` supplies local paths. Figure names and scientific exports
+are unchanged. Direct helper tests cover plotted values and missing-data masks,
+while notebook execution tests exercise fitting and export on synthetic CIFTI data.
 
 ### Cortical surface figures
 
