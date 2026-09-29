@@ -301,8 +301,10 @@ contract for cooperating writers, not protection against a process actively
 swapping directories during publication. There is no crash-recovery protocol.
 
 On failure, the normal diagnostic is
-`.boldtailor/publication_failures.jsonl`. If rollback cannot restore an original
-or remove a new output, the transaction is retained under
+`.boldtailor/publication_failures.jsonl`. New records contain fixed `error_code`
+categories and `rollback_failed`, with a destination-relative recovery path
+when applicable. They omit exception text and class names. If rollback cannot
+restore an original or remove a new output, the transaction is retained under
 `.boldtailor/transactions/<execution-id>/`. The raised `PublicationError`
 reports that directory in its message and `recovery_directory` attribute;
 `rollback_errors` holds individual errors, and `__cause__` is the original

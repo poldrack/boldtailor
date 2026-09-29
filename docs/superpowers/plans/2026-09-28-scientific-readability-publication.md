@@ -1,6 +1,6 @@
 # Local Publication Simplification Implementation Plan
 
-> **For agentic workers:** Use `superpowers:executing-plans` with the preserved inline execution method and one independent review after this increment. Steps use checkbox (`- [ ]`) syntax.
+> **For agentic workers:** Use `superpowers:executing-plans` with the preserved inline execution method and one independent review after this increment. Steps use checkbox (`- [x]`) syntax.
 
 **Goal:** Make scientific output publication understandable using ordinary paths, one writer lock, staging, replacement, and explicit rollback.
 
@@ -10,7 +10,7 @@
 
 **Spec:** [Approved scientific-readability design](../specs/2026-09-28-scientific-readability-design.md).
 
-**Status:** Proposed next increment after `acd56ab`. The lifecycle/logging/provenance increment is complete; its final suite passed 856 tests.
+**Status:** Implemented after `a9f659b`; final verification is recorded in `docs/validation/scientific-readability-publication-2026-09-28.md`. The preceding lifecycle increment passed 856 tests.
 
 ## Global constraints
 
@@ -92,7 +92,7 @@ class _Transaction:
 
 ## Task 1: Pin ordinary path and timeout safety
 
-- [ ] Add these tests to `tests/test_publication.py`; retain the existing artifact, symlink, collision, and source-read-only tests.
+- [x] Add these tests to `tests/test_publication.py`; retain the existing artifact, symlink, collision, and source-read-only tests.
 
 ```python
 @pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
@@ -123,8 +123,8 @@ def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name)
     assert not destination.exists()
 ```
 
-- [ ] Run `uv run pytest tests/test_publication.py -q -W error`; inspect failures and commit tests before source edits. Avoid actually waiting on NaN/infinite lock values: validation tests use uncontended nonexistent destinations, so current code completes or rejects rather than blocking.
-- [ ] Check `math.isfinite(timeout)` in `_validate_lock_timeout`. Compare the artifact's first path component using `casefold()`. Normalize the destination with `resolve(strict=False)` only after checking existing symlink components; keep both unlocked and locked preflight checks. Normalize target paths consistently for source overlap.
+- [x] Run `uv run pytest tests/test_publication.py -q -W error`; inspect failures and commit tests before source edits. Avoid actually waiting on NaN/infinite lock values: validation tests use uncontended nonexistent destinations, so current code completes or rejects rather than blocking.
+- [x] Check `math.isfinite(timeout)` in `_validate_lock_timeout`. Compare the artifact's first path component using `casefold()`. Normalize the destination with `resolve(strict=False)` only after checking existing symlink components; keep both unlocked and locked preflight checks. Normalize target paths consistently for source overlap.
 
 ```python
 root = Path(destination).absolute()
@@ -132,11 +132,11 @@ _require_safe_destination(root)
 root = root.resolve(strict=False)
 ```
 
-- [ ] Run the publication suite, format, document finite-timeout and alias semantics, and commit GREEN. Include the real-process writer and timeout tests in this run.
+- [x] Run the publication suite, format, document finite-timeout and alias semantics, and commit GREEN. Include the real-process writer and timeout tests in this run.
 
 ## Task 2: Ordinary-path publication and retained rollback backups
 
-- [ ] Add a test proving publication works without descriptor-relative platform capabilities:
+- [x] Add a test proving publication works without descriptor-relative platform capabilities:
 
 ```python
 def test_publication_works_without_descriptor_relative_operations(tmp_path, monkeypatch):
@@ -150,7 +150,7 @@ def test_publication_works_without_descriptor_relative_operations(tmp_path, monk
     _assert_no_transaction_debris(destination)
 ```
 
-- [ ] Replace the two restore-fallback/recovery-copy tests with direct retained-backup tests under the new contract. Use this main case and parameterize `block_diagnostics` to cover a ledger that cannot be written:
+- [x] Replace the two restore-fallback/recovery-copy tests with direct retained-backup tests under the new contract. Use this main case and parameterize `block_diagnostics` to cover a ledger that cannot be written:
 
 ```python
 @pytest.mark.parametrize("block_diagnostics", [False, True])
@@ -193,7 +193,7 @@ def test_failed_restore_retains_original_and_reports_recovery(
 
 Import `Path` from pathlib in the test file. This injection identifies staging/backup operations by their paths instead of requiring a particular number of syscalls.
 
-- [ ] Retain the five existing backup/promotion boundary failures and the real-process tests. Replace the old `retain_incomplete` test with the explicit removed-argument behavior below. Remove the active adversarial parent-swap test: the approved local/cooperating-writer scope no longer promises protection against a swap inside `os.replace`. Keep all static symlink rejection tests.
+- [x] Retain the five existing backup/promotion boundary failures and the real-process tests. Replace the old `retain_incomplete` test with the explicit removed-argument behavior below. Remove the active adversarial parent-swap test: the approved local/cooperating-writer scope no longer promises protection against a swap inside `os.replace`. Keep all static symlink rejection tests.
 
 ```python
 def test_removed_retention_option_is_rejected_before_writing(tmp_path):
@@ -203,7 +203,7 @@ def test_removed_retention_option_is_rejected_before_writing(tmp_path):
     assert not destination.exists()
 ```
 
-- [ ] Add staging-write and cleanup-failure cases. For staging, patch `Path.open` only for a transaction `stage` path to raise a sentinel `OSError`, verify all originals untouched, `PublicationError.__cause__` is the sentinel, and no promoted file. For cleanup, patch `shutil.rmtree` to leave the scratch directory, verify a successful publication still returns correct artifact bytes; restore the patch before pytest fixture cleanup. Reuse the current real artifact set rather than mocking publication itself.
+- [x] Add staging-write and cleanup-failure cases. For staging, patch `Path.open` only for a transaction `stage` path to raise a sentinel `OSError`, verify all originals untouched, `PublicationError.__cause__` is the sentinel, and no promoted file. For cleanup, patch `shutil.rmtree` to leave the scratch directory, verify a successful publication still returns correct artifact bytes; restore the patch before pytest fixture cleanup. Reuse the current real artifact set rather than mocking publication itself.
 
 ```python
 @pytest.mark.parametrize("boundary", ["write", "stage_directory"])
@@ -259,8 +259,8 @@ def test_cleanup_failure_does_not_change_publication_outcome(
             assert paths[0].read_bytes() == b"a"
 ```
 
-- [ ] Run the publication suite, inspect RED failures, commit tests.
-- [ ] Replace `_AnchoredEntry`, `_AnchoredPath`, capability probing, descriptor opening/identity checks, anchored replace/unlink, and descriptor fsync with the transaction interface above and ordinary `Path` operations. Remove `fcntl`, `stat`, `_require_anchored_operations`, descriptor-path probing, restore-rename fallback, recovery copying, failed-artifact regeneration, and `_failed_payload`.
+- [x] Run the publication suite, inspect RED failures, commit tests.
+- [x] Replace `_AnchoredEntry`, `_AnchoredPath`, capability probing, descriptor opening/identity checks, anchored replace/unlink, and descriptor fsync with the transaction interface above and ordinary `Path` operations. Remove `fcntl`, `stat`, `_require_anchored_operations`, descriptor-path probing, restore-rename fallback, recovery copying, failed-artifact regeneration, and `_failed_payload`.
 
 ```python
 # Backup: record each successful move before attempting the next file.
@@ -276,7 +276,7 @@ os.replace(transaction.stage / artifact.path, target)
 transaction.promoted.append(artifact.path)
 ```
 
-- [ ] Implement rollback without a second fallback protocol:
+- [x] Implement rollback without a second fallback protocol:
 
 ```python
 def _rollback(destination, transaction):
@@ -298,13 +298,13 @@ def _rollback(destination, transaction):
 
 Keep best-effort directory fsync after successful moves/removals. When constructing a transaction, choose its UUID/root in memory first and create stage/backups inside the protected try block, so staging-directory failures are handled too. Reject existing symlinks in the control/transaction directories before using them. Never scan/delete old transaction directories.
 
-- [ ] In `_publish_locked`, catch an operation failure once, attempt rollback once, append diagnostic metadata, clean up only if rollback succeeded, and raise `PublicationError` from the original error. Retain the transaction in place if any rollback operation failed. Diagnostics and cleanup are best effort; ordinary filesystem errors in them do not mask the operation error. On success, clean up best effort and return only artifact paths, in input order.
-- [ ] Preserve preflight, metadata validation, one persistent `FileLock`, lock timeout behavior, per-file fsync, and existing payload bytes. Extend `_record_failure` with recovery metadata, leaving the error-field migration to Task 3.
-- [ ] Run `uv run pytest tests/test_publication.py examples/NSD/test_nsd_single_trial.py examples/NSD/test_nsd_hrf_selection.py -q -W error`; run real-process tests with the existing required permissions. Update API/developer/migration documentation, format, and commit GREEN.
+- [x] In `_publish_locked`, catch an operation failure once, attempt rollback once, append diagnostic metadata, clean up only if rollback succeeded, and raise `PublicationError` from the original error. Retain the transaction in place if any rollback operation failed. Diagnostics and cleanup are best effort; ordinary filesystem errors in them do not mask the operation error. On success, clean up best effort and return only artifact paths, in input order.
+- [x] Preserve preflight, metadata validation, one persistent `FileLock`, lock timeout behavior, per-file fsync, and existing payload bytes. Extend `_record_failure` with recovery metadata, leaving the error-field migration to Task 3.
+- [x] Run `uv run pytest tests/test_publication.py examples/NSD/test_nsd_single_trial.py examples/NSD/test_nsd_hrf_selection.py -q -W error`; run real-process tests with the existing required permissions. Update API/developer/migration documentation, format, and commit GREEN.
 
 ## Task 3: Fixed publication failure categories
 
-- [ ] Update the existing failure-ledger expectation from `error_type="OSError"` to `error_code="io_failure"`. Add a custom exception with a raising `__str__` so diagnostics cannot inspect its message/class name:
+- [x] Update the existing failure-ledger expectation from `error_type="OSError"` to `error_code="io_failure"`. Add a custom exception with a raising `__str__` so diagnostics cannot inspect its message/class name:
 
 ```python
 def test_publication_failure_ledger_omits_exception_names_and_text(tmp_path, monkeypatch):
@@ -332,7 +332,7 @@ def test_publication_failure_ledger_omits_exception_names_and_text(tmp_path, mon
     assert "PrivatePatientError" not in json.dumps(records)
 ```
 
-- [ ] Extend the retained-recovery test with these assertions after its recovery-file checks. Keep its raw exceptions and absolute caller-facing recovery path intact.
+- [x] Extend the retained-recovery test with these assertions after its recovery-file checks. Keep its raw exceptions and absolute caller-facing recovery path intact.
 
 ```python
 if not block_diagnostics:
@@ -342,8 +342,8 @@ if not block_diagnostics:
     assert not Path(record["recovery_directory"]).is_absolute()
     assert str(tmp_path) not in json.dumps(record)
 ```
-- [ ] Run publication tests, observe RED, commit tests. Replace `_sanitized_message` and `type(error).__name__` with `boldtailor.logging._error_code(error)`. Keep the fixed status fields; do not put raw rollback exceptions into JSON.
-- [ ] Run publication tests including lock timeout and concurrent writers, update the migration guide's ledger example, format, and commit GREEN.
+- [x] Run publication tests, observe RED, commit tests. Replace `_sanitized_message` and `type(error).__name__` with `boldtailor.logging._error_code(error)`. Keep the fixed status fields; do not put raw rollback exceptions into JSON.
+- [x] Run publication tests including lock timeout and concurrent writers, update the migration guide's ledger example, format, and commit GREEN.
 
 ## Verification and handoff
 

@@ -7,7 +7,7 @@
 
 This roadmap keeps the full architectural scope visible. Each stage produces
 working software and receives a concrete implementation plan before execution.
-Stages 1–3 and the lifecycle/logging/provenance portion of Stage 4 are implemented; the
+Stages 1–4 are implemented; the
 [numerical/CV plan](2026-09-28-scientific-readability-numerics.md) records the second
 stage. Later stages retain separate implementation plans. This is deliberate:
 decisions about the numerical interfaces should inform the later fit and
@@ -96,8 +96,9 @@ migrations accompany result-schema changes.
 
 The [fit lifecycle, logging, and provenance plan](2026-09-28-scientific-readability-lifecycle.md)
 is implemented. It covers shared lifecycle boundaries, categorical
-failure logs, and removal of redundant provenance construction. Publication
-is the next increment, with its [implementation plan](2026-09-28-scientific-readability-publication.md) prepared for review.
+failure logs, and removal of redundant provenance construction. The
+[publication increment](2026-09-28-scientific-readability-publication.md) is also
+implemented, including the documented local-writer scope and recovery API.
 
 Primary files: `provenance.py`, `logging.py`, `publication.py`,
 `bids_provenance.py`, and fit callers.

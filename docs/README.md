@@ -9,6 +9,7 @@ from their named modules; package initializers are empty.
 | [User guide](user-guide.md) | Scientific methods, examples, and interpretation |
 | [API reference](api.md) | Signatures, defaults, result fields, and source records |
 | [Developer guide](development.md) | Implementation, testing, ownership, logging, and publication |
+| [Publication migration](publication-migration.md) | Local writer guarantees and retained rollback backups |
 | [Lifecycle migration](lifecycle-migration.md) | Shared fit events and categorical errors |
 | [Result migration](result-migration.md) | Unified candidate scores and composed trial results |
 | [Ownership migration](ownership-migration.md) | Ordinary read-only NumPy arrays and editable copies |
@@ -36,13 +37,13 @@ experiments; rerunning them with current defaults may produce different results.
 Keep historical measurements and decisions intact when updating guidance.
 
 The active [refactor roadmap](superpowers/plans/2026-09-28-scientific-readability-roadmap.md)
-distinguishes implemented work from the remaining publication and imaging
+distinguishes implemented work from the remaining imaging and notebook
 changes. The original
 [project review](review-2026-09-28-full-project.md) examined a broader working
 tree that included separately preserved uncommitted work. It does not describe
 the current branch verbatim.
 
-- [Current refactor verification](validation/scientific-readability-lifecycle-2026-09-28.md)
+- [Current refactor verification](validation/scientific-readability-publication-2026-09-28.md)
 - [Documentation audit](validation/documentation-audit-2026-09-28.md)
 - [Fractional-default adoption record](validation/fractional-defaults-2026-09-28.md)
 - [Historical fractional ablation](validation/fractional-ridge-ablation-2026-09-28.md)
