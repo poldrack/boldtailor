@@ -174,7 +174,8 @@ surface pair nor explicit paths are available, plotting is skipped with a messag
 Values are placed using the CIFTI vertex IDs. Missing/unprocessed vertices and
 triangles touching them are gray, including the medial wall; subcortical values
 are omitted. R² and ΔR² use a common 0–1 range, extended below zero if needed.
-ΔR² uses a square-root color progression to emphasize smaller values; colorbar
+ΔR² uses a black–red–orange–yellow–white heat scale with a square-root color
+progression to emphasize smaller values; colorbar
 ticks remain in original ΔR² units. RT uses a
 shared symmetric range across the displayed models. No significance threshold
 is applied. The final save cell writes `desc-notebookGLMR2Surface_plot.png`,

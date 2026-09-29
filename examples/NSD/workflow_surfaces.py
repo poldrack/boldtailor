@@ -104,7 +104,7 @@ def _color_scale(projected, statistic):
         else "Pooled BOLD full-model R²"
     )
     cmap = (
-        ListedColormap(colormaps["viridis"](np.sqrt(np.linspace(0, 1, 1024))))
+        ListedColormap(colormaps["afmhot"](np.sqrt(np.linspace(0, 1, 1024))))
         if statistic == "delta_r2"
         else "viridis"
     )
@@ -150,7 +150,7 @@ def surface_figure(maps, brain, meshes, *, statistic, title=None):
     """Compare maps in four cortical views with a shared scale and no threshold.
 
     R² and ΔR² span 0–1 (extended below zero when needed). ΔR² uses a square-root
-    color progression to emphasize small values, with ticks in original units.
+    heat-color progression to emphasize small values, with ticks in original units.
     RT and t use a symmetric range covering all finite cortical values.
     Volumetric structures
     never affect the plots or color limits. Input maps and meshes are unchanged.
