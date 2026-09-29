@@ -648,3 +648,27 @@ def test_publication_failure_ledger_omits_exception_names_and_text(
     assert records[0]["rollback_failed"] is False
     assert "error_type" not in records[0] and "message" not in records[0]
     assert "PrivatePatientError" not in json.dumps(records)
+
+
+@pytest.mark.parametrize("source_name", ["publication.lock", "publication_failures.jsonl"])
+def test_control_files_cannot_overwrite_protected_sources(tmp_path, monkeypatch, source_name):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "output"
+    control = destination / ".boldtailor"
+    control.mkdir(parents=True)
+    source = control / source_name
+    source.write_bytes(b"irreplaceable-input")
+
+    def reject_promotion(*args, **kwargs):
+        raise OSError("injected publication failure")
+
+    if source_name.endswith("jsonl"):
+        monkeypatch.setattr(publication.os, "replace", reject_promotion)
+    with pytest.raises(ValueError, match="overlap"):
+        publish_artifact_set(
+            destination, [Artifact("result.bin", b"result")], source_paths=[source]
+        )
+    assert source.read_bytes() == b"irreplaceable-input"
+    assert not (destination / "result.bin").exists()
+    assert not (control / "transactions").exists()
