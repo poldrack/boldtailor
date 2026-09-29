@@ -75,7 +75,8 @@ def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
 
 
 def test_multisession_notebook_executes_and_exports_paired_maps(
-    saved_sessions, tmp_path  # noqa: F811
+    saved_sessions,  # noqa: F811
+    tmp_path,
 ):
     output, sessions, _, brain = saved_sessions
     path = Path(__file__).with_name("nsd_multisession.ipynb")
@@ -133,26 +134,41 @@ def test_incompatible_estimators_fail_before_fitting(saved_sessions, monkeypatch
     monkeypatch.setattr(module, "_execute_workflow", forbidden)
     config = dict(bids_root=str(root), output_root=str(root))
     with pytest.raises(ValueError, match="estimators.*ridge_mode"):
-        module.ensure_session_outputs(config, sessions, estimators=["OLS", "FractionalCV"])
+        module.ensure_session_outputs(
+            config, sessions, estimators=["OLS", "FractionalCV"]
+        )
     with pytest.raises(ValueError, match="estimators"):
-        module.ensure_session_outputs(config, sessions, estimators=["RidgeCV", "FractionalCV"])
+        module.ensure_session_outputs(
+            config, sessions, estimators=["RidgeCV", "FractionalCV"]
+        )
 
 
-def test_complete_sessions_are_validated_before_missing_session_fits(saved_sessions, monkeypatch):  # noqa: F811
+def test_complete_sessions_are_validated_before_missing_session_fits(
+    saved_sessions,  # noqa: F811
+    monkeypatch,
+):
     root, sessions, _, _ = saved_sessions
     module = api("workflow")
     changed = nib.cifti2.BrainModelAxis.from_surface([2, 0, 3], 5, "CortexLeft")
     for path in (root / "sub-07" / sessions[1]).rglob("*.dscalar.nii"):
         image = nib.load(path)
-        nib.save(nib.Cifti2Image(image.get_fdata(), header=nib.Cifti2Header.from_axes(
-            (image.header.get_axis(0), changed))), path)
+        nib.save(
+            nib.Cifti2Image(
+                image.get_fdata(),
+                header=nib.Cifti2Header.from_axes((image.header.get_axis(0), changed)),
+            ),
+            path,
+        )
 
     def forbidden(*args, **kwargs):
-        pytest.fail("Incompatible completed results must be checked before missing fits")
+        pytest.fail(
+            "Incompatible completed results must be checked before missing fits"
+        )
 
     monkeypatch.setattr(module, "_execute_workflow", forbidden)
     with pytest.raises(ValueError, match="grayordinate axes"):
         module.ensure_session_outputs(
             dict(bids_root=str(root), output_root=str(root)),
-            ["ses-nsd99", *sessions], estimators=["OLS"],
+            ["ses-nsd99", *sessions],
+            estimators=["OLS"],
         )

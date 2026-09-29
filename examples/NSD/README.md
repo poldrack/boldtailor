@@ -284,6 +284,37 @@ for automated tests and the bounded real-data audit.
 
 ## HRF reliability across sessions
 
+For combined HRF **and beta-series** comparisons, use
+[nsd_multisession.ipynb](nsd_multisession.ipynb). It defaults to `sub-07`, sessions
+10–19, and canonical versus optimized OLS and fractional-CV models. Set paths in
+`NSD_MULTI_CONFIG` or the same `NSD_BIDS_ROOT` environment variable used above.
+The notebook automatically runs the full single-session workflow for missing
+sessions, sequentially in separate kernels. Completed sessions are reused;
+each new session is saved before the next begins. This can be a long computation
+with the full Sobol library and fractional CV. Set `fit_missing=False` to require
+existing results instead. `analysis_config` supplies fitting overrides; otherwise
+scientific settings inherit from the first completed session. Conflicting
+settings, axes, or libraries fail explicitly rather than mixing analyses.
+
+The notebook compares full HRF curves, without temporal shifts, for every session
+pair at each grayordinate. It also computes **within-session optimized-minus-
+canonical differences** in mean trial beta, descriptive task t, task-added ΔR²,
+signed within-run beta–RT r, and absolute beta–RT r. Aggregate means give each
+session equal weight and require two matched finite session values. Exported
+maps include the number of contributing sessions, SD of changes, and fraction
+with positive changes. A configurable grayordinate view shows its full HRFs and
+canonical/optimized metric trajectories across sessions.
+
+OLS isolates HRF changes from ridge regularization; fractional-CV differences
+also reflect separately selected penalties. RT contributes to tuning, so larger
+RT associations are descriptive rather than independent evidence of improved
+prediction. Mean-beta changes retain native units and can reflect session signal
+scaling. Differences of descriptive t statistics are not themselves t tests.
+Aggregate CIFTIs, TSVs, figures, and JSON source hashes use
+`sub-07/func/*desc-multisession*`; reruns replace only these aggregate files.
+
+For the smaller **HRF-only** workflow:
+
 Use [nsd_session_hrf_reliability.ipynb](nsd_session_hrf_reliability.ipynb) to
 compare independently estimated HRFs for `sub-07`, `ses-nsd10` through
 `ses-nsd19`. All sessions use the same 513-candidate Sobol library by default.

@@ -201,7 +201,9 @@ def test_loader_rejects_different_global_alpha_selection_percentiles(saved_sessi
     for i, session in enumerate(sessions):
         folder = root / "sub-07" / session / "func"
         for source in folder.glob("*TrialOLS_*.dscalar.nii"):
-            source.with_name(source.name.replace("TrialOLS", "TrialRidgeCV")).write_bytes(source.read_bytes())
+            source.with_name(
+                source.name.replace("TrialOLS", "TrialRidgeCV")
+            ).write_bytes(source.read_bytes())
         path = next(folder.glob("*_desc-notebook_metadata.json"))
         meta = json.loads(path.read_text())
         meta["settings"].update(ridge_mode="cv", ridge_percentile=50 if i == 0 else 90)

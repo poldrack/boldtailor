@@ -36,13 +36,13 @@ user notebook outputs and local configuration.
 
 ## Tasks
 
-- [ ] 1. Write, run RED, and commit tests for saved-map loading, matching axes and
+- [x] 1. Write, run RED, and commit tests for saved-map loading, matching axes and
   libraries, missing sessions, and paired summaries with asymmetric missingness.
   Implement loaders and analysis; run GREEN checks.
-- [ ] 2. Test automatic fitting on two small synthetic sessions, then forbid
+- [x] 2. Test automatic fitting on two small synthetic sessions, then forbid
   fitting on rerun and verify reuse. Implement sequential notebook execution
   with explicit configuration and no fitting of completed sessions.
-- [ ] 3. Test the new notebook end to end and verify exported numerical maps.
+- [x] 3. Test the new notebook end to end and verify exported numerical maps.
   Build the notebook, plots, and publication helper; document defaults and
   interpretation. Run focused tests and full pytest, inspect rendered figures,
   review changes, and commit implementation.
@@ -55,3 +55,19 @@ user notebook outputs and local configuration.
 - Reuse must not fit or modify completed per-session numerical results.
 - Changing plotting settings must not require refitting; missing sessions have
   explicit status and excluded data are never represented as measured zeros.
+
+## Completion evidence
+
+- Initial loader/analysis RED: six failures for missing implementation; GREEN:
+  all six passed against direct numerical expectations and malformed inputs.
+- Orchestration/notebook RED: four missing-feature failures; GREEN: real synthetic
+  session fitting, reuse without fitting, notebook execution, and CIFTI export.
+- Independent review found estimator/mode conflicts, late validation of completed
+  inputs, and missing global-alpha percentile validation. Added three failing
+  regressions before fixing; reviewer confirmed resolution.
+- Focused suite: 13 passed. Full `uv run pytest -q -W error`: 919 passed.
+- New Python modules/tests pass Ruff. Rendered HRF and beta-change figures checked.
+- Actual sub-07/ses-nsd10 compact summaries load with 91,282 grayordinates and both
+  OLS/FractionalCV models. Inherited settings agree with the saved Sobol-512,
+  seed-0, within-run fractional-CV analysis. Full missing-session fits were not
+  launched during development; running the delivered notebook starts them.
