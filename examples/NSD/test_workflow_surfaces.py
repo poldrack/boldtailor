@@ -206,14 +206,15 @@ def test_beta_surface_cell_plots_full_minus_confound_r2():
     assert "ΔR²" in captured["title"]
 
 
-def test_activation_surface_uses_signed_t_scale(cortical_axis, surface_files):
+@pytest.mark.parametrize("magnitude", [5, 50])
+def test_activation_surface_uses_fixed_t_scale(cortical_axis, surface_files, magnitude):
     _, meshes = surface_files
-    values = np.array([2, -5, np.nan, 999, 3, 0, -1, 4])
+    values = np.array([2, -magnitude, np.nan, 999, 3, 0, -1, magnitude])
     fig = surfaces().surface_figure(
         {"OLS": values}, cortical_axis, meshes, statistic="t"
     )
     try:
-        np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-5, 5])
+        np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-10, 10])
         assert "t" in fig.axes[-1].get_ylabel().lower()
         assert "Pearson" not in fig.axes[-1].get_ylabel()
         fig.canvas.draw()
