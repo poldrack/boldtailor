@@ -97,7 +97,7 @@ migrations accompany result-schema changes.
 The [fit lifecycle, logging, and provenance plan](2026-09-28-scientific-readability-lifecycle.md)
 is implemented. It covers shared lifecycle boundaries, categorical
 failure logs, and removal of redundant provenance construction. Publication
-remains a separate increment.
+is the next increment, with its [implementation plan](2026-09-28-scientific-readability-publication.md) prepared for review.
 
 Primary files: `provenance.py`, `logging.py`, `publication.py`,
 `bids_provenance.py`, and fit callers.
