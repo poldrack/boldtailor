@@ -1479,10 +1479,24 @@ def test_persistent_destination_rejects_symlink_components(tmp_path, symlink_pat
         publication_destination(bids_root, persistent=True)
 
 
-def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch):
+@pytest.mark.parametrize("root", [None, "", "   "])
+def test_notebook_configuration_requires_data_root(monkeypatch, root):
+    if root is None:
+        monkeypatch.delenv("BOLDTAILOR_BIDS_ROOT", raising=False)
+    else:
+        monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", root)
+    with pytest.raises(ValueError, match="Set BOLDTAILOR_BIDS_ROOT"):
+        _notebook_configuration()
+
+
+def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
 
     configuration = _notebook_configuration()
+
+    assert configuration["BIDS_ROOT"] == tmp_path
+    assert configuration["FMRIPREP_ROOT"] == tmp_path / "derivatives/fmri_25.2.0"
 
     assert configuration["SESSIONS"] == (
         "ses-02",
@@ -1496,7 +1510,8 @@ def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch):
     assert not any("ROI" in name.upper() for name in configuration)
 
 
-def test_notebook_configuration_normalizes_session_override(monkeypatch):
+def test_notebook_configuration_normalizes_session_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", " ses-02, ses-04 ")
 
     configuration = _notebook_configuration()
@@ -1509,8 +1524,9 @@ def test_notebook_configuration_normalizes_session_override(monkeypatch):
     ("", "ses-02", "ses-02,,ses-04", "ses-02,ses-04,ses-06"),
 )
 def test_notebook_configuration_rejects_invalid_session_override(
-    monkeypatch, selection
+    monkeypatch, selection, tmp_path
 ):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", selection)
 
     with pytest.raises(ValueError, match="exactly two non-empty sessions"):
