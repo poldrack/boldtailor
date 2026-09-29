@@ -184,6 +184,8 @@ Fewer than two finite trials or zero sample variance gives NaN t/p; no finite
 trials gives NaN in all maps. The metadata records these assumptions and that
 no multiple-comparison correction is applied. This cell uses existing fits;
 rerun the save cell with a new output root to export the maps and figures.
+See the [activation-map validation record](../../docs/validation/nsd-beta-activation-2026-09-28.md)
+for numerical and notebook execution checks.
 
 ### Ridge selection and held-out encoding
 
