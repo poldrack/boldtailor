@@ -637,3 +637,31 @@ def test_parent_symlink_swap_at_promotion_boundary_cannot_escape_destination(
     assert not (displaced / "result.bin").exists()
     assert (displaced / "original.txt").read_bytes() == b"original-parent-data"
     assert parent.is_symlink()
+
+
+@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
+def test_publication_rejects_nonfinite_timeout_before_writing(tmp_path, timeout):
+    destination = tmp_path / "output"
+    with pytest.raises(ValueError, match="lock_timeout"):
+        publish_artifact_set(destination, [Artifact("a.bin", b"a")], lock_timeout=timeout)
+    assert not destination.exists()
+
+
+def test_source_overlap_through_destination_parent_alias_is_rejected(tmp_path):
+    (tmp_path / "unused").mkdir()
+    source = tmp_path / "signal.bin"
+    source.write_bytes(b"original-input")
+    with pytest.raises(ValueError, match="overlap"):
+        publish_artifact_set(
+            tmp_path / "unused" / "..", [Artifact("signal.bin", b"replacement")],
+            source_paths=[source], overwrite=True,
+        )
+    assert source.read_bytes() == b"original-input"
+
+
+@pytest.mark.parametrize("name", [".boldtailor", ".BOLDTAILOR", ".BoldTailor"])
+def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name):
+    destination = tmp_path / "output"
+    with pytest.raises(ValueError, match="reserved"):
+        publish_artifact_set(destination, [Artifact(f"{name}/publication.lock", b"bad")])
+    assert not destination.exists()
