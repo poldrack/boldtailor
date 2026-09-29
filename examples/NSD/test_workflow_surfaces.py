@@ -141,6 +141,45 @@ def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
         surfaces().surface_figure({"Model": np.ones(2)}, left, meshes, statistic="r2")
 
 
+def test_delta_r2_surface_labels_task_contribution(cortical_axis, surface_files):
+    _, meshes = surface_files
+    fig = surfaces().surface_figure(
+        {"Model": np.full(8, 0.1)}, cortical_axis, meshes, statistic="delta_r2"
+    )
+    try:
+        assert "ΔR²" in fig.axes[-1].get_ylabel()
+        assert "confound-only" in fig.axes[-1].get_ylabel()
+        fig.canvas.draw()
+    finally:
+        plt.close(fig)
+
+
+def test_beta_surface_cell_plots_full_minus_confound_r2():
+    import nbformat
+    from pathlib import Path
+
+    notebook = nbformat.read(
+        Path(__file__).with_name("nsd_workflow.ipynb"), as_version=4
+    )
+    cell = next(c for c in notebook.cells if c.id == "beta-surface-maps")
+    full = np.array([0.9, 0.7, np.nan])
+    nuisance = np.array([0.8, 0.65, np.nan])
+    expected = full - nuisance
+    captured = {}
+
+    def capture(maps, brain, meshes, **options):
+        captured.update(maps=maps, **options)
+
+    exec(cell.source, dict(
+        surface_meshes={}, brain=None, surface_figure=capture,
+        beta_models={"OLS": {"r2": np.stack([full, nuisance, expected])}},
+        figures={}, display=lambda figure: None,
+    ))
+    np.testing.assert_allclose(captured["maps"]["OLS"], expected)
+    assert captured["statistic"] == "delta_r2"
+    assert "ΔR²" in captured["title"]
+
+
 def test_activation_surface_uses_signed_t_scale(cortical_axis, surface_files):
     _, meshes = surface_files
     values = np.array([2, -5, np.nan, 999, 3, 0, -1, 4])
