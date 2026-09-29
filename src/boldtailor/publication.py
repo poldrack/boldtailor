@@ -5,6 +5,7 @@ import csv
 from dataclasses import dataclass
 import io
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -88,8 +89,10 @@ def publish_artifact_set(
     """
     requested = _prepare_artifacts(artifacts)
     sources = tuple(Path(path) for path in source_paths)
-    root = Path(destination).absolute()
     _validate_lock_timeout(lock_timeout)
+    root = Path(destination).absolute()
+    _require_safe_destination(root)
+    root = root.resolve(strict=False)
     _preflight(root, requested, sources, overwrite=overwrite)
     control = _prepare_control_directory(root)
     lock_path = control / "publication.lock"
@@ -143,7 +146,7 @@ def _prepare_artifacts(artifacts: Iterable[Artifact]) -> tuple[Artifact, ...]:
         raise TypeError("artifacts must contain only Artifact values")
     _reject_duplicate_paths(requested)
     for artifact in requested:
-        if PurePosixPath(artifact.path).parts[0] == _CONTROL_DIRECTORY:
+        if PurePosixPath(artifact.path).parts[0].casefold() == _CONTROL_DIRECTORY:
             raise ValueError("artifact path is reserved for publication control data")
         _validate_metadata(artifact)
     return requested
@@ -223,9 +226,10 @@ def _validate_lock_timeout(timeout: float) -> None:
     if (
         isinstance(timeout, bool)
         or not isinstance(timeout, (int, float))
+        or not math.isfinite(timeout)
         or timeout < 0
     ):
-        raise ValueError("lock_timeout must be a non-negative number")
+        raise ValueError("lock_timeout must be a finite non-negative number")
 
 
 def _preflight(
