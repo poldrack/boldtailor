@@ -361,6 +361,11 @@ def test_notebook_default_preview_uses_approved_sobol_library(tmp_path):
     assert result.fingerprint == hrf_library.sobol_hrf_library().fingerprint
 
 
+def test_notebook_preserves_expanded_configured_paths(tmp_path):
+    _, settings = preview_library(tmp_path, bids_root="~/nsd-example", hrf_n_samples=2)
+    assert settings["bids_root"] == str(Path("~/nsd-example").expanduser())
+
+
 def test_notebook_preview_honors_sobol_settings(tmp_path):
     from boldtailor import hrf_library
 
