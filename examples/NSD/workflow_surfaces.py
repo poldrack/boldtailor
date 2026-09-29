@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
+from matplotlib import colormaps
 from matplotlib.figure import Figure
-from matplotlib.colors import Normalize
+from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.cm import ScalarMappable
 import numpy as np
 from nilearn.plotting import plot_surf
@@ -81,8 +82,8 @@ def _load_meshes(paths, brain):
 
 
 def _color_scale(projected, statistic):
-    if statistic not in ("r2", "rt", "t"):
-        raise ValueError("statistic must be r2, rt, or t")
+    if statistic not in ("r2", "delta_r2", "rt", "t"):
+        raise ValueError("statistic must be r2, delta_r2, rt, or t")
     arrays = [
         a[np.isfinite(a)] for mapping in projected.values() for a in mapping.values()
     ]
@@ -97,7 +98,17 @@ def _color_scale(projected, statistic):
         )
         return (-limit, limit), "RdBu_r", label
     lower = min(0.0, float(np.min(finite))) if len(finite) else 0.0
-    return (lower, 1.0), "viridis", "Pooled BOLD full-model R²"
+    label = (
+        "Pooled BOLD ΔR² (full − confound-only)"
+        if statistic == "delta_r2"
+        else "Pooled BOLD full-model R²"
+    )
+    cmap = (
+        ListedColormap(colormaps["viridis"](np.sqrt(np.linspace(0, 1, 1024))))
+        if statistic == "delta_r2"
+        else "viridis"
+    )
+    return (lower, 1.0), cmap, label
 
 
 def _label(name):
@@ -138,8 +149,10 @@ def _panel(axis, mesh, values, hemi, view, limits, cmap):
 def surface_figure(maps, brain, meshes, *, statistic, title=None):
     """Compare maps in four cortical views with a shared scale and no threshold.
 
-    R² spans 0–1 (extended below zero when needed); RT and t use a symmetric range
-    covering all finite cortical values in this figure. Volumetric structures
+    R² and ΔR² span 0–1 (extended below zero when needed). ΔR² uses a square-root
+    color progression to emphasize small values, with ticks in original units.
+    RT and t use a symmetric range covering all finite cortical values.
+    Volumetric structures
     never affect the plots or color limits. Input maps and meshes are unchanged.
     """
     if not maps:

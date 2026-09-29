@@ -94,7 +94,18 @@ The scripts below instead include nonsteady indicator regressors and all
 scans. Their R² values therefore need not agree with the notebook's values.
 
 Results use `desc-notebook...` filenames under the chosen derivative root,
-so existing script results are preserved. Reruns require a new output root.
+so existing script results are preserved. Set `existing_results` in the notebook:
+
+- `"reuse"` (default): reload saved results and skip fitting; regenerate notebook
+  plots without modifying saved files.
+- `"overwrite"`: refit and replace matching notebook outputs.
+- `"error"`: stop before fitting if notebook outputs already exist.
+
+With no saved results, all three modes fit and save normally. Reuse requires
+matching analysis settings, run lengths, and spatial axes. It reads the saved
+analysis rather than checking raw-file contents for changes; refit with
+`"overwrite"` after changing input data. Incomplete saved results require a refit.
+
 Each conventional `stat-rsquared.dscalar.nii` contains three maps: full R²,
 confounds-only R², and task-added ΔR². The
 `desc-notebookGLMComparison_stat-deltarsquared.dscalar.nii` map contains
@@ -142,10 +153,13 @@ while notebook execution tests exercise fitting and export on synthetic CIFTI da
 ### Cortical surface figures
 
 The workflow notebook shows left/right lateral and medial views of full-model
-BOLD R² for both conventional GLMs and beta-series models, plus signed beta–RT
+BOLD R² for conventional GLMs and task ΔR² (full minus confound-only R²) for
+beta-series models, plus signed beta–RT
 correlations across all runs. The plots use existing fitted arrays, so the new
-cells can run in an active notebook kernel without refitting models. R² includes
-the confounds and pools errors across runs; it is distinct from the held-out
+cells can run in an active notebook kernel without refitting models. Both R²
+components pool errors across runs using the same within-run total variance.
+Task ΔR² measures the additional variance explained by trial regressors beyond
+confounds; it is an in-sample measure, distinct from the held-out
 trial-encoding score. RT correlations center betas and RT within each run and
 remain descriptive, particularly when RT helped tune ridge strength.
 
@@ -159,7 +173,9 @@ surface pair nor explicit paths are available, plotting is skipped with a messag
 
 Values are placed using the CIFTI vertex IDs. Missing/unprocessed vertices and
 triangles touching them are gray, including the medial wall; subcortical values
-are omitted. R² uses a common 0–1 range, extended below zero if needed. RT uses a
+are omitted. R² and ΔR² use a common 0–1 range, extended below zero if needed.
+ΔR² uses a square-root color progression to emphasize smaller values; colorbar
+ticks remain in original ΔR² units. RT uses a
 shared symmetric range across the displayed models. No significance threshold
 is applied. The final save cell writes `desc-notebookGLMR2Surface_plot.png`,
 `desc-notebookBetaR2Surface_plot.png`, and `desc-notebookRTSurface_plot.png` beside

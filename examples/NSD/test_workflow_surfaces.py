@@ -188,11 +188,17 @@ def test_beta_surface_cell_plots_full_minus_confound_r2():
     def capture(maps, brain, meshes, **options):
         captured.update(maps=maps, **options)
 
-    exec(cell.source, dict(
-        surface_meshes={}, brain=None, surface_figure=capture,
-        beta_models={"OLS": {"r2": np.stack([full, nuisance, expected])}},
-        figures={}, display=lambda figure: None,
-    ))
+    exec(
+        cell.source,
+        dict(
+            surface_meshes={},
+            brain=None,
+            surface_figure=capture,
+            beta_models={"OLS": {"r2": np.stack([full, nuisance, expected])}},
+            figures={},
+            display=lambda figure: None,
+        ),
+    )
     np.testing.assert_allclose(captured["maps"]["OLS"], expected)
     assert captured["statistic"] == "delta_r2"
     assert "ΔR²" in captured["title"]
@@ -226,9 +232,9 @@ def test_notebook_surface_cells_render_existing_results_and_register_exports(
     )
     cells = {c.id: c for c in notebook.cells}
     required = ("glm-surface-maps", "beta-surface-maps", "rt-surface-maps")
-    assert all(
-        key in cells for key in required
-    ), "Notebook needs executable surface-map cells"
+    assert all(key in cells for key in required), (
+        "Notebook needs executable surface-map cells"
+    )
     model = dict(r2=np.full((3, 8), 0.2), rt={"all": np.linspace(-0.2, 0.3, 8)})
     context = dict(
         settings={"subject": "sub-07", "surface_maps": True, "surface_meshes": meshes},
@@ -306,6 +312,6 @@ figures = {{}}
     executed = NotebookClient(notebook, timeout=60, kernel_name="python3").execute()
     for cell in executed.cells[1:]:
         images = [o for o in cell.outputs if "image/png" in o.get("data", {})]
-        assert (
-            len(images) == 1
-        ), f"{cell.id} should display its surface figure exactly once"
+        assert len(images) == 1, (
+            f"{cell.id} should display its surface figure exactly once"
+        )

@@ -20,7 +20,9 @@ def execute_notebook(config):
     plt.switch_backend("Agg")
     try:
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", message="FigureCanvasAgg is non-interactive")
+            warnings.filterwarnings(
+                "ignore", message="FigureCanvasAgg is non-interactive"
+            )
             for cell in notebook.cells:
                 if cell.cell_type == "code":
                     exec(cell.source, context)
@@ -31,17 +33,24 @@ def execute_notebook(config):
 
 @pytest.mark.parametrize("mode", ["off", "cv", "fractional_cv"])
 def test_notebook_reuses_saved_results_without_fitting(
-    six_run_dataset, tmp_path, monkeypatch, mode
+    six_run_dataset, tmp_path, monkeypatch, mode  # noqa: F811
 ):
     from examples.NSD import workflow_analysis, ridge_workflow
     from examples.NSD.ridge_outputs import tuning_table
 
     root, prep = six_run_dataset
     config = dict(
-        bids_root=str(root), fmriprep_root=str(prep),
-        output_root=str(tmp_path / "output"), n_jobs=1, block_size=4,
-        hrf_n_samples=1, ridge_mode=mode, ridge_fractions=[0.4, 1.0],
-        ridge_alphas=[0.0, 0.1], surface_maps=False, existing_results="reuse",
+        bids_root=str(root),
+        fmriprep_root=str(prep),
+        output_root=str(tmp_path / "output"),
+        n_jobs=1,
+        block_size=4,
+        hrf_n_samples=1,
+        ridge_mode=mode,
+        ridge_fractions=[0.4, 1.0],
+        ridge_alphas=[0.0, 0.1],
+        surface_maps=False,
+        existing_results="reuse",
     )
     original = execute_notebook(config)
     if mode == "off":
@@ -73,8 +82,10 @@ def test_notebook_reuses_saved_results_without_fitting(
         )
     if mode != "off":
         pd.testing.assert_frame_equal(
-            tuning_table(restored["ridge_cv"]), tuning_table(original["ridge_cv"]),
-            atol=1e-6, rtol=1e-5,
+            tuning_table(restored["ridge_cv"]),
+            tuning_table(original["ridge_cv"]),
+            atol=1e-6,
+            rtol=1e-5,
         )
     assert all((p.read_bytes(), p.stat().st_mtime_ns) == v for p, v in before.items())
 
@@ -82,11 +93,15 @@ def test_notebook_reuses_saved_results_without_fitting(
 def test_output_policy_allows_overwrite_and_detects_reuse(tmp_path):
     directory = tmp_path / "sub-07/ses-nsd10/func"
     directory.mkdir(parents=True)
-    (directory / "sub-07_ses-nsd10_task-nsdcore_desc-notebook_metadata.json").write_text("{}")
+    (
+        directory / "sub-07_ses-nsd10_task-nsdcore_desc-notebook_metadata.json"
+    ).write_text("{}")
     with pytest.raises(FileExistsError):
         workflow_outputs.check_output(tmp_path)
     assert workflow_outputs.check_output(tmp_path, existing_results="reuse") is True
-    assert workflow_outputs.check_output(tmp_path, existing_results="overwrite") is False
+    assert (
+        workflow_outputs.check_output(tmp_path, existing_results="overwrite") is False
+    )
     with pytest.raises(ValueError, match="existing_results"):
         workflow_outputs.check_output(tmp_path, existing_results="typo")
 
@@ -94,7 +109,9 @@ def test_output_policy_allows_overwrite_and_detects_reuse(tmp_path):
 def test_reuse_rejects_partial_outputs(tmp_path):
     directory = tmp_path / "sub-07/ses-nsd10/func"
     directory.mkdir(parents=True)
-    (directory / "sub-07_ses-nsd10_task-nsdcore_desc-notebook_partial.tsv").write_text("x\n1\n")
+    (directory / "sub-07_ses-nsd10_task-nsdcore_desc-notebook_partial.tsv").write_text(
+        "x\n1\n"
+    )
     with pytest.raises(ValueError, match="incomplete"):
         workflow_outputs.check_output(tmp_path, existing_results="reuse")
 
@@ -104,5 +121,7 @@ def test_reuse_rejects_changed_analysis_settings(tmp_path):
 
     metadata = {"settings": {"ridge_mode": "fractional_cv", "hrf_seed": 0}}
     with pytest.raises(ValueError, match="hrf_seed"):
-        validate_saved_settings(metadata, {"ridge_mode": "fractional_cv", "hrf_seed": 1})
+        validate_saved_settings(
+            metadata, {"ridge_mode": "fractional_cv", "hrf_seed": 1}
+        )
     validate_saved_settings(metadata, {**metadata["settings"], "n_jobs": 8})

@@ -20,13 +20,28 @@ def _stem(subject, session):
     return f"{subject}/{session}/func/{subject}_{session}_task-nsdcore"
 
 
-def check_output(output, subject="sub-07", session="ses-nsd10"):
-    """Catch prior notebook outputs before launching a long analysis."""
+def check_output(
+    output, subject="sub-07", session="ses-nsd10", *, existing_results="error"
+):
+    """Return whether to reuse a saved analysis; otherwise authorize a fresh fit."""
+    if existing_results not in ("error", "reuse", "overwrite"):
+        raise ValueError("existing_results must be error, reuse, or overwrite")
     directory = Path(output) / subject / session / "func"
-    if any(directory.glob(f"{subject}_{session}_task-nsdcore*desc-notebook*")):
+    exists = any(directory.glob(f"{subject}_{session}_task-nsdcore*desc-notebook*"))
+    if exists and existing_results == "error":
         raise FileExistsError(
-            f"Notebook outputs already exist in {directory}; choose a new output_root"
+            f"Notebook outputs already exist in {directory}; set existing_results "
+            "to reuse or overwrite, or choose a new output_root"
         )
+    if exists and existing_results == "reuse":
+        if not (
+            Path(output) / f"{_stem(subject, session)}_desc-notebook_metadata.json"
+        ).is_file():
+            raise ValueError(
+                "Saved notebook results are incomplete; choose overwrite to refit"
+            )
+        return True
+    return False
 
 
 def _map(stem, brain, descriptor, statistic, values, names):
@@ -283,7 +298,12 @@ def save_workflow(
     session="ses-nsd10",
 ):
     """Use separate notebook descriptors so earlier script outputs are preserved."""
-    check_output(output, subject, session)
+    policy = settings.get("existing_results", "error")
+    if check_output(output, subject, session, existing_results=policy):
+        directory = Path(output) / subject / session / "func"
+        return tuple(
+            sorted(directory.glob(f"{subject}_{session}_task-nsdcore*desc-notebook*"))
+        )
     stem, brain = _stem(subject, session), runs[0].image.header.get_axis(1)
     artifacts = _glm_artifacts(stem, brain, glms, runs)
     artifacts.extend(_hrf_artifacts(stem, brain, selections, library))
@@ -309,6 +329,7 @@ def save_workflow(
         output,
         artifacts,
         source_paths=[p for r in runs for p in _input_paths(r.inputs)],
+        overwrite=policy == "overwrite",
     )
 
 
