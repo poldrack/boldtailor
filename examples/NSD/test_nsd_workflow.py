@@ -326,7 +326,13 @@ def preview_library(tmp_path, **overrides):
 
     plt.switch_backend("Agg")
     cells = {c.id: c for c in nbformat.read(NOTEBOOK, as_version=4).cells}
-    context = {"NSD_CONFIG": {"output_root": str(tmp_path / "output"), **overrides}}
+    context = {
+        "NSD_CONFIG": {
+            "bids_root": str(tmp_path / "bids"),
+            "output_root": str(tmp_path / "output"),
+            **overrides,
+        }
+    }
     try:
         exec(cells["de5dc917"].source, context)
         # These cells run without Jupyter; only suppress Agg's show warning.
