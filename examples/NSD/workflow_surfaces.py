@@ -88,14 +88,12 @@ def _color_scale(projected, statistic):
         a[np.isfinite(a)] for mapping in projected.values() for a in mapping.values()
     ]
     finite = np.concatenate(arrays) if arrays else np.array([])
-    if statistic in ("rt", "t"):
+    if statistic == "t":
+        return (-10.0, 10.0), "RdBu_r", "Beta-series t versus zero (independent trials)"
+    if statistic == "rt":
         limit = float(np.max(np.abs(finite))) if len(finite) else 1.0
         limit = limit or 1.0
-        label = (
-            "Within-run-centered beta–RT Pearson r"
-            if statistic == "rt"
-            else "Beta-series t versus zero (independent trials)"
-        )
+        label = "Within-run-centered beta–RT Pearson r"
         return (-limit, limit), "RdBu_r", label
     lower = min(0.0, float(np.min(finite))) if len(finite) else 0.0
     label = (
@@ -151,7 +149,7 @@ def surface_figure(maps, brain, meshes, *, statistic, title=None):
 
     R² and ΔR² span 0–1 (extended below zero when needed). ΔR² uses a square-root
     heat-color progression to emphasize small values, with ticks in original units.
-    RT and t use a symmetric range covering all finite cortical values.
+    RT uses a symmetric range covering all finite cortical values; t uses ±10.
     Volumetric structures
     never affect the plots or color limits. Input maps and meshes are unchanged.
     """

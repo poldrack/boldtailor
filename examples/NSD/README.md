@@ -194,7 +194,8 @@ not an explicit task-versus-rest contrast. It ignores covariance among trial
 estimates, shrinkage, and HRF/ridge selection uncertainty.
 
 The notebook displays t histograms and, when matching surfaces are available,
-signed cortical t maps using a shared symmetric scale. No significance threshold
+signed cortical t maps using a shared −10 to +10 scale, with values outside that
+range shown in the endpoint colors. No significance threshold
 is applied. For each model, `desc-notebook<model>_stat-activation.dscalar.nii`
 contains `mean_beta`, `t`, `p_uncorrected` (two-sided), `n_trials`, and `df`.
 Fewer than two finite trials or zero sample variance gives NaN t/p; no finite
