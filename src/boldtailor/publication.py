@@ -2,30 +2,34 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import io
 import json
 import math
 import os
 from pathlib import Path, PurePosixPath
 import shutil
-import stat
 from uuid import uuid4
-
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - conservative non-POSIX fallback
-    fcntl = None
 
 from filelock import FileLock, Timeout
 
 _CONTROL_DIRECTORY = ".boldtailor"
 _FAILURE_LOG = "publication_failures.jsonl"
-_PROVENANCE_PATH = "logs/boldtailor_provenance.json"
 
 
 class PublicationError(RuntimeError):
-    """A transactional publication attempt could not be completed."""
+    """Publication failed; inspect the cause and any retained rollback backups."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        recovery_directory: Path | None = None,
+        rollback_errors: Sequence[Exception] = (),
+    ) -> None:
+        super().__init__(message)
+        self.recovery_directory = recovery_directory
+        self.rollback_errors = tuple(rollback_errors)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,36 +46,18 @@ class Artifact:
 
 @dataclass(slots=True)
 class _Transaction:
-    identifier: str
     root: Path
-    stage: Path
-    backups: Path
-    backed_up: list[_AnchoredEntry]
-    promoted: list[_AnchoredEntry]
-    unrestored: list[str]
-
-
-@dataclass(slots=True)
-class _AnchoredEntry:
-    root: Path
-    path: str
-    descriptor: int
-    identity: tuple[int, int]
+    backed_up: list[str] = field(default_factory=list)
+    promoted: list[str] = field(default_factory=list)
+    created: bool = False
 
     @property
-    def name(self) -> str:
-        return PurePosixPath(self.path).name
+    def stage(self) -> Path:
+        return self.root / "stage"
 
-
-@dataclass(frozen=True, slots=True)
-class _AnchoredPath(os.PathLike[str]):
-    entry: _AnchoredEntry
-
-    def __fspath__(self) -> str:
-        return str(_descriptor_current_path(self.entry.descriptor) / self.entry.name)
-
-    def __str__(self) -> str:
-        return self.__fspath__()
+    @property
+    def backups(self) -> Path:
+        return self.root / "backups"
 
 
 def publish_artifact_set(
@@ -80,7 +66,6 @@ def publish_artifact_set(
     *,
     source_paths: Iterable[str | os.PathLike[str]] = (),
     overwrite: bool = False,
-    retain_incomplete: bool = False,
     lock_timeout: float = 30.0,
 ) -> tuple[Path, ...]:
     """Publish with a writer lock, per-file replacement, and failure rollback.
@@ -106,7 +91,6 @@ def publish_artifact_set(
                 requested,
                 sources,
                 overwrite=overwrite,
-                retain_incomplete=retain_incomplete,
             )
     except Timeout as error:
         publication_error = PublicationError(
@@ -123,16 +107,17 @@ def _publish_locked(
     source_paths: tuple[Path, ...],
     *,
     overwrite: bool,
-    retain_incomplete: bool,
 ) -> tuple[Path, ...]:
     _preflight(destination, artifacts, source_paths, overwrite=overwrite)
-    transaction = _new_transaction(control)
+    transaction = _Transaction(control / "transactions" / str(uuid4()))
     try:
+        _safe_mkdir(transaction.root.parent, control)
         _stage_artifacts(transaction, artifacts)
-        _promote_artifacts(destination, transaction, artifacts, overwrite=overwrite)
+        if overwrite:
+            _backup_existing(destination, transaction, artifacts)
+        _promote_staged(destination, transaction, artifacts)
     except Exception as error:
-        _handle_failure(control, transaction, artifacts, error, retain_incomplete)
-        raise PublicationError("artifact publication failed") from error
+        raise _handle_failure(destination, control, transaction, error) from error
     _remove_transaction(transaction)
     _fsync_directory(destination)
     return tuple(destination / artifact.path for artifact in artifacts)
@@ -341,20 +326,11 @@ def _reject_symlink(path: Path) -> None:
         raise ValueError(f"publication path is a symlink: {path}")
 
 
-def _new_transaction(control: Path) -> _Transaction:
-    identifier = str(uuid4())
-    transactions = control / "transactions"
-    _safe_mkdir(transactions, control)
-    root = transactions / identifier
-    root.mkdir(exist_ok=False)
-    stage = root / "stage"
-    backups = root / "backups"
-    stage.mkdir()
-    backups.mkdir()
-    return _Transaction(identifier, root, stage, backups, [], [], [])
-
-
 def _stage_artifacts(transaction: _Transaction, artifacts: Sequence[Artifact]) -> None:
+    transaction.root.mkdir(exist_ok=False)
+    transaction.created = True
+    transaction.stage.mkdir()
+    transaction.backups.mkdir()
     for artifact in artifacts:
         staged = transaction.stage / artifact.path
         staged.parent.mkdir(parents=True, exist_ok=True)
@@ -365,177 +341,21 @@ def _stage_artifacts(transaction: _Transaction, artifacts: Sequence[Artifact]) -
         _fsync_directory(staged.parent)
 
 
-def _require_anchored_operations() -> None:
-    required = (os.open, os.mkdir, os.stat, os.unlink)
-    if (
-        not hasattr(os, "O_NOFOLLOW")
-        or not hasattr(os, "O_DIRECTORY")
-        or not all(operation in os.supports_dir_fd for operation in required)
-        or not _has_descriptor_path_support()
-    ):
-        raise PublicationError("platform lacks safe no-follow publication support")
-
-
-def _has_descriptor_path_support() -> bool:
-    return _has_f_getpath() or Path("/proc/self/fd").is_dir()
-
-
-def _has_f_getpath() -> bool:
-    return fcntl is not None and hasattr(fcntl, "F_GETPATH")
-
-
-def _descriptor_current_path(descriptor: int) -> Path:
-    if _has_f_getpath():
-        buffer = fcntl.fcntl(descriptor, fcntl.F_GETPATH, b"\0" * 1024)
-        return Path(os.fsdecode(buffer.split(b"\0", 1)[0]))
-    proc_path = Path("/proc/self/fd") / str(descriptor)
-    if proc_path.is_dir():
-        return proc_path
-    raise PublicationError("directory descriptor paths are unavailable")
-
-
-def _open_anchored_entry(
-    root: Path,
-    path: str,
-    *,
-    create: bool = False,
-) -> _AnchoredEntry:
-    parts = PurePosixPath(path).parts
-    descriptor = _open_directory(root)
-    try:
-        for part in parts[:-1]:
-            child = _open_child_directory(descriptor, part, create=create)
-            os.close(descriptor)
-            descriptor = child
-        identity = _descriptor_identity(descriptor)
-        return _AnchoredEntry(root, path, descriptor, identity)
-    except Exception:
-        os.close(descriptor)
-        raise
-
-
-def _open_directory(path: Path) -> int:
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    descriptor = os.open(path, flags)
-    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
-        os.close(descriptor)
-        raise ValueError(f"publication path is not a directory: {path}")
-    return descriptor
-
-
-def _open_child_directory(parent: int, name: str, *, create: bool) -> int:
-    if create:
-        try:
-            os.mkdir(name, dir_fd=parent)
-        except FileExistsError:
-            pass
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    return os.open(name, flags, dir_fd=parent)
-
-
-def _descriptor_identity(descriptor: int) -> tuple[int, int]:
-    details = os.fstat(descriptor)
-    return details.st_dev, details.st_ino
-
-
-def _entry_is_current(entry: _AnchoredEntry) -> bool:
-    try:
-        current = _open_anchored_entry(entry.root, entry.path)
-    except OSError:
-        return False
-    try:
-        return current.identity == entry.identity
-    finally:
-        _close_entry(current)
-
-
-def _anchored_path(entry: _AnchoredEntry) -> _AnchoredPath:
-    return _AnchoredPath(entry)
-
-
-def _anchored_replace(source: _AnchoredEntry, target: _AnchoredEntry) -> None:
-    if not _entry_is_current(target):
-        raise PublicationError("destination identity changed before replacement")
-    os.replace(_anchored_path(source), _anchored_path(target))
-    _fsync_descriptor(target.descriptor)
-
-
-def _anchored_rename(source: _AnchoredEntry, target: _AnchoredEntry) -> None:
-    if not _entry_is_current(target):
-        raise OSError("destination identity changed before restore fallback")
-    os.rename(_anchored_path(source), _anchored_path(target))
-    _fsync_descriptor(target.descriptor)
-
-
-def _close_entry(entry: _AnchoredEntry | None) -> None:
-    if entry is not None and entry.descriptor >= 0:
-        os.close(entry.descriptor)
-        entry.descriptor = -1
-
-
-def _entry_exists(entry: _AnchoredEntry) -> bool:
-    try:
-        os.stat(entry.name, dir_fd=entry.descriptor, follow_symlinks=False)
-    except FileNotFoundError:
-        return False
-    return True
-
-
-def _existing_destination_entry(root: Path, path: str) -> _AnchoredEntry | None:
-    try:
-        entry = _open_anchored_entry(root, path)
-    except FileNotFoundError:
-        return None
-    if not _entry_exists(entry):
-        _close_entry(entry)
-        return None
-    details = os.stat(entry.name, dir_fd=entry.descriptor, follow_symlinks=False)
-    if not stat.S_ISREG(details.st_mode):
-        _close_entry(entry)
-        raise ValueError(f"artifact destination is not a regular file: {path}")
-    return entry
-
-
-def _promote_artifacts(
-    destination: Path,
-    transaction: _Transaction,
-    artifacts: Sequence[Artifact],
-    *,
-    overwrite: bool,
-) -> None:
-    try:
-        _require_anchored_operations()
-        if overwrite:
-            _backup_existing(destination, transaction, artifacts)
-        _promote_staged(destination, transaction, artifacts)
-    except Exception:
-        _rollback(transaction)
-        raise
-
-
 def _backup_existing(
     destination: Path,
     transaction: _Transaction,
     artifacts: Sequence[Artifact],
 ) -> None:
     for artifact in artifacts:
-        target_entry = _existing_destination_entry(destination, artifact.path)
-        if target_entry is None:
+        target = destination / artifact.path
+        if not target.exists():
             continue
-        backup_entry = _open_anchored_entry(
-            transaction.backups,
-            artifact.path,
-            create=True,
-        )
-        try:
-            _anchored_replace(target_entry, backup_entry)
-            transaction.backed_up.append(target_entry)
-            target_entry = None
-            if not _entry_is_current(transaction.backed_up[-1]):
-                raise PublicationError("destination identity changed during backup")
-        finally:
-            _close_entry(target_entry)
-            _close_entry(backup_entry)
+        backup = transaction.backups / artifact.path
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(target, backup)
+        transaction.backed_up.append(artifact.path)
+        _fsync_directory(target.parent)
+        _fsync_directory(backup.parent)
 
 
 def _promote_staged(
@@ -544,169 +364,81 @@ def _promote_staged(
     artifacts: Sequence[Artifact],
 ) -> None:
     for artifact in artifacts:
-        staged_entry = _open_anchored_entry(transaction.stage, artifact.path)
-        target_entry = _open_anchored_entry(
-            destination,
-            artifact.path,
-            create=True,
-        )
-        try:
-            _anchored_replace(staged_entry, target_entry)
-            transaction.promoted.append(target_entry)
-            target_entry = None
-            if not _entry_is_current(transaction.promoted[-1]):
-                raise PublicationError("destination identity changed during promotion")
-        finally:
-            _close_entry(staged_entry)
-            _close_entry(target_entry)
+        target = destination / artifact.path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(transaction.stage / artifact.path, target)
+        transaction.promoted.append(artifact.path)
+        _fsync_directory(target.parent)
 
 
-def _rollback(transaction: _Transaction) -> None:
-    rollback_errors = []
-    for promoted in reversed(transaction.promoted):
+def _rollback(destination: Path, transaction: _Transaction) -> tuple[Exception, ...]:
+    errors = []
+    for path in reversed(transaction.promoted):
+        if path in transaction.backed_up:
+            continue
+        target = destination / path
         try:
-            _unlink_anchored(promoted)
-        except OSError as error:
-            rollback_errors.append(error)
-        finally:
-            _close_entry(promoted)
-    for target in reversed(transaction.backed_up):
-        try:
-            _restore_backup(transaction, target)
+            target.unlink(missing_ok=True)
+            _fsync_directory(target.parent)
         except Exception as error:
-            rollback_errors.append(error)
-            transaction.unrestored.append(target.path)
-        finally:
-            _close_entry(target)
-    if rollback_errors:
-        raise PublicationError("artifact rollback failed") from rollback_errors[0]
-
-
-def _unlink_anchored(entry: _AnchoredEntry) -> None:
-    try:
-        os.unlink(entry.name, dir_fd=entry.descriptor)
-    except FileNotFoundError:
-        return
-    _fsync_descriptor(entry.descriptor)
-
-
-def _restore_backup(transaction: _Transaction, target: _AnchoredEntry) -> None:
-    backup = _open_anchored_entry(transaction.backups, target.path)
-    try:
-        if _entry_exists(target):
-            raise FileExistsError(f"rollback target is occupied: {target.path}")
+            errors.append(error)
+    for path in reversed(transaction.backed_up):
+        target = destination / path
         try:
-            _anchored_replace(backup, target)
-        except OSError:
-            _anchored_rename(backup, target)
-    finally:
-        _close_entry(backup)
+            os.replace(transaction.backups / path, target)
+            _fsync_directory(target.parent)
+        except Exception as error:
+            errors.append(error)
+    return tuple(errors)
 
 
 def _handle_failure(
+    destination: Path,
     control: Path,
     transaction: _Transaction,
-    artifacts: Sequence[Artifact],
     error: Exception,
-    retain_incomplete: bool,
-) -> None:
-    recovery_safe = True
-    if transaction.unrestored:
-        recovery_safe = _retain_recovery(control, transaction)
-    if retain_incomplete:
-        _retain_failed_artifacts(control, transaction.identifier, artifacts)
-    _record_failure(control, transaction.identifier, error)
-    if recovery_safe:
+) -> PublicationError:
+    rollback_errors = _rollback(destination, transaction)
+    recovery = transaction.root if rollback_errors else None
+    _record_failure(
+        control,
+        transaction.root.name,
+        error,
+        rollback_errors=rollback_errors,
+        recovery_directory=(
+            recovery.relative_to(destination).as_posix()
+            if recovery is not None
+            else None
+        ),
+    )
+    if recovery is None:
         _remove_transaction(transaction)
+    message = "artifact publication failed"
+    if recovery is not None:
+        message += f"; rollback incomplete, recovery files retained at {recovery}"
+    return PublicationError(
+        message, recovery_directory=recovery, rollback_errors=rollback_errors
+    )
 
 
-def _retain_recovery(control: Path, transaction: _Transaction) -> bool:
-    failed = control / "failed" / transaction.identifier
-    recovery = failed / "recovery"
-    try:
-        _safe_mkdir(recovery, control)
-        for path in transaction.unrestored:
-            source = transaction.backups / path
-            target = recovery / path
-            _copy_recovery_file(source, target)
-        _write_recovery_record(failed, transaction)
-        _fsync_directory(recovery)
-    except (OSError, ValueError):
-        return False
-    return True
-
-
-def _copy_recovery_file(source: Path, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    flags = os.O_RDONLY | os.O_NOFOLLOW
-    source_descriptor = os.open(source, flags)
-    try:
-        with os.fdopen(source_descriptor, "rb", closefd=False) as source_stream:
-            with target.open("xb") as target_stream:
-                shutil.copyfileobj(source_stream, target_stream)
-                target_stream.flush()
-                os.fsync(target_stream.fileno())
-    finally:
-        os.close(source_descriptor)
-
-
-def _write_recovery_record(failed: Path, transaction: _Transaction) -> None:
-    record = {
-        "execution_id": transaction.identifier,
-        "published": False,
-        "status": "failed",
-    }
-    payload = (
-        json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode()
-    with (failed / "recovery.json").open("xb") as stream:
-        stream.write(payload)
-        stream.flush()
-        os.fsync(stream.fileno())
-
-
-def _retain_failed_artifacts(
+def _record_failure(
     control: Path,
     identifier: str,
-    artifacts: Sequence[Artifact],
+    error: Exception,
+    *,
+    rollback_errors: Sequence[Exception] = (),
+    recovery_directory: str | None = None,
 ) -> None:
-    root = control / "failed" / identifier / "artifacts"
-    _safe_mkdir(root, control)
-    for artifact in artifacts:
-        target = root / artifact.path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        payload = _failed_payload(artifact, identifier)
-        with target.open("xb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
-    _fsync_directory(root)
-
-
-def _failed_payload(artifact: Artifact, identifier: str) -> bytes:
-    if artifact.path != _PROVENANCE_PATH:
-        return artifact.payload
-    provenance = json.loads(artifact.payload)
-    if not isinstance(provenance, dict):
-        return artifact.payload
-    provenance["publication"] = {
-        "execution_id": identifier,
-        "published": False,
-        "status": "failed",
-    }
-    return (
-        json.dumps(provenance, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode("utf-8")
-
-
-def _record_failure(control: Path, identifier: str, error: Exception) -> None:
     record = {
+        "rollback_failed": bool(rollback_errors),
         "error_type": type(error).__name__,
         "execution_id": identifier,
         "message": _sanitized_message(error),
         "published": False,
         "status": "failed",
     }
+    if recovery_directory is not None:
+        record["recovery_directory"] = recovery_directory
     payload = (
         json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode()
@@ -732,14 +464,15 @@ def _sanitized_message(error: Exception) -> str:
 
 
 def _remove_transaction(transaction: _Transaction) -> None:
-    for entry in (*transaction.promoted, *transaction.backed_up):
-        _close_entry(entry)
-    if transaction.root.is_symlink():
+    if not transaction.created:
         return
-    shutil.rmtree(transaction.root, ignore_errors=True)
-    parent = transaction.root.parent
-    if parent.is_dir() and not any(parent.iterdir()):
-        parent.rmdir()
+    try:
+        shutil.rmtree(transaction.root)
+        parent = transaction.root.parent
+        if not any(parent.iterdir()):
+            parent.rmdir()
+    except OSError:
+        pass
 
 
 def _fsync_directory(path: Path) -> None:
@@ -752,10 +485,3 @@ def _fsync_directory(path: Path) -> None:
     finally:
         if descriptor is not None:
             os.close(descriptor)
-
-
-def _fsync_descriptor(descriptor: int) -> None:
-    try:
-        os.fsync(descriptor)
-    except OSError:
-        pass

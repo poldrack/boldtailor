@@ -340,12 +340,17 @@ the analysis record, with optional draft BIDS provenance files.
 
 `boldtailor.publication.Artifact(path, payload)` describes a file to
 save. `publish_artifact_set(destination, artifacts, *, source_paths=(),
-overwrite=False, retain_incomplete=False, lock_timeout=30.0)` returns the saved
+overwrite=False, lock_timeout=30.0)` returns the saved
 paths. Files are replaced individually under a writer lock; publication is
 not an atomic snapshot for concurrent readers. Existing files are protected by
 default; `source_paths` protects inputs from accidental replacement. Promotion
 failures raise `PublicationError`; invalid arguments and preflight collisions
-can raise `ValueError` or `FileExistsError` before publication starts.
+can raise `ValueError`, `TypeError`, or `FileExistsError` before publication starts.
+If rollback fails, `PublicationError.recovery_directory` identifies the retained
+transaction directory and `rollback_errors` contains the recovery exceptions.
+The original operation error remains the exception's cause. See the
+[publication migration](publication-migration.md) for recovery and the removed
+`retain_incomplete` argument.
 
 For example, after the README's fit, save a contrast array with its records:
 

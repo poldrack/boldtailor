@@ -346,8 +346,6 @@ def test_failure_log_is_single_jsonl_stream_and_redacts_sensitive_context(
         assert forbidden not in serialized
 
 
-
-
 def test_source_files_are_read_only_inputs_on_success_and_failure(
     tmp_path, monkeypatch
 ):
@@ -447,12 +445,6 @@ def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
     _assert_no_transaction_debris(destination)
 
 
-
-
-
-
-
-
 @pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
 def test_publication_rejects_nonfinite_timeout_before_writing(tmp_path, timeout):
     destination = tmp_path / "output"
@@ -487,7 +479,9 @@ def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name)
     assert not destination.exists()
 
 
-def test_publication_works_without_descriptor_relative_operations(tmp_path, monkeypatch):
+def test_publication_works_without_descriptor_relative_operations(
+    tmp_path, monkeypatch
+):
     import boldtailor.publication as publication
 
     monkeypatch.setattr(publication.os, "supports_dir_fd", set())
@@ -524,8 +518,11 @@ def test_failed_restore_retains_original_and_reports_recovery(
     if block_diagnostics:
         (destination / ".boldtailor" / "publication_failures.jsonl").mkdir(parents=True)
     with pytest.raises(PublicationError) as caught:
-        publish_artifact_set(destination, [Artifact("old.bin", b"new-old"),
-                                          Artifact("new.bin", b"new")], overwrite=True)
+        publish_artifact_set(
+            destination,
+            [Artifact("old.bin", b"new-old"), Artifact("new.bin", b"new")],
+            overwrite=True,
+        )
     error = caught.value
     assert error.__cause__ is promotion_error
     assert error.rollback_errors == (restore_error,)
@@ -539,7 +536,9 @@ def test_failed_restore_retains_original_and_reports_recovery(
 def test_removed_retention_option_is_rejected_before_writing(tmp_path):
     destination = tmp_path / "output"
     with pytest.raises(TypeError, match="retain_incomplete"):
-        publish_artifact_set(destination, [Artifact("a.bin", b"a")], retain_incomplete=True)
+        publish_artifact_set(
+            destination, [Artifact("a.bin", b"a")], retain_incomplete=True
+        )
     assert not destination.exists()
 
 
@@ -596,7 +595,9 @@ def test_cleanup_failure_does_not_change_publication_outcome(
             assert paths[0].read_bytes() == b"a"
 
 
-def test_existing_transaction_is_never_removed_on_identifier_collision(tmp_path, monkeypatch):
+def test_existing_transaction_is_never_removed_on_identifier_collision(
+    tmp_path, monkeypatch
+):
     import boldtailor.publication as publication
 
     identifier = UUID("123e4567-e89b-12d3-a456-426614174000")

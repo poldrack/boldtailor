@@ -293,13 +293,28 @@ that do not share the writer lock can observe partial promotion. Existing
 files are protected unless `overwrite=True`. Preflight known output collisions
 before expensive fitting, and still let the publisher perform its own checks.
 
+The writer uses ordinary `Path` operations and `os.replace` under one
+`FileLock`. Descriptor anchoring, platform capability probing, and secondary
+recovery copying have been removed. Preflight rejects existing symlinks, source
+aliases, unsafe paths, and case-folded collisions. This is a local workflow
+contract for cooperating writers, not protection against a process actively
+swapping directories during publication. There is no crash-recovery protocol.
+
 On failure, the normal diagnostic is
-`.boldtailor/publication_failures.jsonl`. If rollback cannot restore an
-original file, its last recoverable copy is retained under
-`.boldtailor/failed/<execution-id>/recovery/`. This recovery copy is kept
-regardless of `retain_incomplete`. Setting `retain_incomplete=True` also keeps
-the failed new artifact set and marks retained canonical provenance as failed
-and unpublished. See `tests/test_publication.py` for recovery and path-safety cases.
+`.boldtailor/publication_failures.jsonl`. If rollback cannot restore an original
+or remove a new output, the transaction is retained under
+`.boldtailor/transactions/<execution-id>/`. The raised `PublicationError`
+reports that directory in its message and `recovery_directory` attribute;
+`rollback_errors` holds individual errors, and `__cause__` is the original
+publication failure. Unrestored originals remain under `backups/` within the
+transaction. Inspect and recover them manually after resolving the underlying
+failure; a partial new output may still exist at the destination.
+
+`retain_incomplete` has been removed. Successful rollback discards new staged
+artifacts. Failed rollback retains the transaction automatically without
+regenerating artifacts or rewriting provenance. Cleanup is best effort;
+subsequent publications never delete orphan transaction directories. See the
+[publication migration](publication-migration.md) and `tests/test_publication.py`.
 
 ## NSD exports and parallel execution
 
