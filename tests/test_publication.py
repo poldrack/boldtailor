@@ -594,3 +594,20 @@ def test_cleanup_failure_does_not_change_publication_outcome(
         else:
             paths = publish_artifact_set(destination, [Artifact("a.bin", b"a")])
             assert paths[0].read_bytes() == b"a"
+
+
+def test_existing_transaction_is_never_removed_on_identifier_collision(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    identifier = UUID("123e4567-e89b-12d3-a456-426614174000")
+    destination = tmp_path / "output"
+    orphan = destination / ".boldtailor" / "transactions" / str(identifier)
+    orphan.mkdir(parents=True)
+    backup = orphan / "only-original.bin"
+    backup.write_bytes(b"preserve-me")
+    monkeypatch.setattr(publication, "uuid4", lambda: identifier)
+    with pytest.raises(PublicationError) as caught:
+        publish_artifact_set(destination, [Artifact("result.bin", b"result")])
+    assert isinstance(caught.value.__cause__, FileExistsError)
+    assert backup.read_bytes() == b"preserve-me"
+    assert not (destination / "result.bin").exists()
