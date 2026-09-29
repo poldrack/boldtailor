@@ -3,7 +3,8 @@
 Publication uses a local destination shared by cooperating writers. Artifact
 paths are relative POSIX paths; existing symlinks and case-folded collisions
 are rejected. The `.boldtailor` control directory is reserved regardless of
-case. Destination aliases containing `..` are normalized after checking for
+case. Protected inputs must also be outside this control directory, since
+publication writes its lock, staging files, and diagnostics there. Destination aliases containing `..` are normalized after checking for
 symlinks, so they cannot bypass source/output overlap checks.
 
 `lock_timeout` must be finite and non-negative; booleans are invalid.

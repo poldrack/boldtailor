@@ -228,7 +228,7 @@ def _preflight(
 ) -> None:
     _require_safe_destination(destination)
     targets = tuple(destination / artifact.path for artifact in artifacts)
-    _reject_source_overlap(targets, source_paths)
+    _reject_source_overlap((destination / _CONTROL_DIRECTORY, *targets), source_paths)
     _reject_target_collisions(destination, targets, overwrite=overwrite)
 
 

@@ -650,8 +650,12 @@ def test_publication_failure_ledger_omits_exception_names_and_text(
     assert "PrivatePatientError" not in json.dumps(records)
 
 
-@pytest.mark.parametrize("source_name", ["publication.lock", "publication_failures.jsonl"])
-def test_control_files_cannot_overwrite_protected_sources(tmp_path, monkeypatch, source_name):
+@pytest.mark.parametrize(
+    "source_name", ["publication.lock", "publication_failures.jsonl"]
+)
+def test_control_files_cannot_overwrite_protected_sources(
+    tmp_path, monkeypatch, source_name
+):
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
