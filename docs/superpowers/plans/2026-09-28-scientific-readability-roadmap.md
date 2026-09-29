@@ -7,9 +7,9 @@
 
 This roadmap keeps the full architectural scope visible. Each stage produces
 working software and receives a concrete implementation plan before execution.
-Stages 1–4 are implemented; the
+Stages 1–5 are implemented; the
 [numerical/CV plan](2026-09-28-scientific-readability-numerics.md) records the second
-stage. Later stages retain separate implementation plans. This is deliberate:
+stage. Each later stage has a separate implementation plan. This is deliberate:
 decisions about the numerical interfaces should inform the later fit and
 workflow plans, rather than locking all of them into a large speculative rewrite.
 
@@ -147,6 +147,11 @@ remain checkout-local examples; the installed core acquires no new imaging API
 or dependencies; default pytest still runs the whole suite.
 
 ## Final branch review
+
+Completed against `57acff5`; see the [final validation and review record](../../validation/scientific-readability-notebooks-2026-09-28.md).
+The one important completion gap (the stop-signal notebook's personal data
+default) was fixed with RED–GREEN tests. The review records optional cleanup
+and separate scientific follow-ups. The branch remains unmerged.
 
 Compare the branch with `57acff5`, distinguishing API changes from scientific
 changes. Require numerical/CV regressions, installed-wheel checks, formatting,

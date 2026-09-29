@@ -2,6 +2,8 @@
 
 > **For agentic workers:** Use superpowers:executing-plans inline. Steps use checkbox syntax for tracking.
 
+**Status:** Implemented and verified: 888 tests pass. Final review and evidence are in [the validation record](../../validation/scientific-readability-notebooks-2026-09-28.md). Branch remains unmerged.
+
 **Goal:** Make the NSD notebooks readable scientific narratives without adding dataset or imaging APIs to Boldtailor.
 
 **Architecture:** The user approved keeping array modeling in the core and NSD/CIFTI/NIfTI adapters in examples. Extract presentation and path configuration into small example-local functions. Keep model specification, HRF construction, selection, fit calls, and interpretation visible in notebooks. No package moves, new extras, or scientific changes.
@@ -32,7 +34,7 @@
 
 **Interfaces:** `notebook_paths(overrides=None)` returns string paths for `bids_root`, `fmriprep_root`, and `output_root`, from explicit overrides or `NSD_BIDS_ROOT`, `NSD_FMRIPREP_ROOT`, `NSD_OUTPUT_ROOT`; derivative defaults follow the selected BIDS root. Plot functions consume existing library/results and return Figures or `(DataFrame, Figure)`, with no display or fit side effects.
 
-- [ ] Write direct behavior tests for path precedence, missing paths, plotted HRF curves/peak-time colors, paired parameter/curve summaries, GLM comparisons, session matrices, and all-undefined inputs. For example:
+- [x] Write direct behavior tests for path precedence, missing paths, plotted HRF curves/peak-time colors, paired parameter/curve summaries, GLM comparisons, session matrices, and all-undefined inputs. For example:
 
   ```python
   monkeypatch.setenv("NSD_BIDS_ROOT", str(tmp_path))
@@ -41,12 +43,12 @@
   assert paths["output_root"] == str(tmp_path / "results")
   ```
 
-- [ ] Run `uv run pytest examples/NSD/test_notebook_helpers.py -q -W error`; expect failures naming the absent helpers. Commit tests.
-- [ ] Implement small example-local path and plot functions. Move the corresponding notebook plotting blocks into them, returning figures explicitly; keep all fitting calls visible. Replace personal paths with the helper, preserving injected configuration. Update the preview test setup to supply its synthetic BIDS root.
-- [ ] Run direct helper tests and existing NSD notebook execution tests; expect all passing. Check actual figure data, not source-text spelling.
-- [ ] Update NSD README, developer guide, roadmap and design to describe the example/core boundary and configuration. Clear notebook outputs and execution counts.
-- [ ] Run full `uv run pytest -q -W error`, Black, `git diff --check`, wheel build and isolated installed-package smoke test. Commit verified implementation and documentation.
-- [ ] One independent review of this increment; address substantive findings with RED–GREEN tests. Record evidence and remaining full-branch review separately. Keep branch unmerged.
+- [x] Run `uv run pytest examples/NSD/test_notebook_helpers.py -q -W error`; expect failures naming the absent helpers. Commit tests.
+- [x] Implement small example-local path and plot functions. Move the corresponding notebook plotting blocks into them, returning figures explicitly; keep all fitting calls visible. Replace personal paths with the helper, preserving injected configuration. Update the preview test setup to supply its synthetic BIDS root.
+- [x] Run direct helper tests and existing NSD notebook execution tests; expect all passing. Check actual figure data, not source-text spelling.
+- [x] Update NSD README, developer guide, roadmap and design to describe the example/core boundary and configuration. Clear notebook outputs and execution counts.
+- [x] Run full `uv run pytest -q -W error`, Black, `git diff --check`, wheel build and isolated installed-package smoke test. Commit verified implementation and documentation.
+- [x] One independent review of this increment; address substantive findings with RED–GREEN tests. Record evidence and remaining full-branch review separately. Keep branch unmerged.
 
 ## Execution rulings
 

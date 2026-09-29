@@ -4,7 +4,7 @@
 > See the [documentation index](../../README.md) for current API and methods guidance.
 
 Date: 2026-09-28
-Status: approved by the user on 2026-09-28; foundation, numerical, ownership, results, shared-diagnostic, lifecycle/logging/provenance, and publication increments implemented; imaging/notebook work and final whole-branch review remain.
+Status: revised user-approved scope implemented on 2026-09-28, including example-local notebook simplification and final architecture review. The branch remains unmerged. See the [final validation record](../../validation/scientific-readability-notebooks-2026-09-28.md) for evidence, review limitations and optional follow-ups.
 
 ## Purpose and scope
 
