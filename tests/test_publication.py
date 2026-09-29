@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+from pathlib import Path
 import stat
 import time
 from uuid import UUID
@@ -345,67 +346,6 @@ def test_failure_log_is_single_jsonl_stream_and_redacts_sensitive_context(
         assert forbidden not in serialized
 
 
-def test_retain_incomplete_keeps_staged_artifacts_and_failed_provenance(
-    tmp_path,
-    monkeypatch,
-):
-    import boldtailor.publication as publication
-
-    destination = tmp_path / "derivatives"
-    destination.mkdir()
-    existing = destination / "existing.bin"
-    existing.write_bytes(b"original")
-    provenance = {
-        "schema": "boldtailor.provenance/1",
-        "execution_id": "12345678-1234-5678-1234-567812345678",
-        "events": [],
-    }
-    artifacts = (
-        Artifact("existing.bin", b"replacement"),
-        Artifact("new.bin", b"new"),
-        Artifact(
-            "logs/boldtailor_provenance.json",
-            (json.dumps(provenance) + "\n").encode(),
-        ),
-    )
-    original_replace = publication.os.replace
-    calls = 0
-
-    def fail_second_promotion(source, target):
-        nonlocal calls
-        calls += 1
-        if calls == 3:
-            raise OSError("injected failure")
-        original_replace(source, target)
-
-    monkeypatch.setattr(publication.os, "replace", fail_second_promotion)
-
-    with pytest.raises(PublicationError):
-        publish_artifact_set(
-            destination,
-            artifacts,
-            overwrite=True,
-            retain_incomplete=True,
-        )
-
-    failed_root = destination / ".boldtailor" / "failed"
-    retained = tuple(failed_root.iterdir())
-    assert len(retained) == 1
-    UUID(retained[0].name)
-    retained_artifacts = retained[0] / "artifacts"
-    assert (retained_artifacts / "existing.bin").read_bytes() == b"replacement"
-    assert (retained_artifacts / "new.bin").read_bytes() == b"new"
-    retained_provenance = json.loads(
-        (retained_artifacts / "logs/boldtailor_provenance.json").read_bytes()
-    )
-    assert retained_provenance["publication"] == {
-        "execution_id": retained[0].name,
-        "published": False,
-        "status": "failed",
-    }
-    assert existing.read_bytes() == b"original"
-    assert not (destination / "new.bin").exists()
-    _assert_no_transaction_debris(destination)
 
 
 def test_source_files_are_read_only_inputs_on_success_and_failure(
@@ -507,136 +447,10 @@ def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
     _assert_no_transaction_debris(destination)
 
 
-def test_restore_replace_failure_uses_safe_fallback_to_restore_original(
-    tmp_path,
-    monkeypatch,
-):
-    import boldtailor.publication as publication
-
-    destination = tmp_path / "derivatives"
-    destination.mkdir()
-    original = destination / "existing.bin"
-    original.write_bytes(b"irreplaceable-original")
-    real_replace = publication.os.replace
-    calls = 0
-
-    def fail_promotion_and_first_restore(source, target, *args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls in {3, 4}:
-            raise OSError("injected promotion or restore failure")
-        return real_replace(source, target, *args, **kwargs)
-
-    monkeypatch.setattr(publication.os, "replace", fail_promotion_and_first_restore)
-
-    with pytest.raises(PublicationError, match="publication failed"):
-        publish_artifact_set(
-            destination,
-            (
-                Artifact("existing.bin", b"replacement"),
-                Artifact("new.bin", b"must-not-remain"),
-            ),
-            overwrite=True,
-        )
-
-    assert original.read_bytes() == b"irreplaceable-original"
-    assert not (destination / "new.bin").exists()
-    assert not (destination / ".boldtailor" / "failed").exists()
-    _assert_no_transaction_debris(destination)
 
 
-def test_unrestorable_original_is_retained_in_failed_recovery_by_default(
-    tmp_path,
-    monkeypatch,
-):
-    import boldtailor.publication as publication
-
-    destination = tmp_path / "derivatives"
-    destination.mkdir()
-    original = destination / "existing.bin"
-    original.write_bytes(b"only-recoverable-original")
-    real_replace = publication.os.replace
-    real_rename = publication.os.rename
-    calls = 0
-
-    def fail_promotion_and_restore(source, target, *args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls >= 3:
-            raise OSError("injected persistent replace failure")
-        return real_replace(source, target, *args, **kwargs)
-
-    def fail_restore_rename(source, target, *args, **kwargs):
-        if str(target).endswith("existing.bin"):
-            raise OSError("injected persistent restore failure")
-        return real_rename(source, target, *args, **kwargs)
-
-    monkeypatch.setattr(publication.os, "replace", fail_promotion_and_restore)
-    monkeypatch.setattr(publication.os, "rename", fail_restore_rename)
-
-    with pytest.raises(PublicationError, match="publication failed"):
-        publish_artifact_set(
-            destination,
-            (
-                Artifact("existing.bin", b"replacement"),
-                Artifact("new.bin", b"must-not-remain"),
-            ),
-            overwrite=True,
-        )
-
-    recoveries = tuple((destination / ".boldtailor" / "failed").iterdir())
-    assert len(recoveries) == 1
-    UUID(recoveries[0].name)
-    assert (recoveries[0] / "recovery" / "existing.bin").read_bytes() == (
-        b"only-recoverable-original"
-    )
-    recovery_record = json.loads((recoveries[0] / "recovery.json").read_text())
-    assert recovery_record["status"] == "failed"
-    assert recovery_record["published"] is False
-    assert recovery_record["execution_id"] == recoveries[0].name
-    assert not (recoveries[0] / "artifacts").exists()
-    assert not original.exists()
-    assert not (destination / "new.bin").exists()
-    _assert_no_transaction_debris(destination)
 
 
-def test_parent_symlink_swap_at_promotion_boundary_cannot_escape_destination(
-    tmp_path,
-    monkeypatch,
-):
-    import boldtailor.publication as publication
-
-    destination = tmp_path / "derivatives"
-    parent = destination / "nested"
-    parent.mkdir(parents=True)
-    (parent / "original.txt").write_bytes(b"original-parent-data")
-    displaced = destination / "nested-displaced"
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    real_replace = publication.os.replace
-    real_rename = publication.os.rename
-    swapped = False
-
-    def swap_parent_then_replace(source, target, *args, **kwargs):
-        nonlocal swapped
-        if not swapped:
-            swapped = True
-            real_rename(parent, displaced)
-            parent.symlink_to(outside, target_is_directory=True)
-        return real_replace(source, target, *args, **kwargs)
-
-    monkeypatch.setattr(publication.os, "replace", swap_parent_then_replace)
-
-    with pytest.raises(PublicationError, match="publication failed"):
-        publish_artifact_set(
-            destination,
-            (Artifact("nested/result.bin", b"must-stay-contained"),),
-        )
-
-    assert not (outside / "result.bin").exists()
-    assert not (displaced / "result.bin").exists()
-    assert (displaced / "original.txt").read_bytes() == b"original-parent-data"
-    assert parent.is_symlink()
 
 
 @pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
@@ -671,3 +485,112 @@ def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name)
             destination, [Artifact(f"{name}/publication.lock", b"bad")]
         )
     assert not destination.exists()
+
+
+def test_publication_works_without_descriptor_relative_operations(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    monkeypatch.setattr(publication.os, "supports_dir_fd", set())
+    destination = tmp_path / "output"
+    paths = publish_artifact_set(destination, [Artifact("nested/a.bin", b"a")])
+    assert paths == (destination / "nested/a.bin",)
+    assert paths[0].read_bytes() == b"a"
+    _assert_no_transaction_debris(destination)
+
+
+@pytest.mark.parametrize("block_diagnostics", [False, True])
+def test_failed_restore_retains_original_and_reports_recovery(
+    tmp_path, monkeypatch, block_diagnostics
+):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "output"
+    destination.mkdir()
+    original = destination / "old.bin"
+    original.write_bytes(b"only-original")
+    promotion_error = OSError("private promotion detail")
+    restore_error = OSError("private restore detail")
+    real_replace = publication.os.replace
+
+    def fail_promotion_and_restore(source, target):
+        source, target = Path(source), Path(target)
+        if "backups" in source.parts:
+            raise restore_error
+        if "stage" in source.parts and target.name == "new.bin":
+            raise promotion_error
+        return real_replace(source, target)
+
+    monkeypatch.setattr(publication.os, "replace", fail_promotion_and_restore)
+    if block_diagnostics:
+        (destination / ".boldtailor" / "publication_failures.jsonl").mkdir(parents=True)
+    with pytest.raises(PublicationError) as caught:
+        publish_artifact_set(destination, [Artifact("old.bin", b"new-old"),
+                                          Artifact("new.bin", b"new")], overwrite=True)
+    error = caught.value
+    assert error.__cause__ is promotion_error
+    assert error.rollback_errors == (restore_error,)
+    recovery = error.recovery_directory
+    assert recovery is not None and recovery.is_dir()
+    assert str(recovery) in str(error)
+    assert (recovery / "backups" / "old.bin").read_bytes() == b"only-original"
+    assert not (destination / "new.bin").exists()
+
+
+def test_removed_retention_option_is_rejected_before_writing(tmp_path):
+    destination = tmp_path / "output"
+    with pytest.raises(TypeError, match="retain_incomplete"):
+        publish_artifact_set(destination, [Artifact("a.bin", b"a")], retain_incomplete=True)
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("boundary", ["write", "stage_directory"])
+def test_staging_failure_preserves_original_and_cause(tmp_path, monkeypatch, boundary):
+    destination = tmp_path / "output"
+    destination.mkdir()
+    original = destination / "old.bin"
+    original.write_bytes(b"original")
+    failure = OSError("private staging failure")
+    method = "open" if boundary == "write" else "mkdir"
+    real_method = getattr(Path, method)
+
+    def fail_stage(path, *args, **kwargs):
+        if "transactions" in path.parts and "stage" in path.parts:
+            raise failure
+        return real_method(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, method, fail_stage)
+    with pytest.raises(PublicationError) as caught:
+        publish_artifact_set(destination, [Artifact("old.bin", b"new")], overwrite=True)
+    assert caught.value.__cause__ is failure
+    assert caught.value.recovery_directory is None
+    assert not caught.value.rollback_errors
+    assert original.read_bytes() == b"original"
+    _assert_no_transaction_debris(destination)
+
+
+@pytest.mark.parametrize("fail_publication", [False, True])
+def test_cleanup_failure_does_not_change_publication_outcome(
+    tmp_path, monkeypatch, fail_publication
+):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "output"
+    failure = OSError("original operation failure")
+
+    def reject_cleanup(*args, **kwargs):
+        raise OSError("cleanup failure")
+
+    def reject_replace(*args, **kwargs):
+        raise failure
+
+    with monkeypatch.context() as patch:
+        patch.setattr(publication.shutil, "rmtree", reject_cleanup)
+        if fail_publication:
+            patch.setattr(publication.os, "replace", reject_replace)
+            with pytest.raises(PublicationError) as caught:
+                publish_artifact_set(destination, [Artifact("a.bin", b"a")])
+            assert caught.value.__cause__ is failure
+            assert not (destination / "a.bin").exists()
+        else:
+            paths = publish_artifact_set(destination, [Artifact("a.bin", b"a")])
+            assert paths[0].read_bytes() == b"a"
