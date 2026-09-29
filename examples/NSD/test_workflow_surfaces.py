@@ -154,7 +154,7 @@ def test_delta_r2_surface_labels_task_contribution(cortical_axis, surface_files)
         plt.close(fig)
 
 
-def test_delta_r2_colors_emphasize_small_values(cortical_axis, surface_files):
+def test_delta_r2_heat_colors_emphasize_small_values(cortical_axis, surface_files):
     from matplotlib import colormaps
 
     _, meshes = surface_files
@@ -165,8 +165,10 @@ def test_delta_r2_colors_emphasize_small_values(cortical_axis, surface_files):
         colorbar = fig.axes[-1]._colorbar
         # A quarter of the variance range gets half of the color progression.
         np.testing.assert_allclose(
-            colorbar.cmap(colorbar.norm(0.25)), colormaps["viridis"](0.5), atol=0.01
+            colorbar.cmap(colorbar.norm(0.25)), colormaps["afmhot"](0.5), atol=0.01
         )
+        np.testing.assert_allclose(colorbar.cmap(0.0), [0, 0, 0, 1])
+        np.testing.assert_allclose(colorbar.cmap(1.0), [1, 1, 1, 1])
         np.testing.assert_allclose(colorbar.norm([0, 1]), [0, 1])
     finally:
         plt.close(fig)
