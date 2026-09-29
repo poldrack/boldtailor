@@ -141,6 +141,19 @@ def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
         surfaces().surface_figure({"Model": np.ones(2)}, left, meshes, statistic="r2")
 
 
+def test_activation_surface_uses_signed_t_scale(cortical_axis, surface_files):
+    _, meshes = surface_files
+    values = np.array([2, -5, np.nan, 999, 3, 0, -1, 4])
+    fig = surfaces().surface_figure({"OLS": values}, cortical_axis, meshes, statistic="t")
+    try:
+        np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-5, 5])
+        assert "t" in fig.axes[-1].get_ylabel().lower()
+        assert "Pearson" not in fig.axes[-1].get_ylabel()
+        fig.canvas.draw()
+    finally:
+        plt.close(fig)
+
+
 def test_notebook_surface_cells_render_existing_results_and_register_exports(
     cortical_axis, surface_files, tmp_path
 ):

@@ -279,6 +279,21 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     np.testing.assert_allclose(curve_image.get_fdata(), expected, atol=1e-7)
     assert any("HRFCurveReliability_plot.png" in p.name for p in files)
     assert len([p for p in scalars if "_betas." in p.name]) == 16
+    activation_paths = [p for p in scalars if "_stat-activation." in p.name]
+    assert len(activation_paths) == 4
+    from scipy.stats import ttest_1samp
+
+    for path in activation_paths:
+        descriptor = path.name.split("desc-notebook")[1].split("_stat-")[0]
+        images = sorted(p for p in scalars if f"desc-notebook{descriptor}_betas." in p.name)
+        pooled = np.concatenate([nib.load(p).get_fdata() for p in images])
+        expected = ttest_1samp(pooled[:, :3], 0, axis=0)
+        actual = nib.load(path).get_fdata()
+        np.testing.assert_allclose(actual[0, :3], pooled[:, :3].mean(axis=0), rtol=1e-6)
+        np.testing.assert_allclose(actual[1, :3], expected.statistic, rtol=1e-6)
+        np.testing.assert_allclose(actual[2, :3], expected.pvalue, rtol=1e-6)
+        np.testing.assert_array_equal(actual[3, :3], len(pooled))
+        np.testing.assert_array_equal(actual[4, :3], len(pooled) - 1)
     assert len([p for p in files if p.name.endswith("_trials.tsv")]) == 4
     assert any(p.name.endswith("_library.tsv") for p in files)
     assert any(p.name.endswith("_designs.npz") for p in files)
@@ -309,6 +324,9 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     assert restored.fingerprint == metadata["library_fingerprint"]
     np.testing.assert_array_equal(restored.curves, curves)
     assert metadata["noise_model"] == "ols"
+    assert metadata["beta_activation"]["assume_independent_trials"] is True
+    assert metadata["beta_activation"]["null_mean"] == 0
+    assert metadata["beta_activation"]["multiple_comparison_correction"] is None
     assert "independent" in metadata["glm_comparison"].lower()
     assert (
         metadata["hrf_curve_correlations"]["method"]

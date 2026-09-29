@@ -49,6 +49,9 @@ def test_notebook_default_executes_fractional_cv(six_run_dataset, tmp_path):
     betas = [p for p in files if "TrialFractionalCV_betas.dscalar.nii" in p.name]
     assert len(betas) == 12
     assert not any("TrialRidgeCV_betas" in p.name for p in files)
+    activation_maps = [p for p in files if "_stat-activation.dscalar.nii" in p.name]
+    assert len(activation_maps) == 4
+    assert sum("TrialFractionalCV" in p.name for p in activation_maps) == 2
     for image in map(nib.load, betas):
         assert image.shape == (6, 4)
         assert np.isnan(image.get_fdata()[:, -1]).all()
