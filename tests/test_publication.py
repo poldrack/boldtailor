@@ -330,7 +330,7 @@ def test_failure_log_is_single_jsonl_stream_and_redacts_sensitive_context(
 
     records = _failure_records(destination)
     assert len(records) == 1
-    assert records[0]["error_type"] == "OSError"
+    assert records[0]["error_code"] == "io_failure"
     assert records[0]["status"] == "failed"
     assert records[0]["published"] is False
     serialized = json.dumps(records[0]).lower()
@@ -530,6 +530,13 @@ def test_failed_restore_retains_original_and_reports_recovery(
     assert recovery is not None and recovery.is_dir()
     assert str(recovery) in str(error)
     assert (recovery / "backups" / "old.bin").read_bytes() == b"only-original"
+    if not block_diagnostics:
+        record = _failure_records(destination)[0]
+        assert record["rollback_failed"] is True
+        assert record["recovery_directory"] == recovery.relative_to(destination).as_posix()
+        assert not Path(record["recovery_directory"]).is_absolute()
+        assert str(tmp_path) not in json.dumps(record)
+
     assert not (destination / "new.bin").exists()
 
 
@@ -612,3 +619,28 @@ def test_existing_transaction_is_never_removed_on_identifier_collision(
     assert isinstance(caught.value.__cause__, FileExistsError)
     assert backup.read_bytes() == b"preserve-me"
     assert not (destination / "result.bin").exists()
+
+
+def test_publication_failure_ledger_omits_exception_names_and_text(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    class PrivatePatientError(ValueError):
+        def __str__(self):
+            raise AssertionError("do not format this exception")
+
+    failure = PrivatePatientError()
+
+    def reject_replace(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(publication.os, "replace", reject_replace)
+    destination = tmp_path / "output"
+    with pytest.raises(PublicationError) as caught:
+        publish_artifact_set(destination, [Artifact("a.bin", b"a")])
+    assert caught.value.__cause__ is failure
+    records = _failure_records(destination)
+    assert len(records) == 1
+    assert records[0]["error_code"] == "invalid_input"
+    assert records[0]["rollback_failed"] is False
+    assert "error_type" not in records[0] and "message" not in records[0]
+    assert "PrivatePatientError" not in json.dumps(records)
