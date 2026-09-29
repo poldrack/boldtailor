@@ -165,6 +165,26 @@ is applied. The final save cell writes `desc-notebookGLMR2Surface_plot.png`,
 `desc-notebookBetaR2Surface_plot.png`, and `desc-notebookRTSurface_plot.png` beside
 the CIFTI outputs. Resolved surface paths are retained in notebook metadata.
 
+### Descriptive beta-series activation maps
+
+Section 8d tests the mean trial beta against zero at every grayordinate for
+each fitted beta-series model, including OLS and the selected ridge mode.
+It pools finite trials across runs with equal weight per trial, without
+within-run centering, and computes `t = mean / (sample_sd / sqrt(n))` with
+`n - 1` degrees of freedom. **Trial betas are assumed independent.** This is
+a descriptive activation-style summary relative to the fitted model baseline,
+not an explicit task-versus-rest contrast. It ignores covariance among trial
+estimates, shrinkage, and HRF/ridge selection uncertainty.
+
+The notebook displays t histograms and, when matching surfaces are available,
+signed cortical t maps using a shared symmetric scale. No significance threshold
+is applied. For each model, `desc-notebook<model>_stat-activation.dscalar.nii`
+contains `mean_beta`, `t`, `p_uncorrected` (two-sided), `n_trials`, and `df`.
+Fewer than two finite trials or zero sample variance gives NaN t/p; no finite
+trials gives NaN in all maps. The metadata records these assumptions and that
+no multiple-comparison correction is applied. This cell uses existing fits;
+rerun the save cell with a new output root to export the maps and figures.
+
 ### Ridge selection and held-out encoding
 
 The notebook defaults to `ridge_mode="fractional_cv"`, with candidate fractions

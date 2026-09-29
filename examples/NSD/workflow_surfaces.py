@@ -81,16 +81,21 @@ def _load_meshes(paths, brain):
 
 
 def _color_scale(projected, statistic):
-    if statistic not in ("r2", "rt"):
-        raise ValueError("statistic must be r2 or rt")
+    if statistic not in ("r2", "rt", "t"):
+        raise ValueError("statistic must be r2, rt, or t")
     arrays = [
         a[np.isfinite(a)] for mapping in projected.values() for a in mapping.values()
     ]
     finite = np.concatenate(arrays) if arrays else np.array([])
-    if statistic == "rt":
+    if statistic in ("rt", "t"):
         limit = float(np.max(np.abs(finite))) if len(finite) else 1.0
         limit = limit or 1.0
-        return (-limit, limit), "RdBu_r", "Within-run-centered beta–RT Pearson r"
+        label = (
+            "Within-run-centered beta–RT Pearson r"
+            if statistic == "rt"
+            else "Beta-series t versus zero (independent trials)"
+        )
+        return (-limit, limit), "RdBu_r", label
     lower = min(0.0, float(np.min(finite))) if len(finite) else 0.0
     return (lower, 1.0), "viridis", "Pooled BOLD full-model R²"
 
@@ -133,7 +138,7 @@ def _panel(axis, mesh, values, hemi, view, limits, cmap):
 def surface_figure(maps, brain, meshes, *, statistic, title=None):
     """Compare maps in four cortical views with a shared scale and no threshold.
 
-    R² spans 0–1 (extended below zero when needed); RT uses a symmetric range
+    R² spans 0–1 (extended below zero when needed); RT and t use a symmetric range
     covering all finite cortical values in this figure. Volumetric structures
     never affect the plots or color limits. Input maps and meshes are unchanged.
     """

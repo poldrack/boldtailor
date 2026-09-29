@@ -144,7 +144,9 @@ def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
 def test_activation_surface_uses_signed_t_scale(cortical_axis, surface_files):
     _, meshes = surface_files
     values = np.array([2, -5, np.nan, 999, 3, 0, -1, 4])
-    fig = surfaces().surface_figure({"OLS": values}, cortical_axis, meshes, statistic="t")
+    fig = surfaces().surface_figure(
+        {"OLS": values}, cortical_axis, meshes, statistic="t"
+    )
     try:
         np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-5, 5])
         assert "t" in fig.axes[-1].get_ylabel().lower()

@@ -285,7 +285,9 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
 
     for path in activation_paths:
         descriptor = path.name.split("desc-notebook")[1].split("_stat-")[0]
-        images = sorted(p for p in scalars if f"desc-notebook{descriptor}_betas." in p.name)
+        images = sorted(
+            p for p in scalars if f"desc-notebook{descriptor}_betas." in p.name
+        )
         pooled = np.concatenate([nib.load(p).get_fdata() for p in images])
         expected = ttest_1samp(pooled[:, :3], 0, axis=0)
         actual = nib.load(path).get_fdata()

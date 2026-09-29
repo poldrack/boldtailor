@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from boldtailor.publication import publish_artifact_set
+from .beta_activation import MAP_NAMES as ACTIVATION_MAP_NAMES
 from .hrf_artifacts import npz_artifact, parameter_artifact, figure_artifact
 from .hrf_reliability import CORRELATION_NAMES, hrf_curve_correlations
 from .nsd_cifti import _input_paths
@@ -195,7 +196,35 @@ def _ridge_metadata(settings, results):
     )
 
 
-def _metadata(runs, library, settings, ridge_cv=None):
+def _activation_artifacts(stem, brain, activation):
+    return [
+        _map(
+            stem,
+            brain,
+            descriptor,
+            "activation",
+            np.stack([result[name] for name in ACTIVATION_MAP_NAMES]),
+            list(ACTIVATION_MAP_NAMES),
+        )
+        for descriptor, result in activation.items()
+    ]
+
+
+def _activation_metadata():
+    return dict(
+        method="One-sample t test across finite trial betas pooled over runs",
+        null_mean=0,
+        assume_independent_trials=True,
+        alternative="two-sided",
+        weighting="Equal weight per finite trial; no within-run centering",
+        multiple_comparison_correction=None,
+        map_order=list(ACTIVATION_MAP_NAMES),
+        undefined="NaN t/p for fewer than two trials or zero sample variance; all maps NaN if no finite trials",
+        interpretation="Descriptive activation-style map relative to the fitted model baseline, not an explicit task-versus-rest contrast; trial covariance and HRF/ridge selection uncertainty are ignored",
+    )
+
+
+def _metadata(runs, library, settings, ridge_cv=None, activation=None):
     return dict(
         regressors=list(REGRESSORS),
         noise_model="ols",
@@ -219,6 +248,7 @@ def _metadata(runs, library, settings, ridge_cv=None):
             else "Descriptive within-run-centered correlation, never used to select HRFs or fixed ridge strength; all-run optimized HRFs use both halves"
         ),
         ridge_cv=_ridge_metadata(settings, ridge_cv),
+        beta_activation=_activation_metadata() if activation else None,
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",
@@ -248,6 +278,7 @@ def save_workflow(
     settings,
     figures=None,
     ridge_cv=None,
+    activation=None,
     subject="sub-07",
     session="ses-nsd10",
 ):
@@ -257,6 +288,8 @@ def save_workflow(
     artifacts = _glm_artifacts(stem, brain, glms, runs)
     artifacts.extend(_hrf_artifacts(stem, brain, selections, library))
     artifacts.extend(_beta_artifacts(stem, brain, betas, runs))
+    if activation:
+        artifacts.extend(_activation_artifacts(stem, brain, activation))
     if ridge_cv:
         from .ridge_outputs import ridge_artifacts
 
@@ -265,7 +298,7 @@ def save_workflow(
     artifacts.append(
         json_artifact(
             f"{stem}_desc-notebook_metadata.json",
-            _metadata(runs, library, settings, ridge_cv),
+            _metadata(runs, library, settings, ridge_cv, activation),
         )
     )
     for name, figure in (figures or {}).items():

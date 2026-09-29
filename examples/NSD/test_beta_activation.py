@@ -33,7 +33,15 @@ def test_trial_weighted_t_test_matches_scipy_and_preserves_inputs():
 
 
 def test_missing_values_and_degenerate_columns_are_explicit():
-    runs = [np.array([[1, np.nan, 4, 0, 3], [3, np.inf, np.nan, 0, 3], [np.nan, np.nan, np.nan, 0, 3]])]
+    runs = [
+        np.array(
+            [
+                [1, np.nan, 4, 0, 3],
+                [3, np.inf, np.nan, 0, 3],
+                [np.nan, np.nan, np.nan, 0, 3],
+            ]
+        )
+    ]
     result = activation().beta_activation(runs)
     np.testing.assert_allclose(result["mean_beta"], [2, np.nan, 4, 0, 3])
     np.testing.assert_allclose(result["n_trials"], [2, np.nan, 1, 3, 3])
@@ -70,8 +78,12 @@ def test_activation_exports_preserve_map_names_axis_and_values(tmp_path):
         "n_trials": np.array([5, 5, np.nan]),
         "df": np.array([4, 4, np.nan]),
     }
-    assert hasattr(workflow_outputs, "_activation_artifacts"), "Activation exports are missing"
-    artifacts = workflow_outputs._activation_artifacts("sub-07", brain, {"CanonicalTrialOLS": maps})
+    assert hasattr(
+        workflow_outputs, "_activation_artifacts"
+    ), "Activation exports are missing"
+    artifacts = workflow_outputs._activation_artifacts(
+        "sub-07", brain, {"CanonicalTrialOLS": maps}
+    )
     paths = publish_artifact_set(tmp_path, artifacts)
     image = nib.load(paths[0])
     assert image.header.get_axis(0).name.tolist() == list(maps)
