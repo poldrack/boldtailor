@@ -1489,7 +1489,9 @@ def test_notebook_configuration_requires_data_root(monkeypatch, root):
         _notebook_configuration()
 
 
-def test_notebook_configuration_defaults_to_complete_real_sessions(monkeypatch, tmp_path):
+def test_notebook_configuration_defaults_to_complete_real_sessions(
+    monkeypatch, tmp_path
+):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
 
