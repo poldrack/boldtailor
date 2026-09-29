@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from filelock import FileLock, Timeout
 
+from boldtailor.logging import _error_code
+
 _CONTROL_DIRECTORY = ".boldtailor"
 _FAILURE_LOG = "publication_failures.jsonl"
 
@@ -431,9 +433,8 @@ def _record_failure(
 ) -> None:
     record = {
         "rollback_failed": bool(rollback_errors),
-        "error_type": type(error).__name__,
+        "error_code": _error_code(error),
         "execution_id": identifier,
-        "message": _sanitized_message(error),
         "published": False,
         "status": "failed",
     }
@@ -453,14 +454,6 @@ def _record_failure(
         _fsync_directory(control)
     except OSError:
         pass
-
-
-def _sanitized_message(error: Exception) -> str:
-    if isinstance(error, Timeout):
-        return "publication lock acquisition timed out"
-    if isinstance(error, OSError):
-        return "operating system publication failure"
-    return "publication operation failed"
 
 
 def _remove_transaction(transaction: _Transaction) -> None:

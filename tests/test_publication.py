@@ -533,7 +533,9 @@ def test_failed_restore_retains_original_and_reports_recovery(
     if not block_diagnostics:
         record = _failure_records(destination)[0]
         assert record["rollback_failed"] is True
-        assert record["recovery_directory"] == recovery.relative_to(destination).as_posix()
+        assert (
+            record["recovery_directory"] == recovery.relative_to(destination).as_posix()
+        )
         assert not Path(record["recovery_directory"]).is_absolute()
         assert str(tmp_path) not in json.dumps(record)
 
@@ -621,7 +623,9 @@ def test_existing_transaction_is_never_removed_on_identifier_collision(
     assert not (destination / "result.bin").exists()
 
 
-def test_publication_failure_ledger_omits_exception_names_and_text(tmp_path, monkeypatch):
+def test_publication_failure_ledger_omits_exception_names_and_text(
+    tmp_path, monkeypatch
+):
     import boldtailor.publication as publication
 
     class PrivatePatientError(ValueError):

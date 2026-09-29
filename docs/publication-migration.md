@@ -40,3 +40,22 @@ best-effort basis; empty directories or scratch data may remain after cleanup
 errors. Individual file fsync is retained without promising power-loss
 recovery for the complete set. Process termination and fatal interruptions
 can leave partial output and transaction files for manual inspection.
+
+## Failure ledger fields
+
+New records in `.boldtailor/publication_failures.jsonl` replace `error_type`
+and `message` with the same `error_code` categories used by structured logs:
+`invalid_input`, `numerical_failure`, `io_failure`, or `operation_failed`.
+The record includes `rollback_failed`; failed rollback also includes a
+**destination-relative** `recovery_directory`. Caller-facing exceptions retain
+absolute recovery paths and detailed causes. Existing saved ledgers are not
+rewritten and may contain the old fields.
+
+```json
+{"execution_id":"123e4567-e89b-12d3-a456-426614174000","status":"failed","published":false,"error_code":"io_failure","rollback_failed":true,"recovery_directory":".boldtailor/transactions/123e4567-e89b-12d3-a456-426614174000"}
+```
+
+The ledger is best effort: it cannot be guaranteed when its directory or file
+is unwritable. Diagnostic-writing failure does not remove recovery backups or
+replace the original exception. New records omit exception text and custom
+class names; this is not a privacy guarantee for arbitrary artifact contents.
