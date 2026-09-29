@@ -125,7 +125,9 @@ def test_parameter_agreement_excludes_unpaired_and_constant_values(library, miss
         value = table.loc[table.parameter == name, "pearson_r"].iloc[0]
         assert np.isnan(value) if missing else value == pytest.approx(1)
     if not missing:
-        assert np.isnan(table.loc[table.parameter == "duration", "pearson_r"].iloc[0])
+        # Canonical duration is 32 s and the custom HRF is 36 s; onset is
+        # the constant parameter in this fixture (zero for both curves).
+        assert np.isnan(table.loc[table.parameter == "onset_delay", "pearson_r"].iloc[0])
     assert len(fig.axes) == len(table)
 
 
