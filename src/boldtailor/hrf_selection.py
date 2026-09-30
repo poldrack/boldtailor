@@ -12,6 +12,7 @@ from boldtailor._hrf_cv import (
     signal_statistics,
     loro_scores,
     choose_eligible,
+    pooled_amplitude,
     prediction_loss,
 )
 from boldtailor.hrf_library import HrfLibrary
@@ -79,9 +80,9 @@ def _provenance(data, runs, library, labels, signature, name, **extra):
 
 
 def _select(data, runs, signals, library, labels, signature, batch, eligibility_runs):
-    a, b, c = signal_statistics(runs, signals, batch)
+    a, b, c, energy = signal_statistics(runs, signals, batch)
     indices, scores, eligibility = choose_eligible(
-        loro_scores(a, b, c), eligibility_runs
+        loro_scores(a, b, c, energy), eligibility_runs
     )
     selected = np.full(data.n_features, np.nan)
     valid = indices >= 0
@@ -160,18 +161,15 @@ def _fold_indices(values, n_runs, minimum, name):
     return tuple(int(i) for i in values)
 
 
-def _predict(a, b, c, train, test):
-    amplitude = np.divide(
-        b[list(train)].sum(axis=0),
-        a[list(train)].sum(axis=0)[:, None],
-        out=np.zeros_like(b[0]),
-        where=a[list(train)].sum(axis=0)[:, None] > 0,
-    )
+def _predict(a, b, c, energy, train, test):
+    amplitude, ok = pooled_amplitude(a[list(train)].sum(axis=0), b[list(train)].sum(axis=0))
     loss = sum(prediction_loss(a[r], b[r], c[r], amplitude) for r in test)
-    total = c[list(test)].sum(axis=0)
+    total = energy[list(test)].sum(axis=0)
     score = np.full_like(loss, np.nan)
     np.divide(loss, total[None, :], out=score, where=total[None, :] > 0)
-    return amplitude, 1 - score
+    score = 1 - score
+    score[~ok] = np.nan
+    return amplitude[:, 0, :], score
 
 
 def evaluate_hrf_split(
@@ -195,8 +193,8 @@ def evaluate_hrf_split(
         32,
         tuple(runs[i] for i in (*train, *test)),
     )
-    a, b, c = signal_statistics(runs, data.signals, 32)
-    amplitudes, scores = _predict(a, b, c, train, test)
+    a, b, c, energy = signal_statistics(runs, data.signals, 32)
+    amplitudes, scores = _predict(a, b, c, energy, train, test)
     ids = selection.hrf_indices
     valid = ids >= 0
     chosen = np.full(data.n_features, np.nan)

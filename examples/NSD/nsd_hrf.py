@@ -187,7 +187,7 @@ def _store_halves(state, halves, start, stop):
 def _canonical_rt(runs, root, indices, library, state):
     data = block_data(runs, root, indices)
     for run, design in zip(runs, prepare_runs(data, library), strict=True):
-        eligible, reason = design.eligible(0)
+        eligible, reason = design.trial_eligible(0)
         if not eligible:
             state["canonical_rt_reason"] = (
                 f"Canonical HRF is ineligible in {run.label}: {reason}"
@@ -203,7 +203,7 @@ def _canonical_rt(runs, root, indices, library, state):
 
 def _canonical_comparisons(data, library, labels, models, results, start, stop):
     for label, design in zip(labels, prepare_runs(data, library), strict=True):
-        eligible, reason = design.eligible(0)
+        eligible, reason = design.trial_eligible(0)
         if not eligible:
             for result in results.values():
                 result["canonical_reason"] = (
