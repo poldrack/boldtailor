@@ -30,7 +30,7 @@ from .nsd_hrf import spatial_signature
 from .parallel_blocks import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
-from .workflow_inputs import load_block, _trimmed_sources
+from .workflow_inputs import NSD_TASK_MODEL, load_block, _trimmed_sources
 
 
 def trial_predictors(runs):
@@ -260,6 +260,7 @@ def _outer_block(
             library=library,
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
+            task_model=NSD_TASK_MODEL,
         )
     )
     options = (
@@ -398,6 +399,7 @@ def _final_selection(indices, runs, root, library):
             library=library,
             run_labels=[r.label for r in runs],
             feature_signature=_signature(runs, indices),
+            task_model=NSD_TASK_MODEL,
         )
     )
 
