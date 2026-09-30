@@ -18,7 +18,7 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts, tuning_table, tuning_figure
 from examples.NSD.workflow_outputs import _beta_artifacts
-from examples.NSD.workflow_inputs import load_session, load_block
+from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from examples.NSD.test_ridge_workflow import six_run_dataset, cv_library  # noqa: F401
 
@@ -61,7 +61,9 @@ def test_fraction_workflow_matches_whole_array_and_exports(
         None
         if library is None
         else select_hrf(
-            load_block([runs[r] for r in train], root, np.arange(4)), library=library
+            load_block([runs[r] for r in train], root, np.arange(4)),
+            library=library,
+            task_model=NSD_TASK_MODEL,
         )
     )
     fitter = fit_single_trials if outer_selection is None else fit_selected_hrfs
@@ -82,7 +84,11 @@ def test_fraction_workflow_matches_whole_array_and_exports(
     for actual_beta, r in zip(actual_outer["betas"], test):
         np.testing.assert_allclose(actual_beta, shrunk.run_betas[r], atol=1e-8)
     fractions = result["tuning"]["all"]["selection"].ridge_fraction
-    selection = None if library is None else select_hrf(data, library=library)
+    selection = (
+        None
+        if library is None
+        else select_hrf(data, library=library, task_model=NSD_TASK_MODEL)
+    )
     expected = (
         fit_single_trials(data, ridge_fraction=fractions)
         if selection is None
