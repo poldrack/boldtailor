@@ -7,6 +7,7 @@ import pandas as pd
 from boldtailor._arrays import readonly_array
 from boldtailor.data import _owned_table
 from boldtailor.hrf_library import HrfLibrary
+from boldtailor.model import TaskModel
 from boldtailor.provenance import ProvenanceRecord
 
 
@@ -21,8 +22,11 @@ class HrfSelectionResult:
     run_labels: tuple[str, ...]
     feature_signature: str | None
     provenance: ProvenanceRecord
+    task_model: TaskModel = TaskModel()
 
     def __post_init__(self):
+        if not isinstance(self.task_model, TaskModel):
+            raise ValueError("task_model must be a TaskModel")
         object.__setattr__(
             self, "hrf_indices", readonly_array(self.hrf_indices, dtype=np.int64)
         )
@@ -46,6 +50,7 @@ class HrfEvaluationResult:
     train_runs: tuple[int, ...]
     test_runs: tuple[int, ...]
     provenance: ProvenanceRecord
+    amplitude_names: tuple[str, ...] = ("task",)
 
     def __post_init__(self):
         for name in (
@@ -57,3 +62,7 @@ class HrfEvaluationResult:
             object.__setattr__(self, name, readonly_array(getattr(self, name)))
         for name in ("train_runs", "test_runs"):
             object.__setattr__(self, name, tuple(getattr(self, name)))
+        object.__setattr__(self, "amplitude_names", tuple(self.amplitude_names))
+        amplitudes = self.training_amplitudes
+        if amplitudes.ndim != 2 or amplitudes.shape[0] != len(self.amplitude_names):
+            raise ValueError("training_amplitudes needs one row per amplitude name")

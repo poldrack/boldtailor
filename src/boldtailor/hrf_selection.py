@@ -8,6 +8,8 @@ from uuid import uuid4
 import numpy as np
 
 from boldtailor._hrf_cv import (
+    MIN_ONSET,
+    OVERSAMPLING,
     prepare_runs,
     signal_statistics,
     loro_scores,
@@ -17,6 +19,7 @@ from boldtailor._hrf_cv import (
 )
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
+from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint, extend_provenance
 
 
@@ -37,9 +40,11 @@ def run_labels_for(data, run_labels):
     return labels
 
 
-def _validate(library, signature, batch):
+def _validate(library, signature, batch, task_model):
     if not isinstance(library, HrfLibrary):
         raise ValueError("library must be an HrfLibrary")
+    if not isinstance(task_model, TaskModel):
+        raise ValueError("task_model must be a TaskModel")
     if signature is not None and (not isinstance(signature, str) or not signature):
         raise ValueError("feature_signature must be a nonempty string or None")
     if (
@@ -50,7 +55,7 @@ def _validate(library, signature, batch):
         raise ValueError("candidate_batch_size must be a positive integer")
 
 
-def _provenance(data, runs, library, labels, signature, name, **extra):
+def _provenance(data, runs, library, labels, signature, task_model, name, **extra):
     activity = dict(
         name=name,
         library_fingerprint=library.fingerprint,
@@ -59,10 +64,15 @@ def _provenance(data, runs, library, labels, signature, name, **extra):
         ).hexdigest(),
         run_labels=list(labels),
         feature_signature=signature,
-        score="nuisance_adjusted_mean_stimulus_prediction_r2",
+        task_model=task_model.to_dict(),
+        task_model_fingerprint=task_model.fingerprint,
+        task_regressors=list(task_model.regressor_names),
+        profiled_regressors=list(task_model.profiled_names),
+        score="nuisance_adjusted_task_model_prediction_r2",
         beta_units="native_signal",
-        oversampling=50,
-        nuisance="conditional_projection_of_each_run",
+        oversampling=OVERSAMPLING,
+        min_onset=MIN_ONSET,
+        nuisance="conditional_projection_of_confounds_and_profiled_task_columns_per_run",
         invalid_features="zero signal outside nuisance span at numerical precision",
         sse_roundoff_tolerance="64 * eps * (C + abs(2*b*B) + abs(b*b*A))",
         **extra,
@@ -79,7 +89,9 @@ def _provenance(data, runs, library, labels, signature, name, **extra):
     )
 
 
-def _select(data, runs, signals, library, labels, signature, batch, eligibility_runs):
+def _select(
+    data, runs, signals, library, labels, signature, batch, eligibility_runs, task_model
+):
     a, b, c, energy = signal_statistics(runs, signals, batch)
     indices, scores, eligibility = choose_eligible(
         loro_scores(a, b, c, energy), eligibility_runs
@@ -96,6 +108,7 @@ def _select(data, runs, signals, library, labels, signature, batch, eligibility_
         library,
         labels,
         signature,
+        task_model,
         "hrf_selection",
         folds=[
             dict(
@@ -116,32 +129,34 @@ def _select(data, runs, signals, library, labels, signature, batch, eligibility_
         labels,
         signature,
         provenance,
+        task_model=task_model,
     )
 
 
 def select_hrf(
-    data, *, library, run_labels=None, feature_signature=None, candidate_batch_size=32
+    data,
+    *,
+    library,
+    run_labels=None,
+    feature_signature=None,
+    candidate_batch_size=32,
+    task_model=TaskModel(),
 ):
-    """Choose each feature's HRF with leave-one-run-out mean-stimulus prediction.
+    """Choose each feature's HRF by leave-one-run-out task-model prediction.
 
-    This is a selection statistic. Nuisance coefficients are profiled in each
-    run; task amplitudes are learned only from other runs. Anonymous arrays
-    without feature_signature require the caller to preserve feature order.
+    This is a selection statistic. Confounds and missing-value indicators are
+    profiled in each run; task-model amplitudes are learned only from other
+    runs. Anonymous arrays without feature_signature require the caller to
+    preserve feature order.
     """
-    _validate(library, feature_signature, candidate_batch_size)
+    _validate(library, feature_signature, candidate_batch_size, task_model)
     if data.n_runs < 2:
         raise ValueError("HRF selection requires at least two runs")
     labels = run_labels_for(data, run_labels)
-    runs = prepare_runs(data, library)
+    runs = prepare_runs(data, library, task_model)
     return _select(
-        data,
-        runs,
-        data.signals,
-        library,
-        labels,
-        feature_signature,
-        candidate_batch_size,
-        runs,
+        data, runs, data.signals, library, labels, feature_signature,
+        candidate_batch_size, runs, task_model,
     )
 
 
@@ -169,20 +184,27 @@ def _predict(a, b, c, energy, train, test):
     np.divide(loss, total[None, :], out=score, where=total[None, :] > 0)
     score = 1 - score
     score[~ok] = np.nan
-    return amplitude[:, 0, :], score
+    return amplitude, score
 
 
 def evaluate_hrf_split(
-    data, *, library, train_runs, test_runs, run_labels=None, feature_signature=None
+    data,
+    *,
+    library,
+    train_runs,
+    test_runs,
+    run_labels=None,
+    feature_signature=None,
+    task_model=TaskModel(),
 ):
-    """Select within training runs, then freeze HRF and amplitude for test runs."""
-    _validate(library, feature_signature, 32)
+    """Select within training runs, then freeze HRF and amplitudes for test runs."""
+    _validate(library, feature_signature, 32, task_model)
     train = _fold_indices(train_runs, data.n_runs, 2, "train_runs")
     test = _fold_indices(test_runs, data.n_runs, 1, "test_runs")
     if set(train) & set(test):
         raise ValueError("training and test runs must be disjoint")
     labels = run_labels_for(data, run_labels)
-    runs = prepare_runs(data, library)
+    runs = prepare_runs(data, library, task_model)
     selection = _select(
         data,
         tuple(runs[i] for i in train),
@@ -192,25 +214,22 @@ def evaluate_hrf_split(
         feature_signature,
         32,
         tuple(runs[i] for i in (*train, *test)),
+        task_model,
     )
     a, b, c, energy = signal_statistics(runs, data.signals, 32)
     amplitudes, scores = _predict(a, b, c, energy, train, test)
     ids = selection.hrf_indices
-    valid = ids >= 0
+    valid = np.flatnonzero(ids >= 0)
     chosen = np.full(data.n_features, np.nan)
-    coefficient = chosen.copy()
-    chosen[valid] = scores[ids[valid], np.flatnonzero(valid)]
-    coefficient[valid] = amplitudes[ids[valid], np.flatnonzero(valid)]
+    coefficient = np.full((len(task_model.regressor_names), data.n_features), np.nan)
+    chosen[valid] = scores[ids[valid], valid]
+    coefficient[:, valid] = amplitudes[ids[valid], :, valid].T
     canonical = scores[0].copy()
     if not selection.eligibility.loc[0, "eligible"]:
         canonical[:] = np.nan
-    canonical[~valid] = np.nan
+    canonical[ids < 0] = np.nan
     provenance = _provenance(
-        data,
-        runs,
-        library,
-        labels,
-        feature_signature,
+        data, runs, library, labels, feature_signature, task_model,
         "hrf_independent_evaluation",
         train_runs=list(train),
         test_runs=list(test),
@@ -218,12 +237,6 @@ def evaluate_hrf_split(
         frozen_task_amplitudes=True,
     )
     return HrfEvaluationResult(
-        selection,
-        coefficient,
-        chosen,
-        canonical,
-        chosen - canonical,
-        train,
-        test,
-        provenance,
+        selection, coefficient, chosen, canonical, chosen - canonical, train, test,
+        provenance, amplitude_names=task_model.regressor_names,
     )
