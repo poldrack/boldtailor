@@ -159,7 +159,7 @@ def independent_ols(runs, indices, library, ids):
             amplitudes = (
                 np.ones(len(e)),
                 e.response_time.fillna(e.response_time.mean()) - e.response_time.mean(),
-                e.trial_type - e.trial_type.mean(),
+                e.trial_type,  # NSD_TASK_MODEL leaves trial_type uncentered.
             )
             if e.response_time.isna().any():
                 amplitudes += (e.response_time.isna().astype(float),)
