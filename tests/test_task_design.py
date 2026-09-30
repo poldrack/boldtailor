@@ -166,3 +166,13 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
     )
     np.testing.assert_allclose(spm["task"], expected[:, 0], atol=1e-13)
     assert not np.allclose(spm["task"], glover["task"])
+
+
+def test_string_hrf_keeps_kernel_suffix_in_regressor_names(events):
+    from boldtailor._task_design import expand_events, task_columns
+
+    model = TaskModel((Modulator("foo_kernel", center=False),))
+    frame = events.assign(foo_kernel=[1, 0, 1, 0, 1, 0])
+    times = 0.775 + 1.6 * np.arange(90)
+    result = task_columns(expand_events(frame, model), times, "spm")
+    assert list(result.columns) == ["task", "foo_kernel"]
