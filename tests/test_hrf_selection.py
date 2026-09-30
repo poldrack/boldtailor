@@ -144,7 +144,7 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
     assert not np.allclose(original.test_r2[:3], altered.test_r2[:3])
     for v, cid in enumerate(original.training_selection.hrf_indices[:3]):
         beta, loss, null = oracle(data, library.candidates[cid], [0, 2], [1, 3])
-        np.testing.assert_allclose(original.training_amplitudes[v], beta[v], atol=1e-12)
+        np.testing.assert_allclose(original.training_amplitudes[0, v], beta[v], atol=1e-12)
         np.testing.assert_allclose(
             original.test_r2[v], 1 - loss[v] / null[v], atol=1e-12
         )
@@ -290,3 +290,135 @@ def test_results_owned_metadata_independent_and_fingerprinted(cv_fixture):
         a.provenance.to_dict()["activities"][-1]
         != b.provenance.to_dict()["activities"][-1]
     )
+
+
+def nsd_model():
+    from boldtailor.model import Modulator, TaskModel
+
+    return TaskModel(
+        (
+            Modulator("response_time", center=True, missing="indicator"),
+            Modulator("trial_type", center=False),
+        )
+    )
+
+
+def with_trial_types(data):
+    events = [e.assign(trial_type=[0, 1, 1]) for e in data.events]
+    return replace_data(data, events=events)
+
+
+def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+    from tests.test_hrf_cv import loro_oracle
+
+    data, library = cv_fixture
+    data = with_trial_types(data)
+    result = select_hrf(data, library=library, task_model=nsd_model())
+    expected = loro_oracle(data, library, nsd_model())[:, :3]
+    np.testing.assert_allclose(result.cv_r2[:3], expected.max(axis=0), atol=1e-10)
+    np.testing.assert_allclose(result.canonical_cv_r2[:3], expected[0], atol=1e-10)
+    assert result.task_model == nsd_model()
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["task_model"] == nsd_model().to_dict()
+    assert activity["task_model_fingerprint"] == nsd_model().fingerprint
+    assert activity["task_regressors"] == ["task", "response_time", "trial_type"]
+    assert activity["profiled_regressors"] == ["missing_response_time"]
+    assert activity["min_onset"] == -24.0
+    assert activity["oversampling"] == 50
+    assert activity["score"] == "nuisance_adjusted_task_model_prediction_r2"
+
+
+def test_default_selection_carries_task_only_model_and_legacy_fingerprint_rules(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.model import TaskModel
+
+    data, library = cv_fixture
+    result = select_hrf(data, library=library)
+    assert result.task_model == TaskModel()
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["task_regressors"] == ["task"]
+    assert activity["profiled_regressors"] == []
+
+
+def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+
+    data, library = cv_fixture
+    data = with_trial_types(data)
+    key = lambda r: r.provenance.to_dict()["activities"][-1]["design_fingerprint"]
+    plain = select_hrf(data, library=library)
+    modeled = select_hrf(data, library=library, task_model=nsd_model())
+    assert key(plain) != key(modeled)
+    changed = replace_data(
+        data, events=[e.assign(response_time=[0.9, np.nan, 1.1]) for e in data.events]
+    )
+    assert key(modeled) != key(select_hrf(changed, library=library, task_model=nsd_model()))
+    assert key(plain) == key(select_hrf(changed, library=library))
+
+
+def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture):
+    from boldtailor.hrf_selection import evaluate_hrf_split
+    from tests.test_hrf_cv import stacked_oracle
+
+    data, library = cv_fixture
+    data = with_trial_types(data)
+    result = evaluate_hrf_split(
+        data, library=library, train_runs=[0, 2], test_runs=[1, 3], task_model=nsd_model()
+    )
+    assert result.amplitude_names == ("task", "response_time", "trial_type")
+    assert result.training_amplitudes.shape == (3, data.n_features)
+    assert not result.training_amplitudes.flags.writeable
+    for v, cid in enumerate(result.training_selection.hrf_indices[:3]):
+        beta, loss, null = stacked_oracle(
+            data, library, int(cid), nsd_model(), [0, 2], [1, 3]
+        )
+        np.testing.assert_allclose(result.training_amplitudes[:, v], beta[:, v], atol=1e-10)
+        np.testing.assert_allclose(result.test_r2[v], 1 - loss[v] / null[v], atol=1e-10)
+    assert np.isnan(result.training_amplitudes[:, 3:]).all()
+
+
+def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
+    from boldtailor.hrf_selection import evaluate_hrf_split
+
+    data, library = cv_fixture
+    result = evaluate_hrf_split(data, library=library, train_runs=[0, 2], test_runs=[1, 3])
+    assert result.amplitude_names == ("task",)
+    assert result.training_amplitudes.shape == (1, data.n_features)
+
+
+def test_task_model_argument_is_validated(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
+
+    data, library = cv_fixture
+    with pytest.raises(ValueError, match="TaskModel"):
+        select_hrf(data, library=library, task_model={"modulators": []})
+    with pytest.raises(ValueError, match="TaskModel"):
+        evaluate_hrf_split(
+            data, library=library, train_runs=[0, 2], test_runs=[1], task_model="nsd"
+        )
+
+
+def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.single_trial import fit_selected_hrfs
+
+    data, library = cv_fixture
+    data = with_trial_types(data)
+    selection = select_hrf(data, library=library, task_model=nsd_model())
+    result = fit_selected_hrfs(data, selection=selection)
+    assert result.run_betas[0].shape == (3, data.n_features)
+    assert np.isfinite(result.run_betas[0][:, :3]).all()
+
+
+def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
+    from boldtailor.hrf_results import HrfEvaluationResult
+    from boldtailor.hrf_selection import evaluate_hrf_split
+    from dataclasses import replace
+
+    data, library = cv_fixture
+    result = evaluate_hrf_split(data, library=library, train_runs=[0, 2], test_runs=[1, 3])
+    with pytest.raises(ValueError, match="amplitude"):
+        replace(result, amplitude_names=("task", "extra"))
+    with pytest.raises(ValueError, match="amplitude"):
+        replace(result, training_amplitudes=result.training_amplitudes[0])
