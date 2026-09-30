@@ -92,12 +92,14 @@ class ModelSpec:
     oversampling: int = 50
     min_onset: float = -24.0
     noise_model: str = "ar1"
+    task_model: TaskModel | None = None
     _contrast_names: tuple[str, ...] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         normalized = _prepare_contrasts(self.contrasts)
         selected_confounds = _prepare_confound_names(self.confounds)
         _validate_noise_model(self.noise_model)
+        _validate_task_model(self.task_model, self.hrf_model)
         _validate_design_options(
             self.high_pass,
             self.drift_order,
@@ -183,6 +185,15 @@ def _prepare_confound_names(values: Sequence[str]) -> tuple[str, ...]:
 def _validate_noise_model(value: str) -> None:
     if value not in {"ols", "ar1"}:
         raise ValueError("noise_model must be 'ols' or 'ar1' in Phase 1")
+
+
+def _validate_task_model(task_model: object, hrf_model: HRFModel) -> None:
+    if task_model is None:
+        return
+    if not isinstance(task_model, TaskModel):
+        raise ValueError("task_model must be a TaskModel or None")
+    if hrf_model not in ("spm", "glover"):
+        raise ValueError("task_model requires hrf_model 'spm' or 'glover'")
 
 
 def _validate_design_options(

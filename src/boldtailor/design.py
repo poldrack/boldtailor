@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
+from boldtailor._task_design import expand_events, task_columns
 from boldtailor.data import AnalysisData
 from boldtailor.model import ModelSpec
 
@@ -47,13 +48,37 @@ def _compile_run(
     modeled_events, excluded_count, cutoff = _select_modeled_events(
         events, frame_times, model.min_onset, run
     )
-    design = _make_design_matrix(frame_times, modeled_events, selected, model, run)
+    if model.task_model is None:
+        design = _make_design_matrix(frame_times, modeled_events, selected, model, run)
+    else:
+        design = _make_task_model_design(frame_times, modeled_events, selected, model, run)
     _validate_design_matrix(design, run)
     return CompiledDesign(
         matrix=design,
         excluded_event_count=excluded_count,
         min_onset_cutoff=cutoff,
     )
+
+
+def _make_task_model_design(
+    frame_times: np.ndarray,
+    events: pd.DataFrame,
+    confounds: pd.DataFrame | None,
+    model: ModelSpec,
+    run: int,
+) -> pd.DataFrame:
+    try:
+        task = task_columns(
+            expand_events(events, model.task_model, run),
+            frame_times,
+            model.hrf_model,
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+    except ValueError as error:
+        raise ValueError(f"run {run} design compilation failed: {error}") from error
+    nuisance = _make_nuisance_matrix(frame_times, confounds, model, run)
+    return pd.concat([task, nuisance], axis=1)
 
 
 def _compile_nuisance_run(

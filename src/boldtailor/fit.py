@@ -199,6 +199,9 @@ def _model_provenance(model: ModelSpec) -> _ModelProvenance:
         "min_onset": model.min_onset,
         "noise_model": model.noise_model,
     }
+    if model.task_model is not None:
+        activity["task_model"] = model.task_model.to_dict()
+        activity["task_model_fingerprint"] = model.task_model.fingerprint
     fingerprint = None
     if not callable_warnings:
         fingerprint = activity.copy()
