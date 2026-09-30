@@ -148,6 +148,31 @@ def test_paired_summary_uses_same_sessions_for_both_models():
     np.testing.assert_allclose(result["positive_fraction"], [1, np.nan, np.nan])
 
 
+def test_mean_peak_time_averages_session_peaks_and_exports_counts(saved_sessions):
+    root, sessions, _, brain = saved_sessions
+    loaded = api("inputs").load_sessions(root, "sub-07", sessions, estimators=["OLS"])
+    loaded["records"][0]["hrf_indices"][1] = -1
+    loaded["records"][2]["hrf_indices"][1] = np.nan
+    result = api("analysis").analyze_sessions(loaded)
+    # These library curves peak at 5.1 s (SPM) and 2.5 s (custom), not 6/3 s.
+    expected = [12.7 / 3, 2.5, np.nan]
+    np.testing.assert_allclose(result["hrf"]["peak_time_mean"], expected)
+    paths = api("outputs").save_multisession(root, loaded, result)
+    image = nib.load(next(p for p in paths if "HRF_stat-peaktime" in p.name))
+    assert image.header.get_axis(1) == brain
+    assert image.header.get_axis(0).name.tolist() == [
+        "mean_peak_time_seconds",
+        "valid_sessions",
+    ]
+    np.testing.assert_allclose(image.get_fdata()[0], expected, atol=1e-6)
+    np.testing.assert_array_equal(image.get_fdata()[1], [3, 1, 0])
+    metadata = json.loads(
+        next(p for p in paths if p.name.endswith("_metadata.json")).read_text()
+    )
+    assert metadata["hrf_peak_time"]["units"] == "seconds"
+    assert metadata["hrf_peak_time"]["minimum_sessions"] == 1
+
+
 def test_glm_effect_means_match_sessions_and_export_units(saved_sessions):
     root, sessions, _, brain = saved_sessions
     path = next((root / "sub-07" / sessions[2]).rglob("*OptimizedGLM_stat-effects*"))

@@ -262,6 +262,52 @@ def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
         surfaces().surface_figure({"Model": np.ones(2)}, left, meshes, statistic="r2")
 
 
+@pytest.mark.parametrize(
+    "values,limits",
+    [
+        ([2.5, 5.1, np.nan, 999, 4, 3, 4.5, 4], [2.5, 5.1]),
+        ([4] * 8, [3.5, 4.5]),
+        ([np.nan] * 8, [0, 1]),
+    ],
+)
+def test_peak_time_surface_uses_sequential_seconds_scale(
+    cortical_axis, surface_files, values, limits
+):
+    from pathlib import Path
+    import nbformat
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    notebook = nbformat.read(Path(__file__).with_name("nsd_multisession.ipynb"), 4)
+    cells = {c.id: c for c in notebook.cells}
+    assert "hrf-peak-time-surface" in cells
+    from examples.NSD.multisession_plots import peak_time_surface
+
+    figures = {}
+    try:
+        exec(
+            cells["hrf-peak-time-surface"].source,
+            dict(
+                result={"hrf": {"peak_time_mean": np.array(values)}},
+                brain=cortical_axis,
+                meshes=surface_files[1],
+                figures=figures,
+                peak_time_surface=peak_time_surface,
+                display=lambda _: None,
+            ),
+        )
+        fig = figures["HRFPeakTime"]
+        assert len([a for a in fig.axes if a.name == "3d"]) == 4
+        np.testing.assert_allclose(fig.axes[-1].get_ylim(), limits)
+        assert "seconds" in fig.axes[-1].get_ylabel()
+        assert fig.axes[-1]._colorbar.cmap.name == "viridis"
+        FigureCanvasAgg(fig).draw()
+        label = fig.axes[-1].yaxis.label.get_window_extent(fig.canvas.get_renderer())
+        assert label.x0 >= 0 and label.x1 <= fig.bbox.width
+    finally:
+        for fig in figures.values():
+            plt.close(fig)
+
+
 def test_delta_r2_surface_labels_task_contribution(cortical_axis, surface_files):
     _, meshes = surface_files
     fig = surfaces().surface_figure(
