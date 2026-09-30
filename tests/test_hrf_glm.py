@@ -553,3 +553,140 @@ def test_selected_comparison_complete_lifecycle(
         assert len(result.provenance.events) <= 8
     else:
         assert records[-1]["error_code"] == "invalid_input"
+
+
+def _nsd_model():
+    from boldtailor.model import Modulator, TaskModel
+
+    return TaskModel(
+        (
+            Modulator("response_time", center=True, missing="indicator"),
+            Modulator("trial_type", center=False),
+        )
+    )
+
+
+@pytest.fixture(scope="module")
+def task_model_problem():
+    """Raw trials with RT and trial type; one missing RT in run 1."""
+    library = HrfLibrary.from_parameters(
+        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+    )
+    rng = np.random.default_rng(1207)
+    events, times, confounds, signals = [], [], [], []
+    for run in range(3):
+        t = 0.775 + 1.6 * np.arange(85 + 5 * run)
+        rt = np.array([0.8, 1.3, 0.9, 1.7, 1.1, 1.4])
+        if run == 1:
+            rt[3] = np.nan
+        events.append(
+            pd.DataFrame(
+                dict(
+                    onset=np.array([5.3, 21.1, 42.2, 64.4, 88.5, 110.2]) + run,
+                    duration=[1.2, 2.0, 0.7, 1.5, 1.1, 2.3],
+                    trial_type=[0, 1, 1, 0, 1, 0],
+                    response_time=rt,
+                )
+            )
+        )
+        times.append(t)
+        confounds.append(pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t)))))
+        signals.append(rng.normal(100, 1, size=(len(t), 4)))
+    data = from_arrays(
+        signals, events, frame_times=times, confounds=confounds,
+        sources=[_sources(r) for r in range(3)],
+    )
+    model = ModelSpec(
+        contrasts={name: {name: 1} for name in ("task", "response_time", "trial_type")},
+        confounds=("motion",),
+        hrf_model="spm",
+        drift_model=None,
+        noise_model="ols",
+        task_model=_nsd_model(),
+    )
+    selection = select_hrf(data, library=library, feature_signature="axis-tm", task_model=_nsd_model())
+    return data, model, selection, library
+
+
+def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem):
+    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._hrf_design import hrf_model
+    from boldtailor._task_design import expand_events, task_columns
+
+    data, model, selection, library = task_model_problem
+    result = fit(data, model, hrf_selection=selection, feature_signature="axis-tm")
+    runs = prepare_runs(data, library, model.task_model)
+    assert result.group_designs
+    for (run, cid), design in result.group_designs.items():
+        scored = runs[run].task_design(cid)
+        expected = task_columns(
+            expand_events(data.events[run], model.task_model, run),
+            data.frame_times[run],
+            hrf_model(library.candidates[cid]),
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+        pd.testing.assert_frame_equal(scored, expected)
+        assert list(design.columns[: scored.shape[1]]) == list(scored.columns)
+        np.testing.assert_array_equal(design.iloc[:, : scored.shape[1]].to_numpy(), scored.to_numpy())
+        assert list(design.columns[scored.shape[1] :]) == ["motion", "constant"]
+    assert "missing_response_time" in result.group_designs[1, int(selection.hrf_indices[0])].columns
+    assert "missing_response_time" not in result.group_designs[0, int(selection.hrf_indices[0])].columns
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["task_model"] == model.task_model.to_dict()
+    assert activity["task_model_fingerprint"] == model.task_model.fingerprint
+    assert np.isfinite(result.effect("response_time")).all()
+    assert np.isfinite(result.effect("trial_type")).all()
+
+
+def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem):
+    from boldtailor._task_design import expand_events, task_columns
+
+    data, model, selection, library = task_model_problem
+    canonical = HrfLibrary.from_parameters([])
+    spm_only = select_hrf(data, library=canonical, feature_signature="axis-tm", task_model=_nsd_model())
+    result = fit(data, model, hrf_selection=spm_only, feature_signature="axis-tm")
+    for run in range(data.n_runs):
+        expected = task_columns(
+            expand_events(data.events[run], model.task_model, run), data.frame_times[run], "spm",
+            min_onset=model.min_onset, oversampling=model.oversampling,
+        )
+        design = result.group_designs[run, 0]
+        np.testing.assert_array_equal(design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy())
+
+
+def test_selected_glm_requires_matching_task_model(task_model_problem):
+    from boldtailor.model import Modulator, TaskModel
+
+    data, model, selection, library = task_model_problem
+    with pytest.raises(ValueError, match="task_model"):
+        fit(data, replace(model, task_model=None), hrf_selection=selection, feature_signature="axis-tm")
+    other = TaskModel((Modulator("response_time", missing="indicator"),))
+    with pytest.raises(ValueError, match="task_model"):
+        fit(data, replace(model, task_model=other), hrf_selection=selection, feature_signature="axis-tm")
+    plain = select_hrf(data, library=library, feature_signature="axis-tm")
+    with pytest.raises(ValueError, match="task_model"):
+        fit(data, model, hrf_selection=plain, feature_signature="axis-tm")
+
+
+def test_selected_glm_requires_matching_convolution_settings(task_model_problem):
+    data, model, selection, library = task_model_problem
+    with pytest.raises(ValueError, match="oversampling|min_onset"):
+        fit(data, replace(model, oversampling=20), hrf_selection=selection, feature_signature="axis-tm")
+    with pytest.raises(ValueError, match="oversampling|min_onset"):
+        fit(data, replace(model, min_onset=-10.0), hrf_selection=selection, feature_signature="axis-tm")
+
+
+def test_task_delta_r2_uses_the_same_task_model_designs(task_model_problem):
+    data, model, selection, library = task_model_problem
+    result = fit(data, model, hrf_selection=selection, feature_signature="axis-tm")
+    comparison = task_delta_r2(data, model, result)
+    assert np.isfinite(comparison.delta_r2).all()
+    assert np.all(comparison.delta_r2 >= 0)
+
+
+def test_legacy_selected_glm_without_task_model_is_unchanged(hrf_glm_problem):
+    data, model, selection, designs = hrf_glm_problem
+    result = _selected_fit(data, model, selection)
+    for (run, cid), design in result.group_designs.items():
+        np.testing.assert_allclose(design.to_numpy(), designs[run, cid][design.columns].to_numpy(), atol=1e-12)
