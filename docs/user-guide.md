@@ -107,8 +107,18 @@ task_added_r2 = comparison.delta_r2
 
 The selection replaces `ModelSpec.hrf_model` entirely, including any derivative
 basis specified there. Each location uses one selected HRF for all its task
-regressors. The final GLM estimates condition/modulator amplitudes independently
-within each run; it does not reuse the mean amplitude from HRF selection.
+regressors. The final GLM estimates amplitudes independently within each run;
+it does not reuse the amplitudes from HRF selection.
+
+Set `ModelSpec(task_model=...)` to the task model used for selection. The
+GLM then builds its task columns from the same raw events with the same
+Nilearn call, so the fitted task design is the scored task design. `fit()`
+rejects a task model, `oversampling`, or `min_onset` that differ from the
+selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
+to match selection's nuisance exactly, pass every confound column and set
+`drift_model=None`. Without a task model, events are Nilearn-format
+conditions as before, and the selection must have used the default task-only
+model, which scored only the mean stimulus response.
 
 Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
 usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
@@ -129,8 +139,7 @@ The selection can come from separate training runs. If you supplied a
 signature to `fit()`. Matching feature counts alone do not prove that voxels
 are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
 Selection still follows the [mean-response method](#selecting-an-hrf-for-each-location);
-for selection input, represent each presentation once, without extra event rows
-used to encode amplitude modulators in the target GLM.
+for selection input, supply raw per-trial events; the task model expands them for both selection and fitting.
 
 Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
 `task_delta_r2()` also preserves undefined/constant features as NaNs, and compares
@@ -416,16 +425,40 @@ Use `expanded_hrf_library()` for the original 649-candidate grid, or
 include canonical SPM at ID zero. Save the exact table and curves alongside
 the library fingerprint when you need to reuse fitted HRFs.
 
-At each feature, selection evaluates every candidate HRF in turn. For each
-held-out run, it learns a mean stimulus amplitude from the remaining runs and
-predicts that run. Prediction errors are pooled across folds before choosing
-one winner. **The session map contains that winner's parameters; it does not
-average parameters selected for individual runs.** Final beta fits use the
-selected HRF and estimate unrestricted amplitudes for individual trials.
+At each feature, selection evaluates every candidate HRF in turn. The
+candidate's task-model regressors are convolved with Nilearn and projected off
+the run's confounds. For each held-out run, selection learns one amplitude per
+task regressor from the remaining runs and predicts that run. Prediction
+errors are pooled across folds and divided by the pooled confound-adjusted
+signal energy, so the denominator is the same for every candidate. **The
+session map contains that winner's parameters; it does not average parameters
+selected for individual runs.**
 
-This method assumes that a mean stimulus response transfers across runs. It
-does not require repeated images or equal responses to repeated presentations.
-RT never enters HRF selection. Kernels are normalized to sum to one, so beta
+By default the task model has one regressor, `task`, so selection scores the
+mean stimulus response and RT never enters. Pass `task_model=` to score the
+same task model the GLM will fit:
+
+```python
+from boldtailor.model import Modulator, TaskModel
+
+task_model = TaskModel((
+    Modulator("response_time", center=True, missing="indicator"),
+    Modulator("trial_type", center=False),
+))
+selection = select_hrf(multi_run_data, library=library, task_model=task_model)
+```
+
+Each modulator names a numeric column of the raw per-trial events. `center`
+subtracts the within-run mean of observed values. `missing="indicator"` gives
+missing (non-finite) trials zero modulation and adds a `missing_<column>`
+regressor in runs that need it; its coefficient is fit freely within each run,
+like a confound, but with the candidate HRF. `missing="error"` rejects
+non-finite values. A candidate is eligible when its task, indicator, and
+confound columns are full rank with residual degrees of freedom in every run
+and the pooled training design is invertible in every fold.
+
+This method assumes that task-model amplitudes transfer across runs. It does
+not require repeated images. Kernels are normalized to sum to one, so beta
 values depend on that convention and are not estimates of the HRF's peak height.
 
 The winning selection-CV score was used to choose the HRF. For independent

@@ -45,6 +45,7 @@ mappings. The other arguments have these defaults:
 | `oversampling` | `50` | Temporal oversampling for HRF convolution |
 | `min_onset` | `-24.0` | Earliest modeled onset relative to the first frame, in seconds |
 | `noise_model` | `"ar1"` | `"ar1"` or `"ols"` |
+| `task_model` | `None` | `TaskModel` shared with HRF selection; requires `hrf_model` `"spm"` or `"glover"` and raw per-trial events |
 
 `contrast_names` preserves the order of the contrast mapping. A model needs at
 least one nonzero t contrast. Numeric contrast vectors and F contrasts are not
@@ -65,6 +66,11 @@ accepted by this interface.
 feature. The supplied signature must match the selection's signature; it may
 be omitted if selection also omitted it. `feature_signature` without a
 selection is an error.
+
+With `model.task_model` set, the selection must carry the same task model and
+the model's `oversampling` and `min_onset` must equal the selection's recorded
+values. With `task_model=None`, the selection must use the default task-only
+model.
 
 `CompiledDesign` contains `matrix`, `excluded_event_count`, and
 `min_onset_cutoff`. Events earlier than the cutoff are excluded with a warning.
@@ -300,9 +306,10 @@ From `boldtailor.hrf_selection`:
 
 ```text
 select_hrf(data, *, library, run_labels=None, feature_signature=None,
-           candidate_batch_size=32)
+           candidate_batch_size=32, task_model=TaskModel())
 evaluate_hrf_split(data, *, library, train_runs, test_runs,
-                   run_labels=None, feature_signature=None)
+                   run_labels=None, feature_signature=None,
+                   task_model=TaskModel())
 ```
 
 `select_hrf` returns `HrfSelectionResult`: `hrf_indices`, `cv_r2`,
@@ -316,6 +323,19 @@ an unchecked candidate is not an excluded candidate.
 `provenance`. It fixes HRF and mean amplitude before predicting the test runs.
 Selection requires two runs; independent evaluation requires two training runs
 and at least one test run. Undefined HRF indices are `-1`.
+
+`select_hrf(data, *, library, run_labels=None, feature_signature=None,
+candidate_batch_size=32, task_model=TaskModel())` and
+`evaluate_hrf_split(..., task_model=TaskModel())` score the task model's
+regressors. `HrfSelectionResult.task_model` records it.
+`HrfEvaluationResult.training_amplitudes` has one row per task regressor, in
+`amplitude_names` order. Selection provenance records `task_model`,
+`task_model_fingerprint`, `task_regressors`, `profiled_regressors`,
+`min_onset`, and `oversampling`.
+
+From `boldtailor.model`: `Modulator(column, center=True, missing="error")` and
+`TaskModel(modulators=())`, with `regressor_names`, `profiled_names`,
+`fingerprint`, and `to_dict()`.
 
 ## Source records and saving
 
