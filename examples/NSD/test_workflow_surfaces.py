@@ -78,6 +78,57 @@ def test_surface_values_use_vertex_ids_and_exclude_volume(cortical_axis):
         surfaces().cortical_values(values[:-1], cortical_axis)
 
 
+def test_multisession_hrf_surface_shows_matched_delta(cortical_axis, surface_files):
+    import nbformat
+    from pathlib import Path
+    import pandas as pd
+
+    from examples.NSD.multisession_plots import comparison_surface
+    from examples.NSD.session_hrf_plots import agreement_figure
+
+    notebook = nbformat.read(
+        Path(__file__).with_name("nsd_multisession.ipynb"), as_version=4
+    )
+    cell = next(c for c in notebook.cells if 'figures["HRFSurface"] =' in c.source)
+    between = np.full(8, 0.8)
+    baseline = np.array([0.6, 0.9, np.nan, 0.8, 0.7, 0.8, 0.9, 0.7])
+    hrf = dict(
+        sessions=["ses-nsd10", "ses-nsd11"],
+        pairs=[(0, 1)],
+        pair_names=["ses-nsd10_vs_ses-nsd11"],
+        pairwise=between[None],
+        canonical=np.stack([baseline, baseline]),
+        summary=np.stack([between, baseline, between - baseline]),
+    )
+    figures = {}
+    try:
+        exec(
+            cell.source,
+            dict(
+                result={"hrf": hrf},
+                brain=cortical_axis,
+                meshes=surface_files[1],
+                figures=figures,
+                comparison_surface=comparison_surface,
+                agreement_figure=agreement_figure,
+                display=lambda _: None,
+                np=np,
+                pd=pd,
+                plt=plt,
+            ),
+        )
+        fig = figures["HRFSurface"]
+        assert len([ax for ax in fig.axes if ax.name == "3d"]) == 4
+        np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-0.2, 0.2])
+        assert "Δr" in fig.axes[-1].get_ylabel()
+        assert "between-session" in fig.axes[-1].get_ylabel().lower()
+        assert "canonical" in fig.axes[-1].get_ylabel().lower()
+        fig.canvas.draw()
+    finally:
+        for fig in figures.values():
+            plt.close(fig)
+
+
 def test_discovery_uses_fslr_meshes_and_supports_explicit_paths(surface_files):
     root, paths = surface_files
     native = paths["left"].with_name("sub-07_hemi-L_inflated.surf.gii")
@@ -235,9 +286,9 @@ def test_notebook_surface_cells_render_existing_results_and_register_exports(
     )
     cells = {c.id: c for c in notebook.cells}
     required = ("glm-surface-maps", "beta-surface-maps", "rt-surface-maps")
-    assert all(key in cells for key in required), (
-        "Notebook needs executable surface-map cells"
-    )
+    assert all(
+        key in cells for key in required
+    ), "Notebook needs executable surface-map cells"
     model = dict(r2=np.full((3, 8), 0.2), rt={"all": np.linspace(-0.2, 0.3, 8)})
     context = dict(
         settings={"subject": "sub-07", "surface_maps": True, "surface_meshes": meshes},
@@ -315,6 +366,6 @@ figures = {{}}
     executed = NotebookClient(notebook, timeout=60, kernel_name="python3").execute()
     for cell in executed.cells[1:]:
         images = [o for o in cell.outputs if "image/png" in o.get("data", {})]
-        assert len(images) == 1, (
-            f"{cell.id} should display its surface figure exactly once"
-        )
+        assert (
+            len(images) == 1
+        ), f"{cell.id} should display its surface figure exactly once"
