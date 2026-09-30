@@ -960,3 +960,13 @@ def test_model_provenance_adds_task_model_only_when_set():
     activity = _model_provenance(with_model).activity
     assert activity["task_model"] == task_model.to_dict()
     assert activity["task_model_fingerprint"] == task_model.fingerprint
+
+
+def test_model_provenance_without_task_model_keeps_legacy_keys():
+    from boldtailor.fit import _model_provenance
+
+    plain = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm")
+    assert set(_model_provenance(plain).activity) == {
+        "contrasts", "confounds", "hrf_model", "drift_model", "high_pass",
+        "drift_order", "oversampling", "min_onset", "noise_model",
+    }

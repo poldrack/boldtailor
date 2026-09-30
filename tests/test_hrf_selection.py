@@ -339,7 +339,7 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
     assert activity["score"] == "nuisance_adjusted_task_model_prediction_r2"
 
 
-def test_default_selection_carries_task_only_model_and_legacy_fingerprint_rules(cv_fixture):
+def test_default_selection_carries_task_only_model(cv_fixture):
     from boldtailor.hrf_selection import select_hrf
     from boldtailor.model import TaskModel
 
