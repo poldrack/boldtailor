@@ -320,16 +320,16 @@ an unchecked candidate is not an excluded candidate.
 `evaluate_hrf_split` uses disjoint, zero-based run indices. Its
 `HrfEvaluationResult` contains `training_selection`, `training_amplitudes`,
 `test_r2`, `canonical_test_r2`, `delta_test_r2`, `train_runs`, `test_runs`, and
-`provenance`. It fixes HRF and mean amplitude before predicting the test runs.
+`provenance`. It fixes the HRF and one amplitude per task regressor before predicting the test runs.
 Selection requires two runs; independent evaluation requires two training runs
 and at least one test run. Undefined HRF indices are `-1`.
 
-`select_hrf(data, *, library, run_labels=None, feature_signature=None,
-candidate_batch_size=32, task_model=TaskModel())` and
-`evaluate_hrf_split(..., task_model=TaskModel())` score the task model's
-regressors. `HrfSelectionResult.task_model` records it.
+Both functions score the task model's regressors;
+`HrfSelectionResult.task_model` records it.
 `HrfEvaluationResult.training_amplitudes` has one row per task regressor, in
-`amplitude_names` order. Selection provenance records `task_model`,
+`amplitude_names` order. `HrfEvaluationResult.training_amplitudes` is now
+two-dimensional, `(n_regressors, n_features)`; under the default task model
+index row 0 where earlier releases returned a one-dimensional array. Selection provenance records `task_model`,
 `task_model_fingerprint`, `task_regressors`, `profiled_regressors`,
 `min_onset`, and `oversampling`.
 

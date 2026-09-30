@@ -289,9 +289,12 @@ Tests are written and committed before implementation, following the repo's
 RED-GREEN-Refactor rule.
 
 1. **Regression.** `TaskModel()` reproduces the current `select_hrf` indices,
-   `cv_r2`, eligibility table, and design fingerprints on the existing
-   fixtures, and `fit(..., hrf_selection=...)` without a task model is
-   unchanged.
+   `cv_r2`, eligibility table, and design-fingerprint invariances (changing
+   RT values does not change the fingerprint) on the existing fixtures, and
+   `fit(..., hrf_selection=...)` without a task model is unchanged. The
+   fingerprint payload itself now includes the expanded events and the
+   task-model fingerprint, so its value differs from earlier releases even
+   for the default model.
 2. **Event expansion.** For a fixture with RT and trial type, the expanded
    frame has `task` with unit amplitudes, `response_time` centered over
    observed trials and zero where missing, `trial_type` uncentered, and

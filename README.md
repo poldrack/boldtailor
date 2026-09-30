@@ -116,7 +116,7 @@ signals with your usual imaging tools and use the array API, or adapt an example
 Both packages estimate single-trial responses with an HRF selected at each
 brain location. Boldtailor also supports conventional contrasts and custom
 design matrices. Its single-trial workflow uses supplied confounds, fixed or
-encoding-guided ridge penalties, and HRF selection by mean-stimulus prediction
+encoding-guided ridge penalties, and HRF selection by task-model prediction
 across runs.
 
 The published GLMsingle workflow selects HRFs by in-sample fit, then uses

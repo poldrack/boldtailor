@@ -1,4 +1,4 @@
-"""Select HRFs by mean-stimulus prediction across runs, without repeated images."""
+"""Select HRFs by held-out task-model prediction across runs, without repeated images."""
 
 from hashlib import sha256
 from numbers import Integral

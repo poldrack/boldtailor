@@ -16,10 +16,10 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 | Choice | Boldtailor | Published GLMsingle workflow |
 | --- | --- | --- |
 | HRF library | NSD notebooks use canonical SPM plus 512 Sobol-sampled double-gamma candidates; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
-| HRF selection | Predict each omitted run using a shared mean stimulus amplitude learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
+| HRF selection | Predict each omitted run using task-model amplitudes learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
 | Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
 | Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |
-| Cross-validation target | HRFs: nuisance-adjusted mean-stimulus time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
+| Cross-validation target | HRFs: nuisance-adjusted task-model time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
 | Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
 
 GLMsingle's HRF selection itself does **not** use the repeated-condition
@@ -37,7 +37,7 @@ discuss the potential to remove trial-varying effects in the
 [FAQ on repeated conditions](https://glmsingle.readthedocs.io/en/latest/wiki.html#in-glmsingle-the-glmdenoise-and-ridge-regression-rr-components-of-the-method-require-experimental-conditions-to-repeat-across-runs-how-should-i-think-about-whether-this-is-appropriate-for-my-experiment).
 
 Boldtailor does not use image identity or repeated-condition beta agreement to
-select an HRF. It assumes that each location's mean stimulus response transfers
+select an HRF. It assumes that each location's task-model response transfers
 across runs. Final fits then estimate individual trial amplitudes, optionally
 with fixed or CV-selected ridge. A changing mean response across runs, or a weak mean response,
 can make this HRF-selection objective less informative. Avoiding repeat-based

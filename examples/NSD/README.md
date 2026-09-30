@@ -69,15 +69,16 @@ fit these predictors jointly, without orthogonalization:
 - `task`: unit amplitude for every presentation.
 - `response_time`: positive finite seconds, centered over observed RTs within
   each run; unavailable RTs receive zero modulation.
-- `trial_type`: binary codes 0/1, centered within each run; the coefficient is
-  type 1 minus type 0, controlling for RT.
+- `trial_type`: binary codes 0/1, uncentered; the coefficient is type 1 minus
+  type 0, controlling for RT, and the task coefficient is the response on
+  trial_type 0 trials.
 - `missing_response_time`: one for nonfinite or nonpositive RT, zero otherwise;
   included only in runs with unavailable RTs and convolved with the same HRF.
 
 All presentations remain in the task and trial-type regressors. The extra
 indicator allows the mean response on unavailable-RT trials to differ; the
-task coefficient refers to observed-RT trials at the run's mean observed RT
-and mean trial type. Runs with no observed RT cannot estimate an RT effect
+task coefficient refers to observed-RT trial_type 0 trials at the run's mean
+observed RT. Runs with no observed RT cannot estimate an RT effect
 and are rejected. Complete runs retain their original three-predictor design.
 The indicator is saved in the event tables and design matrices; contrast maps
 remain task, RT, and trial type. Conventional task ΔR² includes the indicator's
@@ -228,8 +229,10 @@ no repeated images are needed. The default `encoding_mode="within_run"` removes
 each held-out run/feature mean residual for scoring only. Set
 `NSD_CONFIG["encoding_mode"] = "absolute"` to reproduce shared-intercept fitting
 and uncentered scoring. Inner and outer evaluations use the same mode.
-HRFs are selected on the training runs within each fold using mean-stimulus
-prediction. Training betas use the candidate fraction; validation targets are fixed OLS
+HRFs are selected on the training runs within each fold using task-model
+prediction. Inner-fold HRF selection inside the ridge cross-validation uses the
+package default task-only model; the final beta series use HRFs selected with
+the NSD task model. Training betas use the candidate fraction; validation targets are fixed OLS
 betas under the training-selected HRFs.
 
 A fraction of 1 gives OLS. Smaller fractions shrink the coefficient norm in the
@@ -472,8 +475,8 @@ coefficients are unpenalized and betas retain the input signal scale.
 
 The expanded library has 649 candidates: canonical SPM plus 648 double-gamma
 HRFs varying in delay, dispersion, undershoot, and onset. Each kernel is
-normalized to sum to one. Selection predicts a shared mean stimulus response
-across runs; final beta estimation allows every trial its own amplitude.
+normalized to sum to one. Selection predicts each held-out run's task-model response
+(task, centered RT, uncentered trial type) from the other runs; final beta estimation allows every trial its own amplitude.
 
 Three selections serve different purposes:
 
@@ -580,8 +583,8 @@ fitted runs. Its denominator is the sum of within-run signal variance.
 ridge estimator. Positive values favor the optimized fit; negative values are
 retained. These are all in-sample diagnostics.
 
-The selection and independent-test scores instead measure prediction of a
-mean stimulus response after nuisance adjustment. They have a different
+The selection and independent-test scores instead measure prediction of the
+task-model response after nuisance adjustment. They have a different
 denominator from full-model R². The winning selection-CV score was used to
 choose among HRFs; use the separate test maps for independent prediction.
 

@@ -138,7 +138,7 @@ The selection can come from separate training runs. If you supplied a
 `feature_signature` when selecting HRFs, also pass the target data's spatial
 signature to `fit()`. Matching feature counts alone do not prove that voxels
 are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
-Selection still follows the [mean-response method](#selecting-an-hrf-for-each-location);
+Selection follows the task-model prediction method (the [mean-response method](#selecting-an-hrf-for-each-location) when the task model is the default);
 for selection input, supply raw per-trial events; the task model expands them for both selection and fitting.
 
 Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
@@ -209,7 +209,7 @@ There are three distinct comparisons:
 | --- | --- |
 | How much variance do task regressors add beyond confounds? | Full R² minus nuisance-only R² |
 | Does a selected HRF improve the single-trial fit over the canonical HRF? | Optimized full R² minus canonical full R², using the same estimator |
-| Does a mean stimulus response predict a separate run? | HRF prediction R² after nuisance adjustment |
+| Does a task-model response predict a separate run? | HRF prediction R² after nuisance adjustment |
 
 For conventional models, `task_delta_r2(data, model, result)` and
 `task_delta_r2_prepared(prepared, prepared_result, contrasts=..., ...)` compute
