@@ -242,5 +242,8 @@ def test_compile_designs_with_task_model_reports_data_errors_with_run():
         hrf_model="spm",
         task_model=TaskModel((Modulator("response_time"),)),
     )
-    with pytest.raises(ValueError, match="run 1.*response_time"):
+    with pytest.raises(
+        ValueError,
+        match=r"^run 1 design compilation failed: (?!run 1).*response_time",
+    ):
         compile_designs(data, model)

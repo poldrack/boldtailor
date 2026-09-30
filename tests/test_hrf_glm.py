@@ -690,3 +690,26 @@ def test_legacy_selected_glm_without_task_model_is_unchanged(hrf_glm_problem):
     result = _selected_fit(data, model, selection)
     for (run, cid), design in result.group_designs.items():
         np.testing.assert_allclose(design.to_numpy(), designs[run, cid][design.columns].to_numpy(), atol=1e-12)
+
+
+def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem):
+    from boldtailor.model import Modulator, TaskModel
+
+    data, model, selection, library = task_model_problem
+    strict = TaskModel((Modulator("response_time", missing="error"),))
+    complete = from_arrays(
+        data.signals,
+        [e.assign(response_time=1.0 + e.index) for e in data.events],
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+    )
+    chosen = select_hrf(
+        complete, library=library, feature_signature="axis-tm", task_model=strict
+    )
+    with pytest.raises(ValueError, match=r"^run 1 design compilation failed: (?!run 1)"):
+        fit(
+            data,
+            replace(model, task_model=strict, contrasts={"task": {"task": 1}}),
+            hrf_selection=chosen,
+            feature_signature="axis-tm",
+        )
