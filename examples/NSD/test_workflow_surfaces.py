@@ -82,6 +82,7 @@ def test_multisession_hrf_surface_shows_matched_delta(cortical_axis, surface_fil
     import nbformat
     from pathlib import Path
     import pandas as pd
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
 
     from examples.NSD.multisession_plots import comparison_surface
     from examples.NSD.session_hrf_plots import agreement_figure
@@ -123,7 +124,12 @@ def test_multisession_hrf_surface_shows_matched_delta(cortical_axis, surface_fil
         assert "Δr" in fig.axes[-1].get_ylabel()
         assert "between-session" in fig.axes[-1].get_ylabel().lower()
         assert "canonical" in fig.axes[-1].get_ylabel().lower()
-        fig.canvas.draw()
+        FigureCanvasAgg(fig).draw()
+        renderer = fig.canvas.get_renderer()
+        for label in [fig.axes[-1].yaxis.label, *fig.axes[0].texts]:
+            bounds = label.get_window_extent(renderer)
+            assert bounds.x0 >= 0 and bounds.x1 <= fig.bbox.width
+            assert bounds.y0 >= 0 and bounds.y1 <= fig.bbox.height
     finally:
         for fig in figures.values():
             plt.close(fig)
