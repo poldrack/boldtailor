@@ -204,7 +204,8 @@ def signal_statistics(runs, signals, batch_size):
         for cid in range(n):
             qp = run.block(cid).qp
             if qp.shape[1]:
-                c[cid] -= np.sum((qp.T @ yr) ** 2, axis=0)
+                residual = yr - qp @ (qp.T @ yr)
+                c[cid] = np.sum(residual**2, axis=0)
         a_all.append(a)
         b_all.append(_batched_products(run, yr, batch_size))
         c_all.append(c)
@@ -235,6 +236,7 @@ def prediction_loss(a, b, c, amplitude):
 def loro_scores(a, b, c, energy):
     loss = np.zeros(c.shape[1:])
     eligible = np.ones(c.shape[1], dtype=bool)
+    eligible &= ~np.any(np.all(a == 0, axis=(-2, -1)), axis=0)
     for r in range(len(a)):
         others = [i for i in range(len(a)) if i != r]
         # Explicit sums avoid cancellation when one run has much larger energy.
