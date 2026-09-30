@@ -280,3 +280,42 @@ def test_onsets_outside_supported_window_are_rejected(task_fixture):
     )
     with pytest.raises(ValueError, match="supported sampled response"):
         prepare_runs(early, library, NSD)
+
+
+def test_signal_inside_profiled_span_does_not_raise(task_fixture):
+    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+
+    data, library = task_fixture
+    frames = columns_for(data, library, 1, NSD)
+    signals = []
+    for r, (y, n) in enumerate(zip(data.signals, data.confounds, strict=True)):
+        feature = 3 * n["motion"].to_numpy() + 40
+        if r in (1, 3):
+            feature = feature + 5 * frames[r]["missing_response_time"].to_numpy()
+        signals.append(np.column_stack([feature, y[:, 1:]]))
+    inside = from_arrays(
+        signals, data.events, frame_times=data.frame_times, confounds=data.confounds
+    )
+    runs = prepare_runs(inside, library, NSD)
+    a, b, c, energy = signal_statistics(runs, inside.signals, 32)
+    scores = loro_scores(a, b, c, energy)
+    assert np.all(c >= 0)
+    assert np.all(np.isfinite(scores[:, 0]) | np.isnan(scores[:, 0]))
+
+
+def test_run_ineligible_candidate_scores_minus_inf(task_fixture):
+    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+
+    data, library = task_fixture
+    frames = columns_for(data, library, 0, NSD)
+    confounds = [
+        n.assign(null_task=f["task"].to_numpy()) if r == 2 else n
+        for r, (n, f) in enumerate(zip(data.confounds, frames, strict=True))
+    ]
+    altered = from_arrays(
+        data.signals, data.events, frame_times=data.frame_times, confounds=confounds
+    )
+    runs = prepare_runs(altered, library, NSD)
+    scores = loro_scores(*signal_statistics(runs, altered.signals, 32))
+    assert np.all(scores[0] == -np.inf)
+    assert np.all(np.isfinite(scores[1]))
