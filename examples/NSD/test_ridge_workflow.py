@@ -14,7 +14,7 @@ from boldtailor.hrf_selection import select_hrf
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from examples.NSD.nsd_hrf import spatial_signature
-from examples.NSD.workflow_inputs import load_session, load_block
+from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 
 
@@ -102,7 +102,12 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
     if library is None:
         expected_fit = fit_single_trials(data, ridge_alpha=final_alpha)
     else:
-        selection = select_hrf(data, library=library, feature_signature=signature)
+        selection = select_hrf(
+            data,
+            library=library,
+            feature_signature=signature,
+            task_model=NSD_TASK_MODEL,
+        )
         expected_fit = fit_selected_hrfs(
             data,
             selection=selection,
@@ -127,7 +132,10 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
         else:
             train_data = load_block([runs[i] for i in train], root, np.arange(4))
             selected = select_hrf(
-                train_data, library=library, feature_signature=signature
+                train_data,
+                library=library,
+                feature_signature=signature,
+                task_model=NSD_TASK_MODEL,
             )
             fitted = fit_selected_hrfs(
                 data, selection=selected, ridge_alpha=alpha, feature_signature=signature
