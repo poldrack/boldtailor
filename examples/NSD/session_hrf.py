@@ -18,7 +18,7 @@ from .session_hrf_cache import (
     save_cache,
 )
 from .session_hrf_import import find_workflow_estimate
-from .workflow_inputs import load_session, load_block, make_blocks
+from .workflow_inputs import NSD_TASK_MODEL, load_session, load_block, make_blocks
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,7 @@ def _fit_block(indices, runs, root, library):
         library=library,
         run_labels=[r.label for r in runs],
         feature_signature=spatial_signature(runs[0].image.header.get_axis(1), indices),
+        task_model=NSD_TASK_MODEL,
     )
 
 

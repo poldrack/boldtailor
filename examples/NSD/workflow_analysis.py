@@ -12,7 +12,7 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from .nsd_hrf import spatial_signature
 from .parallel_blocks import map_blocks
 from .rt_diagnostics import correlate_rt
-from .workflow_inputs import load_block, REGRESSORS
+from .workflow_inputs import NSD_TASK_MODEL, load_block, REGRESSORS
 
 
 def _signature(runs, indices):
@@ -25,6 +25,7 @@ def _select_block(indices, runs, root, library):
         library=library,
         run_labels=[r.label for r in runs],
         feature_signature=_signature(runs, indices),
+        task_model=NSD_TASK_MODEL,
     )
     odd = [i for i, r in enumerate(runs) if r.number % 2]
     even = [i for i, r in enumerate(runs) if not r.number % 2]
@@ -69,7 +70,7 @@ def selection_maps(selections, n_features):
 
 def _glm_block(job, runs, root, model):
     indices, selection = job
-    data = load_block(runs, root, indices, glm=True)
+    data = load_block(runs, root, indices)
     options = (
         {}
         if selection is None

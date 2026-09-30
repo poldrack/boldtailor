@@ -14,7 +14,7 @@ from .hrf_reliability import _indices
 from .nsd_cifti import _input_paths
 from .nsd_hrf import spatial_signature
 from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
-from .workflow_inputs import _trimmed_sources
+from .workflow_inputs import NSD_TASK_MODEL, _trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
 
@@ -41,7 +41,8 @@ def request_metadata(runs, root, library, limit):
         grayordinate_limit=limit,
         spatial_fingerprint=spatial_signature(brain, np.arange(len(brain))),
         runs=records,
-        model="mean_stimulus_leave_one_run_out",
+        model="task_model_leave_one_run_out",
+        task_model=NSD_TASK_MODEL.to_dict(),
         oversampling=50,
         nuisance="motion24_top6_combined_acompcor_fmriprep_cosines_intercept",
         trimming="leading_nonsteady_volumes_original_acquisition_times",

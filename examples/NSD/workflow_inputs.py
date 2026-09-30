@@ -8,11 +8,18 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.data import from_arrays
-from boldtailor.model import ModelSpec
+from boldtailor.model import ModelSpec, Modulator, TaskModel
 from .nsd_cifti import discover_runs, _sources
 from .nsd_single_trial import _load_runs
 
 REGRESSORS = ("task", "response_time", "trial_type")
+
+NSD_TASK_MODEL = TaskModel(
+    (
+        Modulator("response_time", center=True, missing="indicator"),
+        Modulator("trial_type", center=False),
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -27,48 +34,34 @@ class WorkflowRun:
     retained_frames: np.ndarray
 
 
-def _rt_amplitudes(values):
-    observed = np.isfinite(values) & (values > 0)
-    if not observed.any():
+def _numeric_column(events, name):
+    if name not in events:
+        raise ValueError(f"Missing {name}")
+    try:
+        return pd.to_numeric(events[name], errors="raise").to_numpy(float)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must contain numeric values") from error
+
+
+def validate_glm_events(events):
+    """Require an observed positive RT and both binary trial_type codes."""
+    rt = _numeric_column(events, "response_time")
+    if not (np.isfinite(rt) & (rt > 0)).any():
         raise ValueError(
             "response_time needs positive finite observations for the RT effect"
         )
-    centered = np.zeros(len(values))
-    centered[observed] = values[observed] - values[observed].mean()
-    amplitudes = {"response_time": centered}
-    if not observed.all():
-        amplitudes["missing_response_time"] = (~observed).astype(float)
-    return amplitudes
+    trial_type = _numeric_column(events, "trial_type")
+    if not np.isfinite(trial_type).all() or set(trial_type) != {0, 1}:
+        raise ValueError("trial_type must contain both binary codes 0 and 1")
 
 
-def glm_events(events):
-    """Retain all stimuli, with centered RT and an indicator for unavailable RT."""
-    amplitudes = {"task": np.ones(len(events))}
-    for name in REGRESSORS[1:]:
-        if name not in events:
-            raise ValueError(f"Missing {name}")
-        try:
-            values = pd.to_numeric(events[name], errors="raise").to_numpy(float)
-        except (TypeError, ValueError) as error:
-            raise ValueError(f"{name} must contain numeric values") from error
-        if name == "response_time":
-            amplitudes.update(_rt_amplitudes(values))
-            continue
-        if not np.isfinite(values).all():
-            raise ValueError(f"{name} must be finite for every trial")
-        if name == "trial_type" and set(values) != {0, 1}:
-            raise ValueError("trial_type must contain both binary codes 0 and 1")
-        amplitudes[name] = values - values.mean()
-    return pd.concat(
-        [
-            events[["onset", "duration"]].assign(trial_type=k, modulation=v)
-            for k, v in amplitudes.items()
-        ],
-        ignore_index=True,
-    )
+def _missing_nonpositive_rt(events):
+    """Package semantics: missing means non-finite, so nonpositive RTs become NaN."""
+    rt = _numeric_column(events, "response_time")
+    return events.assign(response_time=np.where(np.isfinite(rt) & (rt > 0), rt, np.nan))
 
 
-def _trim(run, *, hrf_only=False):
+def _trim(run):
     flags = run.confounds.filter(like="non_steady_state_outlier")
     if not np.isin(flags.to_numpy(), [0, 1]).all():
         raise ValueError("Nonsteady flags must be binary")
@@ -78,12 +71,11 @@ def _trim(run, *, hrf_only=False):
     retained = np.arange(len(dropped), len(run.frame_times))
     if not len(retained):
         raise ValueError("No scans remain after trimming")
-    if not hrf_only:
-        glm_events(run.events)  # Validate the conventional GLM encoding.
+    validate_glm_events(run.events)
     return WorkflowRun(
         run.inputs,
         run.image,
-        run.events,
+        _missing_nonpositive_rt(run.events),
         run.confounds.drop(columns=flags.columns).iloc[retained].reset_index(drop=True),
         run.frame_times[retained],
         run.label,
@@ -96,7 +88,7 @@ def load_session(root, prep, *, subject="sub-07", session="ses-nsd10", hrf_only=
     """Keep original event onsets and acquisition times when dropping NSS scans."""
     inputs = discover_runs(Path(root), Path(prep), subject=subject, session=session)
     raw_runs, _ = _load_runs(inputs)
-    runs = [_trim(run, hrf_only=hrf_only) for run in raw_runs]
+    runs = [_trim(run) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise ValueError("Retained confound names must match across runs")
     if len(runs) < 2:
@@ -133,18 +125,17 @@ def _trimmed_sources(run, root, indices):
     )
 
 
-def load_block(runs, root, indices, *, glm=False):
-    """Use raw trial rows for selection/beta series; expand rows only for GLMs."""
+def load_block(runs, root, indices):
+    """Raw trial rows for every analysis; the task model expands them."""
     return from_arrays(
         block_signals(runs, indices),
-        [glm_events(r.events) if glm else r.events for r in runs],
+        [r.events for r in runs],
         frame_times=[r.frame_times for r in runs],
         confounds=[r.confounds for r in runs],
         sources=[_trimmed_sources(r, root, indices) for r in runs],
         provenance_metadata={
-            "event_encoding": (
-                "centered_joint_modulators" if glm else "one_row_per_trial"
-            )
+            "event_encoding": "raw_trials_with_task_model",
+            "task_model": NSD_TASK_MODEL.to_dict(),
         },
     )
 
@@ -156,6 +147,7 @@ def glm_model(runs):
         hrf_model="spm",
         drift_model=None,
         noise_model="ols",
+        task_model=NSD_TASK_MODEL,
     )
 
 
