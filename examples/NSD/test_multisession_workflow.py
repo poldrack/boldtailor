@@ -1,11 +1,13 @@
 """Missing sessions are fitted once; the combined notebook reuses completed fits."""
 
 from pathlib import Path
+import json
 
 import nibabel as nib
 import nbformat
 from nbclient import NotebookClient
 import numpy as np
+import pandas as pd
 import pytest
 
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
@@ -74,6 +76,54 @@ def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
         )
 
 
+def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
+    two_raw_sessions, tmp_path
+):
+    for path in Path(two_raw_sessions["bids_root"]).rglob("*run-01*events.tsv"):
+        events = pd.read_csv(path, sep="\t")
+        events.loc[1, "response_time"] = np.nan
+        events.to_csv(path, sep="\t", index=False)
+    output = tmp_path / "output"
+    status = api("workflow").ensure_session_outputs(
+        dict(
+            **two_raw_sessions,
+            output_root=str(output),
+            n_jobs=1,
+            block_size=4,
+            hrf_n_samples=1,
+            ridge_fractions=[0.5, 1.0],
+        ),
+        ["ses-nsd10", "ses-nsd11"],
+    )
+    assert status.status.tolist() == ["fitted", "fitted"]
+    loaded = api("inputs").load_sessions(output, "sub-07", ["ses-nsd10", "ses-nsd11"])
+    assert len(loaded["records"]) == 2
+    for record in loaded["records"]:
+        assert (
+            record["metadata"]["missing_response_time"]["regressor"]
+            == "missing_response_time"
+        )
+    betas = list(output.rglob("*run-01*Trial*_betas.dscalar.nii"))
+    assert len(betas) == 8
+    for path in betas:
+        values = nib.load(path).get_fdata()
+        assert values.shape == (6, 4)
+        assert np.isfinite(values[:, :3]).all()
+    designs = list(output.rglob("*GLM_designs.npz"))
+    assert len(designs) == 4
+    for path in designs:
+        with np.load(path) as archive:
+            columns = [
+                archive[k].tolist()
+                for k in archive.files
+                if k.startswith("run-01_") and k.endswith("_columns")
+            ]
+            assert columns and all("missing_response_time" in c for c in columns)
+    for path in output.rglob("*FractionalCVAll_metadata.json"):
+        metadata = json.loads(path.read_text())
+        assert metadata["trial_masks"][0] == [True, False, True, True, True, True]
+
+
 def test_multisession_notebook_executes_and_exports_paired_maps(
     saved_sessions,  # noqa: F811
     tmp_path,
@@ -124,7 +174,9 @@ def test_multisession_export_preserves_input_files(saved_sessions):  # noqa: F81
     assert api("outputs").save_multisession(output, loaded, results) == paths
 
 
-def test_incompatible_estimators_fail_before_fitting(saved_sessions, monkeypatch):  # noqa: F811
+def test_incompatible_estimators_fail_before_fitting(
+    saved_sessions, monkeypatch
+):  # noqa: F811
     root, sessions, _, _ = saved_sessions
     module = api("workflow")
 

@@ -269,8 +269,8 @@ def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
     runs = load_session(root, prep, hrf_only=True)
     assert len(runs[0].events) == len(events)
     assert pd.isna(runs[0].events.response_time).sum() == 1
-    with pytest.raises(ValueError, match="response_time"):
-        load_session(root, prep)  # Conventional GLMs still require their RT predictor.
+    glm_runs = load_session(root, prep)
+    pd.testing.assert_frame_equal(glm_runs[0].events, runs[0].events)
 
 
 def test_hrf_only_analysis_requires_two_runs_without_odd_even_splits(

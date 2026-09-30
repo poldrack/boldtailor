@@ -71,10 +71,37 @@ def test_glm_events_preserve_timing_and_center_two_joint_modulators(events):
     pd.testing.assert_frame_equal(events, original)
 
 
-@pytest.mark.parametrize("column,value", [("trial_type", 2), ("response_time", np.nan)])
+@pytest.mark.parametrize("column,value", [("trial_type", 2), ("trial_type", np.nan)])
 def test_invalid_glm_covariates_fail_explicitly(events, column, value):
     events.loc[0, column] = value
     with pytest.raises(ValueError, match=column):
+        workflow().glm_events(events)
+
+
+@pytest.mark.parametrize("missing", [np.nan, np.inf, -np.inf, 0.0, -1.0])
+def test_glm_missing_rt_has_zero_modulation_and_separate_indicator(events, missing):
+    events["response_time"] = [1.0, missing, 3.0, 2.0, 4.0, 5.0]
+    original = events.copy(deep=True)
+    result = workflow().glm_events(events)
+    expected = {
+        "task": [1, 1, 1, 1, 1, 1],
+        "response_time": [-2, 0, 0, -1, 1, 2],
+        "trial_type": [-0.5, 0.5, -0.5, 0.5, 0.5, -0.5],
+        "missing_response_time": [0, 1, 0, 0, 0, 0],
+    }
+    assert set(result.trial_type) == set(expected)
+    for name, amplitudes in expected.items():
+        rows = result.loc[result.trial_type == name]
+        np.testing.assert_allclose(rows.modulation, amplitudes)
+        np.testing.assert_array_equal(
+            rows[["onset", "duration"]], events[["onset", "duration"]]
+        )
+    pd.testing.assert_frame_equal(events, original)
+
+
+def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
+    events["response_time"] = np.nan
+    with pytest.raises(ValueError, match="response_time.*positive.*finite"):
         workflow().glm_events(events)
 
 
@@ -119,9 +146,11 @@ def independent_ols(runs, indices, library, ids):
             e = run.events
             amplitudes = (
                 np.ones(len(e)),
-                e.response_time - e.response_time.mean(),
+                e.response_time.fillna(e.response_time.mean()) - e.response_time.mean(),
                 e.trial_type - e.trial_type.mean(),
             )
+            if e.response_time.isna().any():
+                amplitudes += (e.response_time.isna().astype(float),)
             columns = [
                 compute_regressor(
                     np.vstack([e.onset, e.duration, a]),
@@ -149,10 +178,16 @@ def independent_ols(runs, indices, library, ids):
 
 
 @pytest.mark.parametrize("n_jobs", [1, 2])
+@pytest.mark.parametrize("missing_rt", [False, True])
 def test_both_glms_match_independent_ols_and_keep_spatial_order(
-    four_runs, small_library, n_jobs, capfd
+    four_runs, small_library, n_jobs, capfd, missing_rt
 ):
     root, prep = four_runs
+    if missing_rt:
+        path = next(root.rglob("*run-01*events.tsv"))
+        events = pd.read_csv(path, sep="\t")
+        events.loc[1, "response_time"] = np.nan
+        events.to_csv(path, sep="\t", index=False)
     runs = workflow().load_session(root, prep)
     inputs, analysis = workflow(), workflow("workflow_analysis")
     blocks = inputs.make_blocks(runs, block_size=2)
@@ -182,6 +217,10 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
         assert np.isnan(result["r2"][:, 3]).all()
         assert np.isnan(result["effects"][:, 3]).all()
         assert result["designs"] and result["provenance"]
+        for (run_index, _), design in result["designs"].items():
+            assert ("missing_response_time" in design) == (
+                missing_rt and run_index == 0
+            )
 
 
 def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
