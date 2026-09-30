@@ -319,3 +319,14 @@ def test_run_ineligible_candidate_scores_minus_inf(task_fixture):
     scores = loro_scores(*signal_statistics(runs, altered.signals, 32))
     assert np.all(scores[0] == -np.inf)
     assert np.all(np.isfinite(scores[1]))
+
+
+def test_prediction_loss_tolerance_sums_absolute_regressor_cross_terms():
+    from boldtailor._hrf_cv import prediction_loss
+
+    a = np.eye(2)[None]
+    b = np.array([[[1e8], [-1e8]]])
+    amplitude = np.ones((1, 2, 1))
+    c = np.array([[-2.0 - 1e-9]])
+    # The cross terms cancel, so only per-regressor magnitudes bound roundoff.
+    np.testing.assert_array_equal(prediction_loss(a, b, c, amplitude), [[0.0]])
