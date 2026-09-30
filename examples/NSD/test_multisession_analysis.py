@@ -68,6 +68,16 @@ def saved_sessions(tmp_path):
         for optimized, prefix in enumerate(("Canonical", "Optimized")):
             shift = optimized * (i + 1)
             add(
+                prefix + "GLM",
+                "effects",
+                [
+                    [10 + i + shift, -4 - i - shift, np.nan],
+                    [0.1 * (i + 1 + shift), -0.2 * (i + 1 + shift), np.nan],
+                    [99, -99, np.nan],
+                ],
+                ["task", "response_time", "trial_type"],
+            )
+            add(
                 prefix + "TrialOLS",
                 "activation",
                 [
@@ -138,6 +148,42 @@ def test_paired_summary_uses_same_sessions_for_both_models():
     np.testing.assert_allclose(result["positive_fraction"], [1, np.nan, np.nan])
 
 
+def test_glm_effect_means_match_sessions_and_export_units(saved_sessions):
+    root, sessions, _, brain = saved_sessions
+    path = next((root / "sub-07" / sessions[2]).rglob("*OptimizedGLM_stat-effects*"))
+    image = nib.load(path)
+    values = image.get_fdata()
+    values[1, 1] = np.nan
+    nib.save(nib.Cifti2Image(values, header=image.header), path)
+    loaded = api("inputs").load_sessions(root, "sub-07", sessions, estimators=["OLS"])
+    result = api("analysis").analyze_sessions(loaded)
+    assert result["glm_metrics"] == ("task", "response_time")
+    expected = {
+        "canonical_mean": [[11, -5, np.nan], [0.2, -0.3, np.nan]],
+        "optimized_mean": [[13, -7, np.nan], [0.4, -0.6, np.nan]],
+        "difference_mean": [[2, -2, np.nan], [0.2, -0.3, np.nan]],
+        "valid_sessions": [[3, 3, 0], [3, 2, 0]],
+    }
+    for stat, values in expected.items():
+        np.testing.assert_allclose(result["glm"][stat], values, atol=1e-7)
+    paths = api("outputs").save_multisession(root, loaded, result)
+    for stat, values in expected.items():
+        saved = nib.load(next(p for p in paths if f"GLM_stat-{stat}." in p.name))
+        assert saved.header.get_axis(1) == brain
+        assert saved.header.get_axis(0).name.tolist() == ["task", "response_time"]
+        np.testing.assert_allclose(saved.get_fdata(), values, atol=1e-7)
+    meta = json.loads(
+        next(p for p in paths if p.name.endswith("_metadata.json")).read_text()
+    )
+    assert meta["glm_units"] == {
+        "task": "native signal units",
+        "response_time": "native signal units per second",
+    }
+    sources = {row["path"] for row in meta["sources"]}
+    assert str(path) in sources
+    assert len([p for p in sources if "GLM_stat-effects" in p]) == 6
+
+
 def test_loader_rejects_misaligned_grayordinates(saved_sessions):
     root, sessions, _, _ = saved_sessions
     path = next(
@@ -156,11 +202,12 @@ def test_loader_rejects_misaligned_grayordinates(saved_sessions):
         api("inputs").load_sessions(root, "sub-07", sessions, estimators=["OLS"])
 
 
-def test_loader_rejects_wrong_scalar_names(saved_sessions):
+@pytest.mark.parametrize(
+    "pattern", ["*CanonicalTrialOLS_stat-rsquared*", "*CanonicalGLM_stat-effects*"]
+)
+def test_loader_rejects_wrong_scalar_names(saved_sessions, pattern):
     root, sessions, _, brain = saved_sessions
-    path = next(
-        (root / "sub-07" / sessions[0]).rglob("*CanonicalTrialOLS_stat-rsquared*")
-    )
+    path = next((root / "sub-07" / sessions[0]).rglob(pattern))
     image = nib.load(path)
     nib.save(
         nib.Cifti2Image(

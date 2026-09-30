@@ -152,6 +152,59 @@ def test_discovery_uses_fslr_meshes_and_supports_explicit_paths(surface_files):
         surfaces().find_surface_meshes(root, "sub-07")
 
 
+def test_multisession_glm_cell_renders_absolute_and_delta_maps(
+    cortical_axis, surface_files
+):
+    from pathlib import Path
+    import nbformat
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+    notebook = nbformat.read(Path(__file__).with_name("nsd_multisession.ipynb"), 4)
+    cells = {c.id: c for c in notebook.cells}
+    assert "glm-session-surfaces" in cells
+    from examples.NSD.multisession_plots import glm_effect_figures
+
+    canonical = np.stack([np.full(8, 3.0), np.full(8, -0.4)])
+    optimized = np.stack([np.full(8, 5.0), np.full(8, -0.2)])
+    result = dict(
+        glm_metrics=("task", "response_time"),
+        glm=dict(
+            canonical_mean=canonical,
+            optimized_mean=optimized,
+            difference_mean=optimized - canonical,
+        ),
+    )
+    figures = {}
+    try:
+        exec(
+            cells["glm-session-surfaces"].source,
+            dict(
+                result=result,
+                brain=cortical_axis,
+                meshes=surface_files[1],
+                glm_effect_figures=glm_effect_figures,
+                figures=figures,
+                display=lambda _: None,
+            ),
+        )
+        assert set(figures) == {"GLMTask", "GLMResponseTime"}
+        for name, limit in (("GLMTask", 5), ("GLMResponseTime", 0.4)):
+            fig = figures[name]
+            assert len([a for a in fig.axes if a.name == "3d"]) == 12
+            np.testing.assert_allclose(fig.axes[-1].get_ylim(), [-limit, limit])
+            assert "signal units" in fig.axes[-1].get_ylabel().lower()
+            if name == "GLMResponseTime":
+                assert "second" in fig.axes[-1].get_ylabel().lower()
+            FigureCanvasAgg(fig).draw()
+            assert (
+                fig.axes[-1].yaxis.label.get_window_extent(fig.canvas.get_renderer()).x1
+                <= fig.bbox.width
+            )
+    finally:
+        for fig in figures.values():
+            plt.close(fig)
+
+
 def test_surface_figure_keeps_signed_shared_scale_and_missing_data(
     cortical_axis, surface_files, tmp_path
 ):

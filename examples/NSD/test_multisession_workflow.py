@@ -162,6 +162,11 @@ def test_multisession_notebook_executes_and_exports_paired_maps(
     assert np.isnan(image.get_fdata()[:, 2]).all()
     assert any("HRF_stat-pairwise" in p.name for p in files)
     assert any(p.suffix == ".png" for p in files)
+    glm = nib.load(next(p for p in files if "GLM_stat-difference_mean" in p.name))
+    assert glm.header.get_axis(0).name.tolist() == ["task", "response_time"]
+    np.testing.assert_allclose(
+        glm.get_fdata()[:, :2], [[2, -2], [0.2, -0.4]], atol=1e-7
+    )
 
 
 def test_multisession_export_preserves_input_files(saved_sessions):  # noqa: F811
