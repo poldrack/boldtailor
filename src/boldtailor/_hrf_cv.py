@@ -227,7 +227,8 @@ def prediction_loss(a, b, c, amplitude):
     cross = 2 * np.einsum("hkf,hkf->hf", amplitude, b)
     fitted = np.einsum("hkf,hkj,hjf->hf", amplitude, a, amplitude)
     loss = c - cross + fitted
-    tolerance = 64 * np.finfo(float).eps * (c + np.abs(cross) + np.abs(fitted))
+    magnitude = 2 * np.einsum("hkf,hkf->hf", np.abs(amplitude), np.abs(b))
+    tolerance = 64 * np.finfo(float).eps * (c + magnitude + np.abs(fitted))
     if np.any(loss < -tolerance):
         raise ArithmeticError("negative HRF prediction SSE beyond roundoff tolerance")
     return np.maximum(loss, 0)
