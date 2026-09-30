@@ -255,8 +255,8 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
             contrast_exported=False,
             task_delta_r2="Includes the missing-RT indicator among task predictors",
         ),
-        trial_type="Binary codes 0/1, centered within run; coefficient type 1 minus type 0",
-        task="One unit per presentation; observed RT at its run mean, trial type at its run mean, missing-RT indicator zero",
+        trial_type="Binary codes 0/1, uncentered; the task coefficient is the response on trial_type 0 trials at the run-mean RT",
+        task="One unit per presentation; observed RT at its run mean, trial type 0, missing-RT indicator zero",
         orthogonalization=False,
         retained_scans=[len(r.frame_times) for r in runs],
         trimming="Leading nonsteady volumes removed; original acquisition times and event onsets retained",
@@ -265,7 +265,7 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
         r2="1 - sum(run SSE) / sum(within-run SST), on retained scans; native signal units",
         glm_comparison="Descriptive in-sample optimized minus canonical full R²; not an independent validation of HRF selection",
         inference="Contrasts use equal-run fixed effects; conditional on selected HRFs, without selection uncertainty correction",
-        hrf_selection="Sum leave-one-run-out mean-stimulus prediction errors, then choose one HRF per grayordinate",
+        hrf_selection="leave-one-run-out task-model prediction (task, centered RT, uncentered trial type; missing-RT indicator profiled per run); pooled held-out error over confound-adjusted energy",
         split_prediction="Train HRF and mean amplitude on one half; freeze both for the other half; nuisance projection is conditional on each run",
         rt_check=(
             "RT/type tune CV ridge strength; final all-run RT correlations are descriptive. Outer test runs are excluded from HRF and penalty selection."
