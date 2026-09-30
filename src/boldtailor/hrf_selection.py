@@ -74,7 +74,9 @@ def _provenance(data, runs, library, labels, signature, task_model, name, **extr
         min_onset=MIN_ONSET,
         nuisance="conditional_projection_of_confounds_and_profiled_task_columns_per_run",
         invalid_features="zero signal outside nuisance span at numerical precision",
-        sse_roundoff_tolerance="64 * eps * (C + abs(2*b*B) + abs(b*b*A))",
+        sse_roundoff_tolerance=(
+            "64 * eps * (C + sum_k abs(2*beta_k*B_k) + abs(beta' A beta))"
+        ),
         **extra,
     )
     return extend_provenance(
