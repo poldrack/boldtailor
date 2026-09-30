@@ -105,6 +105,13 @@ def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
         workflow().glm_events(events)
 
 
+def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
+    events["response_time"] = events.response_time.astype(object)
+    events.loc[1, "response_time"] = "invalid"
+    with pytest.raises(ValueError, match="response_time"):
+        workflow().glm_events(events)
+
+
 def test_trimming_keeps_acquisition_times_and_matches_confounds(four_runs):
     root, prep = four_runs
     runs = workflow().load_session(root, prep)

@@ -119,7 +119,9 @@ def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
                 if k.startswith("run-01_") and k.endswith("_columns")
             ]
             assert columns and all("missing_response_time" in c for c in columns)
-    for path in output.rglob("*FractionalCVAll_metadata.json"):
+    masks = list(output.rglob("*FractionalCVAll_metadata.json"))
+    assert len(masks) == 4
+    for path in masks:
         metadata = json.loads(path.read_text())
         assert metadata["trial_masks"][0] == [True, False, True, True, True, True]
 
