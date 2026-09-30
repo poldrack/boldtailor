@@ -27,13 +27,33 @@ class WorkflowRun:
     retained_frames: np.ndarray
 
 
+def _rt_amplitudes(values):
+    observed = np.isfinite(values) & (values > 0)
+    if not observed.any():
+        raise ValueError(
+            "response_time needs positive finite observations for the RT effect"
+        )
+    centered = np.zeros(len(values))
+    centered[observed] = values[observed] - values[observed].mean()
+    amplitudes = {"response_time": centered}
+    if not observed.all():
+        amplitudes["missing_response_time"] = (~observed).astype(float)
+    return amplitudes
+
+
 def glm_events(events):
-    """Encode an intercept-like task response plus two joint amplitude effects."""
+    """Retain all stimuli, with centered RT and an indicator for unavailable RT."""
     amplitudes = {"task": np.ones(len(events))}
     for name in REGRESSORS[1:]:
         if name not in events:
             raise ValueError(f"Missing {name}")
-        values = pd.to_numeric(events[name], errors="coerce").to_numpy(float)
+        try:
+            values = pd.to_numeric(events[name], errors="raise").to_numpy(float)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{name} must contain numeric values") from error
+        if name == "response_time":
+            amplitudes.update(_rt_amplitudes(values))
+            continue
         if not np.isfinite(values).all():
             raise ValueError(f"{name} must be finite for every trial")
         if name == "trial_type" and set(values) != {0, 1}:
@@ -59,7 +79,7 @@ def _trim(run, *, hrf_only=False):
     if not len(retained):
         raise ValueError("No scans remain after trimming")
     if not hrf_only:
-        glm_events(run.events)  # Conventional GLMs require these covariates.
+        glm_events(run.events)  # Validate the conventional GLM encoding.
     return WorkflowRun(
         run.inputs,
         run.image,

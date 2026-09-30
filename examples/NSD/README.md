@@ -64,12 +64,25 @@ it rejects mismatches before fitting.
 The notebook walks through input inspection, two conventional GLMs, optimized
 HRF selection, odd/even reliability, canonical and optimized single-trial
 models, encoding-guided ridge CV, RT checks, and export. The conventional GLMs
-fit three predictors jointly, without orthogonalization:
+fit these predictors jointly, without orthogonalization:
 
 - `task`: unit amplitude for every presentation.
-- `response_time`: seconds, centered within each run.
+- `response_time`: positive finite seconds, centered over observed RTs within
+  each run; unavailable RTs receive zero modulation.
 - `trial_type`: binary codes 0/1, centered within each run; the coefficient is
   type 1 minus type 0, controlling for RT.
+- `missing_response_time`: one for nonfinite or nonpositive RT, zero otherwise;
+  included only in runs with unavailable RTs and convolved with the same HRF.
+
+All presentations remain in the task and trial-type regressors. The extra
+indicator allows the mean response on unavailable-RT trials to differ; the
+task coefficient refers to observed-RT trials at the run's mean observed RT
+and mean trial type. Runs with no observed RT cannot estimate an RT effect
+and are rejected. Complete runs retain their original three-predictor design.
+The indicator is saved in the event tables and design matrices; contrast maps
+remain task, RT, and trial type. Conventional task ΔR² includes the indicator's
+contribution. HRF selection and beta estimation retain all trials; RT scoring
+continues to exclude unavailable RTs.
 
 By default, the notebook samples 512 continuous parameter combinations with
 a scrambled Sobol sequence (seed 0), then adds canonical SPM for 513 HRFs.
