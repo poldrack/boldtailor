@@ -304,7 +304,17 @@ def nsd_model():
 
 
 def with_trial_types(data):
-    events = [e.assign(trial_type=[0, 1, 1]) for e in data.events]
+    events = [
+        pd.DataFrame(
+            dict(
+                onset=np.array([8.13, 25.37, 45.22, 60.5, 80.1]) + r,
+                duration=[3.0, 1.2, 2.0, 1.5, 2.2],
+                trial_type=[0, 1, 1, 0, 1],
+                response_time=[0.7, np.nan, 1.5, 0.9, 1.2],
+            )
+        )
+        for r in range(data.n_runs)
+    ]
     return replace_data(data, events=events)
 
 
@@ -346,12 +356,14 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
 
     data, library = cv_fixture
     data = with_trial_types(data)
-    key = lambda r: r.provenance.to_dict()["activities"][-1]["design_fingerprint"]
+    def key(result):
+        return result.provenance.to_dict()["activities"][-1]["design_fingerprint"]
+
     plain = select_hrf(data, library=library)
     modeled = select_hrf(data, library=library, task_model=nsd_model())
     assert key(plain) != key(modeled)
     changed = replace_data(
-        data, events=[e.assign(response_time=[0.9, np.nan, 1.1]) for e in data.events]
+        data, events=[e.assign(response_time=[0.9, np.nan, 1.1, 0.8, 1.3]) for e in data.events]
     )
     assert key(modeled) != key(select_hrf(changed, library=library, task_model=nsd_model()))
     assert key(plain) == key(select_hrf(changed, library=library))
@@ -407,12 +419,11 @@ def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
     data = with_trial_types(data)
     selection = select_hrf(data, library=library, task_model=nsd_model())
     result = fit_selected_hrfs(data, selection=selection)
-    assert result.run_betas[0].shape == (3, data.n_features)
+    assert result.run_betas[0].shape == (5, data.n_features)
     assert np.isfinite(result.run_betas[0][:, :3]).all()
 
 
 def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
-    from boldtailor.hrf_results import HrfEvaluationResult
     from boldtailor.hrf_selection import evaluate_hrf_split
     from dataclasses import replace
 
