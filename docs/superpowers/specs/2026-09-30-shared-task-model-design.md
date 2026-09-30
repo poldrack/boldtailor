@@ -77,9 +77,10 @@ Rules:
   trials and adds a regressor `missing_<column>` with unit amplitude on those
   trials, only in runs where at least one value is missing.
 - `missing="error"` rejects non-finite values.
-- Column names must be unique, must not be `task`, `constant`, `onset`,
-  `duration`, `trial_type`, or `modulation`, and must not collide with any
-  `missing_<column>` name.
+- Column names must be unique, must not be `task`, `constant`, `onset`, or
+  `duration`, and must not begin with `missing_`. A raw events column named
+  `trial_type` is an ordinary modulator column; the expanded Nilearn frame
+  uses `trial_type` for regressor names, but that frame is derived, not input.
 - Every task regressor must have a nonzero amplitude somewhere in every run
   after centering. A violation is a data error raised before any candidate is
   scored, because it does not depend on the HRF.
@@ -119,10 +120,20 @@ def task_columns(expanded_events, frame_times, hrf, model_settings) -> pd.DataFr
 It calls `make_first_level_design_matrix` with `drift_model=None`, no added
 regressors, and `hrf_model` equal to `"spm"`, `"glover"`, or the candidate's
 kernel callable, then drops the constant and strips Nilearn's callable name
-suffix, as `_custom_design` already does. Selection and GLM fitting both call
-this helper, so the columns are identical by construction. Nilearn's
-`min_onset` and `oversampling` come from the caller's settings; selection uses
-the same defaults `ModelSpec` uses.
+suffix, as `_custom_design` already does. Columns are ordered as task
+regressors first, then whichever profiled regressors the run contains.
+Selection and GLM fitting both call this helper, so the task columns are
+identical by construction. Selection always uses `min_onset=-24.0` and
+`oversampling=50`, records both in its provenance, and rejects any onset
+earlier than the first frame plus `min_onset` or at or after the last frame,
+as it does today. A selected-HRF GLM with a task model must use the same two
+values, so no event is excluded on one side and kept on the other.
+
+Nuisance columns are not shared. Selection projects onto every supplied
+confound column plus a constant, as documented. The GLM takes drifts and the
+`ModelSpec.confounds` subset from Nilearn's nuisance builder, as it does today.
+Callers who want identical nuisance sets pass every confound column to
+`ModelSpec` and set `drift_model=None`, which the NSD example already does.
 
 If Nilearn emits stdout notices for modulated events, the helper suppresses
 them locally the way the NSD example already does; this is verified during
@@ -190,9 +201,10 @@ statistical threshold is introduced.
 - Per candidate it lazily builds and caches the Nilearn task columns via the
   shared helper, splits them into task and profiled blocks, forms Q_{r,h},
   X̂_{r,h}, A_{r,h}, and the C correction.
-- `task_design(candidate_id)` returns the full per-run design frame: task
-  columns, profiled columns, then nuisance columns. The GLM compiler uses it
-  verbatim.
+- `task_design(candidate_id)` returns the run's Nilearn task and profiled
+  columns for that candidate, in the order described above. The GLM compiler
+  produces the same frame by calling the same helper on the same expanded
+  events; tests assert equality.
 - `eligible(candidate_id)` implements the run-level rank check above.
 - `trial_matrix(candidate_id)` and a renamed `trial_eligible(candidate_id)`
   remain for the single-trial, ridge CV, and the older NSD single-trial
@@ -209,13 +221,17 @@ statistical threshold is introduced.
   helper and concatenates the Nilearn nuisance matrix (drifts, confounds,
   constant) from `_make_nuisance_matrix`. Without a task model it is
   unchanged.
-- `compile_group_designs` with a task model uses `RunDesign.task_design` for
-  every candidate including SPM, so the selected-HRF design is the scored
-  design. Without a task model it is unchanged.
-- `fit(..., hrf_selection=selection)` requires `model.task_model` to equal
-  `selection.task_model`, comparing fingerprints. Both None is allowed and
-  preserves today's Nilearn event path. The user guide states that a selection
-  made without a task model scored only the mean stimulus response.
+- `compile_group_designs` with a task model builds every candidate's task
+  columns, including SPM, through the shared helper and appends the
+  `ModelSpec` nuisance matrix, so the selected-HRF task design is the scored
+  task design. Without a task model it is unchanged.
+- `fit(..., hrf_selection=selection)` with `model.task_model` set requires
+  the selection's task model fingerprint to match and `model.oversampling`
+  and `model.min_onset` to equal the values recorded in the selection
+  provenance. With `model.task_model=None`, the selection must carry the
+  default task-only model; this preserves today's Nilearn event path. The
+  user guide states that such a selection scored only the mean stimulus
+  response. A selection always carries a task model, defaulting to task-only.
 - `select_hrf` and `evaluate_hrf_split` gain `task_model=TaskModel()`.
   `_ridge_cv` passes its default through unchanged; threading a task model
   into ridge CV is out of scope.
@@ -292,9 +308,11 @@ RED-GREEN-Refactor rule.
    columns, followed by explicit held-out prediction with per-run nuisance
    and profiled coefficients refit. Extends
    `test_pooled_loro_matches_stacked_training_ols`.
-5. **Recovery.** Simulated data whose response is modulated by RT under a
-   known library HRF: task-only selection picks a different HRF at some
-   features, the full task model recovers the generating HRF at all features.
+5. **Recovery.** Noise-free simulated data whose response is modulated by
+   RT and trial type under a known library HRF, with a missing RT in some
+   runs: the full task model recovers the generating HRF at every feature
+   with a score of one, while the task-only model scores that HRF strictly
+   below one because the modulated variance is unexplained.
 6. **Eligibility.** A candidate whose task design is rank deficient in one run
    is `-inf` everywhere with a run-specific reason; a fold with a singular
    pooled training A excludes the candidate; the canonical row is NaN when
