@@ -134,7 +134,7 @@ def test_statistics_shapes_and_profiled_columns(task_fixture):
     assert c.shape == (4, 3, 3)
     assert energy.shape == (4, 3)
     # Profiled columns only lower the candidate's C in runs that have them.
-    np.testing.assert_allclose(c[0], energy[0][None])
+    np.testing.assert_allclose(c[0], np.broadcast_to(energy[0][None], c[0].shape))
     assert np.all(c[1] < energy[1][None])
     for run in runs:
         np.testing.assert_allclose(run.block(1).a, run.block(1).x.T @ run.block(1).x)
@@ -161,7 +161,7 @@ def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
     runs = prepare_runs(data, library)
     a, b, c, energy = signal_statistics(runs, data.signals, 32)
     assert a.shape[-2:] == (1, 1)
-    np.testing.assert_allclose(c, energy[:, None, :])
+    np.testing.assert_allclose(c, np.broadcast_to(energy[:, None, :], c.shape))
     np.testing.assert_allclose(
         loro_scores(a, b, c, energy), oracle_cv(data, library), atol=1e-12
     )
