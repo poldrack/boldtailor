@@ -31,15 +31,19 @@ def beta_summary_table(result):
                     estimator=estimator,
                     metric=metric,
                     grayordinates=int(valid.sum()),
-                    median_change=float(np.median(change[valid]))
-                    if valid.any()
-                    else np.nan,
-                    p10_change=float(np.percentile(change[valid], 10))
-                    if valid.any()
-                    else np.nan,
-                    p90_change=float(np.percentile(change[valid], 90))
-                    if valid.any()
-                    else np.nan,
+                    median_change=(
+                        float(np.median(change[valid])) if valid.any() else np.nan
+                    ),
+                    p10_change=(
+                        float(np.percentile(change[valid], 10))
+                        if valid.any()
+                        else np.nan
+                    ),
+                    p90_change=(
+                        float(np.percentile(change[valid], 90))
+                        if valid.any()
+                        else np.nan
+                    ),
                 )
             )
     return pd.DataFrame(rows)
@@ -86,6 +90,18 @@ def _beta_artifacts(base, brain, loaded, result):
     return artifacts
 
 
+def _glm_artifacts(base, brain, result):
+    return [
+        scalar_artifact(
+            f"{base}GLM_stat-{stat}.dscalar.nii",
+            brain,
+            result["glm"][stat],
+            result["glm_metrics"],
+        )
+        for stat in SUMMARY_STATS
+    ]
+
+
 def _metadata(loaded, sources):
     return dict(
         subject=loaded["subject"],
@@ -93,6 +109,11 @@ def _metadata(loaded, sources):
         estimators=loaded["estimators"],
         library_fingerprint=loaded["library"].fingerprint,
         metrics=list(loaded["metrics"]),
+        glm_metrics=list(loaded["glm_metrics"]),
+        glm_units=dict(
+            task="native signal units", response_time="native signal units per second"
+        ),
+        glm_interpretation="Equal-session means of conventional GLM coefficients, not t statistics or significance maps. Optimized minus canonical is a signed coefficient change, not a measure of prediction accuracy.",
         direction="optimized minus canonical within each session",
         aggregation="equal session weights on matched finite model values; at least two sessions",
         hrf_correlation="Pearson over the full stored HRF time grid without temporal shifting",
@@ -123,6 +144,7 @@ def save_multisession(output, loaded, result, *, figures=None):
     artifacts = _hrf_artifacts(base, brain, result) + _beta_artifacts(
         base, brain, loaded, result
     )
+    artifacts.extend(_glm_artifacts(base, brain, result))
     hrf = result["hrf"]
     pairs = pd.DataFrame(
         dict(

@@ -58,4 +58,14 @@ def analyze_sessions(loaded):
         )
         for e in loaded["estimators"]
     }
-    return dict(hrf=hrf, beta=beta, metrics=loaded["metrics"])
+    glm = paired_summary(
+        np.stack([r["glm"]["Canonical"] for r in records]),
+        np.stack([r["glm"]["Optimized"] for r in records]),
+    )
+    return dict(
+        hrf=hrf,
+        beta=beta,
+        metrics=loaded["metrics"],
+        glm=glm,
+        glm_metrics=loaded["glm_metrics"],
+    )

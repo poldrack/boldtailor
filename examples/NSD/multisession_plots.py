@@ -43,6 +43,40 @@ def comparison_surface(maps, brain, meshes, *, label, title, t_scale=False):
     return fig
 
 
+def glm_effect_figures(result, brain, meshes):
+    """Plot matched session means and signed coefficient changes on shared scales."""
+    definitions = (
+        ("task", "GLMTask", "Mean task response", "Native signal units"),
+        (
+            "response_time",
+            "GLMResponseTime",
+            "Mean RT effect",
+            "Native signal units per second",
+        ),
+    )
+    figures = {}
+    for metric, key, title, units in definitions:
+        row = result["glm_metrics"].index(metric)
+        maps = {
+            label: result["glm"][stat][row]
+            for label, stat in (
+                ("CanonicalGLM", "canonical_mean"),
+                ("OptimizedGLM", "optimized_mean"),
+                ("Difference\n(opt. − canon.)", "difference_mean"),
+            )
+        }
+        fig = comparison_surface(
+            maps,
+            brain,
+            meshes,
+            label=units,
+            title=f"{title} across sessions: GLM coefficients",
+        )
+        fig.axes[-1].yaxis.set_label_position("left")
+        figures[key] = fig
+    return figures
+
+
 def choose_grayordinate(loaded, result, requested=None):
     if requested is not None:
         if (

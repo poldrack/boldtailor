@@ -13,8 +13,10 @@ from .beta_activation import MAP_NAMES as ACTIVATION_NAMES
 from .hrf_reliability import _indices
 from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 from .workflow_outputs import R2_NAMES, _stem
+from .workflow_inputs import REGRESSORS
 
 METRICS = ("mean_beta", "task_t", "task_delta_r2", "rt_r", "rt_abs_r")
+GLM_METRICS = ("task", "response_time")
 ESTIMATORS = ("OLS", "FractionalCV", "RidgeCV", "Ridge")
 
 
@@ -42,7 +44,11 @@ def summary_paths(output, subject, session, estimators):
         parameters=Path(f"{base}_desc-notebookHRF_library.tsv"),
         curves=Path(f"{base}_desc-notebookHRF_library.npz"),
     )
-    descriptors = {"HRFAll": ("selection",)}
+    descriptors = {
+        "HRFAll": ("selection",),
+        "CanonicalGLM": ("effects",),
+        "OptimizedGLM": ("effects",),
+    }
     descriptors.update(
         {
             prefix + "Trial" + e: ("activation", "rsquared", "rtcorrelation")
@@ -107,6 +113,12 @@ def load_one_session(output, subject, session, estimators):
         metadata=metadata,
         hrf_indices=ids,
         sources=list(paths.values()),
+        glm={
+            prefix: _map(paths[prefix + "GLM", "effects"], brain, REGRESSORS)[
+                [REGRESSORS.index(name) for name in GLM_METRICS]
+            ]
+            for prefix in ("Canonical", "Optimized")
+        },
         beta={
             e: {
                 prefix: _beta(paths, brain, prefix + "Trial" + e)
@@ -155,4 +167,5 @@ def load_sessions(output, subject, sessions, *, estimators=("OLS", "FractionalCV
         library=records[0]["library"],
         records=records,
         metrics=METRICS,
+        glm_metrics=GLM_METRICS,
     )

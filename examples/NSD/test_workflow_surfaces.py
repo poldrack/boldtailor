@@ -196,6 +196,17 @@ def test_multisession_glm_cell_renders_absolute_and_delta_maps(
             if name == "GLMResponseTime":
                 assert "second" in fig.axes[-1].get_ylabel().lower()
             FigureCanvasAgg(fig).draw()
+            expected = (3, 5, 2) if name == "GLMTask" else (-0.4, -0.2, 0.2)
+            colorbar = fig.axes[-1]._colorbar
+            for axis_index, value in zip((0, 4, 8), expected, strict=True):
+                colors = np.asarray(
+                    fig.axes[axis_index].collections[0].get_facecolors()
+                )
+                target = colorbar.cmap(colorbar.norm(value))
+                # Triangle averaging can shift a boundary value by one color bin.
+                assert np.any(
+                    np.all(np.isclose(colors, target, atol=0.02, rtol=0), axis=1)
+                )
             assert (
                 fig.axes[-1].yaxis.label.get_window_extent(fig.canvas.get_renderer()).x1
                 <= fig.bbox.width

@@ -318,6 +318,21 @@ maps include the number of contributing sessions, SD of changes, and fraction
 with positive changes. A configurable grayordinate view shows its full HRFs and
 canonical/optimized metric trajectories across sessions.
 
+Section 3's cortical HRF map shows the mean **between-session correlation minus
+matched canonical baseline**, with a zero-centered diverging scale. Each pair's
+baseline averages its two session-to-canonical correlations. Positive values
+indicate shape consistency above that baseline, not improved BOLD prediction.
+
+Section 3b loads saved conventional GLM effect maps to show **mean task amplitude**
+and **mean RT slope** across sessions. Each figure contains canonical, optimized,
+and optimized-minus-canonical maps on a shared signed scale. Both models use the
+same finite sessions at each location, with at least two required. Task effects
+are in native signal units and RT slopes in native signal units per second;
+these are descriptive coefficients, not t statistics. The corresponding means,
+deltas, SDs, positive fractions, and session counts are exported as
+`desc-multisessionGLM_stat-...` CIFTIs. Loading also validates the GLM scalar names
+and spatial axes and includes those input maps in the source-file hashes.
+
 OLS isolates HRF changes from ridge regularization; fractional-CV differences
 also reflect separately selected penalties. RT contributes to tuning, so larger
 RT associations are descriptive rather than independent evidence of improved
