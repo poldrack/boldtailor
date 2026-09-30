@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
+from boldtailor._hrf_design import hrf_model
+from boldtailor._task_design import expand_events, task_columns
 from boldtailor._conventional import _preflight_contrasts, _validate_designs
 from boldtailor.design import (
     CompiledDesign,
@@ -31,7 +33,14 @@ def compile_group_designs(data, model, selection):
         _validate_designs(matrices)
     for cid in ids:
         candidate = selection.library.candidates[cid]
-        if candidate.kind == "spm":
+        if model.task_model is not None:
+            designs = tuple(
+                _task_model_design(e, t, n, candidate, model, run)
+                for run, (e, t, n) in enumerate(
+                    zip(events, data.frame_times, nuisance, strict=True)
+                )
+            )
+        elif candidate.kind == "spm":
             designs = compile_designs(data, replace(model, hrf_model="spm"))
         else:
             designs = tuple(
@@ -42,6 +51,22 @@ def compile_group_designs(data, model, selection):
             )
         groups.update({(run, int(cid)): design for run, design in enumerate(designs)})
     return groups, nuisance
+
+
+def _task_model_design(events, times, nuisance, candidate, model, run):
+    modeled, excluded, cutoff = _select_modeled_events(
+        events, times, model.min_onset, run
+    )
+    task = task_columns(
+        expand_events(modeled, model.task_model, run),
+        times,
+        hrf_model(candidate),
+        min_onset=model.min_onset,
+        oversampling=model.oversampling,
+    )
+    matrix = pd.concat([task, nuisance.matrix], axis=1)
+    _validate_design_matrix(matrix, run)
+    return CompiledDesign(matrix, excluded, cutoff)
 
 
 def _custom_design(events, times, nuisance, candidate, model, run):

@@ -13,6 +13,7 @@ from boldtailor._hrf_glm_design import (
 )
 from boldtailor.hrf_glm_results import HrfAnalysisResult, _masked_delta_result
 from boldtailor._fit_lifecycle import fit_operation
+from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint
 from boldtailor.results import _ContrastResult
 
@@ -25,10 +26,31 @@ class _FitContext:
     analysis_id: str | None
 
 
+def _check_task_model(model, selection):
+    if model.task_model is None:
+        if selection.task_model != TaskModel():
+            raise ValueError(
+                "selection used a task_model; set ModelSpec.task_model to the same model"
+            )
+        return
+    if model.task_model.fingerprint != selection.task_model.fingerprint:
+        raise ValueError("ModelSpec.task_model must match the selection's task_model")
+    activity = selection.provenance.to_dict()["activities"][-1]
+    recorded = (activity.get("oversampling"), activity.get("min_onset"))
+    if (model.oversampling, model.min_onset) != recorded:
+        raise ValueError(
+            "ModelSpec.oversampling and min_onset must match the selection's settings"
+        )
+
+
 def _prepare(data, model, selection, signature, model_settings):
     assignment = validate_selection(data, selection, signature)
+    _check_task_model(model, selection)
     groups, nuisance = compile_group_designs(data, model, selection)
     settings = {**model_settings, "hrf_model": {"kind": "selected"}}
+    if model.task_model is not None:
+        settings["task_model"] = model.task_model.to_dict()
+        settings["task_model_fingerprint"] = model.task_model.fingerprint
     activity = dict(
         name="selected_hrf_glm",
         stage="fit",
@@ -44,6 +66,9 @@ def _prepare(data, model, selection, signature, model_settings):
         selection_analysis_id=selection.provenance.analysis_fingerprint,
         inference="conditional_on_selected_hrfs",
     )
+    if model.task_model is not None:
+        activity["task_model"] = model.task_model.to_dict()
+        activity["task_model_fingerprint"] = model.task_model.fingerprint
     return _FitContext(
         groups,
         nuisance,
@@ -101,7 +126,9 @@ def fit_selected_glm(data, model, selection, signature):
     from boldtailor.fit import _model_provenance
 
     with fit_operation("fit", data.provenance) as operation:
-        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        settings = _model_provenance(
+            replace(model, hrf_model=None, task_model=None)
+        ).activity
         context = _prepare(data, model, selection, signature, settings)
         operation.analysis_id = context.analysis_id
         fits = _group_fits(data, model, selection, context)
@@ -138,7 +165,9 @@ def selected_task_delta_r2(data, model, result):
 
     with fit_operation("task_delta_r2", result.provenance) as operation:
         selection = result.hrf_selection
-        settings = _model_provenance(replace(model, hrf_model=None)).activity
+        settings = _model_provenance(
+            replace(model, hrf_model=None, task_model=None)
+        ).activity
         context = _prepare(
             data, model, selection, selection.feature_signature, settings
         )
