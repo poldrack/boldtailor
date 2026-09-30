@@ -71,5 +71,6 @@ def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50
             oversampling=oversampling,
         )
     matrix = matrix.drop(columns="constant")
-    matrix.columns = [name.removesuffix("_kernel") for name in matrix.columns]
+    if callable(hrf):
+        matrix.columns = [name.removesuffix("_kernel") for name in matrix.columns]
     return matrix.loc[:, list(dict.fromkeys(expanded.trial_type))]
