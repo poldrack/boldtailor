@@ -6,7 +6,7 @@ from nilearn.glm.first_level import make_first_level_design_matrix
 
 from boldtailor.data import from_arrays
 from boldtailor.design import compile_designs, compile_nuisance_designs
-from boldtailor.model import ModelSpec
+from boldtailor.model import ModelSpec, Modulator, TaskModel
 
 
 @pytest.fixture
@@ -175,4 +175,72 @@ def test_compile_designs_contextualizes_invalid_nilearn_options(inputs, option, 
     model = ModelSpec(contrasts={"face": "face"}, **{option: value})
 
     with pytest.raises(ValueError, match=r"run 0.*design compilation"):
+        compile_designs(data, model)
+
+
+def _task_model_data():
+    times = [0.775 + 1.6 * np.arange(80), 0.775 + 1.6 * np.arange(85)]
+    events = [
+        pd.DataFrame(
+            dict(
+                onset=[8.0, 22.0, 38.0, 60.0, 90.0],
+                duration=[3.0, 1.0, 2.0, 3.0, 1.5],
+                trial_type=[0, 1, 0, 1, 1],
+                response_time=[1.0, np.nan if r else 2.0, 3.0, 2.0, 4.0],
+            )
+        )
+        for r in range(2)
+    ]
+    confounds = [pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t)))) for t in times]
+    signals = [np.random.default_rng(r).normal(size=(len(t), 3)) for r, t in enumerate(times)]
+    return from_arrays(signals, events, frame_times=times, confounds=confounds)
+
+
+def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance():
+    from boldtailor._task_design import expand_events
+
+    data = _task_model_data()
+    task_model = TaskModel(
+        (Modulator("response_time", missing="indicator"), Modulator("trial_type", center=False))
+    )
+    model = ModelSpec(
+        contrasts={"task": {"task": 1}},
+        confounds=("motion",),
+        hrf_model="spm",
+        drift_model="cosine",
+        high_pass=0.01,
+        task_model=task_model,
+    )
+    compiled = compile_designs(data, model)
+    expected_names = [
+        ["task", "response_time", "trial_type"],
+        ["task", "response_time", "trial_type", "missing_response_time"],
+    ]
+    for run, design in enumerate(compiled):
+        expected = make_first_level_design_matrix(
+            data.frame_times[run],
+            events=expand_events(data.events[run], task_model, run),
+            hrf_model="spm",
+            drift_model="cosine",
+            high_pass=0.01,
+            add_regs=data.confounds[run][["motion"]],
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+        assert list(design.matrix.columns[: len(expected_names[run])]) == expected_names[run]
+        assert "constant" in design.matrix.columns
+        assert any(c.startswith("drift") for c in design.matrix.columns)
+        for name in expected_names[run]:
+            np.testing.assert_allclose(design.matrix[name], expected[name], atol=1e-12)
+        np.testing.assert_allclose(design.matrix["motion"], expected["motion"], atol=1e-12)
+
+
+def test_compile_designs_with_task_model_reports_data_errors_with_run():
+    data = _task_model_data()
+    model = ModelSpec(
+        contrasts={"task": {"task": 1}},
+        hrf_model="spm",
+        task_model=TaskModel((Modulator("response_time"),)),
+    )
+    with pytest.raises(ValueError, match="run 1.*response_time"):
         compile_designs(data, model)

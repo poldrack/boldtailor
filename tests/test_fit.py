@@ -12,7 +12,7 @@ from nilearn.glm.first_level.hemodynamic_models import glover_hrf
 from boldtailor.data import from_arrays
 import boldtailor.fit as fit_module
 from boldtailor.fit import fit, task_delta_r2
-from boldtailor.model import ModelSpec
+from boldtailor.model import ModelSpec, Modulator, TaskModel
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
 
@@ -948,3 +948,15 @@ def test_comparison_complete_lifecycle(delta_r2_problem, caplog, monkeypatch, ou
         assert len(result.provenance.events) <= 8
     else:
         assert records[-1]["error_code"] == "invalid_input"
+
+
+def test_model_provenance_adds_task_model_only_when_set():
+    from boldtailor.fit import _model_provenance
+
+    plain = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm")
+    assert "task_model" not in _model_provenance(plain).activity
+    task_model = TaskModel((Modulator("response_time", missing="indicator"),))
+    with_model = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm", task_model=task_model)
+    activity = _model_provenance(with_model).activity
+    assert activity["task_model"] == task_model.to_dict()
+    assert activity["task_model_fingerprint"] == task_model.fingerprint

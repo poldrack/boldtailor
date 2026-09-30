@@ -79,3 +79,25 @@ def test_model_spec_rejects_empty_contrasts():
 def test_model_spec_rejects_nonfinite_min_onset():
     with pytest.raises(ValueError, match="min_onset"):
         ModelSpec(contrasts={"face": "face"}, min_onset=np.nan)
+
+def test_model_spec_accepts_task_model_with_spm_or_glover():
+    from boldtailor.model import Modulator, TaskModel
+
+    task_model = TaskModel((Modulator("response_time", missing="indicator"),))
+    for hrf in ("spm", "glover"):
+        model = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model=hrf, task_model=task_model)
+        assert model.task_model == task_model
+    assert ModelSpec(contrasts={"task": {"task": 1}}).task_model is None
+
+@pytest.mark.parametrize(
+    "hrf_model", ["spm + derivative", "glover + derivative + dispersion", None, "fir"]
+)
+def test_task_model_requires_single_column_string_hrf(hrf_model):
+    from boldtailor.model import TaskModel
+
+    with pytest.raises(ValueError, match="task_model requires hrf_model 'spm' or 'glover'"):
+        ModelSpec(contrasts={"task": {"task": 1}}, hrf_model=hrf_model, task_model=TaskModel())
+
+def test_task_model_must_be_a_task_model():
+    with pytest.raises(ValueError, match="TaskModel"):
+        ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm", task_model="nsd")
