@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from hashlib import sha256
 from numbers import Real
 from types import MappingProxyType
 
@@ -10,6 +12,73 @@ import numpy as np
 ContrastWeights = Mapping[str, float]
 ContrastValue = str | ContrastWeights
 HRFModel = str | Callable[..., np.ndarray] | None
+
+_RESERVED_TASK_COLUMNS = frozenset({"task", "constant", "onset", "duration"})
+_MISSING_POLICIES = ("error", "indicator")
+
+
+@dataclass(frozen=True)
+class Modulator:
+    """One parametric task regressor derived from a raw events column."""
+
+    column: str
+    center: bool = True
+    missing: str = "error"
+
+    def __post_init__(self) -> None:
+        _validate_modulator_column(self.column)
+        if not isinstance(self.center, bool):
+            raise ValueError("modulator center must be a boolean")
+        if self.missing not in _MISSING_POLICIES:
+            raise ValueError("modulator missing policy must be 'error' or 'indicator'")
+
+    @property
+    def indicator_name(self) -> str:
+        return f"missing_{self.column}"
+
+    def to_dict(self) -> dict[str, object]:
+        return {"column": self.column, "center": self.center, "missing": self.missing}
+
+
+@dataclass(frozen=True)
+class TaskModel:
+    """Task regressor plus modulators; the default is the task regressor alone."""
+
+    modulators: tuple[Modulator, ...] = ()
+
+    def __post_init__(self) -> None:
+        modulators = tuple(self.modulators)
+        if any(not isinstance(m, Modulator) for m in modulators):
+            raise ValueError("task model modulators must be Modulator instances")
+        columns = [m.column for m in modulators]
+        if len(set(columns)) != len(columns):
+            raise ValueError("modulator columns must be unique")
+        object.__setattr__(self, "modulators", modulators)
+
+    @property
+    def regressor_names(self) -> tuple[str, ...]:
+        return ("task", *(m.column for m in self.modulators))
+
+    @property
+    def profiled_names(self) -> tuple[str, ...]:
+        return tuple(m.indicator_name for m in self.modulators if m.missing == "indicator")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "regressors": list(self.regressor_names),
+            "modulators": [m.to_dict() for m in self.modulators],
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        return sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()
+
+
+def _validate_modulator_column(column: object) -> None:
+    if not isinstance(column, str) or not column:
+        raise ValueError("modulator column must be a nonempty string")
+    if column in _RESERVED_TASK_COLUMNS or column.startswith("missing_"):
+        raise ValueError(f"modulator column {column!r} is reserved")
 
 
 @dataclass(frozen=True)
