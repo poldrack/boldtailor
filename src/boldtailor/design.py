@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._task_design import expand_events, task_columns
+from boldtailor._task_design import run_task_columns
 from boldtailor.data import AnalysisData
 from boldtailor.model import ModelSpec
 
@@ -67,16 +67,15 @@ def _make_task_model_design(
     model: ModelSpec,
     run: int,
 ) -> pd.DataFrame:
-    try:
-        task = task_columns(
-            expand_events(events, model.task_model, run),
-            frame_times,
-            model.hrf_model,
-            min_onset=model.min_onset,
-            oversampling=model.oversampling,
-        )
-    except ValueError as error:
-        raise ValueError(f"run {run} design compilation failed: {error}") from error
+    task = run_task_columns(
+        events,
+        model.task_model,
+        frame_times,
+        model.hrf_model,
+        run=run,
+        min_onset=model.min_onset,
+        oversampling=model.oversampling,
+    )
     nuisance = _make_nuisance_matrix(frame_times, confounds, model, run)
     return pd.concat([task, nuisance], axis=1)
 

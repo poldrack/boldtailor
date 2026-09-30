@@ -9,7 +9,7 @@ import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
 from boldtailor._hrf_design import hrf_model
-from boldtailor._task_design import expand_events, task_columns
+from boldtailor._task_design import run_task_columns
 from boldtailor._conventional import _preflight_contrasts, _validate_designs
 from boldtailor.design import (
     CompiledDesign,
@@ -57,10 +57,12 @@ def _task_model_design(events, times, nuisance, candidate, model, run):
     modeled, excluded, cutoff = _select_modeled_events(
         events, times, model.min_onset, run
     )
-    task = task_columns(
-        expand_events(modeled, model.task_model, run),
+    task = run_task_columns(
+        modeled,
+        model.task_model,
         times,
         hrf_model(candidate),
+        run=run,
         min_onset=model.min_onset,
         oversampling=model.oversampling,
     )

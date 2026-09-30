@@ -74,3 +74,15 @@ def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50
     if callable(hrf):
         matrix.columns = [name.removesuffix("_kernel") for name in matrix.columns]
     return matrix.loc[:, list(dict.fromkeys(expanded.trial_type))]
+
+
+def run_task_columns(events, task_model, frame_times, hrf, *, run, min_onset, oversampling):
+    """Task columns for one run; data errors name the run exactly once."""
+    try:
+        expanded = expand_events(events, task_model, run)
+        return task_columns(
+            expanded, frame_times, hrf, min_onset=min_onset, oversampling=oversampling
+        )
+    except ValueError as error:
+        detail = str(error).removeprefix(f"run {run}: ")
+        raise ValueError(f"run {run} design compilation failed: {detail}") from error
