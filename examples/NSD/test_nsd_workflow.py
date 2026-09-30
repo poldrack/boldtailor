@@ -407,6 +407,19 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     assert metadata["beta_activation"]["null_mean"] == 0
     assert metadata["beta_activation"]["multiple_comparison_correction"] is None
     assert "independent" in metadata["glm_comparison"].lower()
+    assert metadata["trial_type"] == (
+        "Binary codes 0/1, uncentered; the task coefficient is the response on "
+        "trial_type 0 trials at the run-mean RT"
+    )
+    assert metadata["task"] == (
+        "One unit per presentation; observed RT at its run mean, trial type 0, "
+        "missing-RT indicator zero"
+    )
+    assert metadata["hrf_selection"] == (
+        "leave-one-run-out task-model prediction (task, centered RT, uncentered "
+        "trial type; missing-RT indicator profiled per run); pooled held-out "
+        "error over confound-adjusted energy"
+    )
     assert (
         metadata["hrf_curve_correlations"]["method"]
         == "Pearson over HRF time samples, without temporal shifting"
