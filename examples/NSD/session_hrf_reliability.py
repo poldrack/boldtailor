@@ -77,6 +77,8 @@ def compare_hrfs(library, hrf_indices, sessions):
     baseline[~np.isfinite(pairwise)] = np.nan
     delta = pairwise - baseline
     names, sd = _parameter_sd(library, ids)
+    peak_times = library.parameter_table.peak_time.to_numpy()[np.maximum(ids, 0)]
+    peak_times[ids < 0] = np.nan
     return dict(
         sessions=sessions,
         pair_names=[f"{sessions[a]}_vs_{sessions[b]}" for a, b in pairs],
@@ -87,6 +89,7 @@ def compare_hrfs(library, hrf_indices, sessions):
         pair_delta=delta,
         parameter_names=names,
         parameter_sd=sd,
+        peak_time_mean=finite_mean(peak_times),
         summary=np.vstack(
             [
                 finite_mean(pairwise),

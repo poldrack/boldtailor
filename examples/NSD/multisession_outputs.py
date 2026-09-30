@@ -57,6 +57,11 @@ def _hrf_artifacts(base, brain, result):
             ("pairwise", hrf["pairwise"], hrf["pair_names"]),
             ("canonical", hrf["canonical"], hrf["sessions"]),
             ("summary", hrf["summary"], SUMMARY_NAMES),
+            (
+                "peaktime",
+                np.stack([hrf["peak_time_mean"], hrf["summary"][3]]),
+                ["mean_peak_time_seconds", "valid_sessions"],
+            ),
         )
     ]
 
@@ -118,6 +123,12 @@ def _metadata(loaded, sources):
         aggregation="equal session weights on matched finite model values; at least two sessions",
         hrf_correlation="Pearson over the full stored HRF time grid without temporal shifting",
         hrf_pairs="descriptive dependent pairs, not independent replicates for inference",
+        hrf_peak_time=dict(
+            units="seconds",
+            minimum_sessions=1,
+            definition="Time of the maximum of each selected full HRF on the library time grid",
+            aggregation="Equal-weight mean of valid session peak times, not the peak of the mean HRF; no valid sessions gives NaN",
+        ),
         units=dict(
             mean_beta="native signal units",
             task_t="descriptive t statistic; differences are not t tests",

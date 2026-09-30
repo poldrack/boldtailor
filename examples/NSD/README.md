@@ -323,6 +323,13 @@ matched canonical baseline**, with a zero-centered diverging scale. Each pair's
 baseline averages its two session-to-canonical correlations. Positive values
 indicate shape consistency above that baseline, not improved BOLD prediction.
 
+Section 3a maps **mean HRF time-to-peak in seconds**, averaging valid selected-HRF
+peak times equally across sessions (including canonical selections). Peak times
+come from the full library curves, not their response-delay parameters or the
+peak of a mean curve. One valid session is sufficient; no valid sessions gives
+NaN. The sequential cortical map is saved as a PNG, and
+`desc-multisessionHRF_stat-peaktime.dscalar.nii` stores both the mean and count.
+
 Section 3b loads saved conventional GLM effect maps to show **mean task amplitude**
 and **mean RT slope** across sessions. Each figure contains canonical, optimized,
 and optimized-minus-canonical maps on a shared signed scale. Both models use the

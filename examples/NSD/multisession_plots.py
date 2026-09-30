@@ -43,6 +43,19 @@ def comparison_surface(maps, brain, meshes, *, label, title, t_scale=False):
     return fig
 
 
+def peak_time_surface(result, brain, meshes):
+    """Display the mean of valid session HRF peak times at each grayordinate."""
+    fig = surface_figure(
+        {"Mean peak time": result["hrf"]["peak_time_mean"]},
+        brain,
+        meshes,
+        statistic="peak_time",
+        title="Mean HRF time-to-peak across sessions",
+    )
+    fig.axes[-1].yaxis.set_label_position("left")
+    return fig
+
+
 def glm_effect_figures(result, brain, meshes):
     """Plot matched session means and signed coefficient changes on shared scales."""
     definitions = (

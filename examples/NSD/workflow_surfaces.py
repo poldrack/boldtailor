@@ -82,12 +82,19 @@ def _load_meshes(paths, brain):
 
 
 def _color_scale(projected, statistic):
-    if statistic not in ("r2", "delta_r2", "rt", "t"):
-        raise ValueError("statistic must be r2, delta_r2, rt, or t")
+    if statistic not in ("r2", "delta_r2", "rt", "t", "peak_time"):
+        raise ValueError("statistic must be r2, delta_r2, rt, t, or peak_time")
     arrays = [
         a[np.isfinite(a)] for mapping in projected.values() for a in mapping.values()
     ]
     finite = np.concatenate(arrays) if arrays else np.array([])
+    if statistic == "peak_time":
+        lower, upper = (
+            (float(finite.min()), float(finite.max())) if len(finite) else (0.0, 1.0)
+        )
+        if lower == upper:
+            lower, upper = max(0.0, lower - 0.5), upper + 0.5
+        return (lower, upper), "viridis", "Mean time-to-peak (seconds)"
     if statistic == "t":
         return (-10.0, 10.0), "RdBu_r", "Beta-series t versus zero (independent trials)"
     if statistic == "rt":
@@ -150,6 +157,7 @@ def surface_figure(maps, brain, meshes, *, statistic, title=None):
     R² and ΔR² span 0–1 (extended below zero when needed). ΔR² uses a square-root
     heat-color progression to emphasize small values, with ticks in original units.
     RT uses a symmetric range covering all finite cortical values; t uses ±10.
+    Peak time uses a sequential scale spanning finite cortical values in seconds.
     Volumetric structures
     never affect the plots or color limits. Input maps and meshes are unchanged.
     """
