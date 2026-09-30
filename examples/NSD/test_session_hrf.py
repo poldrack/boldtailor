@@ -62,14 +62,16 @@ def test_session_selection_matches_public_api_and_reuses_without_fitting(
     session_data, library, tmp_path, monkeypatch
 ):
     from boldtailor.hrf_selection import select_hrf
-    from examples.NSD.workflow_inputs import load_session, load_block
+    from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
 
     output = tmp_path / "output"
     estimates = run_sessions(session_data, output, library, n_jobs=2)
     assert [e.session for e in estimates] == ["ses-nsd10", "ses-nsd11", "ses-nsd12"]
     root, prep = session_data
     runs = load_session(root, prep)
-    expected = select_hrf(load_block(runs, root, [0, 1, 2]), library=library)
+    expected = select_hrf(
+        load_block(runs, root, [0, 1, 2]), library=library, task_model=NSD_TASK_MODEL
+    )
     np.testing.assert_array_equal(estimates[0].maps[0, :3], expected.hrf_indices)
     np.testing.assert_allclose(estimates[0].maps[1, :3], expected.cv_r2, atol=1e-7)
     assert all(np.isnan(e.maps[:, 3]).all() for e in estimates)

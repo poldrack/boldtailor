@@ -52,22 +52,29 @@ def small_library():
     return HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
 
 
-def test_glm_events_preserve_timing_and_center_two_joint_modulators(events):
+def test_nsd_task_model_centers_rt_and_keeps_trial_type_uncentered(events):
+    from boldtailor._task_design import expand_events
+    from boldtailor.model import Modulator, TaskModel
+
+    inputs = workflow()
+    assert inputs.NSD_TASK_MODEL == TaskModel(
+        (
+            Modulator("response_time", center=True, missing="indicator"),
+            Modulator("trial_type", center=False),
+        )
+    )
     original = events.copy(deep=True)
-    result = workflow().glm_events(events)
+    result = expand_events(events, inputs.NSD_TASK_MODEL)
     amplitudes = {
         "task": np.ones(len(events)),
         "response_time": events.response_time - events.response_time.mean(),
-        "trial_type": events.trial_type - events.trial_type.mean(),
+        "trial_type": events.trial_type,
     }
-    assert set(result.trial_type) == set(amplitudes)
-    assert len(result) == 3 * len(events)
+    assert list(dict.fromkeys(result.trial_type)) == list(amplitudes)
     for name, expected in amplitudes.items():
         rows = result.loc[result.trial_type == name]
         np.testing.assert_allclose(rows.modulation, expected)
-        np.testing.assert_allclose(
-            rows[["onset", "duration"]], events[["onset", "duration"]]
-        )
+        np.testing.assert_allclose(rows[["onset", "duration"]], events[["onset", "duration"]])
     pd.testing.assert_frame_equal(events, original)
 
 
@@ -75,47 +82,45 @@ def test_glm_events_preserve_timing_and_center_two_joint_modulators(events):
 def test_invalid_glm_covariates_fail_explicitly(events, column, value):
     events.loc[0, column] = value
     with pytest.raises(ValueError, match=column):
-        workflow().glm_events(events)
+        workflow().validate_glm_events(events)
 
 
 @pytest.mark.parametrize("missing", [np.nan, np.inf, -np.inf, 0.0, -1.0])
-def test_glm_missing_rt_has_zero_modulation_and_separate_indicator(events, missing):
-    events["response_time"] = [1.0, missing, 3.0, 2.0, 4.0, 5.0]
-    original = events.copy(deep=True)
-    result = workflow().glm_events(events)
-    expected = {
-        "task": [1, 1, 1, 1, 1, 1],
-        "response_time": [-2, 0, 0, -1, 1, 2],
-        "trial_type": [-0.5, 0.5, -0.5, 0.5, 0.5, -0.5],
-        "missing_response_time": [0, 1, 0, 0, 0, 0],
-    }
-    assert set(result.trial_type) == set(expected)
-    for name, amplitudes in expected.items():
-        rows = result.loc[result.trial_type == name]
-        np.testing.assert_allclose(rows.modulation, amplitudes)
-        np.testing.assert_array_equal(
-            rows[["onset", "duration"]], events[["onset", "duration"]]
-        )
-    pd.testing.assert_frame_equal(events, original)
+def test_nonpositive_rt_becomes_missing_with_indicator(four_runs, missing):
+    inputs = workflow()
+    root, prep = four_runs
+    path = next(root.rglob("*run-01_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.loc[1, "response_time"] = missing
+    table.to_csv(path, sep="\t", index=False)
+    runs = inputs.load_session(root, prep)
+    run = next(r for r in runs if r.number == 1)
+    assert np.isnan(run.events.response_time.iloc[1])
+    assert np.isfinite(run.events.response_time.drop(index=1)).all()
+    from boldtailor._task_design import expand_events
+
+    expanded = expand_events(run.events, inputs.NSD_TASK_MODEL)
+    indicator = expanded.loc[expanded.trial_type == "missing_response_time", "modulation"]
+    np.testing.assert_array_equal(indicator, (np.arange(len(run.events)) == 1).astype(float))
 
 
 def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
     events["response_time"] = np.nan
     with pytest.raises(ValueError, match="response_time.*positive.*finite"):
-        workflow().glm_events(events)
+        workflow().validate_glm_events(events)
 
 
 def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
     events["response_time"] = events.response_time.astype(object)
     events.loc[1, "response_time"] = "invalid"
     with pytest.raises(ValueError, match="response_time"):
-        workflow().glm_events(events)
+        workflow().validate_glm_events(events)
 
 
 def test_trimming_keeps_acquisition_times_and_matches_confounds(four_runs):
     root, prep = four_runs
     runs = workflow().load_session(root, prep)
-    data = workflow().load_block(runs, root, [0, 2], glm=True)
+    data = workflow().load_block(runs, root, [0, 2])
     assert [len(t) for t in data.frame_times] == [95, 94, 93, 95]
     for run, y, dropped in zip(runs, data.signals, (1, 2, 3, 1), strict=True):
         np.testing.assert_allclose(
@@ -228,6 +233,32 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
             assert ("missing_response_time" in design) == (
                 missing_rt and run_index == 0
             )
+
+
+def test_glm_model_and_selection_share_the_nsd_task_model(four_runs, small_library):
+    from boldtailor._hrf_design import hrf_model
+    from boldtailor._task_design import expand_events, task_columns
+
+    inputs, analysis = workflow(), workflow("workflow_analysis")
+    root, prep = four_runs
+    runs = inputs.load_session(root, prep)
+    blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
+    model = inputs.glm_model(runs)
+    assert model.task_model == inputs.NSD_TASK_MODEL
+    selections = analysis.select_hrfs(runs, root, blocks, small_library)
+    for bundle in selections.values():
+        assert bundle["all"].task_model == inputs.NSD_TASK_MODEL
+    fitted = analysis.fit_glms(runs, root, blocks, model, selections=selections)
+    assert fitted["designs"]
+    for (run, cid), design in fitted["designs"].items():
+        expected = task_columns(
+            expand_events(runs[run].events, inputs.NSD_TASK_MODEL, run),
+            runs[run].frame_times,
+            hrf_model(small_library.candidates[cid]),
+        )
+        np.testing.assert_array_equal(
+            design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy()
+        )
 
 
 def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
