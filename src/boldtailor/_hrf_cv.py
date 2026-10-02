@@ -60,7 +60,9 @@ class RunDesign:
     def __init__(self, expanded, times, nuisance, library, task_model, fingerprint):
         self.expanded = expanded
         task_rows = expanded.trial_type == "task"
-        self.events = expanded.loc[task_rows, ["onset", "duration"]].reset_index(drop=True)
+        self.events = expanded.loc[task_rows, ["onset", "duration"]].reset_index(
+            drop=True
+        )
         self.times, self.nuisance, self.library = times, nuisance, library
         self.task_model, self.fingerprint = task_model, fingerprint
         self.q = _basis(nuisance)
@@ -133,7 +135,13 @@ class RunDesign:
 
 @lru_cache(maxsize=32)
 def _cached_design(
-    expanded_bytes, names_bytes, times_bytes, nuisance_bytes, n_columns, library, task_model
+    expanded_bytes,
+    names_bytes,
+    times_bytes,
+    nuisance_bytes,
+    n_columns,
+    library,
+    task_model,
 ):
     values = np.frombuffer(expanded_bytes, dtype="<f8").reshape(-1, 3)
     expanded = pd.DataFrame(values, columns=["onset", "duration", "modulation"])
@@ -169,7 +177,9 @@ def prepare_runs(data, library, task_model=TaskModel()):
         expanded = expand_events(events, task_model, r)
         nuisance = _nuisance_matrix(confounds, len(times))
         payloads = (
-            np.asarray(expanded[["onset", "duration", "modulation"]], dtype="<f8").tobytes(),
+            np.asarray(
+                expanded[["onset", "duration", "modulation"]], dtype="<f8"
+            ).tobytes(),
             json.dumps(list(expanded.trial_type)).encode(),
             np.asarray(times, dtype="<f8").tobytes(),
             np.asarray(nuisance, dtype="<f8").tobytes(),

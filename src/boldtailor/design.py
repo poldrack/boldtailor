@@ -51,7 +51,9 @@ def _compile_run(
     if model.task_model is None:
         design = _make_design_matrix(frame_times, modeled_events, selected, model, run)
     else:
-        design = _make_task_model_design(frame_times, modeled_events, selected, model, run)
+        design = _make_task_model_design(
+            frame_times, modeled_events, selected, model, run
+        )
     _validate_design_matrix(design, run)
     return CompiledDesign(
         matrix=design,

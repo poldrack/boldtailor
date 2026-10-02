@@ -74,7 +74,9 @@ def test_nsd_task_model_centers_rt_and_keeps_trial_type_uncentered(events):
     for name, expected in amplitudes.items():
         rows = result.loc[result.trial_type == name]
         np.testing.assert_allclose(rows.modulation, expected)
-        np.testing.assert_allclose(rows[["onset", "duration"]], events[["onset", "duration"]])
+        np.testing.assert_allclose(
+            rows[["onset", "duration"]], events[["onset", "duration"]]
+        )
     pd.testing.assert_frame_equal(events, original)
 
 
@@ -100,8 +102,12 @@ def test_nonpositive_rt_becomes_missing_with_indicator(four_runs, missing):
     from boldtailor._task_design import expand_events
 
     expanded = expand_events(run.events, inputs.NSD_TASK_MODEL)
-    indicator = expanded.loc[expanded.trial_type == "missing_response_time", "modulation"]
-    np.testing.assert_array_equal(indicator, (np.arange(len(run.events)) == 1).astype(float))
+    indicator = expanded.loc[
+        expanded.trial_type == "missing_response_time", "modulation"
+    ]
+    np.testing.assert_array_equal(
+        indicator, (np.arange(len(run.events)) == 1).astype(float)
+    )
 
 
 def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
@@ -568,20 +574,30 @@ def test_select_hrfs_without_rt_still_feeds_the_full_glm(four_runs, small_librar
     runs = inputs.load_session(root, prep)
     blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
     narrow = inputs.selection_task_model(False)
-    selections = analysis.select_hrfs(runs, root, blocks, small_library, task_model=narrow)
+    selections = analysis.select_hrfs(
+        runs, root, blocks, small_library, task_model=narrow
+    )
     for bundle in selections.values():
         assert bundle["all"].task_model == narrow
         assert bundle["odd"].training_selection.task_model == narrow
         assert bundle["even"].training_selection.task_model == narrow
-    fitted = analysis.fit_glms(runs, root, blocks, inputs.glm_model(runs), selections=selections)
-    assert all("response_time" in design.columns for design in fitted["designs"].values())
+    fitted = analysis.fit_glms(
+        runs, root, blocks, inputs.glm_model(runs), selections=selections
+    )
+    assert all(
+        "response_time" in design.columns for design in fitted["designs"].values()
+    )
     assigned = np.isfinite(fitted["effects"][0, :4])
     assert assigned.any()
     assert np.isfinite(fitted["effects"][1, :4][assigned]).all()
 
 
 def test_metadata_and_reuse_follow_the_rt_selection_switch(four_runs, small_library):
-    inputs, outputs, reuse = workflow(), workflow("workflow_outputs"), workflow("workflow_reuse")
+    inputs, outputs, reuse = (
+        workflow(),
+        workflow("workflow_outputs"),
+        workflow("workflow_reuse"),
+    )
     root, prep = four_runs
     runs = inputs.load_session(root, prep)
     off = outputs._metadata(runs, small_library, {"hrf_selection_rt": False})

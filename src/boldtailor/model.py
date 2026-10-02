@@ -61,7 +61,9 @@ class TaskModel:
 
     @property
     def profiled_names(self) -> tuple[str, ...]:
-        return tuple(m.indicator_name for m in self.modulators if m.missing == "indicator")
+        return tuple(
+            m.indicator_name for m in self.modulators if m.missing == "indicator"
+        )
 
     def to_dict(self) -> dict[str, object]:
         return {

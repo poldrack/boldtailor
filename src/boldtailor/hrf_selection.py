@@ -157,8 +157,15 @@ def select_hrf(
     labels = run_labels_for(data, run_labels)
     runs = prepare_runs(data, library, task_model)
     return _select(
-        data, runs, data.signals, library, labels, feature_signature,
-        candidate_batch_size, runs, task_model,
+        data,
+        runs,
+        data.signals,
+        library,
+        labels,
+        feature_signature,
+        candidate_batch_size,
+        runs,
+        task_model,
     )
 
 
@@ -179,7 +186,9 @@ def _fold_indices(values, n_runs, minimum, name):
 
 
 def _predict(a, b, c, energy, train, test):
-    amplitude, ok = pooled_amplitude(a[list(train)].sum(axis=0), b[list(train)].sum(axis=0))
+    amplitude, ok = pooled_amplitude(
+        a[list(train)].sum(axis=0), b[list(train)].sum(axis=0)
+    )
     loss = sum(prediction_loss(a[r], b[r], c[r], amplitude) for r in test)
     total = energy[list(test)].sum(axis=0)
     score = np.full_like(loss, np.nan)
@@ -231,7 +240,12 @@ def evaluate_hrf_split(
         canonical[:] = np.nan
     canonical[ids < 0] = np.nan
     provenance = _provenance(
-        data, runs, library, labels, feature_signature, task_model,
+        data,
+        runs,
+        library,
+        labels,
+        feature_signature,
+        task_model,
         "hrf_independent_evaluation",
         train_runs=list(train),
         test_runs=list(test),
@@ -239,6 +253,13 @@ def evaluate_hrf_split(
         frozen_task_amplitudes=True,
     )
     return HrfEvaluationResult(
-        selection, coefficient, chosen, canonical, chosen - canonical, train, test,
-        provenance, amplitude_names=task_model.regressor_names,
+        selection,
+        coefficient,
+        chosen,
+        canonical,
+        chosen - canonical,
+        train,
+        test,
+        provenance,
+        amplitude_names=task_model.regressor_names,
     )

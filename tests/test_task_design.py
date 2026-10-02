@@ -59,7 +59,9 @@ def test_indicator_absent_when_nothing_is_missing(events):
     result = expand_events(complete, NSD)
     assert set(result.trial_type) == {"task", "response_time", "trial_type"}
     rt = result.loc[result.trial_type == "response_time", "modulation"]
-    np.testing.assert_allclose(rt, complete.response_time - complete.response_time.mean())
+    np.testing.assert_allclose(
+        rt, complete.response_time - complete.response_time.mean()
+    )
 
 
 def test_task_only_model_expands_to_unit_task_rows(events):

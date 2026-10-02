@@ -25,6 +25,7 @@ def selection_task_model(include_rt=True):
         tuple(m for m in NSD_TASK_MODEL.modulators if m.column != "response_time")
     )
 
+
 NSD_TASK_MODEL = TaskModel(
     (
         Modulator("response_time", center=True, missing="indicator"),

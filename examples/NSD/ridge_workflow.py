@@ -410,7 +410,14 @@ def _final_selection(indices, runs, root, library, task_model):
 
 
 def _final_fit(
-    runs, root, blocks, library, alpha, n_jobs, fractional=False, task_model=NSD_TASK_MODEL
+    runs,
+    root,
+    blocks,
+    library,
+    alpha,
+    n_jobs,
+    fractional=False,
+    task_model=NSD_TASK_MODEL,
 ):
     selections = None
     if library is not None:

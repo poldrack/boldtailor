@@ -118,7 +118,9 @@ def find_workflow_estimate(roots, runs, root, library, request, subject, session
             records = json.loads(
                 (directory / f"{stem}_desc-notebookHRF_provenance.json").read_text()
             )
-            if _matching_provenance(records, runs, root, library, maps, limit, task_model):
+            if _matching_provenance(
+                records, runs, root, library, maps, limit, task_model
+            ):
                 return maps, records, str(path)
         except (
             OSError,

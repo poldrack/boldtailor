@@ -192,7 +192,9 @@ def _task_model_data():
         for r in range(2)
     ]
     confounds = [pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t)))) for t in times]
-    signals = [np.random.default_rng(r).normal(size=(len(t), 3)) for r, t in enumerate(times)]
+    signals = [
+        np.random.default_rng(r).normal(size=(len(t), 3)) for r, t in enumerate(times)
+    ]
     return from_arrays(signals, events, frame_times=times, confounds=confounds)
 
 
@@ -201,7 +203,10 @@ def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance(
 
     data = _task_model_data()
     task_model = TaskModel(
-        (Modulator("response_time", missing="indicator"), Modulator("trial_type", center=False))
+        (
+            Modulator("response_time", missing="indicator"),
+            Modulator("trial_type", center=False),
+        )
     )
     model = ModelSpec(
         contrasts={"task": {"task": 1}},
@@ -227,12 +232,17 @@ def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance(
             min_onset=model.min_onset,
             oversampling=model.oversampling,
         )
-        assert list(design.matrix.columns[: len(expected_names[run])]) == expected_names[run]
+        assert (
+            list(design.matrix.columns[: len(expected_names[run])])
+            == expected_names[run]
+        )
         assert "constant" in design.matrix.columns
         assert any(c.startswith("drift") for c in design.matrix.columns)
         for name in expected_names[run]:
             np.testing.assert_allclose(design.matrix[name], expected[name], atol=1e-12)
-        np.testing.assert_allclose(design.matrix["motion"], expected["motion"], atol=1e-12)
+        np.testing.assert_allclose(
+            design.matrix["motion"], expected["motion"], atol=1e-12
+        )
 
 
 def test_compile_designs_with_task_model_reports_data_errors_with_run():

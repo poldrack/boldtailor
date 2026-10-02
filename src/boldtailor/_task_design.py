@@ -23,7 +23,9 @@ def _modulator_amplitudes(events, modulator, run):
     values = _numeric(events, modulator.column, run)
     observed = np.isfinite(values)
     if not observed.any():
-        raise ValueError(f"run {run}: modulator {modulator.column!r} has no observed values")
+        raise ValueError(
+            f"run {run}: modulator {modulator.column!r} has no observed values"
+        )
     if modulator.missing == "error" and not observed.all():
         raise ValueError(f"run {run}: modulator {modulator.column!r} must be finite")
     amplitude = np.zeros(len(values))
@@ -51,9 +53,14 @@ def expand_events(events, task_model, run=0):
             raise ValueError(f"run {run}: regressor {name!r} has no nonzero amplitude")
     timing = events[["onset", "duration"]].reset_index(drop=True)
     regressor_order = list(task_model.regressor_names) + list(task_model.profiled_names)
-    ordered_amplitudes = {name: all_amplitudes[name] for name in regressor_order if name in all_amplitudes}
+    ordered_amplitudes = {
+        name: all_amplitudes[name] for name in regressor_order if name in all_amplitudes
+    }
     return pd.concat(
-        [timing.assign(trial_type=name, modulation=values) for name, values in ordered_amplitudes.items()],
+        [
+            timing.assign(trial_type=name, modulation=values)
+            for name, values in ordered_amplitudes.items()
+        ],
         ignore_index=True,
     )
 
@@ -76,7 +83,9 @@ def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50
     return matrix.loc[:, list(dict.fromkeys(expanded.trial_type))]
 
 
-def run_task_columns(events, task_model, frame_times, hrf, *, run, min_onset, oversampling):
+def run_task_columns(
+    events, task_model, frame_times, hrf, *, run, min_onset, oversampling
+):
     """Task columns for one run; data errors name the run exactly once."""
     try:
         expanded = expand_events(events, task_model, run)
