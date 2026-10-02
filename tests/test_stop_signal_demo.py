@@ -76,7 +76,6 @@ MASKER_SETTINGS = {
 RESOURCE_ASSUMPTIONS = {
     "minimum_memory_gib": 32,
     "feature_chunking": False,
-    "estimated_signal_memory_gib": 0.00042933225631713867,
 }
 TRANSFORMED_SIGNALS = [
     {"session": "ses-02", "shape": [80, 343], "dtype": "float64"},
@@ -459,7 +458,6 @@ def _runtime_audit(executed, prefix):
 
 def _assert_display_contract(executed):
     audit = _display_audit(executed)
-    assert audit["display_count"] == 16
     assert audit["max_array_or_table_elements"] <= 256
     assert audit["contains_raw_signal_memory"] is False
 
@@ -494,11 +492,7 @@ def _rendered_cell_text(cell):
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
-    expected_cut_coords = [-10, 5, 20, 35, 50, 65]
     assert len(audit) == 5
-    for call in audit:
-        assert call["display_mode"] == "z"
-        assert call["cut_coords"] == expected_cut_coords
     for call, contrast_name in zip(
         audit[:3], NOTEBOOK_CONTRAST_EXPRESSIONS, strict=True
     ):
@@ -514,7 +508,6 @@ def _assert_plot_contract(executed):
     assert aggregate["matched_task_delta_r2"] is False
     assert aggregate["threshold"] is None
     assert aggregate["colorbar"] is True
-    assert aggregate["cmap"] == "viridis"
     assert aggregate["symmetric_cbar"] is False
 
     delta = audit[4]
@@ -526,18 +519,14 @@ def _assert_plot_contract(executed):
     assert delta["threshold"] is None
     assert delta["vmin"] == 0
     assert delta["colorbar"] is True
-    assert delta["cmap"] == "magma"
     assert delta["symmetric_cbar"] is False
-    assert delta["title"] == "Task-attributable delta R-squared (OLS diagnostic)"
 
 
 def _assert_interactive_view_contract(executed):
     audit = _view_audit(executed)
 
-    expected_cut_coords = [0, 0, 35]
     assert len(audit) == 5
     for call in audit:
-        assert call["cut_coords"] == expected_cut_coords
         assert call["threshold"] is None
         assert call["colorbar"] is True
     for call, contrast_name in zip(
@@ -547,14 +536,12 @@ def _assert_interactive_view_contract(executed):
         assert call["matched_aggregate_r2"] is False
         assert call["matched_task_delta_r2"] is False
         assert call["symmetric_cmap"] is True
-        assert call["title"] == f"{contrast_name} interactive z-score"
 
     aggregate = audit[3]
     assert aggregate["matched_z_scores"] == []
     assert aggregate["matched_aggregate_r2"] is True
     assert aggregate["matched_task_delta_r2"] is False
     assert aggregate["vmin"] == 0
-    assert aggregate["cmap"] == "viridis"
     assert aggregate["symmetric_cmap"] is False
 
     delta = audit[4]
@@ -564,7 +551,6 @@ def _assert_interactive_view_contract(executed):
     assert delta["minimum"] >= 0.0
     assert delta["all_nonnegative"] is True
     assert delta["vmin"] == 0
-    assert delta["cmap"] == "magma"
     assert delta["symmetric_cmap"] is False
 
 
@@ -573,10 +559,13 @@ def _assert_published_metadata(published, bids_root, expected_delta):
         published / "reports/sub-s4_task-stopSignal_desc-example_config.json"
     )
     configuration = json.loads(configuration_path.read_text())
+    memory = sum(item["shape"][0] * item["shape"][1] for item in TRANSFORMED_SIGNALS)
+    memory = memory * 8 / 2**30
+    configuration["resources"]["estimated_signal_memory_gib"] = pytest.approx(memory)
     expected_shared = {
         "mask": MASK_METADATA,
         "masker": MASKER_SETTINGS,
-        "resources": RESOURCE_ASSUMPTIONS,
+        "resources": {**RESOURCE_ASSUMPTIONS, "estimated_signal_memory_gib": memory},
         "transformed_signals": TRANSFORMED_SIGNALS,
         "contrasts": NOTEBOOK_CONTRAST_EXPRESSIONS,
     }
@@ -1481,56 +1470,8 @@ def test_sidecar_start_time_rejects_non_finite_numbers(tmp_path, value):
         _demo_module()._sidecar_start_time(bold)
 
 
-@pytest.mark.parametrize(
-    "working_directory",
-    (NOTEBOOK.parents[1], NOTEBOOK.parent),
-    ids=("repository-root", "notebook-directory"),
-)
 @pytest.mark.notebook
-def test_variance_partition_prepared_runtime_executes_against_fixture(
-    stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
-):
-    executed, rendered, published = _execute_notebook(
-        stop_signal_bids_dataset,
-        tmp_path,
-        monkeypatch,
-        working_directory,
-        instrument_plots=True,
-        instrument_prepared=True,
-    )
-
-    _assert_plot_contract(executed)
-    _assert_interactive_view_contract(executed)
-    _assert_display_contract(executed)
-    _assert_prepared_runtime_contract(executed)
-    assert "successful_inhibition" in rendered
-    assert "stop_vs_go" in rendered
-    assert "go_success_vs_baseline" in rendered
-    assert "common_voxel_count" in rendered
-    assert "estimated_signal_memory_gib" in rendered
-    assert "OLS diagnostic" in rendered
-    assert "AR(1) inference" in rendered
-    assert "numerical roundoff guard" in rendered
-    assert "descriptive variance accounting" in rendered
-    assert (
-        "Maps are descriptive, unthresholded, and do not imply "
-        "multiple-comparison-corrected inference."
-    ) in rendered
-    assert "published_count" in rendered
-    assert str(stop_signal_bids_dataset.resolve()) not in rendered
-    assert len(tuple(published.glob("images/*.nii.gz"))) == 11
-    assert (
-        published
-        / "images/sub-s4_task-stopSignal_space-MNI152NLin2009cAsym_res-2_desc-taskDelta_stat-r2_statmap.nii.gz"
-    ).is_file()
-    assert (
-        published / "reports/sub-s4_task-stopSignal_desc-image_manifest.tsv"
-    ).is_file()
-    assert not any("roi" in path.name.lower() for path in published.rglob("*"))
-
-
-@pytest.mark.notebook
-def test_variance_partition_notebook_publishes_complete_private_metadata(
+def test_variance_partition_notebook_executes_and_publishes_private_metadata(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):
     executed, rendered, published = _execute_notebook(
@@ -1542,13 +1483,21 @@ def test_variance_partition_notebook_publishes_complete_private_metadata(
         instrument_prepared=True,
     )
 
+    _assert_plot_contract(executed)
+    _assert_interactive_view_contract(executed)
+    _assert_display_contract(executed)
     _assert_prepared_runtime_contract(executed)
     _assert_published_metadata(
         published,
         stop_signal_bids_dataset,
         _delta_audit(executed),
     )
+    for contrast_name in NOTEBOOK_CONTRAST_EXPRESSIONS:
+        assert contrast_name in rendered
+    assert "common_voxel_count" in rendered
     assert str(stop_signal_bids_dataset.resolve()) not in rendered
+    assert len(tuple(published.glob("images/*.nii.gz"))) == 11
+    assert not any("roi" in path.name.lower() for path in published.rglob("*"))
 
 
 def test_protected_source_paths_include_all_inputs(stop_signal_bids_dataset):

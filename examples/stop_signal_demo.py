@@ -130,7 +130,7 @@ def load_run(
         signals=_transformed_signals(image, masker, n_scans),
         events=events,
         confounds=confounds,
-        frame_times=_frame_times(n_scans, tr),
+        frame_times=_frame_times(n_scans, tr, _sidecar_start_time(inputs.bold)),
         tr=tr,
     )
 
@@ -584,8 +584,22 @@ def _selected_confounds(
     return pd.DataFrame(values, columns=names, index=selected.index).copy(deep=True)
 
 
-def _frame_times(n_scans: int, tr: float) -> np.ndarray:
-    return _immutable_array(np.arange(n_scans, dtype=float) * tr, dtype=float)
+def _frame_times(n_scans: int, tr: float, start_time: float = 0.0) -> np.ndarray:
+    return _immutable_array(
+        start_time + np.arange(n_scans, dtype=float) * tr, dtype=float
+    )
+
+
+def _sidecar_start_time(bold_path: Path) -> float:
+    sidecar = bold_path.with_name(bold_path.name.split(".nii")[0] + ".json")
+    if not sidecar.exists():
+        return 0.0
+    value = json.loads(sidecar.read_text()).get("StartTime", 0.0)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"StartTime in {sidecar.name} must be a finite number")
+    if not np.isfinite(value):
+        raise ValueError(f"StartTime in {sidecar.name} must be a finite number")
+    return float(value)
 
 
 def _source_ref(
