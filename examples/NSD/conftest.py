@@ -1,4 +1,11 @@
+import sys
+from pathlib import Path
+
 import pytest
+
+# The scripts import their siblings as examples.NSD.*; put the repo root on
+# sys.path so that works under plain `pytest` (pyproject no longer sets pythonpath).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
 def pytest_addoption(parser):
