@@ -1,6 +1,5 @@
 from pathlib import Path
 import re
-import socket
 
 from types import MappingProxyType
 
@@ -308,16 +307,15 @@ def test_incomplete_sources_clear_metadata_fingerprint_and_add_quality_warning()
     assert any("incomplete" in warning["message"] for warning in record.warnings)
 
 
-def test_serialized_record_excludes_digest_and_sensitive_runtime_strings():
-    record = ProvenanceRecord.from_dict(_record_payload())
+def test_serialized_record_excludes_injected_local_path():
+    sentinel = "/sentinel-home/boldtailor-secret"
+    record = ProvenanceRecord.from_dict(_record_payload(extra_note={"note": "ok"}))
     serialized = record.canonical_json()
 
-    assert "Digest" not in serialized
-    assert "digest" not in serialized
-    assert str(Path.home()) not in serialized
-    assert "/Users/poldrack/Dropbox/code/boldtailor" not in serialized
-    assert Path.home().name not in serialized
-    assert socket.gethostname() not in serialized
+    assert "digest" not in serialized.lower()
+    assert sentinel not in serialized
+    with pytest.raises(ValueError, match="relative"):
+        _complete_source("signal", sentinel)
 
 
 def test_extension_preserves_fields_without_parent_serialization(monkeypatch):

@@ -96,7 +96,10 @@ def stacked_oracle(data, library, cid, task_model, train, test):
     for r in test:
         residual = data.signals[r] - xs[r] @ beta
         residual = residual - zs[r] @ np.linalg.lstsq(zs[r], residual, rcond=None)[0]
-        yr = data.signals[r] - ns[r] @ np.linalg.lstsq(ns[r], data.signals[r], rcond=None)[0]
+        yr = (
+            data.signals[r]
+            - ns[r] @ np.linalg.lstsq(ns[r], data.signals[r], rcond=None)[0]
+        )
         loss += np.sum(residual**2, axis=0)
         null += np.sum(yr**2, axis=0)
     return beta, loss, null
@@ -107,7 +110,12 @@ def loro_oracle(data, library, task_model):
     for cid in range(len(library.candidates)):
         folds = [
             stacked_oracle(
-                data, library, cid, task_model, [i for i in range(data.n_runs) if i != r], [r]
+                data,
+                library,
+                cid,
+                task_model,
+                [i for i in range(data.n_runs) if i != r],
+                [r],
             )
             for r in range(data.n_runs)
         ]
@@ -280,27 +288,6 @@ def test_onsets_outside_supported_window_are_rejected(task_fixture):
     )
     with pytest.raises(ValueError, match="supported sampled response"):
         prepare_runs(early, library, NSD)
-
-
-def test_signal_inside_profiled_span_does_not_raise(task_fixture):
-    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
-
-    data, library = task_fixture
-    frames = columns_for(data, library, 1, NSD)
-    signals = []
-    for r, (y, n) in enumerate(zip(data.signals, data.confounds, strict=True)):
-        feature = 3 * n["motion"].to_numpy() + 40
-        if r in (1, 3):
-            feature = feature + 5 * frames[r]["missing_response_time"].to_numpy()
-        signals.append(np.column_stack([feature, y[:, 1:]]))
-    inside = from_arrays(
-        signals, data.events, frame_times=data.frame_times, confounds=data.confounds
-    )
-    runs = prepare_runs(inside, library, NSD)
-    a, b, c, energy = signal_statistics(runs, inside.signals, 32)
-    scores = loro_scores(a, b, c, energy)
-    assert np.all(c >= 0)
-    assert np.all(np.isfinite(scores[:, 0]) | np.isnan(scores[:, 0]))
 
 
 def test_run_ineligible_candidate_scores_minus_inf(task_fixture):

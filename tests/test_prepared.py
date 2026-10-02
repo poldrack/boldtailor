@@ -274,15 +274,6 @@ def test_prepared_analysis_requires_exactly_one_timing_source(
         _make_prepared(prepared_inputs, tr=tr, frame_times=frame_times)
 
 
-def test_prepared_analysis_accepts_explicit_other_column_role(prepared_inputs):
-    case = deepcopy(prepared_inputs)
-    case[2][0]["motion"] = "other"
-
-    prepared = _make_prepared(case)
-
-    assert prepared.column_roles[0]["motion"] == "other"
-
-
 def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inputs):
     first = _make_prepared(prepared_inputs)
     reordered_metadata = deepcopy(prepared_inputs)

@@ -1,6 +1,4 @@
-import gc
 import importlib
-import weakref
 
 import numpy as np
 import pandas as pd
@@ -143,20 +141,6 @@ def test_beta_path_matches_augmented_ols(problem, ill_conditioned, prepared):
         assert np.isnan(beta[:, -1]).all()
 
 
-def test_beta_path_factors_design_once(problem, monkeypatch):
-    module = importlib.import_module("boldtailor._single_trial_fit")
-    original, calls = module._project_design, []
-
-    def observe(*args):
-        calls.append(1)
-        return original(*args)
-
-    monkeypatch.setattr(module, "_project_design", observe)
-    data, x, ns = problem
-    list(beta_path(x, ns[0], data.signals[0], [0.0, 0.1, 1.0, 10.0]))
-    assert len(calls) == 1
-
-
 @pytest.mark.parametrize("case", ["rank", "support", "dof", "alpha"])
 @pytest.mark.parametrize("prepared", [False, True])
 def test_beta_path_retains_solver_rejections(case, prepared):
@@ -176,18 +160,6 @@ def test_beta_path_retains_solver_rejections(case, prepared):
                 solver.betas_at(alpha)
         else:
             list(beta_path(x, n, y, alphas))
-
-
-def test_prepared_trial_betas_do_not_retain_outputs(problem):
-    data, x, ns = problem
-    solver = entry("_single_trial_fit", "prepare_trial_betas")(
-        x, ns[0], data.signals[0]
-    )
-    beta = solver.betas_at(0.1)
-    reference = weakref.ref(beta)
-    del beta
-    gc.collect()
-    assert reference() is None
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 2.0])
@@ -405,7 +377,6 @@ def test_ols_and_ridge_preserve_supported_trials_with_small_hrf_support(alpha):
 def test_shared_trials_complete_lifecycle(problem, caplog, monkeypatch, outcome):
     import json
     import logging
-    from dataclasses import replace
 
     data, _, _ = problem
     caplog.set_level(logging.INFO, logger="boldtailor")

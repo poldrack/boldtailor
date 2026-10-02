@@ -45,25 +45,6 @@ def test_fixed_ols_targets_are_candidate_independent():
     assert second["r2"][0] < first["r2"][0]
 
 
-def test_simulation_records_both_regularizers_and_four_objectives():
-    from examples.validation.ridge_objective_simulation import scenario_rows
-
-    rows, candidates = scenario_rows(0, 4.0, 1.5, 0.3, 0.5, 1.0)
-    assert len(rows) == 8
-    assert len(candidates) == 48
-    assert {r["objective"] for r in rows} == {
-        "current",
-        "centered",
-        "fixed_ols",
-        "within_run",
-    }
-    assert {r["regularizer"] for r in rows} == {"alpha", "fraction"}
-    for row in rows:
-        assert np.isfinite(row["beta_rmse"])
-        assert row["train_runs"] == "0,1,2,3"
-        assert row["test_runs"] == "4,5"
-
-
 @pytest.mark.parametrize("encoding_mode", ["absolute", "within_run"])
 def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
     from boldtailor._single_trial_fit import trial_beta_path

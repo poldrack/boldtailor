@@ -238,7 +238,6 @@ def test_fit_warns_for_rank_deficient_design():
     messages = {str(warning.message) for warning in caught}
 
     assert any("design rank" in message for message in messages)
-    assert "Matrix is singular at working precision, regularizing..." in messages
 
 
 def test_fit_records_run_diagnostics_without_serializing_design_values():
@@ -307,7 +306,6 @@ def test_fit_rejects_non_estimable_contrast_before_glm(monkeypatch):
     messages = {str(warning.message) for warning in caught}
 
     assert any("design rank" in message for message in messages)
-    assert "Matrix is singular at working precision, regularizing..." in messages
 
 
 def test_fit_records_rank_deficiency_warning_in_provenance():

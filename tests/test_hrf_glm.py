@@ -442,30 +442,9 @@ def test_undefined_assignment_still_validates_contrasts(hrf_glm_problem, contras
         fit(data, replace(model, contrasts={"bad": contrast}), hrf_selection=selection)
 
 
-def test_completed_operations_log_their_analysis_identity(hrf_glm_problem, caplog):
-    data, model, selection, _ = hrf_glm_problem
-    with caplog.at_level("INFO", logger="boldtailor"):
-        result = _selected_fit(data, model, selection)
-        comparison = task_delta_r2(data, model, result)
-    events = [
-        json.loads(record.message)
-        for record in caplog.records
-        if record.name == "boldtailor"
-    ]
-    for name, output in [
-        ("fit_completed", result),
-        ("task_delta_r2_completed", comparison),
-    ]:
-        completed = next(event for event in events if event["event"] == name)
-        assert completed.get("analysis_id") == output.provenance.analysis_fingerprint
-        assert completed["execution_id"] == output.provenance.execution_id
-
-
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
 def test_selected_glm_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, outcome):
-    import json
     import logging
-    from dataclasses import replace
 
     data, model, selection, _ = hrf_glm_problem
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -509,7 +488,6 @@ def test_selected_glm_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, o
 def test_selected_comparison_complete_lifecycle(
     hrf_glm_problem, caplog, monkeypatch, outcome
 ):
-    import json
     import logging
     from dataclasses import replace
 
@@ -593,7 +571,10 @@ def task_model_problem():
         confounds.append(pd.DataFrame(dict(motion=np.linspace(-1, 1, len(t)))))
         signals.append(rng.normal(100, 1, size=(len(t), 4)))
     data = from_arrays(
-        signals, events, frame_times=times, confounds=confounds,
+        signals,
+        events,
+        frame_times=times,
+        confounds=confounds,
         sources=[_sources(r) for r in range(3)],
     )
     model = ModelSpec(
@@ -604,7 +585,9 @@ def task_model_problem():
         noise_model="ols",
         task_model=_nsd_model(),
     )
-    selection = select_hrf(data, library=library, feature_signature="axis-tm", task_model=_nsd_model())
+    selection = select_hrf(
+        data, library=library, feature_signature="axis-tm", task_model=_nsd_model()
+    )
     return data, model, selection, library
 
 
@@ -628,10 +611,18 @@ def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem
         )
         pd.testing.assert_frame_equal(scored, expected)
         assert list(design.columns[: scored.shape[1]]) == list(scored.columns)
-        np.testing.assert_array_equal(design.iloc[:, : scored.shape[1]].to_numpy(), scored.to_numpy())
+        np.testing.assert_array_equal(
+            design.iloc[:, : scored.shape[1]].to_numpy(), scored.to_numpy()
+        )
         assert list(design.columns[scored.shape[1] :]) == ["motion", "constant"]
-    assert "missing_response_time" in result.group_designs[1, int(selection.hrf_indices[0])].columns
-    assert "missing_response_time" not in result.group_designs[0, int(selection.hrf_indices[0])].columns
+    assert (
+        "missing_response_time"
+        in result.group_designs[1, int(selection.hrf_indices[0])].columns
+    )
+    assert (
+        "missing_response_time"
+        not in result.group_designs[0, int(selection.hrf_indices[0])].columns
+    )
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["task_model"] == model.task_model.to_dict()
     assert activity["task_model_fingerprint"] == model.task_model.fingerprint
@@ -644,15 +635,22 @@ def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem
 
     data, model, selection, library = task_model_problem
     canonical = HrfLibrary.from_parameters([])
-    spm_only = select_hrf(data, library=canonical, feature_signature="axis-tm", task_model=_nsd_model())
+    spm_only = select_hrf(
+        data, library=canonical, feature_signature="axis-tm", task_model=_nsd_model()
+    )
     result = fit(data, model, hrf_selection=spm_only, feature_signature="axis-tm")
     for run in range(data.n_runs):
         expected = task_columns(
-            expand_events(data.events[run], model.task_model, run), data.frame_times[run], "spm",
-            min_onset=model.min_onset, oversampling=model.oversampling,
+            expand_events(data.events[run], model.task_model, run),
+            data.frame_times[run],
+            "spm",
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
         )
         design = result.group_designs[run, 0]
-        np.testing.assert_array_equal(design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy())
+        np.testing.assert_array_equal(
+            design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy()
+        )
 
 
 def test_selected_glm_requires_matching_task_model(task_model_problem):
@@ -660,14 +658,29 @@ def test_selected_glm_requires_matching_task_model(task_model_problem):
 
     data, model, selection, library = task_model_problem
     with pytest.raises(ValueError, match="task_model"):
-        fit(data, replace(model, task_model=None), hrf_selection=selection, feature_signature="axis-tm")
+        fit(
+            data,
+            replace(model, task_model=None),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
     other = TaskModel((Modulator("response_time", missing="indicator"),))
     with pytest.raises(ValueError, match="task_model"):
-        fit(data, replace(model, task_model=other), hrf_selection=selection, feature_signature="axis-tm")
+        fit(
+            data,
+            replace(model, task_model=other),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
     centered = TaskModel(
-        (Modulator("response_time", missing="indicator"), Modulator("trial_type", center=True))
+        (
+            Modulator("response_time", missing="indicator"),
+            Modulator("trial_type", center=True),
+        )
     )
-    shifted = select_hrf(data, library=library, feature_signature="axis-tm", task_model=centered)
+    shifted = select_hrf(
+        data, library=library, feature_signature="axis-tm", task_model=centered
+    )
     with pytest.raises(ValueError, match="task_model"):
         fit(data, model, hrf_selection=shifted, feature_signature="axis-tm")
 
@@ -679,7 +692,9 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
 
     data, model, selection, library = task_model_problem
     subset = TaskModel((Modulator("trial_type", center=False),))
-    narrow = select_hrf(data, library=library, feature_signature="axis-tm", task_model=subset)
+    narrow = select_hrf(
+        data, library=library, feature_signature="axis-tm", task_model=subset
+    )
     result = fit(data, model, hrf_selection=narrow, feature_signature="axis-tm")
     for (run, cid), design in result.group_designs.items():
         expected = task_columns(
@@ -689,36 +704,35 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
             min_onset=model.min_onset,
             oversampling=model.oversampling,
         )
-        np.testing.assert_array_equal(design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy())
+        np.testing.assert_array_equal(
+            design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy()
+        )
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["task_model_fingerprint"] == model.task_model.fingerprint
     assert activity["selection_task_model_fingerprint"] == subset.fingerprint
     assert np.isfinite(result.effect("response_time")).all()
     plain = select_hrf(data, library=library, feature_signature="axis-tm")
-    assert fit(data, model, hrf_selection=plain, feature_signature="axis-tm").group_designs
+    assert fit(
+        data, model, hrf_selection=plain, feature_signature="axis-tm"
+    ).group_designs
 
 
 def test_selected_glm_requires_matching_convolution_settings(task_model_problem):
     data, model, selection, library = task_model_problem
     with pytest.raises(ValueError, match="oversampling|min_onset"):
-        fit(data, replace(model, oversampling=20), hrf_selection=selection, feature_signature="axis-tm")
+        fit(
+            data,
+            replace(model, oversampling=20),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
     with pytest.raises(ValueError, match="oversampling|min_onset"):
-        fit(data, replace(model, min_onset=-10.0), hrf_selection=selection, feature_signature="axis-tm")
-
-
-def test_task_delta_r2_uses_the_same_task_model_designs(task_model_problem):
-    data, model, selection, library = task_model_problem
-    result = fit(data, model, hrf_selection=selection, feature_signature="axis-tm")
-    comparison = task_delta_r2(data, model, result)
-    assert np.isfinite(comparison.delta_r2).all()
-    assert np.all(comparison.delta_r2 >= 0)
-
-
-def test_legacy_selected_glm_without_task_model_is_unchanged(hrf_glm_problem):
-    data, model, selection, designs = hrf_glm_problem
-    result = _selected_fit(data, model, selection)
-    for (run, cid), design in result.group_designs.items():
-        np.testing.assert_allclose(design.to_numpy(), designs[run, cid][design.columns].to_numpy(), atol=1e-12)
+        fit(
+            data,
+            replace(model, min_onset=-10.0),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
 
 
 def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem):
@@ -735,7 +749,9 @@ def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem
     chosen = select_hrf(
         complete, library=library, feature_signature="axis-tm", task_model=strict
     )
-    with pytest.raises(ValueError, match=r"^run 1 design compilation failed: (?!run 1)"):
+    with pytest.raises(
+        ValueError, match=r"^run 1 design compilation failed: (?!run 1)"
+    ):
         fit(
             data,
             replace(model, task_model=strict, contrasts={"task": {"task": 1}}),

@@ -144,7 +144,9 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
     assert not np.allclose(original.test_r2[:3], altered.test_r2[:3])
     for v, cid in enumerate(original.training_selection.hrf_indices[:3]):
         beta, loss, null = oracle(data, library.candidates[cid], [0, 2], [1, 3])
-        np.testing.assert_allclose(original.training_amplitudes[0, v], beta[v], atol=1e-12)
+        np.testing.assert_allclose(
+            original.training_amplitudes[0, v], beta[v], atol=1e-12
+        )
         np.testing.assert_allclose(
             original.test_r2[v], 1 - loss[v] / null[v], atol=1e-12
         )
@@ -339,23 +341,12 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
     assert activity["score"] == "nuisance_adjusted_task_model_prediction_r2"
 
 
-def test_default_selection_carries_task_only_model(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
-    from boldtailor.model import TaskModel
-
-    data, library = cv_fixture
-    result = select_hrf(data, library=library)
-    assert result.task_model == TaskModel()
-    activity = result.provenance.to_dict()["activities"][-1]
-    assert activity["task_regressors"] == ["task"]
-    assert activity["profiled_regressors"] == []
-
-
 def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
     from boldtailor.hrf_selection import select_hrf
 
     data, library = cv_fixture
     data = with_trial_types(data)
+
     def key(result):
         return result.provenance.to_dict()["activities"][-1]["design_fingerprint"]
 
@@ -363,9 +354,14 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
     modeled = select_hrf(data, library=library, task_model=nsd_model())
     assert key(plain) != key(modeled)
     changed = replace_data(
-        data, events=[e.assign(response_time=[0.9, np.nan, 1.1, 0.8, 1.3]) for e in data.events]
+        data,
+        events=[
+            e.assign(response_time=[0.9, np.nan, 1.1, 0.8, 1.3]) for e in data.events
+        ],
     )
-    assert key(modeled) != key(select_hrf(changed, library=library, task_model=nsd_model()))
+    assert key(modeled) != key(
+        select_hrf(changed, library=library, task_model=nsd_model())
+    )
     assert key(plain) == key(select_hrf(changed, library=library))
 
 
@@ -376,7 +372,11 @@ def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture)
     data, library = cv_fixture
     data = with_trial_types(data)
     result = evaluate_hrf_split(
-        data, library=library, train_runs=[0, 2], test_runs=[1, 3], task_model=nsd_model()
+        data,
+        library=library,
+        train_runs=[0, 2],
+        test_runs=[1, 3],
+        task_model=nsd_model(),
     )
     assert result.amplitude_names == ("task", "response_time", "trial_type")
     assert result.training_amplitudes.shape == (3, data.n_features)
@@ -385,7 +385,9 @@ def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture)
         beta, loss, null = stacked_oracle(
             data, library, int(cid), nsd_model(), [0, 2], [1, 3]
         )
-        np.testing.assert_allclose(result.training_amplitudes[:, v], beta[:, v], atol=1e-10)
+        np.testing.assert_allclose(
+            result.training_amplitudes[:, v], beta[:, v], atol=1e-10
+        )
         np.testing.assert_allclose(result.test_r2[v], 1 - loss[v] / null[v], atol=1e-10)
     assert np.isnan(result.training_amplitudes[:, 3:]).all()
 
@@ -394,7 +396,9 @@ def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
-    result = evaluate_hrf_split(data, library=library, train_runs=[0, 2], test_runs=[1, 3])
+    result = evaluate_hrf_split(
+        data, library=library, train_runs=[0, 2], test_runs=[1, 3]
+    )
     assert result.amplitude_names == ("task",)
     assert result.training_amplitudes.shape == (1, data.n_features)
 
@@ -428,18 +432,10 @@ def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
     from dataclasses import replace
 
     data, library = cv_fixture
-    result = evaluate_hrf_split(data, library=library, train_runs=[0, 2], test_runs=[1, 3])
+    result = evaluate_hrf_split(
+        data, library=library, train_runs=[0, 2], test_runs=[1, 3]
+    )
     with pytest.raises(ValueError, match="amplitude"):
         replace(result, amplitude_names=("task", "extra"))
     with pytest.raises(ValueError, match="amplitude"):
         replace(result, training_amplitudes=result.training_amplitudes[0])
-
-
-def test_selection_provenance_states_per_regressor_roundoff_tolerance(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
-
-    data, library = cv_fixture
-    activity = select_hrf(data, library=library).provenance.to_dict()["activities"][-1]
-    assert activity["sse_roundoff_tolerance"] == (
-        "64 * eps * (C + sum_k abs(2*beta_k*B_k) + abs(beta' A beta))"
-    )

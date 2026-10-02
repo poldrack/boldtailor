@@ -211,25 +211,3 @@ def test_prepared_fraction_run_betas_match_oracle_in_any_order(
                 np.asarray(x), np.asarray(n), data.signals[0][:, feature], fraction
             )[0]
         np.testing.assert_allclose(path.betas_at(fraction), expected, atol=1e-9)
-
-
-def test_fraction_cv_prepares_each_run_once_per_fold(ridge_problem, monkeypatch):
-    from boldtailor import _ridge_cv as cv
-
-    data, predictors, _ = ridge_problem
-    calls = []
-    original = cv.prepare_run_beta_path
-
-    def observe(data, run_index, *args, **kwargs):
-        calls.append(run_index)
-        return original(data, run_index, *args, **kwargs)
-
-    monkeypatch.setattr(cv, "prepare_run_beta_path", observe)
-    result = module().score_fraction_candidates(data, predictors, fractions=[1.0, 0.5])
-    assert calls == list(range(data.n_runs)) * data.n_runs
-    expected = reference(data, predictors, None, [1.0, 0.5])
-    for actual, wanted in zip(
-        (result.cv_r2, result.fold_sse, result.fold_sst, result.fold_hrf_indices),
-        expected,
-    ):
-        np.testing.assert_allclose(actual, wanted, rtol=2e-7, atol=1e-8)

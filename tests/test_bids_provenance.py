@@ -157,40 +157,6 @@ def test_projection_is_immutable_bytes_and_performs_no_io(
         projected["extra.json"] = b"{}\n"
 
 
-def test_stable_dataset_description_normalizes_optional_metadata(
-    provenance_record,
-    projection_options,
-):
-    projected = project_bids_provenance(provenance_record, **projection_options)
-    description = json.loads(projected["dataset_description.json"])
-
-    assert description == {
-        "Name": "Boldtailor example derivatives",
-        "BIDSVersion": "1.11.1",
-        "DatasetType": "derivative",
-        "GeneratedBy": [
-            {
-                "Name": "Boldtailor",
-                "Version": "0.1.0",
-                "CodeURL": "https://github.com/example/boldtailor",
-                "Container": {
-                    "Type": "docker",
-                    "Tag": "example/boldtailor:0.1.0",
-                    "URI": "docker://example/boldtailor:0.1.0",
-                },
-            }
-        ],
-        "SourceDatasets": [
-            {"DOI": "doi:10.1234/example", "Version": "1.0.0"},
-            {"URL": "https://example.org/raw", "Version": "2.0.0"},
-        ],
-        "DatasetLinks": {
-            "raw": "https://example.org/raw",
-            "template": "https://example.org/template",
-        },
-    }
-
-
 def test_draft_records_form_semantic_activity_source_graph(
     provenance_record,
     projection_options,

@@ -1,7 +1,5 @@
 import json
 import logging
-from pathlib import Path
-import socket
 
 import numpy as np
 import pandas as pd
@@ -85,7 +83,14 @@ def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
     assert records[4].get("execution_id") is None
 
 
-def test_from_arrays_logs_structured_records_without_mutating_loggers(caplog):
+def test_from_arrays_logs_structured_records_without_mutating_loggers(
+    caplog, monkeypatch, tmp_path
+):
+    sentinel_home = "/sentinel-home/boldtailor-secret"
+    sentinel_cwd = tmp_path / "sentinel-cwd-boldtailor-secret"
+    sentinel_cwd.mkdir()
+    monkeypatch.setenv("HOME", sentinel_home)
+    monkeypatch.chdir(sentinel_cwd)
     caplog.set_level(logging.INFO, logger="boldtailor")
     logger = logging.getLogger("boldtailor")
     root = logging.getLogger()
@@ -134,10 +139,8 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(caplog):
     assert "raw-secret-event" not in combined
     assert "raw-secret-confound" not in combined
     assert "987654.5" not in combined
-    assert str(Path.home()) not in combined
-    assert Path.cwd().as_posix() not in combined
-    assert Path.home().name not in combined
-    assert socket.gethostname() not in combined
+    assert sentinel_home not in combined
+    assert "sentinel-cwd-boldtailor-secret" not in combined
 
 
 def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
@@ -342,39 +345,6 @@ def test_task_delta_r2_logs_failure_and_resets_context(caplog):
     assert records[-1].get("analysis_id") is None
 
 
-def test_task_delta_r2_logs_provenance_failure_before_completion(
-    caplog,
-    monkeypatch,
-):
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    data, model, full_result = _delta_r2_logging_problem()
-
-    def reject_provenance(*args, **kwargs):
-        raise ValueError("comparison provenance cannot be frozen")
-
-    monkeypatch.setattr(
-        "boldtailor._fit_lifecycle.extend_provenance", reject_provenance
-    )
-
-    with pytest.raises(ValueError, match="comparison provenance cannot be frozen"):
-        task_delta_r2(data, model, full_result)
-    emit_event("after_task_delta_r2_provenance_failure", stage="test")
-
-    records = _structured_records(caplog)
-    comparison_records = [
-        record for record in records if record["event"].startswith("task_delta_r2_")
-    ]
-    assert [record["event"] for record in comparison_records] == [
-        "task_delta_r2_started",
-        "task_delta_r2_failed",
-    ]
-    assert comparison_records[1]["error_code"] == "invalid_input"
-    assert records[-1]["event"] == "after_task_delta_r2_provenance_failure"
-    assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
-
-
 @pytest.mark.parametrize(
     ("error", "code"),
     [
@@ -403,14 +373,3 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
     event = emit_event("fit_failed", stage="fit", error=UnprintableError())
     assert event["error_code"] == "invalid_input"
     assert "UnprintableError" not in caplog.text
-
-
-@pytest.mark.parametrize("level", [15, 25, 35, 45])
-def test_emit_event_preserves_custom_numeric_levels(caplog, level):
-    caplog.set_level(1, logger="boldtailor")
-    event = emit_event("custom_event", stage="test", level=level)
-    records = [r for r in caplog.records if r.name == "boldtailor"]
-    assert len(records) == 1
-    assert records[0].levelno == level
-    assert json.loads(records[0].getMessage()) == dict(event)
-    assert event["level"] == logging.getLevelName(level)

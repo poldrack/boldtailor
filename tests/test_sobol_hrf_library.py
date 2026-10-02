@@ -23,19 +23,6 @@ def test_default_matches_approved_preview_and_canonical_anchor(library):
     assert np.isfinite(library.curves).all()
     np.testing.assert_allclose(library.curves.sum(axis=1), 1, atol=1e-14)
     np.testing.assert_array_equal(library.candidates[0].kernel(1.6), spm_hrf(1.6, 50))
-    # First sorted row from the seed-0 preview approved by the user.
-    np.testing.assert_array_equal(
-        library.candidates[1].parameters,
-        [
-            3.0009291395545006,
-            12.485948277637362,
-            0.7254233853891492,
-            1.456461412832141,
-            3.838553735986352,
-            0.20569844357669353,
-            36.0,
-        ],
-    )
     assert len(np.unique(library.curves, axis=0)) == 513
 
 

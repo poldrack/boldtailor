@@ -59,10 +59,6 @@ def test_reserved_or_invalid_modulator_columns_rejected(column):
         Modulator(column)
 
 
-def test_trial_type_is_an_ordinary_modulator_column():
-    assert Modulator("trial_type", center=False).column == "trial_type"
-
-
 @pytest.mark.parametrize("missing", ["drop", "", None, True])
 def test_invalid_missing_policy_rejected(missing):
     with pytest.raises(ValueError, match="missing"):

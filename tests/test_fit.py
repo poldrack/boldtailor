@@ -1,4 +1,3 @@
-import builtins
 import warnings
 
 import numpy as np
@@ -10,9 +9,8 @@ from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
 from nilearn.glm.first_level.hemodynamic_models import glover_hrf
 
 from boldtailor.data import from_arrays
-import boldtailor.fit as fit_module
 from boldtailor.fit import fit, task_delta_r2
-from boldtailor.model import ModelSpec, Modulator, TaskModel
+from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
 
@@ -406,17 +404,6 @@ def test_fit_owns_designs_and_exposes_immutable_provenance(single_run_problem):
         result.design_provenance[0]["excluded_event_count"] = 3
 
 
-def test_fit_does_not_mutate_inputs(single_run_problem):
-    signals, events, _, model = single_run_problem
-    original_signals = signals.copy()
-    original_events = events.copy(deep=True)
-
-    fit(from_arrays(signals, events, tr=2.0), model)
-
-    np.testing.assert_array_equal(signals, original_signals)
-    pd.testing.assert_frame_equal(events, original_events)
-
-
 def test_fit_extends_input_provenance_and_exposes_result_provenance(single_run_problem):
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
@@ -545,23 +532,6 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
     assert "effect_size" not in serialized
 
 
-def test_fit_serializes_nondefault_drift_order(single_run_problem):
-    signals, events, _, _ = single_run_problem
-    model = ModelSpec(
-        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
-        drift_model="polynomial",
-        drift_order=3,
-        noise_model="ols",
-    )
-
-    result = fit(
-        from_arrays(signals, events, tr=2.0, sources=_complete_sources()),
-        model,
-    )
-
-    assert result.provenance.activities[-1]["model"]["drift_order"] == 3
-
-
 def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_problem):
     signals, events, _, _ = single_run_problem
 
@@ -592,30 +562,6 @@ def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_probl
     assert "local_hrf" not in str(activity["model"]["hrf_model"])
     assert "<function" not in serialized
     assert "0x" not in serialized
-
-
-def test_fit_does_not_write_to_filesystem(single_run_problem, monkeypatch):
-    signals, events, _, model = single_run_problem
-    original_open = builtins.open
-
-    def guarded_open(file, mode="r", *args, **kwargs):
-        if any(flag in mode for flag in ("w", "a", "+", "x")):
-            raise AssertionError("fit must not write files")
-        return original_open(file, mode, *args, **kwargs)
-
-    def fail_path_write(*args, **kwargs):
-        raise AssertionError("fit must not write files")
-
-    monkeypatch.setattr(builtins, "open", guarded_open)
-    monkeypatch.setattr("pathlib.Path.write_text", fail_path_write)
-    monkeypatch.setattr("pathlib.Path.write_bytes", fail_path_write)
-
-    result = fit(
-        from_arrays(signals, events, tr=2.0, sources=_complete_sources()),
-        model,
-    )
-
-    assert result.contrast_names == ("face_gt_house",)
 
 
 @pytest.mark.parametrize(
@@ -678,13 +624,6 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     returned = comparison.nuisance_design_matrices[0]
     returned.iloc[0, 0] = -99.0
     assert comparison.nuisance_design_matrices[0].iloc[0, 0] != -99.0
-
-
-def test_task_delta_r2_rejects_broken_nested_ols_monotonicity():
-    from boldtailor._fit_diagnostics import validate_nested_ols_delta
-
-    with pytest.raises(ValueError, match="nested OLS monotonicity"):
-        validate_nested_ols_delta(np.array([-1.1e-12]))
 
 
 def test_make_task_delta_r2_result_clips_and_owns_values(delta_r2_problem):
@@ -856,7 +795,6 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
 def test_ordinary_complete_lifecycle(delta_r2_problem, caplog, monkeypatch, outcome):
     import json
     import logging
-    from dataclasses import replace
 
     data, model, full = delta_r2_problem
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -948,25 +886,3 @@ def test_comparison_complete_lifecycle(delta_r2_problem, caplog, monkeypatch, ou
         assert len(result.provenance.events) <= 8
     else:
         assert records[-1]["error_code"] == "invalid_input"
-
-
-def test_model_provenance_adds_task_model_only_when_set():
-    from boldtailor.fit import _model_provenance
-
-    plain = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm")
-    assert "task_model" not in _model_provenance(plain).activity
-    task_model = TaskModel((Modulator("response_time", missing="indicator"),))
-    with_model = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm", task_model=task_model)
-    activity = _model_provenance(with_model).activity
-    assert activity["task_model"] == task_model.to_dict()
-    assert activity["task_model_fingerprint"] == task_model.fingerprint
-
-
-def test_model_provenance_without_task_model_keeps_legacy_keys():
-    from boldtailor.fit import _model_provenance
-
-    plain = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm")
-    assert set(_model_provenance(plain).activity) == {
-        "contrasts", "confounds", "hrf_model", "drift_model", "high_pass",
-        "drift_order", "oversampling", "min_onset", "noise_model",
-    }

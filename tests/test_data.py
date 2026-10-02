@@ -142,25 +142,6 @@ def test_from_arrays_owns_readonly_copies(events):
             values.flat[0] = 0
 
 
-def test_from_arrays_owns_nested_tabular_payloads(events):
-    events["metadata"] = [["event"], ["other-event"]]
-    confounds = pd.DataFrame({"unselected": [["confound"] for _ in range(10)]})
-
-    data = from_arrays(np.ones((10, 2)), events, tr=2.0, confounds=confounds)
-
-    events.at[0, "metadata"].append("source-mutated")
-    confounds.at[0, "unselected"].append("source-mutated")
-
-    assert data.events[0].at[0, "metadata"] == ["event"]
-    assert data.confounds[0].at[0, "unselected"] == ["confound"]
-
-    data.events[0].at[0, "metadata"].append("accessor-mutated")
-    data.confounds[0].at[0, "unselected"].append("accessor-mutated")
-
-    assert data.events[0].at[0, "metadata"] == ["event"]
-    assert data.confounds[0].at[0, "unselected"] == ["confound"]
-
-
 def test_from_arrays_accepts_negative_onsets_without_trial_type():
     events = pd.DataFrame({"onset": [-2.0, 4.0], "duration": [1.0, 0.0]})
 

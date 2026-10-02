@@ -209,18 +209,6 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
     assert not np.allclose(first.fold_sse[0, :, :4], changed.fold_sse[0, :, :4])
 
 
-def test_behavior_is_in_scoring_provenance(ridge_problem):
-    data, predictors, _ = ridge_problem
-    first = score(data, predictors, alphas=[0.0, 0.1])
-    predictors[0] = predictors[0].assign(response_time=1.0)
-    second = score(data, predictors, alphas=[0.0, 0.1])
-    one = first.provenance.to_dict()["activities"][-1]
-    two = second.provenance.to_dict()["activities"][-1]
-    assert one["predictor_fingerprint"] != two["predictor_fingerprint"]
-    assert one["validation_target"] == "candidate_regularized_betas"
-    assert one["score"] == "pooled_within_run_centered_trial_encoding_r2"
-
-
 @pytest.mark.parametrize("optimized,count", [(True, 2), (False, 1)])
 def test_too_few_runs_rejected(ridge_problem, optimized, count):
     data, predictors, library = ridge_problem

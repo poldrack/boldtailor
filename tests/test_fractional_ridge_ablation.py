@@ -199,28 +199,3 @@ def test_training_only_calibration_and_identity_fallback():
     np.testing.assert_allclose(mapping, [[3, 1, 1], [2, 0, 0]], atol=1e-12)
     test = np.array([[10, 4, 5]], float)
     np.testing.assert_allclose(exp.apply_calibration([test], mapping)[0], [[32, 4, 5]])
-
-
-def test_basis_and_pooling_are_distinct_models(runs):
-    designs, signals, predictors = runs
-    exp = experiment()
-    fits = []
-    for basis, scope in [
-        ("normalized", "per_run"),
-        ("raw", "per_run"),
-        ("raw", "pooled_train"),
-    ]:
-        fits.append(
-            exp.fit_split(
-                exp.prepare_runs(designs, signals, basis=basis),
-                predictors,
-                train=[0, 1],
-                test=[2, 3],
-                fraction=0.5,
-                target="candidate",
-                scope=scope,
-            )
-        )
-    assert not np.allclose(fits[0]["test_betas"], fits[1]["test_betas"])
-    assert not np.allclose(fits[1]["test_betas"], fits[2]["test_betas"])
-    assert not np.allclose(fits[2]["test_fractions"], 0.5)

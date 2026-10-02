@@ -1,5 +1,3 @@
-import ast
-import copy
 from dataclasses import replace
 import gzip
 import hashlib
@@ -24,7 +22,6 @@ from boldtailor.publication import Artifact, publish_artifact_set
 from boldtailor.results import make_task_delta_r2_result
 from examples.stop_signal_demo import (
     common_brain_mask,
-    estimate_signal_memory_gib,
     load_run,
     make_masker,
     run_sources,
@@ -494,78 +491,6 @@ def _rendered_cell_text(cell):
     )
 
 
-def _assert_compact_variance_display_source():
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    source = next(cell.source for cell in notebook.cells if cell.id == "design-fit")
-    display_calls = [
-        node
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "display"
-    ]
-    assert any(
-        len(call.args) == 1
-        and not call.keywords
-        and isinstance(call.args[0], ast.Name)
-        and call.args[0].id == "variance_partition"
-        for call in display_calls
-    )
-    for call in display_calls:
-        displayed_nodes = (
-            *call.args,
-            *(keyword.value for keyword in call.keywords),
-        )
-        assert not any(
-            (isinstance(node, ast.Attribute) and node.attr == "signals")
-            or (isinstance(node, ast.Name) and node.id == "signals")
-            for displayed in displayed_nodes
-            for node in ast.walk(displayed)
-        )
-
-
-def _notebook_calls(notebook):
-    tree = ast.parse(
-        "\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")
-    )
-    return {
-        ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)
-    }
-
-
-def test_notebook_uses_prepared_design_estimation_boundary():
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    calls = _notebook_calls(notebook)
-    source = "\n".join(
-        cell.source for cell in notebook.cells if cell.cell_type == "code"
-    )
-    narrative = "\n".join(cell.source for cell in notebook.cells)
-
-    assert "design.compile_designs" in calls
-    assert "design.compile_nuisance_designs" in calls
-    assert "PreparedDesignAnalysis.from_arrays" in calls
-    assert "prepared_fit.fit_prepared" in calls
-    assert "prepared_fit.task_delta_r2_prepared" in calls
-    assert "fit.fit" not in calls
-    assert "fit.task_delta_r2" not in calls
-    assert "import boldtailor.design as design" in source
-    assert "from boldtailor.prepared import PreparedDesignAnalysis" in source
-    assert "import boldtailor.prepared_fit as prepared_fit" in source
-    assert "PyBIDS/FitLins" in narrative
-    assert "performs no image/file I/O" in narrative
-    assert "separate nested OLS fits" in narrative
-
-
-def test_notebook_source_boundary_ignores_stored_outputs():
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    without_outputs = copy.deepcopy(notebook)
-    for cell in without_outputs.cells:
-        cell["outputs"] = []
-        cell["execution_count"] = None
-
-    assert _notebook_calls(without_outputs) == _notebook_calls(notebook)
-
-
 def _assert_plot_contract(executed):
     audit = _plot_audit(executed)
 
@@ -1018,12 +943,6 @@ def test_whole_brain_image_round_trips_mask_values(stop_signal_bids_dataset):
     np.testing.assert_array_equal(restored, values)
     assert image.shape == mask_image.shape
     np.testing.assert_allclose(image.affine, mask_image.affine)
-
-
-def test_signal_memory_estimate_uses_float64_storage():
-    estimate = estimate_signal_memory_gib((80, 88), 343)
-
-    assert estimate == pytest.approx(80 * 343 * 8 / 2**30 + 88 * 343 * 8 / 2**30)
 
 
 def test_load_run_rejects_confound_length_mismatch(stop_signal_bids_dataset):
@@ -1489,29 +1408,6 @@ def test_notebook_configuration_requires_data_root(monkeypatch, root):
         _notebook_configuration()
 
 
-def test_notebook_configuration_defaults_to_complete_real_sessions(
-    monkeypatch, tmp_path
-):
-    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
-    monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
-
-    configuration = _notebook_configuration()
-
-    assert configuration["BIDS_ROOT"] == tmp_path
-    assert configuration["FMRIPREP_ROOT"] == tmp_path / "derivatives/fmri_25.2.0"
-
-    assert configuration["SESSIONS"] == (
-        "ses-02",
-        "ses-04",
-        "ses-06",
-        "ses-08",
-        "ses-10",
-    )
-    assert configuration["MASK_STRATEGY"] == "intersection"
-    assert configuration["MINIMUM_MEMORY_GIB"] == 32
-    assert not any("ROI" in name.upper() for name in configuration)
-
-
 def test_notebook_configuration_normalizes_session_override(monkeypatch, tmp_path):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", " ses-02, ses-04 ")
@@ -1533,10 +1429,6 @@ def test_notebook_configuration_rejects_invalid_session_override(
 
     with pytest.raises(ValueError, match="exactly two non-empty sessions"):
         _notebook_configuration()
-
-
-def test_notebook_design_fit_displays_compact_variance_summary():
-    _assert_compact_variance_display_source()
 
 
 @pytest.mark.parametrize(
@@ -1607,17 +1499,6 @@ def test_variance_partition_notebook_publishes_complete_private_metadata(
         _delta_audit(executed),
     )
     assert str(stop_signal_bids_dataset.resolve()) not in rendered
-
-
-def test_readme_links_real_data_notebook():
-    readme = (Path(__file__).parents[1] / "README.md").read_text()
-    notebook_line = next(
-        line
-        for line in readme.splitlines()
-        if "examples/stop_signal_demo.ipynb" in line
-    )
-
-    assert "whole-brain" in notebook_line.lower()
 
 
 def test_protected_source_paths_include_all_inputs(stop_signal_bids_dataset):

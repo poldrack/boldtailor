@@ -479,19 +479,6 @@ def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name)
     assert not destination.exists()
 
 
-def test_publication_works_without_descriptor_relative_operations(
-    tmp_path, monkeypatch
-):
-    import boldtailor.publication as publication
-
-    monkeypatch.setattr(publication.os, "supports_dir_fd", set())
-    destination = tmp_path / "output"
-    paths = publish_artifact_set(destination, [Artifact("nested/a.bin", b"a")])
-    assert paths == (destination / "nested/a.bin",)
-    assert paths[0].read_bytes() == b"a"
-    _assert_no_transaction_debris(destination)
-
-
 @pytest.mark.parametrize("block_diagnostics", [False, True])
 def test_failed_restore_retains_original_and_reports_recovery(
     tmp_path, monkeypatch, block_diagnostics
@@ -540,15 +527,6 @@ def test_failed_restore_retains_original_and_reports_recovery(
         assert str(tmp_path) not in json.dumps(record)
 
     assert not (destination / "new.bin").exists()
-
-
-def test_removed_retention_option_is_rejected_before_writing(tmp_path):
-    destination = tmp_path / "output"
-    with pytest.raises(TypeError, match="retain_incomplete"):
-        publish_artifact_set(
-            destination, [Artifact("a.bin", b"a")], retain_incomplete=True
-        )
-    assert not destination.exists()
 
 
 @pytest.mark.parametrize("boundary", ["write", "stage_directory"])

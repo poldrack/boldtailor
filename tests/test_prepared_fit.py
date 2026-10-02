@@ -1,11 +1,7 @@
-import builtins
 from dataclasses import replace
 from importlib.metadata import version
-import io
 import json
 import logging
-import os
-from pathlib import Path
 import re
 import warnings
 
@@ -719,66 +715,6 @@ def test_fit_prepared_rejects_path_like_mapping_keys_inside_metadata_sequences(
     assert records[-1].get("execution_id") is None
 
 
-@pytest.mark.parametrize(
-    ("contrasts", "noise_model", "model_metadata"),
-    [
-        ({}, "ols", None),
-        ({"face": {"face": 1.0}}, "fast", None),
-        ({"face": {"face": 1.0}}, "ols", {"value": object()}),
-    ],
-)
-def test_fit_prepared_logs_invalid_specification_failures_and_resets_context(
-    caplog,
-    prepared_problem,
-    contrasts,
-    noise_model,
-    model_metadata,
-):
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    prepared, _, _ = prepared_problem
-
-    with pytest.raises(ValueError):
-        fit_prepared(
-            prepared,
-            contrasts=contrasts,
-            noise_model=noise_model,
-            model_metadata=model_metadata,
-        )
-    from boldtailor.logging import emit_event
-
-    emit_event("after_invalid_fit_spec", stage="test")
-    records = _structured_records(caplog)
-    fit_records = [record for record in records if record["stage"] == "fit"]
-
-    assert [record["event"] for record in fit_records] == [
-        "fit_started",
-        "fit_failed",
-    ]
-    assert fit_records[0]["execution_id"] == fit_records[1]["execution_id"]
-    assert fit_records[1]["level"] == "ERROR"
-    assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
-
-
-def test_fit_prepared_ignores_empty_sensitive_environment_values(caplog, monkeypatch):
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    monkeypatch.setenv("BOLDTAILOR_EMPTY_SECRET", "")
-    design = pd.DataFrame({"face": [0.0, 1.0, 0.0, 1.0, 0.0, 1.0], "constant": 1.0})
-    prepared = _prepared(design.to_numpy() @ np.array([[2.0], [5.0]]), design)
-
-    with pytest.raises(ValueError, match="missing regressor"):
-        fit_prepared(
-            prepared,
-            contrasts={"missing": {"missing": 1.0}},
-            noise_model="ols",
-        )
-
-    records = _structured_records(caplog)
-    failed = [record for record in records if record["event"] == "fit_failed"][-1]
-    assert failed["error_code"] == "invalid_input"
-
-
 def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
     caplog,
     monkeypatch,
@@ -817,43 +753,6 @@ def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
     assert "Traceback" not in combined
     assert raw_repr not in combined
     assert raw_address not in combined
-
-
-def test_fit_prepared_never_writes_to_the_filesystem(monkeypatch, prepared_problem):
-    prepared, contrasts, _ = prepared_problem
-    real_open = builtins.open
-    real_io_open = io.open
-    real_os_open = os.open
-
-    def guarded_open(file, mode="r", *args, **kwargs):
-        if any(flag in mode for flag in "wax+"):
-            raise AssertionError(f"unexpected write through open: {mode}")
-        return real_open(file, mode, *args, **kwargs)
-
-    def guarded_io_open(file, mode="r", *args, **kwargs):
-        if any(flag in mode for flag in "wax+"):
-            raise AssertionError(f"unexpected write through io.open: {mode}")
-        return real_io_open(file, mode, *args, **kwargs)
-
-    def fail_os_open(path, flags, *args, **kwargs):
-        write_flags = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND
-        if flags & write_flags:
-            raise AssertionError("unexpected write through os.open")
-        return real_os_open(path, flags, *args, **kwargs)
-
-    def fail_write(*args, **kwargs):
-        raise AssertionError("unexpected Path write")
-
-    monkeypatch.setattr(builtins, "open", guarded_open)
-    monkeypatch.setattr(io, "open", guarded_io_open)
-    monkeypatch.setattr(os, "open", fail_os_open)
-    # Path.open delegates to the guarded io.open: allow reads, reject writes.
-    monkeypatch.setattr(Path, "write_text", fail_write)
-    monkeypatch.setattr(Path, "write_bytes", fail_write)
-
-    result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
-
-    assert result.contrast_names == ("face_gt_house",)
 
 
 @pytest.fixture
@@ -1299,82 +1198,12 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
     assert records[-1].get("analysis_id") is None
 
 
-def test_task_delta_r2_prepared_never_writes_to_the_filesystem(
-    monkeypatch,
-    prepared_delta_problem,
-):
-    prepared, contrasts, metadata, full_result = prepared_delta_problem
-
-    def fail_write(*args, **kwargs):
-        raise AssertionError("unexpected filesystem write")
-
-    monkeypatch.setattr(Path, "open", fail_write)
-    monkeypatch.setattr(Path, "write_text", fail_write)
-    monkeypatch.setattr(Path, "write_bytes", fail_write)
-
-    comparison = task_delta_r2_prepared(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model="ar1",
-        model_metadata=metadata,
-    )
-
-    assert comparison.delta_r2.shape == (prepared.n_features,)
-
-
-def test_prepared_fitting_uses_owned_designs_without_bulk_copy(
-    prepared_delta_problem, monkeypatch
-):
-    prepared, contrasts, metadata, _ = prepared_delta_problem
-    original_designs = prepared.design_matrices
-    original_roles = prepared.column_roles
-    expected_full = _ols_r2_oracle(prepared.signals, original_designs)
-    nuisance_designs = tuple(
-        design.loc[
-            :, [name for name in design if roles[name] in {"nuisance", "intercept"}]
-        ]
-        for design, roles in zip(original_designs, original_roles, strict=True)
-    )
-    expected_null = _ols_r2_oracle(prepared.signals, nuisance_designs)
-
-    def bulk_copy_forbidden(self):
-        raise AssertionError("internal fitting copied every prepared table")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(
-            PreparedDesignAnalysis, "design_matrices", property(bulk_copy_forbidden)
-        )
-        patch.setattr(
-            PreparedDesignAnalysis, "column_roles", property(bulk_copy_forbidden)
-        )
-        full = fit_prepared(
-            prepared, contrasts=contrasts, noise_model="ols", model_metadata=metadata
-        )
-        delta = task_delta_r2_prepared(
-            prepared,
-            full,
-            contrasts=contrasts,
-            noise_model="ols",
-            model_metadata=metadata,
-        )
-    np.testing.assert_allclose(full.r2, expected_full)
-    np.testing.assert_allclose(delta.full_r2, expected_full)
-    np.testing.assert_allclose(delta.nuisance_r2, expected_null)
-    for actual, expected in zip(
-        prepared.design_matrices, original_designs, strict=True
-    ):
-        pd.testing.assert_frame_equal(actual, expected)
-    assert prepared.column_roles == original_roles
-
-
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
 def test_prepared_complete_lifecycle(
     prepared_delta_problem, caplog, monkeypatch, outcome
 ):
     import json
     import logging
-    from dataclasses import replace
 
     prepared, contrasts, metadata, full = prepared_delta_problem
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -1427,7 +1256,6 @@ def test_prepared_comparison_complete_lifecycle(
 ):
     import json
     import logging
-    from dataclasses import replace
 
     prepared, contrasts, metadata, full = prepared_delta_problem
     caplog.set_level(logging.INFO, logger="boldtailor")

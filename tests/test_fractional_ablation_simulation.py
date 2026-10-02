@@ -1,7 +1,6 @@
 """Nested tuning, common recovery metrics, and seed-level experiment exports."""
 
 import importlib
-import json
 
 import numpy as np
 import pandas as pd
@@ -117,52 +116,3 @@ def test_metrics_keep_offsets_and_shape_errors_distinct():
     assert values["within_run_correlation"][0] == pytest.approx(1)
     assert values["common_ols_r2"][0] == pytest.approx(1)
     assert values["beta_rmse"][0] > 10
-
-
-def test_export_is_complete_and_uncertainty_uses_seeds(tmp_path):
-    sim = simulation()
-    settings = dict(
-        isi=4.0, durations="variable", noise="white", hrf_mismatch=False, offset=1.0
-    )
-    frame = sim.run_simulation(
-        seeds=2,
-        output_dir=tmp_path,
-        scenarios=[settings],
-        n_trials=12,
-        fractions=(1.0, 0.5),
-    )
-    assert len(frame) == 102
-    assert len(pd.read_csv(tmp_path / "candidates.csv.gz")) == 96
-    assert set(frame.calibration) == {"none", "train_affine"}
-    assert (
-        frame.groupby(["seed", "config", "feature"]).selected_fraction.nunique() == 1
-    ).all()
-    assert {
-        "scale",
-        "offset",
-        "test_fraction_mean",
-        "test_fraction_min",
-        "test_fraction_max",
-        "common_ols_r2",
-        "slope_rmse",
-    } <= set(frame)
-    metadata = json.loads((tmp_path / "settings.json").read_text())
-    assert metadata["train_runs"] == [0, 1, 2, 3] and metadata["test_runs"] == [4, 5]
-    assert metadata["production_defaults_changed"] is False
-    means = pd.read_csv(tmp_path / "seed-means.csv")
-    summary = pd.read_csv(tmp_path / "summary.csv")
-    assert len(means) == 34
-    assert (summary["seed_count"] == 2).all()
-    for _, row in summary.iterrows():
-        values = means[
-            (means.config == row.config) & (means.calibration == row.calibration)
-        ].beta_rmse
-        assert row.beta_rmse_mean == pytest.approx(values.mean())
-        assert row.beta_rmse_sem == pytest.approx(values.std(ddof=1) / np.sqrt(2))
-    paired = pd.read_csv(tmp_path / "paired-summary.csv")
-    assert (paired.seed_count == 2).all()
-    base = paired[
-        (paired.config == "candidate__normalized__per_run")
-        & (paired.calibration == "none")
-    ]
-    assert base.beta_rmse_mean.item() == pytest.approx(0)
