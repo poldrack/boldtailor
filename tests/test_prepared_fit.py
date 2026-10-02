@@ -115,6 +115,24 @@ def test_fit_prepared_matches_nilearn(noise_model, prepared_problem):
     )
 
 
+def test_fit_prepared_masks_constant_features(prepared_problem):
+    prepared, contrasts, _ = prepared_problem
+    signals = prepared.signals[0].copy()
+    signals[:, -1] = 3.0
+    constant = _prepared(signals, prepared.design_matrices[0])
+
+    result = fit_prepared(
+        constant,
+        contrasts=contrasts,
+        noise_model="ols",
+        model_metadata={"origin": "fitlins", "node": "run"},
+    )
+
+    name = next(iter(contrasts))
+    assert np.isnan(result.z_score(name)[-1])
+    assert np.isfinite(result.z_score(name)[0])
+
+
 def test_fit_prepared_combines_run_specific_designs_and_pools_r_squared():
     rng = np.random.default_rng(20260812)
     designs = (

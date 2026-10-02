@@ -259,6 +259,25 @@ def test_fit_accepts_zero_sst_features_without_inference_warnings(
     for values in (result.run_r2[0], result.r2):
         np.testing.assert_allclose(values[0], expected_r2)
         assert np.isnan(values[1:]).all()
+    for accessor in ("effect", "variance", "stat", "z_score", "one_sided_p_value"):
+        values = getattr(result, accessor)(name)
+        assert np.isnan(values[1:]).all(), accessor
+
+
+def test_feature_constant_in_one_run_has_undefined_contrasts(single_run_problem):
+    signals, events, _, _ = single_run_problem
+    first = np.column_stack([signals[:, 0], signals[:, 0] * 0.5 + 1.0])
+    second = first.copy()
+    second[:, 1] = 7.0
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+    result = fit(from_arrays([first, second], [events, events], tr=2.0), model)
+    assert np.isfinite(result.stat("face_gt_house")[0])
+    assert np.isnan(result.stat("face_gt_house")[1])
+    assert np.isnan(result.effect("face_gt_house")[1])
 
 
 def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
