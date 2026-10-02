@@ -33,8 +33,11 @@ def _check_task_model(model, selection):
                 "selection used a task_model; set ModelSpec.task_model to the same model"
             )
         return
-    if model.task_model.fingerprint != selection.task_model.fingerprint:
-        raise ValueError("ModelSpec.task_model must match the selection's task_model")
+    if not selection.task_model.is_subset_of(model.task_model):
+        raise ValueError(
+            "the selection's task_model must equal ModelSpec.task_model or be a "
+            "subset of it with identical modulator settings"
+        )
     activity = selection.provenance.to_dict()["activities"][-1]
     recorded = (activity.get("oversampling"), activity.get("min_onset"))
     if (model.oversampling, model.min_onset) != recorded:
@@ -69,6 +72,7 @@ def _prepare(data, model, selection, signature, model_settings):
     if model.task_model is not None:
         activity["task_model"] = model.task_model.to_dict()
         activity["task_model_fingerprint"] = model.task_model.fingerprint
+        activity["selection_task_model_fingerprint"] = selection.task_model.fingerprint
     return _FitContext(
         groups,
         nuisance,

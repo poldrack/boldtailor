@@ -73,6 +73,12 @@ class TaskModel:
     def fingerprint(self) -> str:
         return sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()
 
+    def is_subset_of(self, other: "TaskModel") -> bool:
+        """True when every modulator here appears unchanged in the other model."""
+        if not isinstance(other, TaskModel):
+            raise ValueError("is_subset_of expects a TaskModel")
+        return set(self.modulators) <= set(other.modulators)
+
 
 def _validate_modulator_column(column: object) -> None:
     if not isinstance(column, str) or not column:
