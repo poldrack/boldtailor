@@ -88,6 +88,8 @@ use the default task-only model.
 | `design_matrices`, `design_provenance` | Fitted run designs and their records |
 | `provenance` | Analysis record |
 
+A feature whose signal is exactly constant in any run has NaN for every contrast statistic and for R²; constant features cannot support inference.
+
 `boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
 `contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`
 and `design_provenance`, it exposes `group_designs` and

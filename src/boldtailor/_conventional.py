@@ -11,7 +11,7 @@ from nilearn.glm.contrasts import expression_to_contrast_vector
 from nilearn.glm.first_level import run_glm
 
 from boldtailor.model import ContrastValue
-from boldtailor.results import contrast_result
+from boldtailor.results import contrast_result, mask_contrast
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,10 @@ def fit_designs(
         )
     )
     combined = _combine_contrasts(run_fits, tuple(contrasts))
+    undefined = np.any([run.total_sum <= 0 for run in run_fits], axis=0)
+    combined = {
+        name: mask_contrast(value, undefined) for name, value in combined.items()
+    }
     residual_sum = np.sum([run.residual_sum for run in run_fits], axis=0)
     total_sum = np.sum([run.total_sum for run in run_fits], axis=0)
     return ConventionalFit(run_fits, combined, _r2_from_sums(residual_sum, total_sum))
@@ -176,6 +180,7 @@ def _nilearn_t_contrast(
     regression_results: dict,
     vector: np.ndarray,
 ) -> object:
+    # Constant features divide 0/0 here; fit_designs masks them to NaN afterwards.
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",

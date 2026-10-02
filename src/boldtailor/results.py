@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from types import MappingProxyType
 from typing import Protocol
 
@@ -248,4 +248,17 @@ def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
         stat=readonly_array(contrast.stat()),
         z_score=readonly_array(contrast.z_score()),
         one_sided_p_value=readonly_array(contrast.p_value()),
+    )
+
+
+def mask_contrast(result: _ContrastResult, undefined: np.ndarray) -> _ContrastResult:
+    """Return a copy with every statistic set to NaN where ``undefined`` is True."""
+
+    def masked(values: np.ndarray) -> np.ndarray:
+        out = np.array(values, dtype=float, copy=True)
+        out[undefined] = np.nan
+        return readonly_array(out)
+
+    return _ContrastResult(
+        **{f.name: masked(getattr(result, f.name)) for f in fields(_ContrastResult)}
     )
