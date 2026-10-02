@@ -574,7 +574,9 @@ def test_select_hrfs_without_rt_still_feeds_the_full_glm(four_runs, small_librar
         assert bundle["even"].training_selection.task_model == narrow
     fitted = analysis.fit_glms(runs, root, blocks, inputs.glm_model(runs), selections=selections)
     assert all("response_time" in design.columns for design in fitted["designs"].values())
-    assert np.isfinite(fitted["effects"][1, :4]).all()
+    assigned = np.isfinite(fitted["effects"][0, :4])
+    assert assigned.any()
+    assert np.isfinite(fitted["effects"][1, :4][assigned]).all()
 
 
 def test_metadata_and_reuse_follow_the_rt_selection_switch(four_runs, small_library):

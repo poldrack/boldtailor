@@ -387,3 +387,20 @@ def test_rt_switch_changes_request_identity_and_cache_metadata(
     assert metadata["request"]["task_model"] == selection_task_model(False).to_dict()
     assert metadata["request"]["task_model"]["regressors"] == ["task", "trial_type"]
     assert np.isfinite(without[0].maps[0, :3]).all()
+
+
+def test_full_workflow_export_with_rt_is_not_imported_when_rt_is_off(
+    session_data, library, tmp_path, workflow_export
+):
+    root, prep = session_data
+    result = session_api().estimate_sessions(
+        root,
+        prep,
+        tmp_path / "output",
+        library=library,
+        sessions=["ses-nsd10"],
+        reuse_roots=[workflow_export],
+        include_rt=False,
+    )
+    assert result[0].reused_from is None
+    assert np.isfinite(result[0].maps[0, :3]).all()
