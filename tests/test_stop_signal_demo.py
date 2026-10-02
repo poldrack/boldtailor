@@ -1544,6 +1544,7 @@ def test_notebook_design_fit_displays_compact_variance_summary():
     (NOTEBOOK.parents[1], NOTEBOOK.parent),
     ids=("repository-root", "notebook-directory"),
 )
+@pytest.mark.notebook
 def test_variance_partition_prepared_runtime_executes_against_fixture(
     stop_signal_bids_dataset, tmp_path, monkeypatch, working_directory
 ):
@@ -1586,6 +1587,7 @@ def test_variance_partition_prepared_runtime_executes_against_fixture(
     assert not any("roi" in path.name.lower() for path in published.rglob("*"))
 
 
+@pytest.mark.notebook
 def test_variance_partition_notebook_publishes_complete_private_metadata(
     stop_signal_bids_dataset, tmp_path, monkeypatch
 ):

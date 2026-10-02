@@ -14,9 +14,9 @@ uv run black --check src tests examples/NSD examples/stop_signal_demo.py
 uv run git diff --check
 ```
 
-`uv run pytest` collects both `tests/` and `examples/NSD`, including the CIFTI
-workflows and real-process parallel tests. The explicit command
-`uv run pytest tests examples/NSD -q -W error` runs the same suite.
+`uv run pytest` runs the package suite in `tests/`. Example and notebook tests are
+opt-in: `uv run pytest examples/NSD` and
+`uv run pytest --run-notebooks tests/test_stop_signal_demo.py examples/NSD`.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
 

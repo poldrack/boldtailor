@@ -283,6 +283,7 @@ def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
         ({"hrf_library": "sobol", "hrf_n_samples": 4, "hrf_seed": 7}, 5),
     ],
 )
+@pytest.mark.notebook
 def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     four_runs, tmp_path, library_config, candidate_count
 ):

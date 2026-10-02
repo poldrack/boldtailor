@@ -30,6 +30,7 @@ def two_raw_sessions(six_run_dataset):  # noqa: F811
     return dict(bids_root=str(root), fmriprep_root=str(prep))
 
 
+@pytest.mark.notebook
 def test_missing_sessions_fit_then_reuse_without_fitting(
     two_raw_sessions, tmp_path, monkeypatch
 ):
@@ -76,6 +77,7 @@ def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
         )
 
 
+@pytest.mark.notebook
 def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
     two_raw_sessions, tmp_path
 ):
@@ -126,6 +128,7 @@ def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
         assert metadata["trial_masks"][0] == [True, False, True, True, True, True]
 
 
+@pytest.mark.notebook
 def test_multisession_notebook_executes_and_exports_paired_maps(
     saved_sessions,  # noqa: F811
     tmp_path,

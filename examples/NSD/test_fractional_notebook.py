@@ -7,6 +7,7 @@ import nbformat
 from nbclient import NotebookClient
 import nibabel as nib
 import numpy as np
+import pytest
 
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from examples.NSD.test_ridge_workflow import six_run_dataset  # noqa: F401
@@ -21,6 +22,7 @@ def test_explicit_fractional_mode_uses_fraction_grid(tmp_path):
     assert settings["ridge_fractions"] == [0.4, 1]
 
 
+@pytest.mark.notebook
 def test_notebook_default_executes_fractional_cv(six_run_dataset, tmp_path):
     root, prep = six_run_dataset
     output = tmp_path / "fractional-notebook"

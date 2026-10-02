@@ -316,6 +316,7 @@ def test_incompatible_axes_or_missing_sessions_fail_before_fitting(
         )
 
 
+@pytest.mark.notebook
 def test_notebook_fits_three_sessions_exports_comparisons_and_resumes(
     session_data, tmp_path
 ):

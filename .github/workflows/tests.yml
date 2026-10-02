@@ -1,9 +1,14 @@
 name: tests
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
 permissions:
   contents: read
 jobs:
-  test:
+  package:
     runs-on: ubuntu-latest
     env:
       MPLBACKEND: Agg
@@ -15,5 +20,18 @@ jobs:
       - run: uv sync --locked --group dev
       - run: uv run pytest -q -W error
       - run: uv run black --check src tests examples/NSD examples/stop_signal_demo.py
+      - run: git diff --check
       - run: uv build --wheel
-      - run: uv run --isolated --no-project --with ./dist/boldtailor-0.1.0-py3-none-any.whl python tests/check_installed_package.py
+      - run: uv run --isolated --no-project --with "$(ls dist/boldtailor-*.whl)" python tests/check_installed_package.py
+  examples:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --locked --group dev
+      - run: uv run pytest -q -W error --run-notebooks examples/NSD examples/validation tests/test_stop_signal_demo.py

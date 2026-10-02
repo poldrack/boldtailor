@@ -435,6 +435,7 @@ def test_notebook_surface_cells_render_existing_results_and_register_exports(
         plt.close("all")
 
 
+@pytest.mark.notebook
 def test_inline_notebook_displays_each_surface_figure_once(
     cortical_axis, surface_files, tmp_path
 ):

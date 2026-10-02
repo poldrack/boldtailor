@@ -123,6 +123,7 @@ def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_
     "mode,encoding_mode",
     [("cv", "within_run"), ("cv", "absolute"), ("off", "within_run")],
 )
+@pytest.mark.notebook
 def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode, encoding_mode):
     root, prep = six_run_dataset
     output = tmp_path / f"notebook-{mode}"

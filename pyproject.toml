@@ -35,7 +35,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "examples/NSD"]
+testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.black]
