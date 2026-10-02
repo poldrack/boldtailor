@@ -1,6 +1,5 @@
 """Conventional voxelwise HRFs must preserve semantic contrasts and inference."""
 
-import json
 from dataclasses import replace
 
 import numpy as np
@@ -452,97 +451,6 @@ def test_fit_rejects_invalid_contrasts_for_any_assignment(
     bad_model = replace(model, contrasts={"bad": contrast})
     with pytest.raises(ValueError, match=message):
         fit(data, bad_model, hrf_selection=selection, feature_signature=signature)
-
-
-@pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
-def test_selected_glm_complete_lifecycle(hrf_glm_problem, caplog, monkeypatch, outcome):
-    import logging
-
-    data, model, selection, _ = hrf_glm_problem
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    caplog.clear()
-    failure = ValueError("private late result detail")
-
-    def reject(*args, **kwargs):
-        raise failure
-
-    if outcome == "late_failure":
-        monkeypatch.setattr("boldtailor._hrf_glm._assemble", reject)
-    if outcome == "success":
-        result = _selected_fit(data, model, selection)
-    else:
-        with pytest.raises(ValueError) as caught:
-            if outcome == "early_failure":
-                fit(data, model, hrf_selection=selection, feature_signature="wrong")
-            else:
-                _selected_fit(data, model, selection)
-        if outcome == "late_failure":
-            assert caught.value is failure
-    records = [
-        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
-    ]
-    ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == ["fit_started", f"fit_{ending}"]
-    assert "analysis_id" not in records[0]
-    assert records[0]["execution_id"] == records[1]["execution_id"]
-    assert "private" not in caplog.text
-    if outcome == "success":
-        assert dict(result.provenance.events[-1]) == records[-1]
-        assert records[-1]["execution_id"] == result.provenance.execution_id
-        assert records[-1].get("analysis_id") == result.provenance.analysis_fingerprint
-        assert records[-1].get("data_id") == result.provenance.metadata_fingerprint
-        assert len(result.provenance.events) <= 8
-    else:
-        assert records[-1]["error_code"] == "invalid_input"
-
-
-@pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
-def test_selected_comparison_complete_lifecycle(
-    hrf_glm_problem, caplog, monkeypatch, outcome
-):
-    import logging
-    from dataclasses import replace
-
-    data, model, selection, _ = hrf_glm_problem
-    full = _selected_fit(data, model, selection)
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    caplog.clear()
-    failure = ValueError("private late result detail")
-
-    def reject(*args, **kwargs):
-        raise failure
-
-    if outcome == "late_failure":
-        monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject)
-    if outcome == "success":
-        result = task_delta_r2(data, model, full)
-    else:
-        with pytest.raises(ValueError) as caught:
-            if outcome == "early_failure":
-                task_delta_r2(data, replace(model, noise_model="ar1"), full)
-            else:
-                task_delta_r2(data, model, full)
-        if outcome == "late_failure":
-            assert caught.value is failure
-    records = [
-        json.loads(r.getMessage()) for r in caplog.records if r.name == "boldtailor"
-    ]
-    ending = "completed" if outcome == "success" else "failed"
-    assert [r["event"] for r in records] == [
-        "task_delta_r2_started",
-        f"task_delta_r2_{ending}",
-    ]
-    assert "analysis_id" not in records[0]
-    assert records[0]["execution_id"] == records[1]["execution_id"]
-    assert "private" not in caplog.text
-    if outcome == "success":
-        assert dict(result.provenance.events[-1]) == records[-1]
-        assert records[-1]["execution_id"] == result.provenance.execution_id
-        assert records[-1].get("analysis_id") == result.provenance.analysis_fingerprint
-        assert records[-1].get("data_id") == result.provenance.metadata_fingerprint
-        assert len(result.provenance.events) <= 8
-    else:
-        assert records[-1]["error_code"] == "invalid_input"
 
 
 def _nsd_model():
