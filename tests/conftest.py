@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -10,6 +8,7 @@ from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
+from boldtailor.provenance import RunSources, SourceRef
 
 
 def pytest_addoption(parser):
@@ -171,10 +170,8 @@ def ridge_problem():
 
 
 @pytest.fixture
-def selected_fixture():
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
+def selected_fixture(two_candidate_library):
+    library = two_candidate_library
     events = []
     signals = []
     times = []
@@ -212,3 +209,39 @@ def selected_fixture():
     selection = select_hrf(data, library=library, feature_signature="ordered-axis")
     np.testing.assert_array_equal(selection.hrf_indices, [1, 0, 1, 2, -1])
     return data, selection
+
+
+@pytest.fixture(scope="session")
+def two_candidate_library():
+    return HrfLibrary.from_parameters(
+        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+    )
+
+
+_SUFFIX = {"signal": "bold", "events": "events", "confounds": "confounds"}
+
+
+def _source_ref(role, run):
+    stem = f"sub-01/func/sub-01_task-localizer_run-{run:02d}"
+    return SourceRef(
+        role=role,
+        uri=f"{stem}_{_SUFFIX[role]}.tsv",
+        media_type="text/tab-separated-values",
+        byte_size=1024 + run,
+        modified_at="2026-08-08T12:00:00Z",
+    )
+
+
+@pytest.fixture
+def complete_sources():
+    def build(n_runs):
+        return [
+            RunSources(
+                signal=_source_ref("signal", run),
+                events=_source_ref("events", run),
+                confounds=_source_ref("confounds", run),
+            )
+            for run in range(1, n_runs + 1)
+        ]
+
+    return build

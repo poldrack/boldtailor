@@ -339,3 +339,30 @@ def test_single_training_run_or_single_row_run_can_fit(sizes):
 def test_unknown_encoding_mode_rejected(encoding_runs, mode):
     with pytest.raises(ValueError, match="encoding_mode"):
         evaluate(*encoding_runs, train_runs=[0, 1], test_runs=[2], encoding_mode=mode)
+
+
+@pytest.mark.parametrize("encoding_mode", ["absolute", "within_run"])
+def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
+    from boldtailor._single_trial_fit import trial_beta_path
+    from boldtailor.trial_encoding import evaluate_trial_encoding
+
+    rng = np.random.default_rng(58)
+    xs = [rng.normal(size=(50, 5)) for _ in range(3)]
+    ys = [rng.normal(size=(50, 1)) for _ in xs]
+    betas, matched = [], []
+    for x, y in zip(xs, ys):
+        betas.append(next(trial_beta_path(x, np.ones((50, 1)), y, alphas=[1e8]))[1])
+        xr, yr = x - x.mean(0), y - y.mean(0)
+        matched.append(xr.T @ yr / np.sum(xr * xr, axis=0)[:, None])
+    predictors = [pd.DataFrame(dict(value=np.arange(5.0)))] * 3
+    actual = evaluate_trial_encoding(
+        betas, predictors, train_runs=[0, 1], test_runs=[2], encoding_mode=encoding_mode
+    )
+    expected = evaluate_trial_encoding(
+        matched,
+        predictors,
+        train_runs=[0, 1],
+        test_runs=[2],
+        encoding_mode=encoding_mode,
+    )
+    np.testing.assert_allclose(actual.r2, expected.r2, atol=1e-7)

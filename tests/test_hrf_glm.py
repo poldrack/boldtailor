@@ -1,7 +1,7 @@
 """Conventional voxelwise HRFs must preserve semantic contrasts and inference."""
 
-from dataclasses import replace
 import json
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
@@ -59,10 +59,8 @@ def _oracle_design(events, times, confounds, candidate, model):
 
 
 @pytest.fixture(scope="module")
-def hrf_glm_problem():
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
+def hrf_glm_problem(two_candidate_library):
+    library = two_candidate_library
     ids = [1, 0, 1, 2]
     model = ModelSpec(
         contrasts={"stimulus": {"stimulus": 1}, "rt_effect": "rt"},
@@ -545,11 +543,9 @@ def _nsd_model():
 
 
 @pytest.fixture(scope="module")
-def task_model_problem():
+def task_model_problem(two_candidate_library):
     """Raw trials with RT and trial type; one missing RT in run 1."""
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
+    library = two_candidate_library
     rng = np.random.default_rng(1207)
     events, times, confounds, signals = [], [], [], []
     for run in range(3):

@@ -5,13 +5,12 @@ import pytest
 from nilearn.glm.first_level import (
     FirstLevelModel,
     make_first_level_design_matrix,
-    run_glm,
 )
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
-from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import nilearn_original_space_diagnostics
 
 
 def _problem():
@@ -68,43 +67,6 @@ def _problem():
     return tuple(signals), events, frame_times, designs, model
 
 
-def _complete_sources() -> tuple[RunSources, ...]:
-    return (
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri="sub-01/func/sub-01_task-localizer_run-01_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=2048,
-                modified_at="2026-08-08T12:00:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri="sub-01/func/sub-01_task-localizer_run-01_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=512,
-                modified_at="2026-08-08T12:01:00Z",
-            ),
-        ),
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri="sub-01/func/sub-01_task-localizer_run-02_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=4096,
-                modified_at="2026-08-08T12:02:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri="sub-01/func/sub-01_task-localizer_run-02_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=768,
-                modified_at="2026-08-08T12:03:00Z",
-            ),
-        ),
-    )
-
-
 def _as_image(signals):
     data = signals.T.reshape(2, 1, 1, signals.shape[0])
     return nib.Nifti1Image(data, np.eye(4))
@@ -112,21 +74,6 @@ def _as_image(signals):
 
 def _flat_values(image):
     return image.get_fdata().reshape(-1)
-
-
-def _original_space_ar1_diagnostics(signals, design):
-    matrix = design.to_numpy()
-    labels, regression_results = run_glm(
-        signals,
-        matrix,
-        noise_model="ar1",
-    )
-    prediction = np.empty_like(signals)
-    for label, result in regression_results.items():
-        prediction[:, labels == label] = matrix @ result.theta
-    residual_sum = np.sum((signals - prediction) ** 2, axis=0)
-    total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
-    return 1.0 - residual_sum / total_sum, residual_sum, total_sum
 
 
 def test_fit_allows_run_specific_designs_and_matches_first_level_model():
@@ -203,7 +150,7 @@ def test_fit_ar1_r2_uses_original_signal_space_across_runs():
         model,
     )
     diagnostics = tuple(
-        _original_space_ar1_diagnostics(run, design)
+        nilearn_original_space_diagnostics(run, design, "ar1")
         for run, design in zip(signals, designs, strict=True)
     )
     residual_sum = np.sum([values[1] for values in diagnostics], axis=0)
@@ -240,7 +187,9 @@ def test_fit_warns_for_rank_deficient_design():
     assert any("design rank" in message for message in messages)
 
 
-def test_fit_records_run_diagnostics_without_serializing_design_values():
+def test_fit_records_run_diagnostics_without_serializing_design_values(
+    complete_sources,
+):
     signals, events, frame_times, designs, model = _problem()
 
     result = fit(
@@ -248,7 +197,7 @@ def test_fit_records_run_diagnostics_without_serializing_design_values():
             signals,
             events,
             frame_times=frame_times,
-            sources=_complete_sources(),
+            sources=complete_sources(2),
         ),
         model,
     )
@@ -308,7 +257,7 @@ def test_fit_rejects_non_estimable_contrast_before_glm(monkeypatch):
     assert any("design rank" in message for message in messages)
 
 
-def test_fit_records_rank_deficiency_warning_in_provenance():
+def test_fit_records_rank_deficiency_warning_in_provenance(complete_sources):
     signals, events, frame_times, _, _ = _problem()
     confound = pd.DataFrame({"duplicate": np.ones(len(signals[0]))})
     model = ModelSpec(
@@ -325,7 +274,7 @@ def test_fit_records_rank_deficiency_warning_in_provenance():
                 events[0],
                 frame_times=frame_times[0],
                 confounds=confound,
-                sources=_complete_sources()[:1],
+                sources=complete_sources(2)[:1],
             ),
             model,
         )

@@ -13,6 +13,7 @@ from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
+from tests.oracles import nilearn_original_space_r2, nilearn_pooled_ols_r2
 
 
 @pytest.fixture
@@ -41,27 +42,6 @@ def single_run_problem():
         noise_model="ols",
     )
     return signals, events, design, model
-
-
-def _complete_sources() -> tuple[RunSources, ...]:
-    return (
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri="sub-01/func/sub-01_task-localizer_run-01_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=2048,
-                modified_at="2026-08-08T12:00:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri="sub-01/func/sub-01_task-localizer_run-01_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=512,
-                modified_at="2026-08-08T12:01:00Z",
-            ),
-        ),
-    )
 
 
 def _delta_r2_sources(*, signal_byte_size=4096) -> tuple[RunSources, ...]:
@@ -156,41 +136,6 @@ def _nilearn_contrast(signals, design, noise_model):
         vector,
         stat_type="t",
     )
-
-
-def _nilearn_original_space_r2(signals, design, noise_model):
-    matrix = design.to_numpy()
-    labels, regression_results = run_glm(
-        signals,
-        matrix,
-        noise_model=noise_model,
-    )
-    prediction = np.empty_like(signals)
-    for label, result in regression_results.items():
-        prediction[:, labels == label] = matrix @ result.theta
-    residual_sum = np.sum((signals - prediction) ** 2, axis=0)
-    total_sum = np.sum((signals - signals.mean(axis=0)) ** 2, axis=0)
-    return 1.0 - residual_sum / total_sum
-
-
-def _nilearn_pooled_ols_r2(signals, designs):
-    residual_sums = []
-    total_sums = []
-    for observations, design in zip(signals, designs, strict=True):
-        matrix = design.to_numpy()
-        labels, regression_results = run_glm(
-            observations,
-            matrix,
-            noise_model="ols",
-        )
-        prediction = np.empty_like(observations)
-        for label, result in regression_results.items():
-            prediction[:, labels == label] = matrix @ result.theta
-        residual_sums.append(np.sum((observations - prediction) ** 2, axis=0))
-        total_sums.append(
-            np.sum((observations - observations.mean(axis=0)) ** 2, axis=0)
-        )
-    return 1.0 - np.sum(residual_sums, axis=0) / np.sum(total_sums, axis=0)
 
 
 def _full_ols_designs(data, model):
@@ -293,7 +238,7 @@ def test_fit_accepts_zero_sst_features_without_inference_warnings(
         noise_model=noise_model,
     )
     expected = _nilearn_contrast(varying, design, noise_model)
-    expected_r2 = _nilearn_original_space_r2(varying, design, noise_model)[0]
+    expected_r2 = nilearn_original_space_r2(varying, design, noise_model)[0]
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -404,9 +349,11 @@ def test_fit_owns_designs_and_exposes_immutable_provenance(single_run_problem):
         result.design_provenance[0]["excluded_event_count"] = 3
 
 
-def test_fit_extends_input_provenance_and_exposes_result_provenance(single_run_problem):
+def test_fit_extends_input_provenance_and_exposes_result_provenance(
+    single_run_problem, complete_sources
+):
     signals, events, _, model = single_run_problem
-    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
     before = data.provenance.to_dict()
 
     first = fit(data, model)
@@ -423,9 +370,11 @@ def test_fit_extends_input_provenance_and_exposes_result_provenance(single_run_p
     ]
 
 
-def test_fit_analysis_fingerprint_depends_on_data_and_model(single_run_problem):
+def test_fit_analysis_fingerprint_depends_on_data_and_model(
+    single_run_problem, complete_sources
+):
     signals, events, _, model = single_run_problem
-    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
 
     same = fit(
         data,
@@ -460,7 +409,9 @@ def test_fit_analysis_fingerprint_depends_on_data_and_model(single_run_problem):
     )
 
 
-def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
+def test_fit_serializes_model_spec_and_run_diagnostics(
+    single_run_problem, complete_sources
+):
     signals, events, _, _ = single_run_problem
     signals = signals.copy()
     signals[0, 0] = 987654.5
@@ -481,7 +432,7 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
 
     result = fit(
         from_arrays(
-            signals, events, tr=2.0, confounds=confounds, sources=_complete_sources()
+            signals, events, tr=2.0, confounds=confounds, sources=complete_sources(1)
         ),
         model,
     )
@@ -532,7 +483,9 @@ def test_fit_serializes_model_spec_and_run_diagnostics(single_run_problem):
     assert "effect_size" not in serialized
 
 
-def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_problem):
+def test_fit_marks_local_callable_hrf_as_partially_reproducible(
+    single_run_problem, complete_sources
+):
     signals, events, _, _ = single_run_problem
 
     def local_hrf(frame_times, oversampling=50):
@@ -546,7 +499,7 @@ def test_fit_marks_local_callable_hrf_as_partially_reproducible(single_run_probl
     )
 
     result = fit(
-        from_arrays(signals, events, tr=2.0, sources=_complete_sources()),
+        from_arrays(signals, events, tr=2.0, sources=complete_sources(1)),
         model,
     )
     activity = result.provenance.activities[-1]
@@ -584,11 +537,11 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     data, model, full_result = delta_r2_problem
 
     comparison = task_delta_r2(data, model, full_result)
-    expected_full_ols_r2 = _nilearn_pooled_ols_r2(
+    expected_full_ols_r2 = nilearn_pooled_ols_r2(
         data.signals,
         _full_ols_designs(data, model),
     )
-    expected_nuisance_ols_r2 = _nilearn_pooled_ols_r2(
+    expected_nuisance_ols_r2 = nilearn_pooled_ols_r2(
         data.signals,
         _nuisance_ols_designs(data, model),
     )

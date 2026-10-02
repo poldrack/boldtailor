@@ -9,9 +9,7 @@ import pytest
 
 def simulation():
     try:
-        return importlib.import_module(
-            "examples.validation.fractional_ridge_ablation_simulation"
-        )
+        return importlib.import_module("fractional_ridge_ablation_simulation")
     except ImportError as error:
         pytest.fail(f"Ablation runner missing: {error}")
 

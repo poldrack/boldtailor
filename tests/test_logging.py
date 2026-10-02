@@ -9,35 +9,6 @@ from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.logging import bind_context, emit_event
 from boldtailor.model import ModelSpec
-from boldtailor.provenance import RunSources, SourceRef
-
-
-def _complete_sources() -> list[RunSources]:
-    return [
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri="sub-01/func/sub-01_task-localizer_run-01_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=2048,
-                modified_at="2026-08-08T12:00:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri="sub-01/func/sub-01_task-localizer_run-01_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=512,
-                modified_at="2026-08-08T12:01:00Z",
-            ),
-            confounds=SourceRef(
-                role="confounds",
-                uri="sub-01/func/sub-01_task-localizer_run-01_confounds.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=1024,
-                modified_at="2026-08-08T12:02:00Z",
-            ),
-        )
-    ]
 
 
 def _structured_records(caplog) -> list[dict[str, object]]:
@@ -84,7 +55,7 @@ def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
 
 
 def test_from_arrays_logs_structured_records_without_mutating_loggers(
-    caplog, monkeypatch, tmp_path
+    caplog, monkeypatch, tmp_path, complete_sources
 ):
     sentinel_home = "/sentinel-home/boldtailor-secret"
     sentinel_cwd = tmp_path / "sentinel-cwd-boldtailor-secret"
@@ -113,7 +84,7 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(
         events,
         tr=2.0,
         confounds=confounds,
-        sources=_complete_sources(),
+        sources=complete_sources(1),
     )
 
     records = _structured_records(caplog)
@@ -143,7 +114,9 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(
     assert "sentinel-cwd-boldtailor-secret" not in combined
 
 
-def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
+def test_from_arrays_logs_failure_and_resets_context_after_exception(
+    caplog, complete_sources
+):
     caplog.set_level(logging.INFO, logger="boldtailor")
     events = pd.DataFrame({"onset": [0.0], "duration": [-1.0]})
 
@@ -152,7 +125,7 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
             np.ones((10, 2)),
             events,
             tr=2.0,
-            sources=_complete_sources(),
+            sources=complete_sources(1),
         )
     except ValueError as error:
         assert "non-negative" in str(error)
@@ -176,7 +149,7 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(caplog):
     assert records[2].get("data_id") is None
 
 
-def test_fit_logs_structured_records_with_correlated_ids(caplog):
+def test_fit_logs_structured_records_with_correlated_ids(caplog, complete_sources):
     caplog.set_level(logging.INFO, logger="boldtailor")
     events = pd.DataFrame(
         {
@@ -198,7 +171,7 @@ def test_fit_logs_structured_records_with_correlated_ids(caplog):
         drift_model=None,
         noise_model="ols",
     )
-    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
 
     result = fit(data, model)
     records = _structured_records(caplog)
@@ -216,7 +189,7 @@ def test_fit_logs_structured_records_with_correlated_ids(caplog):
     assert fit_records[1]["analysis_id"] == result.provenance.analysis_fingerprint
 
 
-def test_fit_logs_failure_and_resets_context_after_exception(caplog):
+def test_fit_logs_failure_and_resets_context_after_exception(caplog, complete_sources):
     caplog.set_level(logging.INFO, logger="boldtailor")
     events = pd.DataFrame(
         {
@@ -231,7 +204,7 @@ def test_fit_logs_failure_and_resets_context_after_exception(caplog):
         drift_model=None,
         noise_model="ols",
     )
-    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
 
     with pytest.raises(ValueError, match="contrast 'missing'"):
         fit(data, model)
@@ -253,7 +226,7 @@ def test_fit_logs_failure_and_resets_context_after_exception(caplog):
     assert records[-1].get("analysis_id") is None
 
 
-def _delta_r2_logging_problem():
+def _delta_r2_logging_problem(complete_sources):
     events = pd.DataFrame(
         {
             "onset": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0],
@@ -273,13 +246,15 @@ def _delta_r2_logging_problem():
         drift_model=None,
         noise_model="ols",
     )
-    data = from_arrays(signals, events, tr=2.0, sources=_complete_sources())
+    data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
     return data, model, fit(data, model)
 
 
-def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
+def test_task_delta_r2_logs_structured_records_with_comparison_id(
+    caplog, complete_sources
+):
     caplog.set_level(logging.INFO, logger="boldtailor")
-    data, model, full_result = _delta_r2_logging_problem()
+    data, model, full_result = _delta_r2_logging_problem(complete_sources)
 
     comparison = task_delta_r2(data, model, full_result)
     records = _structured_records(caplog)
@@ -312,9 +287,9 @@ def test_task_delta_r2_logs_structured_records_with_comparison_id(caplog):
     )
 
 
-def test_task_delta_r2_logs_failure_and_resets_context(caplog):
+def test_task_delta_r2_logs_failure_and_resets_context(caplog, complete_sources):
     caplog.set_level(logging.INFO, logger="boldtailor")
-    data, model, full_result = _delta_r2_logging_problem()
+    data, model, full_result = _delta_r2_logging_problem(complete_sources)
     changed_model = ModelSpec(
         contrasts=model.contrasts,
         drift_model=model.drift_model,

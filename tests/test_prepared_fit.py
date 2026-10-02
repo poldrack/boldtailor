@@ -1,9 +1,9 @@
-from dataclasses import replace
-from importlib.metadata import version
 import json
 import logging
 import re
 import warnings
+from dataclasses import replace
+from importlib.metadata import version
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ from nilearn.glm.first_level import run_glm
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import nilearn_pooled_ols_r2
 
 
 @pytest.fixture
@@ -61,28 +62,7 @@ def _prepared(signals, design, *, roles=None):
     )
 
 
-def _complete_sources() -> tuple[RunSources, ...]:
-    return (
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri="sub-01/func/sub-01_task-faces_run-01_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=2048,
-                modified_at="2026-08-11T12:00:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri="sub-01/func/sub-01_task-faces_run-01_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=512,
-                modified_at="2026-08-11T12:01:00Z",
-            ),
-        ),
-    )
-
-
-def _prepared_with_sources(signals, design, *, roles=None, sources=None):
+def _prepared_with_sources(signals, design, sources, *, roles=None):
     if roles is None:
         roles = {
             name: "intercept" if name == "constant" else "task"
@@ -93,7 +73,7 @@ def _prepared_with_sources(signals, design, *, roles=None, sources=None):
         design_matrices=design,
         tr=2.0,
         column_roles=roles,
-        sources=_complete_sources() if sources is None else sources,
+        sources=sources,
     )
 
 
@@ -399,6 +379,7 @@ def test_fit_prepared_owns_results_and_reports_prepared_design_provenance(
 
 def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
     prepared_problem,
+    complete_sources,
 ):
     del prepared_problem
     rng = np.random.default_rng(20260815)
@@ -410,7 +391,7 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
         }
     )
     signals = design.to_numpy() @ np.array([[2.0, 1.0], [-1.0, 0.5], [5.0, 6.0]])
-    prepared = _prepared_with_sources(signals, design)
+    prepared = _prepared_with_sources(signals, design, complete_sources(1))
     metadata = {"origin": "fitlins", "node": "run"}
     contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
 
@@ -464,7 +445,9 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
     }
 
 
-def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(prepared_problem):
+def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(
+    prepared_problem, complete_sources
+):
     _, contrasts, _ = prepared_problem
     rng = np.random.default_rng(20260816)
     design = pd.DataFrame(
@@ -475,7 +458,7 @@ def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(prepared_proble
         }
     )
     signals = design.to_numpy() @ np.array([[2.0], [-1.0], [5.0]])
-    prepared = _prepared_with_sources(signals, design)
+    prepared = _prepared_with_sources(signals, design, complete_sources(1))
     baseline = fit_prepared(
         prepared,
         contrasts=contrasts,
@@ -484,7 +467,9 @@ def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(prepared_proble
     )
     changed_design = design.copy()
     changed_design.loc[0, "face"] += 0.25
-    changed_prepared = _prepared_with_sources(signals, changed_design)
+    changed_prepared = _prepared_with_sources(
+        signals, changed_design, complete_sources(1)
+    )
     changed_results = (
         fit_prepared(
             changed_prepared,
@@ -533,7 +518,9 @@ def test_fit_prepared_leaves_analysis_identity_unavailable_for_anonymous_sources
     )
 
 
-def test_fit_prepared_logs_lifecycle_and_resets_context(caplog, prepared_problem):
+def test_fit_prepared_logs_lifecycle_and_resets_context(
+    caplog, prepared_problem, complete_sources
+):
     caplog.set_level(logging.INFO, logger="boldtailor")
     _, _, _ = prepared_problem
     design = pd.DataFrame(
@@ -544,7 +531,7 @@ def test_fit_prepared_logs_lifecycle_and_resets_context(caplog, prepared_problem
         }
     )
     signals = design.to_numpy() @ np.array([[2.0], [-1.0], [5.0]])
-    prepared = _prepared_with_sources(signals, design)
+    prepared = _prepared_with_sources(signals, design, complete_sources(1))
     contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
 
     result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
@@ -579,6 +566,7 @@ def test_fit_prepared_logs_lifecycle_and_resets_context(caplog, prepared_problem
 def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
     caplog,
     monkeypatch,
+    complete_sources,
 ):
     caplog.set_level(logging.INFO, logger="boldtailor")
     design = pd.DataFrame(
@@ -588,7 +576,7 @@ def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
         }
     )
     signals = np.full((6, 1), 712345.5)
-    prepared = _prepared_with_sources(signals, design)
+    prepared = _prepared_with_sources(signals, design, complete_sources(1))
     result = fit_prepared(
         prepared,
         contrasts={"face": {"face": 1.0}},
@@ -756,7 +744,7 @@ def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
 
 
 @pytest.fixture
-def prepared_delta_problem():
+def prepared_delta_problem(complete_sources):
     rng = np.random.default_rng(20260817)
     designs = (
         pd.DataFrame(
@@ -803,7 +791,7 @@ def prepared_delta_problem():
         design_matrices=designs,
         tr=2.0,
         column_roles=roles,
-        sources=_complete_sources() * 2,
+        sources=complete_sources(2),
     )
     contrasts = {"face_gt_house": {"face": 1.0, "house": -1.0}}
     metadata = {"origin": "fitlins", "node": "prepared-delta"}
@@ -814,20 +802,6 @@ def prepared_delta_problem():
         model_metadata=metadata,
     )
     return prepared, contrasts, metadata, full_result
-
-
-def _ols_r2_oracle(signals, designs):
-    residual_sums = []
-    total_sums = []
-    for signal, design in zip(signals, designs, strict=True):
-        matrix = design.to_numpy()
-        labels, regression_results = run_glm(signal, matrix, noise_model="ols")
-        prediction = np.empty_like(signal)
-        for label, fit in regression_results.items():
-            prediction[:, labels == label] = matrix @ fit.theta
-        residual_sums.append(np.sum((signal - prediction) ** 2, axis=0))
-        total_sums.append(np.sum((signal - signal.mean(axis=0)) ** 2, axis=0))
-    return 1.0 - np.sum(residual_sums, axis=0) / np.sum(total_sums, axis=0)
 
 
 def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
@@ -848,8 +822,8 @@ def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
         ["motion_first", "constant"],
         ["constant", "motion_second"],
     ]
-    expected_full = _ols_r2_oracle(prepared.signals, prepared.design_matrices)
-    expected_nuisance = _ols_r2_oracle(prepared.signals, nuisance_designs)
+    expected_full = nilearn_pooled_ols_r2(prepared.signals, prepared.design_matrices)
+    expected_nuisance = nilearn_pooled_ols_r2(prepared.signals, nuisance_designs)
     expected_raw = expected_full - expected_nuisance
     np.testing.assert_allclose(comparison.full_r2, expected_full)
     np.testing.assert_allclose(comparison.nuisance_r2, expected_nuisance)
@@ -911,13 +885,16 @@ def test_task_delta_r2_prepared_returns_owned_readonly_arrays_and_copied_designs
         ),
     ],
 )
-def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(roles, message):
+def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(
+    roles, message, complete_sources
+):
     design = pd.DataFrame(
         {"face": [0.0, 1.0] * 12, "motion": np.linspace(0, 1, 24), "constant": 1.0}
     )
     prepared = _prepared_with_sources(
         design.to_numpy() @ np.array([[2.0], [0.5], [5.0]]),
         design,
+        complete_sources(1),
         roles=roles,
     )
     full_result = fit_prepared(
@@ -942,6 +919,7 @@ def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(roles, messag
 def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     prepared_delta_problem,
     changed,
+    complete_sources,
 ):
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     supplied_prepared = prepared
@@ -958,9 +936,9 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
                     byte_size=2048,
                     modified_at="2026-08-11T12:00:00Z",
                 ),
-                events=_complete_sources()[0].events,
+                events=complete_sources(1)[0].events,
             ),
-            _complete_sources()[0],
+            complete_sources(1)[0],
         )
         supplied_prepared = PreparedDesignAnalysis.from_arrays(
             signals=prepared.signals,
@@ -977,7 +955,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
             design_matrices=designs,
             tr=2.0,
             column_roles=prepared.column_roles,
-            sources=_complete_sources() * 2,
+            sources=complete_sources(2),
         )
     elif changed == "contrasts":
         supplied_contrasts = {"face": {"face": 1.0}}

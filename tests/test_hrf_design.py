@@ -6,7 +6,6 @@ import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
-from boldtailor.hrf_library import HrfLibrary
 from boldtailor.single_trial import fit_single_trials
 
 
@@ -25,10 +24,8 @@ def timing_fixture():
 
 
 @pytest.fixture
-def candidates():
-    return HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    ).candidates
+def candidates(two_candidate_library):
+    return two_candidate_library.candidates
 
 
 def test_default_single_trial_design_is_unchanged(timing_fixture, candidates):
@@ -129,6 +126,7 @@ def test_unidentified_hrfs_are_rejected(timing_fixture):
 @pytest.mark.parametrize("irregular", [False, True])
 def test_batched_trial_convolution_matches_nilearn_across_library(offset, irregular):
     from nilearn.glm.first_level import compute_regressor
+
     from boldtailor._hrf_design import trial_regressors
     from boldtailor.hrf_library import expanded_hrf_library
 

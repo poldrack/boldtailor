@@ -3,12 +3,10 @@
 import numpy as np
 import pandas as pd
 import pytest
-from nilearn.glm.first_level import run_glm
-from scipy.linalg import block_diag
 
 from boldtailor.data import from_arrays
-from boldtailor.hrf_library import HrfLibrary
 from boldtailor.model import Modulator, TaskModel
+from tests.oracles import columns_for, loro_oracle, oracle_cv
 
 NSD = TaskModel(
     (
@@ -19,11 +17,9 @@ NSD = TaskModel(
 
 
 @pytest.fixture
-def task_fixture():
+def task_fixture(two_candidate_library):
     """Four runs; runs 1 and 3 have one missing RT; three modulated features."""
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
+    library = two_candidate_library
     rng = np.random.default_rng(93)
     signals, events, times, confounds = [], [], [], []
     for r, length in enumerate([70, 82, 76, 90]):
@@ -48,19 +44,6 @@ def task_fixture():
     return data, library
 
 
-def columns_for(data, library, cid, task_model):
-    from boldtailor._hrf_design import hrf_model
-    from boldtailor._task_design import expand_events, task_columns
-
-    out = []
-    for r, (e, t) in enumerate(zip(data.events, data.frame_times, strict=True)):
-        frame = task_columns(
-            expand_events(e, task_model, r), t, hrf_model(library.candidates[cid])
-        )
-        out.append(frame)
-    return out
-
-
 def generated(data, library, cid, task_model, amplitudes, profiled_gain=2.0):
     """Noise-free signals from the task model plus run-specific nuisance."""
     signals = []
@@ -74,53 +57,6 @@ def generated(data, library, cid, task_model, amplitudes, profiled_gain=2.0):
     return from_arrays(
         signals, data.events, frame_times=data.frame_times, confounds=data.confounds
     )
-
-
-def stacked_oracle(data, library, cid, task_model, train, test):
-    """Nilearn OLS on a stacked training design, then frozen held-out prediction."""
-    frames = columns_for(data, library, cid, task_model)
-    xs, zs, ns = [], [], []
-    for r, frame in enumerate(frames):
-        xs.append(frame[list(task_model.regressor_names)].to_numpy())
-        n = np.column_stack([data.confounds[r].to_numpy(), np.ones(len(frame))])
-        profiled = [c for c in task_model.profiled_names if c in frame]
-        zs.append(np.column_stack([n, frame[profiled].to_numpy()]) if profiled else n)
-        ns.append(n)
-    design = np.column_stack(
-        [np.concatenate([xs[r] for r in train]), block_diag(*[zs[r] for r in train])]
-    )
-    y = np.concatenate([data.signals[r] for r in train])
-    labels, results = run_glm(y, design, noise_model="ols")
-    beta = results[labels[0]].theta[: xs[0].shape[1]]
-    loss, null = np.zeros(data.n_features), np.zeros(data.n_features)
-    for r in test:
-        residual = data.signals[r] - xs[r] @ beta
-        residual = residual - zs[r] @ np.linalg.lstsq(zs[r], residual, rcond=None)[0]
-        yr = (
-            data.signals[r]
-            - ns[r] @ np.linalg.lstsq(ns[r], data.signals[r], rcond=None)[0]
-        )
-        loss += np.sum(residual**2, axis=0)
-        null += np.sum(yr**2, axis=0)
-    return beta, loss, null
-
-
-def loro_oracle(data, library, task_model):
-    scores = []
-    for cid in range(len(library.candidates)):
-        folds = [
-            stacked_oracle(
-                data,
-                library,
-                cid,
-                task_model,
-                [i for i in range(data.n_runs) if i != r],
-                [r],
-            )
-            for r in range(data.n_runs)
-        ]
-        scores.append(1 - sum(f[1] for f in folds) / sum(f[2] for f in folds))
-    return np.array(scores)
 
 
 def test_statistics_shapes_and_profiled_columns(task_fixture):
@@ -163,7 +99,6 @@ def test_task_model_loro_matches_stacked_nilearn_ols(task_fixture, batch):
 
 def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
     from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
-    from tests.test_hrf_selection import oracle_cv
 
     data, library = task_fixture
     runs = prepare_runs(data, library)

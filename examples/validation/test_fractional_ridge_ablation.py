@@ -14,7 +14,7 @@ from boldtailor.trial_encoding import evaluate_trial_encoding
 
 def experiment():
     try:
-        return importlib.import_module("examples.validation.fractional_ridge_ablation")
+        return importlib.import_module("fractional_ridge_ablation")
     except ImportError as error:
         pytest.fail(f"Experimental solver missing: {error}")
 

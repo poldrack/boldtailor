@@ -1,15 +1,15 @@
-from copy import deepcopy
-from importlib.metadata import version
 import json
 import logging
 import re
+from copy import deepcopy
+from importlib.metadata import version
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from boldtailor.prepared import PreparedDesignAnalysis
-from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
+from boldtailor.provenance import ProvenanceRecord, RunSources
 
 
 @pytest.fixture
@@ -70,28 +70,6 @@ def _replace_design_column(case, values):
     design = case[1][0].copy()
     design["face"] = values
     case[1][0] = design
-
-
-def _complete_sources() -> tuple[RunSources, ...]:
-    return tuple(
-        RunSources(
-            signal=SourceRef(
-                role="signal",
-                uri=f"sub-01/func/sub-01_task-faces_run-0{run}_bold.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=1024 * run,
-                modified_at=f"2026-08-11T12:0{run}:00Z",
-            ),
-            events=SourceRef(
-                role="events",
-                uri=f"sub-01/func/sub-01_task-faces_run-0{run}_events.tsv",
-                media_type="text/tab-separated-values",
-                byte_size=256 * run,
-                modified_at=f"2026-08-11T12:1{run}:00Z",
-            ),
-        )
-        for run in (1, 2)
-    )
 
 
 def _structured_records(caplog):
@@ -326,10 +304,10 @@ def test_prepared_design_fingerprint_includes_structure_and_run_order(prepared_i
 
 
 def test_prepared_design_normalization_records_lifecycle_and_provenance(
-    prepared_inputs, caplog
+    prepared_inputs, caplog, complete_sources
 ):
     caplog.set_level(logging.INFO, logger="boldtailor")
-    sources = _complete_sources()
+    sources = complete_sources(2)
 
     first = _make_prepared(prepared_inputs, sources=sources)
     second = _make_prepared(prepared_inputs, sources=sources)
@@ -389,6 +367,7 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
 
 def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
     prepared_inputs,
+    complete_sources,
 ):
     inputs = deepcopy(prepared_inputs)
     provenance_metadata = {
@@ -397,21 +376,21 @@ def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
     }
     first = _make_prepared(
         inputs,
-        sources=_complete_sources(),
+        sources=complete_sources(2),
         provenance_metadata=provenance_metadata,
     )
     reordered = deepcopy(prepared_inputs)
     reordered[3][:] = [dict(reversed(tuple(item.items()))) for item in reordered[3]]
     second = _make_prepared(
         reordered,
-        sources=_complete_sources(),
+        sources=complete_sources(2),
         provenance_metadata=dict(reversed(tuple(provenance_metadata.items()))),
     )
     changed_metadata = deepcopy(prepared_inputs)
     changed_metadata[3][0]["subject"] = "99"
     third = _make_prepared(
         changed_metadata,
-        sources=_complete_sources(),
+        sources=complete_sources(2),
         provenance_metadata=provenance_metadata,
     )
     inputs[3][0]["subject"] = "mutated"
@@ -452,11 +431,12 @@ def test_prepared_design_provenance_rejects_nested_path_like_metadata_keys(
 
 def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
     prepared_inputs,
+    complete_sources,
 ):
     private_inputs = deepcopy(prepared_inputs)
     private_inputs[0][0][0, 0] = 712345.5
     private_inputs[1][0].loc[0, "motion"] = 9274.25
-    prepared = _make_prepared(private_inputs, sources=_complete_sources())
+    prepared = _make_prepared(private_inputs, sources=complete_sources(2))
     anonymous = _make_prepared(prepared_inputs)
 
     canonical = prepared.provenance.canonical_json()
@@ -474,14 +454,15 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
 
 @pytest.mark.parametrize("complete", [False, True])
 def test_normalization_builds_one_record(
-    prepared_inputs, monkeypatch, caplog, complete
+    prepared_inputs, monkeypatch, caplog, complete, complete_sources
 ):
     import hashlib
     import json
     import logging
+
     import boldtailor.prepared as module
 
-    sources = _complete_sources() if complete else None
+    sources = complete_sources(2) if complete else None
     metadata = {"purpose": "normalization"}
     original = module.ProvenanceRecord
     calls = []
@@ -519,6 +500,7 @@ def test_normalization_catches_final_failures_and_isolates_context(
 ):
     import json
     import logging
+
     import boldtailor.prepared as module
     from boldtailor.logging import bind_context, emit_event
 

@@ -3,19 +3,22 @@
 import numpy as np
 import pandas as pd
 import pytest
-from scipy.linalg import block_diag
 
 from boldtailor._hrf_design import stimulus_regressor
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
+from tests.oracles import (
+    loro_oracle,
+    oracle_cv,
+    stacked_training_ols_oracle,
+    task_model_oracle,
+)
 
 
 @pytest.fixture
-def cv_fixture():
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
+def cv_fixture(two_candidate_library):
+    library = two_candidate_library
     rng = np.random.default_rng(510)
     signals, events, times, confounds = [], [], [], []
     for r, length in enumerate([65, 80, 73, 95]):
@@ -53,39 +56,6 @@ def replace_data(data, signals=None, events=None, confounds=None):
         frame_times=data.frame_times,
         confounds=data.confounds if confounds is None else confounds,
     )
-
-
-def oracle(data, candidate, train, test):
-    xs, ns = [], []
-    for e, t, n in zip(data.events, data.frame_times, data.confounds, strict=True):
-        xs.append(stimulus_regressor(e, t, candidate))
-        ns.append(np.column_stack([n, np.ones(len(t))]))
-    design = np.column_stack(
-        [np.concatenate([xs[r] for r in train]), block_diag(*[ns[r] for r in train])]
-    )
-    beta = np.linalg.lstsq(
-        design, np.concatenate([data.signals[r] for r in train]), rcond=None
-    )[0][0]
-    loss, null = np.zeros(data.n_features), np.zeros(data.n_features)
-    for r in test:
-        y, n = data.signals[r], ns[r]
-        residual = y - xs[r][:, None] * beta
-        residual -= n @ np.linalg.lstsq(n, residual, rcond=None)[0]
-        yr = y - n @ np.linalg.lstsq(n, y, rcond=None)[0]
-        loss += np.sum(residual**2, axis=0)
-        null += np.sum(yr**2, axis=0)
-    return beta, loss, null
-
-
-def oracle_cv(data, library):
-    scores = []
-    for c in library.candidates:
-        folds = [
-            oracle(data, c, [i for i in range(data.n_runs) if i != r], [r])
-            for r in range(data.n_runs)
-        ]
-        scores.append(1 - sum(f[1] for f in folds) / sum(f[2] for f in folds))
-    return np.array(scores)
 
 
 @pytest.mark.parametrize("batch", [1, 2, 32])
@@ -143,7 +113,9 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
     )
     assert not np.allclose(original.test_r2[:3], altered.test_r2[:3])
     for v, cid in enumerate(original.training_selection.hrf_indices[:3]):
-        beta, loss, null = oracle(data, library.candidates[cid], [0, 2], [1, 3])
+        beta, loss, null = task_model_oracle(
+            data, library.candidates[cid], [0, 2], [1, 3]
+        )
         np.testing.assert_allclose(
             original.training_amplitudes[0, v], beta[v], atol=1e-12
         )
@@ -258,7 +230,7 @@ def test_structurally_invalid_candidate_excluded_and_canonical_nan(cv_fixture):
 
 
 def test_results_owned_metadata_independent_and_fingerprinted(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
+    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
 
     data, library = cv_fixture
     result = select_hrf(data, library=library, feature_signature="axis-a")
@@ -322,7 +294,6 @@ def with_trial_types(data):
 
 def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
     from boldtailor.hrf_selection import select_hrf
-    from tests.test_hrf_cv import loro_oracle
 
     data, library = cv_fixture
     data = with_trial_types(data)
@@ -367,7 +338,6 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
 
 def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture):
     from boldtailor.hrf_selection import evaluate_hrf_split
-    from tests.test_hrf_cv import stacked_oracle
 
     data, library = cv_fixture
     data = with_trial_types(data)
@@ -382,7 +352,7 @@ def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture)
     assert result.training_amplitudes.shape == (3, data.n_features)
     assert not result.training_amplitudes.flags.writeable
     for v, cid in enumerate(result.training_selection.hrf_indices[:3]):
-        beta, loss, null = stacked_oracle(
+        beta, loss, null = stacked_training_ols_oracle(
             data, library, int(cid), nsd_model(), [0, 2], [1, 3]
         )
         np.testing.assert_allclose(
@@ -404,7 +374,7 @@ def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
 
 
 def test_task_model_argument_is_validated(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
+    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
 
     data, library = cv_fixture
     with pytest.raises(ValueError, match="TaskModel"):
@@ -428,8 +398,9 @@ def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
 
 
 def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
-    from boldtailor.hrf_selection import evaluate_hrf_split
     from dataclasses import replace
+
+    from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
     result = evaluate_hrf_split(
