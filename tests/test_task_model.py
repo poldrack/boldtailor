@@ -89,3 +89,18 @@ def test_task_model_is_immutable_and_owns_its_tuple():
     assert model.regressor_names == ("task", "rt")
     with pytest.raises(AttributeError):
         model.modulators = ()
+
+
+def test_subset_requires_identical_shared_modulators():
+    rt = Modulator("response_time", center=True, missing="indicator")
+    trial = Modulator("trial_type", center=False)
+    full = TaskModel((rt, trial))
+    assert TaskModel().is_subset_of(full)
+    assert TaskModel((trial,)).is_subset_of(full)
+    assert full.is_subset_of(full)
+    assert not full.is_subset_of(TaskModel((trial,)))
+    assert not TaskModel((Modulator("trial_type", center=True),)).is_subset_of(full)
+    assert not TaskModel((Modulator("response_time"),)).is_subset_of(full)
+    assert not TaskModel((Modulator("image"),)).is_subset_of(full)
+    with pytest.raises(ValueError, match="TaskModel"):
+        full.is_subset_of("nsd")

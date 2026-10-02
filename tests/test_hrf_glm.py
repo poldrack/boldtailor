@@ -664,9 +664,38 @@ def test_selected_glm_requires_matching_task_model(task_model_problem):
     other = TaskModel((Modulator("response_time", missing="indicator"),))
     with pytest.raises(ValueError, match="task_model"):
         fit(data, replace(model, task_model=other), hrf_selection=selection, feature_signature="axis-tm")
-    plain = select_hrf(data, library=library, feature_signature="axis-tm")
+    centered = TaskModel(
+        (Modulator("response_time", missing="indicator"), Modulator("trial_type", center=True))
+    )
+    shifted = select_hrf(data, library=library, feature_signature="axis-tm", task_model=centered)
     with pytest.raises(ValueError, match="task_model"):
-        fit(data, model, hrf_selection=plain, feature_signature="axis-tm")
+        fit(data, model, hrf_selection=shifted, feature_signature="axis-tm")
+
+
+def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_problem):
+    from boldtailor._hrf_design import hrf_model
+    from boldtailor._task_design import expand_events, task_columns
+    from boldtailor.model import Modulator, TaskModel
+
+    data, model, selection, library = task_model_problem
+    subset = TaskModel((Modulator("trial_type", center=False),))
+    narrow = select_hrf(data, library=library, feature_signature="axis-tm", task_model=subset)
+    result = fit(data, model, hrf_selection=narrow, feature_signature="axis-tm")
+    for (run, cid), design in result.group_designs.items():
+        expected = task_columns(
+            expand_events(data.events[run], model.task_model, run),
+            data.frame_times[run],
+            hrf_model(library.candidates[cid]),
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        )
+        np.testing.assert_array_equal(design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy())
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["task_model_fingerprint"] == model.task_model.fingerprint
+    assert activity["selection_task_model_fingerprint"] == subset.fingerprint
+    assert np.isfinite(result.effect("response_time")).all()
+    plain = select_hrf(data, library=library, feature_signature="axis-tm")
+    assert fit(data, model, hrf_selection=plain, feature_signature="axis-tm").group_designs
 
 
 def test_selected_glm_requires_matching_convolution_settings(task_model_problem):
