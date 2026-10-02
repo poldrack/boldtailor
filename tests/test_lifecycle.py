@@ -208,11 +208,13 @@ def run_bad_argument(entry_calls):
 def break_late(monkeypatch):
     @contextmanager
     def patch():
+        failure = RuntimeError("private late detail")
+
         def reject(*args, **kwargs):
-            raise RuntimeError("late")
+            raise failure
 
         monkeypatch.setattr("boldtailor._fit_lifecycle.extend_provenance", reject)
-        yield
+        yield failure
 
     return patch
 
@@ -259,12 +261,16 @@ def test_late_failure_logs_failed_and_never_completed(
 ):
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
-    with break_late(), pytest.raises(RuntimeError, match="late"):
+    with break_late() as failure, pytest.raises(RuntimeError) as caught:
         run_entry_point(name)
+    assert caught.value is failure
+    assert "private" not in caplog.text
     events = _events(caplog, name)
     prefix = EVENT_PREFIX.get(name, name)
     assert [e["event"] for e in events] == [f"{prefix}_started", f"{prefix}_failed"]
     assert len({e["execution_id"] for e in events}) == 1
+    assert "analysis_id" not in events[0]
+    assert events[0].get("data_id") == events[-1].get("data_id")
     assert events[-1]["level"] == "ERROR"
     assert events[-1]["error_code"] == "operation_failed"
     _assert_context_reset()
@@ -283,6 +289,8 @@ def test_early_argument_failure_logs_failed_and_never_completed(
     assert [e["event"] for e in events] == [f"{prefix}_started", f"{prefix}_failed"]
     assert len({e["execution_id"] for e in events}) == 1
     assert "analysis_id" not in events[0]
+    assert events[0].get("data_id") == events[-1].get("data_id")
     assert events[-1]["level"] == "ERROR"
     assert events[-1]["error_code"] == "invalid_input"
+    assert "private" not in caplog.text
     _assert_context_reset()
