@@ -17,7 +17,7 @@ from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
-from boldtailor.model import ModelSpec
+from boldtailor.model import ModelSpec, Modulator, TaskModel
 from boldtailor.provenance import RunSources, SourceRef
 
 
@@ -246,10 +246,20 @@ def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
     )
 
 
-@pytest.mark.parametrize("signature", [None, "reordered-axis"])
-def test_rejects_spatial_signature_mismatch(hrf_glm_problem, signature):
+@pytest.mark.parametrize(
+    ("with_selection", "signature", "message"),
+    [
+        (True, None, "signature"),
+        (True, "reordered-axis", "signature"),
+        (False, "axis-v1", "selection"),
+    ],
+)
+def test_rejects_spatial_signature_mismatch(
+    hrf_glm_problem, with_selection, signature, message
+):
     data, model, selection, _ = hrf_glm_problem
-    with pytest.raises(ValueError, match="signature"):
+    selection = selection if with_selection else None
+    with pytest.raises(ValueError, match=message):
         fit(data, model, hrf_selection=selection, feature_signature=signature)
 
 
@@ -359,12 +369,6 @@ def test_all_undefined_hrfs_return_nan_maps(hrf_glm_problem):
     assert "NaN" not in delta.provenance.canonical_json()
 
 
-def test_signature_without_selection_is_not_silently_ignored(hrf_glm_problem):
-    data, model, _, _ = hrf_glm_problem
-    with pytest.raises(ValueError, match="selection"):
-        fit(data, model, feature_signature="axis-v1")
-
-
 def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem):
     data, model, selection, _ = hrf_glm_problem
     confounds = data.confounds
@@ -384,12 +388,6 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
             model,
         )
         pd.testing.assert_frame_equal(actual, expected)
-
-
-def test_grouped_fit_rejects_missing_contrast_column(hrf_glm_problem):
-    data, model, selection, _ = hrf_glm_problem
-    with pytest.raises(ValueError, match="missing|invalid"):
-        _selected_fit(data, replace(model, contrasts={"bad": "absent"}), selection)
 
 
 def test_selected_delta_requires_complete_sources(hrf_glm_problem):
@@ -426,18 +424,34 @@ def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_probl
     assert np.isfinite(delta.delta_r2[1:4]).all()
 
 
-@pytest.mark.parametrize("contrast", ["absent", "stimulus - stimulus"])
-def test_undefined_assignment_still_validates_contrasts(hrf_glm_problem, contrast):
-    data, model, _, _ = hrf_glm_problem
+def _undefined_selection(data):
     constant = from_arrays(
         [np.full_like(y, 100) for y in data.signals],
         [e.iloc[:6] for e in data.events],
         frame_times=data.frame_times,
         confounds=data.confounds,
     )
-    selection = select_hrf(constant, library=HrfLibrary.from_parameters([]))
-    with pytest.raises(ValueError, match="invalid|zero|missing"):
-        fit(data, replace(model, contrasts={"bad": contrast}), hrf_selection=selection)
+    return select_hrf(constant, library=HrfLibrary.from_parameters([]))
+
+
+@pytest.mark.parametrize(
+    ("undefined_assignment", "contrast", "message"),
+    [
+        (False, "absent", "missing|invalid"),
+        (True, "absent", "invalid|zero|missing"),
+        (True, "stimulus - stimulus", "invalid|zero|missing"),
+    ],
+)
+def test_fit_rejects_invalid_contrasts_for_any_assignment(
+    hrf_glm_problem, undefined_assignment, contrast, message
+):
+    data, model, selection, _ = hrf_glm_problem
+    signature = "axis-v1"
+    if undefined_assignment:
+        selection, signature = _undefined_selection(data), None
+    bad_model = replace(model, contrasts={"bad": contrast})
+    with pytest.raises(ValueError, match=message):
+        fit(data, bad_model, hrf_selection=selection, feature_signature=signature)
 
 
 @pytest.mark.parametrize("outcome", ["success", "late_failure", "early_failure"])
@@ -649,36 +663,41 @@ def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem
         )
 
 
-def test_selected_glm_requires_matching_task_model(task_model_problem):
-    from boldtailor.model import Modulator, TaskModel
+_RT_INDICATOR = Modulator("response_time", missing="indicator")
 
-    data, model, selection, library = task_model_problem
-    with pytest.raises(ValueError, match="task_model"):
-        fit(
-            data,
-            replace(model, task_model=None),
-            hrf_selection=selection,
-            feature_signature="axis-tm",
-        )
-    other = TaskModel((Modulator("response_time", missing="indicator"),))
-    with pytest.raises(ValueError, match="task_model"):
-        fit(
-            data,
-            replace(model, task_model=other),
-            hrf_selection=selection,
-            feature_signature="axis-tm",
-        )
-    centered = TaskModel(
+
+@pytest.mark.parametrize(
+    ("model_changes", "selection_task_model", "message"),
+    [
+        ({"task_model": None}, None, "task_model"),
+        ({"task_model": TaskModel((_RT_INDICATOR,))}, None, "task_model"),
         (
-            Modulator("response_time", missing="indicator"),
-            Modulator("trial_type", center=True),
+            {},
+            TaskModel((_RT_INDICATOR, Modulator("trial_type", center=True))),
+            "task_model",
+        ),
+        ({"oversampling": 20}, None, "oversampling|min_onset"),
+        ({"min_onset": -10.0}, None, "oversampling|min_onset"),
+    ],
+)
+def test_selected_glm_rejects_mismatched_selection_settings(
+    task_model_problem, model_changes, selection_task_model, message
+):
+    data, model, selection, library = task_model_problem
+    if selection_task_model is not None:
+        selection = select_hrf(
+            data,
+            library=library,
+            feature_signature="axis-tm",
+            task_model=selection_task_model,
         )
-    )
-    shifted = select_hrf(
-        data, library=library, feature_signature="axis-tm", task_model=centered
-    )
-    with pytest.raises(ValueError, match="task_model"):
-        fit(data, model, hrf_selection=shifted, feature_signature="axis-tm")
+    with pytest.raises(ValueError, match=message):
+        fit(
+            data,
+            replace(model, **model_changes),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
 
 
 def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_problem):
@@ -711,24 +730,6 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
     assert fit(
         data, model, hrf_selection=plain, feature_signature="axis-tm"
     ).group_designs
-
-
-def test_selected_glm_requires_matching_convolution_settings(task_model_problem):
-    data, model, selection, library = task_model_problem
-    with pytest.raises(ValueError, match="oversampling|min_onset"):
-        fit(
-            data,
-            replace(model, oversampling=20),
-            hrf_selection=selection,
-            feature_signature="axis-tm",
-        )
-    with pytest.raises(ValueError, match="oversampling|min_onset"):
-        fit(
-            data,
-            replace(model, min_onset=-10.0),
-            hrf_selection=selection,
-            feature_signature="axis-tm",
-        )
 
 
 def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem):

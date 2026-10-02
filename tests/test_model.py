@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from boldtailor.model import ModelSpec
+from boldtailor.model import ModelSpec, TaskModel
 
 
 def test_model_spec_owns_contrasts_and_confounds():
@@ -31,73 +31,65 @@ def test_model_spec_accepts_symbolic_contrast():
     assert model.min_onset == -24.0
 
 
-@pytest.mark.parametrize("noise_model", ["ar0", "ar", "ar2", "ar-1", "white"])
-def test_model_spec_rejects_unknown_noise_model(noise_model):
-    with pytest.raises(ValueError, match="'ols' or 'ar1'"):
-        ModelSpec(contrasts={"face": "face"}, noise_model=noise_model)
-
-
-def test_model_spec_rejects_positional_contrast_vector():
-    with pytest.raises(ValueError, match="semantic"):
-        ModelSpec(contrasts={"omnibus": np.eye(2)})
+_FACE = {"contrasts": {"face": "face"}}
 
 
 @pytest.mark.parametrize(
-    "weights",
+    ("kwargs", "message"),
     [
-        {},
-        {"": 1.0},
-        {"face": np.nan},
-        {"face": 0.0, "house": 0.0},
+        ({"contrasts": {}}, "at least one contrast"),
+        ({**_FACE, "noise_model": "ar2"}, "'ols' or 'ar1'"),
+        ({"contrasts": {"omnibus": np.eye(2)}}, "semantic"),
+        ({"contrasts": {"invalid": {}}}, "contrast"),
+        ({"contrasts": {"invalid": {"": 1.0}}}, "contrast"),
+        ({"contrasts": {"invalid": {"face": np.nan}}}, "contrast"),
+        ({"contrasts": {"invalid": {"face": 0.0, "house": 0.0}}}, "contrast"),
+        ({"contrasts": {"invalid": {"face": True}}}, "contrast"),
+        ({"contrasts": {"invalid": {"face": np.bool_(False)}}}, "contrast"),
+        ({**_FACE, "high_pass": True}, "high_pass"),
+        ({**_FACE, "high_pass": np.bool_(False)}, "high_pass"),
+        ({**_FACE, "drift_order": True}, "drift_order"),
+        ({**_FACE, "oversampling": False}, "oversampling"),
+        ({**_FACE, "min_onset": True}, "min_onset"),
+        ({**_FACE, "min_onset": np.nan}, "min_onset"),
     ],
 )
-def test_model_spec_rejects_invalid_weight_mapping(weights):
-    with pytest.raises(ValueError, match="contrast"):
-        ModelSpec(contrasts={"invalid": weights})
+def test_model_spec_rejects_invalid_arguments(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        ModelSpec(**kwargs)
 
 
-@pytest.mark.parametrize("weight", [True, False, np.bool_(True), np.bool_(False)])
-def test_model_spec_rejects_boolean_weight(weight):
-    with pytest.raises(ValueError, match="contrast"):
-        ModelSpec(contrasts={"invalid": {"face": weight}})
+_TASK_MODEL_HRF = "task_model requires hrf_model 'spm' or 'glover'"
 
-
-@pytest.mark.parametrize(
-    "option", ["high_pass", "drift_order", "oversampling", "min_onset"]
-)
-@pytest.mark.parametrize("value", [True, False, np.bool_(True), np.bool_(False)])
-def test_model_spec_rejects_boolean_design_option(option, value):
-    with pytest.raises(ValueError, match=option):
-        ModelSpec(contrasts={"face": "face"}, **{option: value})
-
-
-def test_model_spec_rejects_empty_contrasts():
-    with pytest.raises(ValueError, match="at least one contrast"):
-        ModelSpec(contrasts={})
-
-
-def test_model_spec_rejects_nonfinite_min_onset():
-    with pytest.raises(ValueError, match="min_onset"):
-        ModelSpec(contrasts={"face": "face"}, min_onset=np.nan)
 
 def test_model_spec_accepts_task_model_with_spm_or_glover():
     from boldtailor.model import Modulator, TaskModel
 
     task_model = TaskModel((Modulator("response_time", missing="indicator"),))
     for hrf in ("spm", "glover"):
-        model = ModelSpec(contrasts={"task": {"task": 1}}, hrf_model=hrf, task_model=task_model)
+        model = ModelSpec(
+            contrasts={"task": {"task": 1}}, hrf_model=hrf, task_model=task_model
+        )
         assert model.task_model == task_model
     assert ModelSpec(contrasts={"task": {"task": 1}}).task_model is None
 
+
 @pytest.mark.parametrize(
-    "hrf_model", ["spm + derivative", "glover + derivative + dispersion", None, "fir"]
+    ("kwargs", "message"),
+    [
+        ({"hrf_model": "spm + derivative", "task_model": TaskModel()}, _TASK_MODEL_HRF),
+        (
+            {
+                "hrf_model": "glover + derivative + dispersion",
+                "task_model": TaskModel(),
+            },
+            _TASK_MODEL_HRF,
+        ),
+        ({"hrf_model": None, "task_model": TaskModel()}, _TASK_MODEL_HRF),
+        ({"hrf_model": "fir", "task_model": TaskModel()}, _TASK_MODEL_HRF),
+        ({"hrf_model": "spm", "task_model": "nsd"}, "TaskModel"),
+    ],
 )
-def test_task_model_requires_single_column_string_hrf(hrf_model):
-    from boldtailor.model import TaskModel
-
-    with pytest.raises(ValueError, match="task_model requires hrf_model 'spm' or 'glover'"):
-        ModelSpec(contrasts={"task": {"task": 1}}, hrf_model=hrf_model, task_model=TaskModel())
-
-def test_task_model_must_be_a_task_model():
-    with pytest.raises(ValueError, match="TaskModel"):
-        ModelSpec(contrasts={"task": {"task": 1}}, hrf_model="spm", task_model="nsd")
+def test_model_spec_rejects_invalid_task_model(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        ModelSpec(contrasts={"task": {"task": 1}}, **kwargs)

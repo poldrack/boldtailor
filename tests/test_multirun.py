@@ -1,3 +1,5 @@
+import warnings
+
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -10,6 +12,8 @@ from nilearn.glm.first_level import (
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
+from boldtailor.prepared import PreparedDesignAnalysis
+from boldtailor.prepared_fit import fit_prepared
 from tests.oracles import nilearn_original_space_diagnostics
 
 
@@ -223,40 +227,6 @@ def test_fit_records_run_diagnostics_without_serializing_design_values(
     assert "r2" not in serialized
 
 
-def test_fit_rejects_non_estimable_contrast_before_glm(monkeypatch):
-    signals, events, frame_times, designs, _ = _problem()
-    confound = pd.DataFrame({"duplicate": designs[0]["face"].to_numpy()})
-    model = ModelSpec(
-        contrasts={"difference": {"face": 1.0, "duplicate": -1.0}},
-        confounds=("duplicate",),
-        drift_model="cosine",
-        noise_model="ols",
-    )
-
-    def fail_glm(*args, **kwargs):
-        pytest.fail("run_glm must not be called before contrast preflight")
-
-    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
-
-    with pytest.warns(UserWarning) as caught:
-        with pytest.raises(
-            ValueError,
-            match="run 0.*contrast 'difference'.*not estimable",
-        ):
-            fit(
-                from_arrays(
-                    signals[0],
-                    events[0],
-                    frame_times=frame_times[0],
-                    confounds=confound,
-                ),
-                model,
-            )
-    messages = {str(warning.message) for warning in caught}
-
-    assert any("design rank" in message for message in messages)
-
-
 def test_fit_records_rank_deficiency_warning_in_provenance(complete_sources):
     signals, events, frame_times, _, _ = _problem()
     confound = pd.DataFrame({"duplicate": np.ones(len(signals[0]))})
@@ -285,45 +255,128 @@ def test_fit_records_rank_deficiency_warning_in_provenance(complete_sources):
     assert any("design rank" in warning for warning in run["warnings"])
 
 
-def test_fit_rejects_contrast_term_missing_from_one_run_before_glm(monkeypatch):
+def _fit_single_run(contrasts):
     signals, events, frame_times, _, _ = _problem()
+    model = ModelSpec(contrasts=contrasts, drift_model=None, noise_model="ols")
+    fit(from_arrays(signals[0], events[0], frame_times=frame_times[0]), model)
+
+
+def _fit_single_run_with_duplicate_confound(contrasts):
+    signals, events, frame_times, designs, _ = _problem()
+    confound = pd.DataFrame({"duplicate": designs[0]["face"].to_numpy()})
     model = ModelSpec(
-        contrasts={"button": {"button": 1.0}},
+        contrasts=contrasts,
+        confounds=("duplicate",),
+        drift_model="cosine",
         noise_model="ols",
     )
-
-    def fail_glm(*args, **kwargs):
-        pytest.fail("run_glm must not be called before contrast preflight")
-
-    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
-
-    with pytest.raises(
-        ValueError,
-        match="run 1.*contrast 'button'.*missing regressor 'button'",
-    ):
-        fit(
-            from_arrays(signals, events, frame_times=frame_times),
-            model,
-        )
+    data = from_arrays(
+        signals[0], events[0], frame_times=frame_times[0], confounds=confound
+    )
+    fit(data, model)
 
 
-def test_fit_rejects_all_zero_semantic_contrast_before_glm(monkeypatch):
+def _fit_two_runs(contrasts):
     signals, events, frame_times, _, _ = _problem()
-    model = ModelSpec(
-        contrasts={"zero": "face - face"},
-        noise_model="ols",
+    model = ModelSpec(contrasts=contrasts, noise_model="ols")
+    fit(from_arrays(signals, events, frame_times=frame_times), model)
+
+
+def _prepared(designs, roles):
+    designs = designs if isinstance(designs, tuple) else (designs,)
+    signals = tuple(d.to_numpy() @ np.ones((d.shape[1], 1)) for d in designs)
+    return PreparedDesignAnalysis.from_arrays(
+        signals=signals,
+        design_matrices=designs,
+        tr=2.0,
+        column_roles=roles,
     )
 
-    def fail_glm(*args, **kwargs):
-        pytest.fail("run_glm must not be called before contrast preflight")
 
-    monkeypatch.setattr("boldtailor._conventional.run_glm", fail_glm)
+def _fit_prepared_single_run(contrasts):
+    rng = np.random.default_rng(20260811)
+    design = pd.DataFrame(
+        {"face": rng.normal(size=12), "house": rng.normal(size=12), "constant": 1.0}
+    )
+    roles = {"face": "task", "house": "task", "constant": "intercept"}
+    fit_prepared(_prepared(design, roles), contrasts=contrasts, noise_model="ols")
 
-    with pytest.raises(
-        ValueError,
-        match="run 0.*contrast 'zero'.*resolves to all zeros",
-    ):
-        fit(
-            from_arrays(signals, events, frame_times=frame_times),
-            model,
-        )
+
+def _fit_prepared_duplicate_columns(contrasts):
+    design = pd.DataFrame(
+        {
+            "face": [0.0, 1.0, 0.0, 1.0, 0.0],
+            "duplicate": [0.0, 1.0, 0.0, 1.0, 0.0],
+            "constant": 1.0,
+        }
+    )
+    roles = {"face": "task", "duplicate": "task", "constant": "intercept"}
+    fit_prepared(_prepared(design, roles), contrasts=contrasts, noise_model="ols")
+
+
+def _fit_prepared_two_runs(contrasts):
+    designs = (
+        pd.DataFrame({"face": [0.0, 1.0, 0.0, 1.0], "constant": 1.0}),
+        pd.DataFrame({"constant": 1.0, "house": [0.0, 1.0, 0.0, 1.0]}),
+    )
+    roles = (
+        {"face": "task", "constant": "intercept"},
+        {"constant": "intercept", "house": "task"},
+    )
+    fit_prepared(_prepared(designs, roles), contrasts=contrasts, noise_model="ols")
+
+
+_MISSING_TERM = "run 1.*contrast '{0}'.*missing regressor '{0}'"
+_ALL_ZERO = "run 0.*contrast 'zero'.*resolves to all zeros"
+_NOT_ESTIMABLE = "run 0.*contrast 'difference'.*not estimable"
+_DIFFERENCE = {"difference": {"face": 1.0, "duplicate": -1.0}}
+
+
+@pytest.mark.parametrize(
+    ("entry_point", "contrasts", "message", "warning"),
+    [
+        (
+            _fit_single_run,
+            {"missing": "not_a_column"},
+            "run 0.*contrast 'missing'",
+            None,
+        ),
+        (
+            _fit_single_run,
+            {"missing": {"not_a_column": 1.0}},
+            "run 0.*contrast 'missing'",
+            None,
+        ),
+        (
+            _fit_single_run_with_duplicate_confound,
+            _DIFFERENCE,
+            _NOT_ESTIMABLE,
+            "design rank",
+        ),
+        (
+            _fit_two_runs,
+            {"button": {"button": 1.0}},
+            _MISSING_TERM.format("button"),
+            None,
+        ),
+        (_fit_two_runs, {"zero": "face - face"}, _ALL_ZERO, None),
+        (
+            _fit_prepared_two_runs,
+            {"face": {"face": 1.0}},
+            _MISSING_TERM.format("face"),
+            None,
+        ),
+        (_fit_prepared_duplicate_columns, _DIFFERENCE, _NOT_ESTIMABLE, "design rank"),
+        (_fit_prepared_single_run, {"zero": "face - face"}, _ALL_ZERO, None),
+    ],
+)
+def test_contrast_preflight_rejects_before_glm(
+    fail_glm, entry_point, contrasts, message, warning
+):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(ValueError, match=message):
+            entry_point(contrasts)
+
+    if warning:
+        assert any(warning in str(item.message) for item in caught)

@@ -245,3 +245,11 @@ def complete_sources():
         ]
 
     return build
+
+
+@pytest.fixture
+def fail_glm(monkeypatch):
+    def fail(*args, **kwargs):
+        pytest.fail("run_glm must not be called before contrast preflight")
+
+    monkeypatch.setattr("boldtailor._conventional.run_glm", fail)

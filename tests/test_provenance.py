@@ -126,31 +126,25 @@ def test_run_sources_requires_exactly_one_signal_and_events_source():
     assert sources.events.role == "events"
     assert sources.confounds is None
 
-    with pytest.raises(ValueError, match="SourceRef"):
-        RunSources(
-            signal="signal",  # type: ignore[arg-type]
-            events=_complete_source(
-                "events", "sub-01/func/sub-01_task-rest_events.tsv"
-            ),
-        )
+
+_SIGNAL = ("signal", "sub-01/func/sub-01_task-rest_bold.tsv")
+_EVENTS = ("events", "sub-01/func/sub-01_task-rest_events.tsv")
 
 
-def test_run_sources_rejects_role_mismatches_for_named_slots():
-    with pytest.raises(ValueError, match="signal"):
-        RunSources(
-            signal=_complete_source(
-                "events", "sub-01/func/sub-01_task-rest_events.tsv"
-            ),
-            events=_complete_source(
-                "events", "sub-01/func/sub-01_task-rest_events.tsv"
-            ),
-        )
+@pytest.mark.parametrize(
+    ("signal", "events", "message"),
+    [
+        ("signal", _EVENTS, "SourceRef"),
+        (_EVENTS, _EVENTS, "signal"),
+        (_SIGNAL, _SIGNAL, "events"),
+    ],
+)
+def test_run_sources_rejects_invalid_sources(signal, events, message):
+    def build(source):
+        return source if isinstance(source, str) else _complete_source(*source)
 
-    with pytest.raises(ValueError, match="events"):
-        RunSources(
-            signal=_complete_source("signal", "sub-01/func/sub-01_task-rest_bold.tsv"),
-            events=_complete_source("signal", "sub-01/func/sub-01_task-rest_bold.tsv"),
-        )
+    with pytest.raises(ValueError, match=message):
+        RunSources(signal=build(signal), events=build(events))
 
 
 def test_provenance_record_owns_nested_inputs_and_preserves_order():
@@ -205,12 +199,17 @@ def test_provenance_record_round_trips_without_sharing_state():
     assert loaded.to_dict() == record.to_dict()
 
 
-def test_provenance_record_validates_execution_ids_and_schema_versions():
-    with pytest.raises(ValueError, match="UUID"):
-        ProvenanceRecord.from_dict(_record_payload(execution_id="not-a-uuid"))
-
-    with pytest.raises(ValueError, match="major"):
-        ProvenanceRecord.from_dict(_record_payload(schema="boldtailor.provenance/2"))
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"execution_id": "not-a-uuid"}, "UUID"),
+        ({"schema": "boldtailor.provenance/2"}, "major"),
+        ({"digest": "abc123"}, "digest"),
+    ],
+)
+def test_provenance_record_rejects_invalid_payloads(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        ProvenanceRecord.from_dict(_record_payload(**overrides))
 
 
 def test_provenance_record_accepts_additive_version_one_fields():
@@ -219,11 +218,6 @@ def test_provenance_record_accepts_additive_version_one_fields():
     )
 
     assert loaded.to_dict()["future_field"] == {"status": "kept", "count": 2}
-
-
-def test_provenance_record_rejects_top_level_digest_field():
-    with pytest.raises(ValueError, match="digest"):
-        ProvenanceRecord.from_dict(_record_payload(digest="abc123"))
 
 
 def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order():

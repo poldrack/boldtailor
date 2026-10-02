@@ -52,30 +52,33 @@ def test_fingerprint_is_sha256_of_canonical_dict_and_changes_with_settings():
 
 
 @pytest.mark.parametrize(
-    "column", ["task", "constant", "onset", "duration", "missing_rt", "", None, 3]
+    ("build", "message"),
+    [
+        (lambda: Modulator("task"), "reserved|nonempty"),
+        (lambda: Modulator("constant"), "reserved|nonempty"),
+        (lambda: Modulator("onset"), "reserved|nonempty"),
+        (lambda: Modulator("duration"), "reserved|nonempty"),
+        (lambda: Modulator("missing_rt"), "reserved|nonempty"),
+        (lambda: Modulator(""), "reserved|nonempty"),
+        (lambda: Modulator(None), "reserved|nonempty"),
+        (lambda: Modulator(3), "reserved|nonempty"),
+        (lambda: Modulator("response_time", missing="drop"), "missing"),
+        (lambda: Modulator("response_time", missing=""), "missing"),
+        (lambda: Modulator("response_time", missing=None), "missing"),
+        (lambda: Modulator("response_time", missing=True), "missing"),
+        (lambda: Modulator("response_time", center=1), "center"),
+        (lambda: Modulator("response_time", center="yes"), "center"),
+        (lambda: Modulator("response_time", center=None), "center"),
+        (
+            lambda: TaskModel((Modulator("rt"), Modulator("rt", center=False))),
+            "unique",
+        ),
+        (lambda: TaskModel(("rt",)), "Modulator"),
+    ],
 )
-def test_reserved_or_invalid_modulator_columns_rejected(column):
-    with pytest.raises(ValueError, match="reserved|nonempty"):
-        Modulator(column)
-
-
-@pytest.mark.parametrize("missing", ["drop", "", None, True])
-def test_invalid_missing_policy_rejected(missing):
-    with pytest.raises(ValueError, match="missing"):
-        Modulator("response_time", missing=missing)
-
-
-@pytest.mark.parametrize("center", [1, "yes", None])
-def test_center_must_be_boolean(center):
-    with pytest.raises(ValueError, match="center"):
-        Modulator("response_time", center=center)
-
-
-def test_duplicate_or_non_modulator_entries_rejected():
-    with pytest.raises(ValueError, match="unique"):
-        TaskModel((Modulator("rt"), Modulator("rt", center=False)))
-    with pytest.raises(ValueError, match="Modulator"):
-        TaskModel(("rt",))
+def test_task_model_rejects_invalid_arguments(build, message):
+    with pytest.raises(ValueError, match=message):
+        build()
 
 
 def test_task_model_is_immutable_and_owns_its_tuple():

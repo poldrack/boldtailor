@@ -224,64 +224,46 @@ def test_logs_are_deterministic_newline_terminated_and_exclude_sensitive_runtime
         assert forbidden not in combined
 
 
-@pytest.mark.parametrize(
-    "label", ["../escape", "bad/name", "bad\\name", "bad-label", ""]
-)
-def test_projection_rejects_invalid_bids_provenance_labels(provenance_record, label):
-    with pytest.raises(ValueError, match="label"):
-        project_bids_provenance(provenance_record, label=label)
+_MODEL_SIDECAR = "sub-01/func/sub-01_desc-model_bold.json"
 
 
 @pytest.mark.parametrize(
-    "path",
+    ("options", "message"),
     [
-        "../escape.json",
-        "/absolute.json",
-        "sub-01/../escape.json",
-        "sub-01\\escape.json",
-        "sub-01/func/not-a-sidecar.tsv",
+        ({"label": "../escape"}, "label"),
+        ({"label": "bad/name"}, "label"),
+        ({"label": "bad\\name"}, "label"),
+        ({"label": "bad-label"}, "label"),
+        ({"label": ""}, "label"),
+        ({"derivative_sidecars": {"../escape.json": ()}}, "sidecar path"),
+        ({"derivative_sidecars": {"/absolute.json": ()}}, "sidecar path"),
+        ({"derivative_sidecars": {"sub-01/../escape.json": ()}}, "sidecar path"),
+        ({"derivative_sidecars": {"sub-01\\escape.json": ()}}, "sidecar path"),
+        (
+            {"derivative_sidecars": {"sub-01/func/not-a-sidecar.tsv": ()}},
+            "sidecar path",
+        ),
+        (
+            {
+                "derivative_sidecars": {
+                    _MODEL_SIDECAR: (),
+                    "sub-01/func/SUB-01_desc-model_bold.json": (),
+                }
+            },
+            "collision",
+        ),
+        ({"derivative_sidecars": {"dataset_description.json": ()}}, "collision"),
+        ({"derivative_sidecars": {"provenance.json": ()}}, "collision"),
+        (
+            {
+                "derivative_sidecars": {
+                    _MODEL_SIDECAR: ("sub-99/func/sub-99_task-secret_bold.nii.gz",)
+                }
+            },
+            "record source",
+        ),
     ],
 )
-def test_projection_rejects_unsafe_derivative_sidecar_paths(provenance_record, path):
-    with pytest.raises(ValueError, match="sidecar path"):
-        project_bids_provenance(
-            provenance_record,
-            derivative_sidecars={path: ()},
-        )
-
-
-def test_projection_rejects_case_folded_output_collisions(provenance_record):
-    sidecars = {
-        "sub-01/func/sub-01_desc-model_bold.json": (),
-        "sub-01/func/SUB-01_desc-model_bold.json": (),
-    }
-
-    with pytest.raises(ValueError, match="collision"):
-        project_bids_provenance(
-            provenance_record,
-            derivative_sidecars=sidecars,
-        )
-
-
-@pytest.mark.parametrize("path", ["dataset_description.json", "provenance.json"])
-def test_projection_rejects_sidecars_that_overwrite_reserved_artifacts(
-    provenance_record,
-    path,
-):
-    with pytest.raises(ValueError, match="collision"):
-        project_bids_provenance(
-            provenance_record,
-            derivative_sidecars={path: ()},
-        )
-
-
-def test_projection_rejects_relationship_sources_absent_from_record(provenance_record):
-    with pytest.raises(ValueError, match="record source"):
-        project_bids_provenance(
-            provenance_record,
-            derivative_sidecars={
-                "sub-01/func/sub-01_desc-model_bold.json": (
-                    "sub-99/func/sub-99_task-secret_bold.nii.gz",
-                )
-            },
-        )
+def test_projection_rejects_invalid_options(provenance_record, options, message):
+    with pytest.raises(ValueError, match=message):
+        project_bids_provenance(provenance_record, **options)

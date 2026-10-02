@@ -517,22 +517,6 @@ def test_fit_marks_local_callable_hrf_as_partially_reproducible(
     assert "0x" not in serialized
 
 
-@pytest.mark.parametrize(
-    "contrast",
-    ["not_a_column", {"not_a_column": 1.0}],
-)
-def test_fit_rejects_unknown_semantic_contrast(single_run_problem, contrast):
-    signals, events, _, _ = single_run_problem
-    model = ModelSpec(
-        contrasts={"missing": contrast},
-        drift_model=None,
-        noise_model="ols",
-    )
-
-    with pytest.raises(ValueError, match="run 0.*contrast 'missing'"):
-        fit(from_arrays(signals, events, tr=2.0), model)
-
-
 def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     data, model, full_result = delta_r2_problem
 

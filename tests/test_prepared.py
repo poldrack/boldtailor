@@ -132,6 +132,45 @@ def test_prepared_analysis_arrays_are_readonly(prepared_inputs):
             values.flat[0] = 0
 
 
+def _set_design(index, design):
+    def mutate(case):
+        case[1][index] = design
+
+    return mutate
+
+
+def _absolute_path_column(case):
+    case[1][0] = case[1][0].rename(columns={"face": "/private/secret/design.tsv"})
+    case[2][0]["/private/secret/design.tsv"] = case[2][0].pop("face")
+
+
+def _drop_last_design_row(case):
+    case[1][0] = case[1][0].iloc[:-1]
+
+
+def _drop_run_item(item):
+    def mutate(case):
+        case[item].pop()
+
+    return mutate
+
+
+def _drop_role(case):
+    case[2][0].pop("motion")
+
+
+def _nested_path_metadata(kind):
+    nested = {"safe": [{"/private/secret/metadata.json": "redacted"}]}
+
+    def mutate(case):
+        if kind == "run":
+            case[3][0] = nested
+            return {}
+        return {"provenance_metadata": nested}
+
+    return mutate
+
+
 @pytest.mark.parametrize(
     ("mutator", "message"),
     [
@@ -144,15 +183,9 @@ def test_prepared_analysis_arrays_are_readonly(prepared_inputs):
             lambda case: setattr(case[1][0], "columns", ["face", "face", "constant"]),
             "duplicate",
         ),
-        (
-            lambda case: _replace_design_column(case, [True] * 8),
-            "finite numeric",
-        ),
-        (
-            lambda case: _replace_design_column(case, [np.nan] * 8),
-            "finite numeric",
-        ),
-        (lambda case: case[2][0].pop("motion"), "one role per design column"),
+        (lambda case: _replace_design_column(case, [True] * 8), "finite numeric"),
+        (lambda case: _replace_design_column(case, [np.nan] * 8), "finite numeric"),
+        (_drop_role, "one role per design column"),
         (
             lambda case: case[2][0].__setitem__("motion", "learned"),
             "invalid column role",
@@ -161,95 +194,39 @@ def test_prepared_analysis_arrays_are_readonly(prepared_inputs):
             lambda case: case[3][0].__setitem__("path", "/private/data"),
             "path-like",
         ),
+        (_absolute_path_column, "path-like"),
+        (
+            _set_design(0, pd.DataFrame(columns=["face", "motion", "constant"])),
+            "nonzero dimensions",
+        ),
+        (_set_design(0, pd.DataFrame(index=range(8))), "nonzero dimensions"),
+        (_drop_last_design_row, "8 rows"),
+        (
+            lambda case: case[0].__setitem__(1, np.ones((10, 2))),
+            "same number of features",
+        ),
+        (_drop_run_item(1), "design_matrices"),
+        (_drop_run_item(2), "column_roles"),
+        (_drop_run_item(3), "run_metadata"),
+        (
+            lambda case: case[3].__setitem__(0, ["subject", "01"]),
+            "run_metadata.*mapping",
+        ),
+        (lambda case: {"tr": None}, "exactly one of tr or frame_times"),
+        (
+            lambda case: {"frame_times": [np.arange(8.0), np.arange(10.0)]},
+            "exactly one of tr or frame_times",
+        ),
+        (_nested_path_metadata("run"), "path-like"),
+        (_nested_path_metadata("provenance"), "path-like"),
     ],
 )
-def test_prepared_analysis_rejects_invalid_design_inputs(
-    prepared_inputs, mutator, message
-):
+def test_prepared_analysis_rejects_invalid_arguments(prepared_inputs, mutator, message):
     case = deepcopy(prepared_inputs)
-    mutator(case)
+    extra = mutator(case) or {}
 
     with pytest.raises(ValueError, match=message):
-        _make_prepared(case)
-
-
-def test_prepared_analysis_rejects_absolute_path_design_column(prepared_inputs):
-    case = deepcopy(prepared_inputs)
-    case[1][0] = case[1][0].rename(columns={"face": "/private/secret/design.tsv"})
-    case[2][0]["/private/secret/design.tsv"] = case[2][0].pop("face")
-
-    with pytest.raises(ValueError, match="path-like"):
-        _make_prepared(case)
-
-
-@pytest.mark.parametrize(
-    ("design", "message"),
-    [
-        (pd.DataFrame(columns=["face", "motion", "constant"]), "nonzero dimensions"),
-        (pd.DataFrame(index=range(8)), "nonzero dimensions"),
-    ],
-)
-def test_prepared_analysis_rejects_empty_design_dimensions(
-    prepared_inputs, design, message
-):
-    case = deepcopy(prepared_inputs)
-    case[1][0] = design
-
-    with pytest.raises(ValueError, match=message):
-        _make_prepared(case)
-
-
-def test_prepared_analysis_rejects_design_signal_row_mismatch(prepared_inputs):
-    case = deepcopy(prepared_inputs)
-    case[1][0] = case[1][0].iloc[:-1]
-
-    with pytest.raises(ValueError, match="8 rows"):
-        _make_prepared(case)
-
-
-def test_prepared_analysis_rejects_inconsistent_signal_feature_counts(prepared_inputs):
-    case = deepcopy(prepared_inputs)
-    case[0][1] = np.ones((10, 2))
-
-    with pytest.raises(ValueError, match="same number of features"):
-        _make_prepared(case)
-
-
-@pytest.mark.parametrize(
-    ("item", "message"),
-    [
-        (1, "design_matrices"),
-        (2, "column_roles"),
-        (3, "run_metadata"),
-    ],
-)
-def test_prepared_analysis_rejects_mismatched_run_counts(
-    prepared_inputs, item, message
-):
-    case = deepcopy(prepared_inputs)
-    case[item].pop()
-
-    with pytest.raises(ValueError, match=message):
-        _make_prepared(case)
-
-
-def test_prepared_analysis_rejects_nonmapping_run_metadata(prepared_inputs):
-    case = deepcopy(prepared_inputs)
-    case[3][0] = ["subject", "01"]
-
-    with pytest.raises(ValueError, match="run_metadata.*mapping"):
-        _make_prepared(case)
-
-
-@pytest.mark.parametrize(
-    ("tr", "frame_times"),
-    [(None, None), (2.0, [np.arange(8.0), np.arange(10.0)])],
-)
-def test_prepared_analysis_requires_exactly_one_timing_source(
-    prepared_inputs, tr, frame_times
-):
-    with pytest.raises(ValueError, match="exactly one of tr or frame_times"):
-        _make_prepared(prepared_inputs, tr=tr, frame_times=frame_times)
+        _make_prepared(case, **extra)
 
 
 def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inputs):
@@ -410,23 +387,6 @@ def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
     assert activity == second.provenance.to_dict()["activities"][0]
     assert first.design_fingerprint == second.design_fingerprint
     assert first.design_fingerprint == third.design_fingerprint
-
-
-@pytest.mark.parametrize("metadata_kind", ["run", "provenance"])
-def test_prepared_design_provenance_rejects_nested_path_like_metadata_keys(
-    prepared_inputs,
-    metadata_kind,
-):
-    case = deepcopy(prepared_inputs)
-    provenance_metadata = None
-    nested = {"safe": [{"/private/secret/metadata.json": "redacted"}]}
-    if metadata_kind == "run":
-        case[3][0] = nested
-    else:
-        provenance_metadata = nested
-
-    with pytest.raises(ValueError, match="path-like"):
-        _make_prepared(case, provenance_metadata=provenance_metadata)
 
 
 def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(

@@ -119,23 +119,37 @@ def test_artifact_rejects_paths_that_are_not_relative_normalized_posix(path):
         Artifact(path, b"payload")
 
 
-def test_publish_rejects_empty_artifact_set(tmp_path):
-    with pytest.raises(ValueError, match="at least one artifact"):
-        publish_artifact_set(tmp_path / "derivatives", ())
+def _artifacts(*paths):
+    return tuple(Artifact(path, b"{}\n") for path in paths)
 
 
 @pytest.mark.parametrize(
-    "paths",
+    ("artifacts", "kwargs", "message"),
     (
-        ("result.json", "result.json"),
-        ("Sub-01/result.json", "sub-01/RESULT.JSON"),
+        ((), {}, "at least one artifact"),
+        (_artifacts("result.json", "result.json"), {}, "duplicate artifact path"),
+        (
+            _artifacts("Sub-01/result.json", "sub-01/RESULT.JSON"),
+            {},
+            "duplicate artifact path",
+        ),
+        (_artifacts("a.bin"), {"lock_timeout": float("nan")}, "lock_timeout"),
+        (_artifacts("a.bin"), {"lock_timeout": float("inf")}, "lock_timeout"),
+        (_artifacts("a.bin"), {"lock_timeout": -float("inf")}, "lock_timeout"),
+        (_artifacts(".boldtailor/publication.lock"), {}, "reserved"),
+        (_artifacts(".BOLDTAILOR/publication.lock"), {}, "reserved"),
+        (_artifacts(".BoldTailor/publication.lock"), {}, "reserved"),
     ),
 )
-def test_preflight_rejects_exact_and_casefolded_duplicate_paths(tmp_path, paths):
-    artifacts = tuple(Artifact(path, b"{}\n") for path in paths)
+def test_preflight_rejects_invalid_requests_before_writing(
+    tmp_path, artifacts, kwargs, message
+):
+    destination = tmp_path / "derivatives"
 
-    with pytest.raises(ValueError, match="duplicate artifact path"):
-        publish_artifact_set(tmp_path / "derivatives", artifacts)
+    with pytest.raises(ValueError, match=message):
+        publish_artifact_set(destination, artifacts, **kwargs)
+
+    assert not destination.exists()
 
 
 @pytest.mark.parametrize(
@@ -445,16 +459,6 @@ def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
     _assert_no_transaction_debris(destination)
 
 
-@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
-def test_publication_rejects_nonfinite_timeout_before_writing(tmp_path, timeout):
-    destination = tmp_path / "output"
-    with pytest.raises(ValueError, match="lock_timeout"):
-        publish_artifact_set(
-            destination, [Artifact("a.bin", b"a")], lock_timeout=timeout
-        )
-    assert not destination.exists()
-
-
 def test_source_overlap_through_destination_parent_alias_is_rejected(tmp_path):
     (tmp_path / "unused").mkdir()
     source = tmp_path / "signal.bin"
@@ -467,16 +471,6 @@ def test_source_overlap_through_destination_parent_alias_is_rejected(tmp_path):
             overwrite=True,
         )
     assert source.read_bytes() == b"original-input"
-
-
-@pytest.mark.parametrize("name", [".boldtailor", ".BOLDTAILOR", ".BoldTailor"])
-def test_control_directory_names_are_reserved_case_insensitively(tmp_path, name):
-    destination = tmp_path / "output"
-    with pytest.raises(ValueError, match="reserved"):
-        publish_artifact_set(
-            destination, [Artifact(f"{name}/publication.lock", b"bad")]
-        )
-    assert not destination.exists()
 
 
 @pytest.mark.parametrize("block_diagnostics", [False, True])
