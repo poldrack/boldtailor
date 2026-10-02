@@ -104,6 +104,10 @@ def stop_signal_bids_dataset(tmp_path):
             derivative_func
             / f"{stem}_space-MNI152NLin2009cAsym_res-2_desc-preproc_bold.nii.gz",
         )
+        (
+            derivative_func
+            / f"{stem}_space-MNI152NLin2009cAsym_res-2_desc-preproc_bold.json"
+        ).write_text('{"RepetitionTime": 1.5, "StartTime": 0.75}\n')
         mask = nib.Nifti1Image(np.ones(shape[:3], dtype=np.uint8), AFFINE)
         nib.save(
             mask,

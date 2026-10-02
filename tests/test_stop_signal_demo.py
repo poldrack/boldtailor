@@ -46,12 +46,12 @@ CONFOUNDS = (
 NOTEBOOK = Path(__file__).parents[1] / "examples" / "stop_signal_demo.ipynb"
 CONTRAST_EXPRESSIONS = {
     "successful_inhibition": "stop_success - stop_failure",
-    "stop_vs_go": "(stop_success + stop_failure) - go_success",
+    "stop_vs_go": "0.5 * stop_success + 0.5 * stop_failure - go_success",
     "go_success_vs_baseline": "go_success",
 }
 NOTEBOOK_CONTRAST_EXPRESSIONS = {
     "successful_inhibition": "stop_success - stop_failure",
-    "stop_vs_go": "(stop_success + stop_failure) - go_success",
+    "stop_vs_go": "0.5 * stop_success + 0.5 * stop_failure - go_success",
     "go_success_vs_baseline": "go_success",
 }
 MASK_METADATA = {
@@ -809,7 +809,7 @@ def example_result(stop_signal_bids_dataset):
     model = ModelSpec(
         contrasts={
             "successful_inhibition": "stop_success - stop_failure",
-            "stop_vs_go": "(stop_success + stop_failure) - go_success",
+            "stop_vs_go": "0.5 * stop_success + 0.5 * stop_failure - go_success",
             "go_success_vs_baseline": "go_success",
         },
         confounds=CONFOUNDS,
@@ -1417,18 +1417,68 @@ def test_notebook_configuration_normalizes_session_override(monkeypatch, tmp_pat
     assert configuration["SESSIONS"] == ("ses-02", "ses-04")
 
 
-@pytest.mark.parametrize(
-    "selection",
-    ("", "ses-02", "ses-02,,ses-04", "ses-02,ses-04,ses-06"),
-)
+@pytest.mark.parametrize("selection", ("", "ses-02", "ses-02,,ses-04"))
 def test_notebook_configuration_rejects_invalid_session_override(
     monkeypatch, selection, tmp_path
 ):
     monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
     monkeypatch.setenv("BOLDTAILOR_SESSIONS", selection)
 
-    with pytest.raises(ValueError, match="exactly two non-empty sessions"):
+    with pytest.raises(ValueError, match="at least two non-empty sessions"):
         _notebook_configuration()
+
+
+def test_notebook_configuration_accepts_three_sessions(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
+    monkeypatch.setenv("BOLDTAILOR_SESSIONS", "ses-02,ses-04,ses-06")
+
+    assert _notebook_configuration()["SESSIONS"] == ("ses-02", "ses-04", "ses-06")
+
+
+def test_notebook_default_sessions_are_accepted_by_the_validator(monkeypatch, tmp_path):
+    monkeypatch.setenv("BOLDTAILOR_BIDS_ROOT", str(tmp_path))
+    monkeypatch.delenv("BOLDTAILOR_SESSIONS", raising=False)
+
+    configuration = _notebook_configuration()
+
+    assert len(configuration["DEFAULT_SESSIONS"]) == 5
+    assert configuration["_configured_sessions"]() == configuration["DEFAULT_SESSIONS"]
+
+
+def test_stop_vs_go_contrast_averages_the_two_stop_conditions():
+    source = NOTEBOOK.read_text()
+
+    assert (
+        '\\"stop_vs_go\\": \\"0.5 * stop_success + 0.5 * stop_failure - go_success\\"'
+        in source
+    )
+    assert "(stop_success + stop_failure) - go_success" not in source
+
+
+def test_frame_times_start_at_sidecar_start_time(stop_signal_bids_dataset):
+    *_, runs = _loaded_runs(stop_signal_bids_dataset)
+
+    assert runs[0].frame_times[0] == pytest.approx(0.75)
+    np.testing.assert_allclose(np.diff(runs[0].frame_times), 1.5)
+
+
+def test_frame_times_default_to_zero_without_sidecar(stop_signal_bids_dataset):
+    inputs = _discover(stop_signal_bids_dataset)
+    inputs.bold.with_name(inputs.bold.name.split(".nii")[0] + ".json").unlink()
+    masker = make_masker(common_brain_mask((inputs,)))
+
+    run = load_run(inputs, masker, trial_types=TRIAL_TYPES, confound_names=CONFOUNDS)
+
+    assert run.frame_times[0] == 0.0
+
+
+@pytest.mark.parametrize("value", ('"late"', "NaN", "true"))
+def test_sidecar_start_time_rejects_non_finite_numbers(tmp_path, value):
+    bold = tmp_path / "sub-s4_bold.nii.gz"
+    bold.with_name("sub-s4_bold.json").write_text(f'{{"StartTime": {value}}}')
+
+    with pytest.raises(ValueError, match="StartTime"):
+        _demo_module()._sidecar_start_time(bold)
 
 
 @pytest.mark.parametrize(
