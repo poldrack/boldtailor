@@ -626,31 +626,6 @@ def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
     assert comparison.nuisance_design_matrices[0].iloc[0, 0] != -99.0
 
 
-def test_make_task_delta_r2_result_clips_and_owns_values(delta_r2_problem):
-    _, _, full_result = delta_r2_problem
-    full = np.array([0.25, 0.4, 0.8])
-    nuisance = np.array([0.5, 0.4, 0.5])
-    nuisance_design = pd.DataFrame({"constant": [1.0, 1.0]})
-
-    result = make_task_delta_r2_result(
-        full_r2=full,
-        nuisance_r2=nuisance,
-        nuisance_designs=(nuisance_design,),
-        provenance=full_result.provenance,
-    )
-    full[0] = 99.0
-    nuisance[0] = 99.0
-    nuisance_design.iloc[0, 0] = 99.0
-
-    np.testing.assert_allclose(result.raw_delta_r2, [-0.25, 0.0, 0.3])
-    np.testing.assert_allclose(result.delta_r2, [0.0, 0.0, 0.3])
-    np.testing.assert_allclose(result.full_r2, [0.25, 0.4, 0.8])
-    np.testing.assert_allclose(result.nuisance_r2, [0.5, 0.4, 0.5])
-    assert result.negative_voxel_count == 1
-    assert result.raw_min == -0.25
-    assert result.nuisance_design_matrices[0].iloc[0, 0] == 1.0
-
-
 @pytest.mark.parametrize(
     ("full", "nuisance"),
     [

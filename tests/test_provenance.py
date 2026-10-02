@@ -307,15 +307,22 @@ def test_incomplete_sources_clear_metadata_fingerprint_and_add_quality_warning()
     assert any("incomplete" in warning["message"] for warning in record.warnings)
 
 
-def test_serialized_record_excludes_injected_local_path():
-    sentinel = "/sentinel-home/boldtailor-secret"
-    record = ProvenanceRecord.from_dict(_record_payload(extra_note={"note": "ok"}))
+def test_serialized_record_excludes_environment_paths_and_digests(
+    monkeypatch, tmp_path
+):
+    sentinel_dir = tmp_path / "sentinel-home-boldtailor-secret"
+    sentinel_dir.mkdir()
+    monkeypatch.setenv("HOME", str(sentinel_dir))
+    monkeypatch.chdir(sentinel_dir)
+
+    record = ProvenanceRecord.from_dict(_record_payload())
     serialized = record.canonical_json()
 
+    assert str(sentinel_dir) not in serialized
+    assert "sentinel-home-boldtailor-secret" not in serialized
     assert "digest" not in serialized.lower()
-    assert sentinel not in serialized
     with pytest.raises(ValueError, match="relative"):
-        _complete_source("signal", sentinel)
+        _complete_source("signal", str(sentinel_dir))
 
 
 def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
