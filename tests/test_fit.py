@@ -720,3 +720,30 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
     serialized = comparison.provenance.canonical_json()
     assert "design_values" not in serialized
     assert "signals" not in serialized
+
+
+def _assert_constant_feature_undefined(result, name, index):
+    for accessor in ("effect", "variance", "stat", "z_score", "one_sided_p_value"):
+        assert np.isnan(getattr(result, accessor)(name)[index]), accessor
+    assert np.isnan(result.run_r2[0][index])
+    assert np.isnan(result.r2[index])
+
+
+@pytest.mark.parametrize(
+    ("value", "dtype", "noise_model"),
+    [(0.1, np.float64, "ar1"), (123.456, np.float32, "ols")],
+)
+def test_rounding_level_constants_are_undefined(
+    single_run_problem, value, dtype, noise_model
+):
+    signals, events, _, _ = single_run_problem
+    mixed = np.column_stack([signals[:, 0], np.full(len(signals), value)])
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model=noise_model,
+    )
+    data = from_arrays(mixed.astype(dtype), events, tr=2.0)
+    result = fit(data, model)
+    _assert_constant_feature_undefined(result, "face_gt_house", 1)
+    assert np.isfinite(result.stat("face_gt_house")[0])

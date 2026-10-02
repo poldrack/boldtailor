@@ -423,6 +423,24 @@ def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_probl
     assert np.isfinite(delta.delta_r2[1:4]).all()
 
 
+def test_selected_glm_masks_constant_feature_contrasts(hrf_glm_problem):
+    data, model, selection, _ = hrf_glm_problem
+    signals = [y.copy() for y in data.signals]
+    for y in signals:
+        y[:, 0] = 100
+    target = from_arrays(
+        signals,
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+        sources=[_sources(r) for r in range(3)],
+    )
+    result = _selected_fit(target, model, selection)
+    for name in model.contrasts:
+        assert np.isnan(result.stat(name)[0])
+        assert np.isfinite(result.stat(name)[1])
+
+
 def _undefined_selection(data):
     constant = from_arrays(
         [np.full_like(y, 100) for y in data.signals],
