@@ -45,14 +45,14 @@ def library():
     return sobol_hrf_library(4, seed=0)
 
 
-def run_sessions(session_data, output, library, **options):
+def run_sessions(session_data, output, library, sessions_limit=3, **options):
     root, prep = session_data
     return session_api().estimate_sessions(
         root,
         prep,
         output,
         library=library,
-        sessions=["ses-nsd10", "ses-nsd11", "ses-nsd12"],
+        sessions=["ses-nsd10", "ses-nsd11", "ses-nsd12"][:sessions_limit],
         block_size=2,
         **options,
     )
@@ -371,3 +371,19 @@ def test_notebook_fits_three_sessions_exports_comparisons_and_resumes(
     )
     assert text.count("Reused HRF estimates") == 3
     assert "Fitting HRFs" not in text
+
+
+def test_rt_switch_changes_request_identity_and_cache_metadata(
+    session_data, library, tmp_path
+):
+    from examples.NSD.workflow_inputs import selection_task_model
+
+    with_rt = run_sessions(session_data, tmp_path / "rt", library, sessions_limit=1)
+    without = run_sessions(
+        session_data, tmp_path / "nort", library, sessions_limit=1, include_rt=False
+    )
+    assert with_rt[0].request_id != without[0].request_id
+    metadata = json.loads(without[0].cache_path.read_text())
+    assert metadata["request"]["task_model"] == selection_task_model(False).to_dict()
+    assert metadata["request"]["task_model"]["regressors"] == ["task", "trial_type"]
+    assert np.isfinite(without[0].maps[0, :3]).all()

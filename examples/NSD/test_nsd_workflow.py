@@ -416,10 +416,11 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
         "missing-RT indicator zero"
     )
     assert metadata["hrf_selection"] == (
-        "leave-one-run-out task-model prediction (task, centered RT, uncentered "
-        "trial type; missing-RT indicator profiled per run); pooled held-out "
-        "error over confound-adjusted energy"
+        "leave-one-run-out task-model prediction over task, response_time, "
+        "trial_type; missing-RT indicator profiled per run when present; pooled "
+        "held-out error over confound-adjusted energy"
     )
+    assert metadata["settings"]["hrf_selection_rt"] is True
     assert (
         metadata["hrf_curve_correlations"]["method"]
         == "Pearson over HRF time samples, without temporal shifting"
@@ -469,6 +470,7 @@ def test_notebook_default_preview_uses_approved_sobol_library(tmp_path):
     assert len(result.candidates) == 513
     assert settings["hrf_seed"] == 0
     assert result.fingerprint == hrf_library.sobol_hrf_library().fingerprint
+    assert settings["hrf_selection_rt"] is True
 
 
 def test_notebook_preserves_expanded_configured_paths(tmp_path):
@@ -544,3 +546,52 @@ def test_beta_series_progress_is_brief_across_blocks(four_runs, capfd):
     assert "complete" in messages[-1].lower()
     assert len(result["betas"]) == 4
     assert all(np.isfinite(beta[:, :3]).all() for beta in result["betas"])
+
+
+def test_selection_task_model_switch_drops_only_rt():
+    from boldtailor.model import Modulator, TaskModel
+
+    inputs = workflow()
+    assert inputs.selection_task_model(True) == inputs.NSD_TASK_MODEL
+    assert inputs.selection_task_model(False) == TaskModel(
+        (Modulator("trial_type", center=False),)
+    )
+    assert inputs.selection_task_model(False).is_subset_of(inputs.NSD_TASK_MODEL)
+    with pytest.raises(ValueError, match="include_rt"):
+        inputs.selection_task_model(1)
+
+
+def test_select_hrfs_without_rt_still_feeds_the_full_glm(four_runs, small_library):
+    inputs, analysis = workflow(), workflow("workflow_analysis")
+    root, prep = four_runs
+    runs = inputs.load_session(root, prep)
+    blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
+    narrow = inputs.selection_task_model(False)
+    selections = analysis.select_hrfs(runs, root, blocks, small_library, task_model=narrow)
+    for bundle in selections.values():
+        assert bundle["all"].task_model == narrow
+        assert bundle["odd"].training_selection.task_model == narrow
+        assert bundle["even"].training_selection.task_model == narrow
+    fitted = analysis.fit_glms(runs, root, blocks, inputs.glm_model(runs), selections=selections)
+    assert all("response_time" in design.columns for design in fitted["designs"].values())
+    assert np.isfinite(fitted["effects"][1, :4]).all()
+
+
+def test_metadata_and_reuse_follow_the_rt_selection_switch(four_runs, small_library):
+    inputs, outputs, reuse = workflow(), workflow("workflow_outputs"), workflow("workflow_reuse")
+    root, prep = four_runs
+    runs = inputs.load_session(root, prep)
+    off = outputs._metadata(runs, small_library, {"hrf_selection_rt": False})
+    assert off["hrf_selection"] == (
+        "leave-one-run-out task-model prediction over task, trial_type; "
+        "missing-RT indicator profiled per run when present; pooled held-out "
+        "error over confound-adjusted energy"
+    )
+    assert "never used to select HRFs" in off["rt_check"]
+    on = outputs._metadata(runs, small_library, {"hrf_selection_rt": True})
+    assert "response_time" in on["hrf_selection"]
+    assert "never used to select HRFs" not in on["rt_check"]
+    with pytest.raises(ValueError, match="hrf_selection_rt"):
+        reuse.validate_saved_settings(
+            {"settings": {"hrf_selection_rt": True}}, {"hrf_selection_rt": False}
+        )

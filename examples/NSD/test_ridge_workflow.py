@@ -296,3 +296,18 @@ def test_final_provenance_identifies_the_tuning_decision(six_run_dataset):
     assert (
         original["final"]["ridge_alpha"] == alternatives[0]["final"]["ridge_alpha"] == 1
     )
+
+
+def test_rt_switch_reaches_every_ridge_selection(six_run_dataset, cv_library):
+    from examples.NSD.workflow_inputs import selection_task_model
+
+    root, prep = six_run_dataset
+    runs = load_session(root, prep)
+    narrow = selection_task_model(False)
+    result = workflow().fit_cv_beta_series(
+        runs, root, **options(cv_library), task_model=narrow
+    )
+    finals = result["final"]["hrf_selections"]
+    assert finals and all(b["all"].task_model == narrow for b in finals.values())
+    for evaluation in result["evaluation"].values():
+        assert evaluation["selection_task_model"] == narrow.to_dict()
