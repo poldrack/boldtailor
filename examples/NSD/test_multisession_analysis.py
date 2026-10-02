@@ -282,3 +282,15 @@ def test_loader_rejects_different_global_alpha_selection_percentiles(saved_sessi
         path.write_text(json.dumps(meta))
     with pytest.raises(ValueError, match="ridge_percentile"):
         api("inputs").load_sessions(root, "sub-07", sessions, estimators=["RidgeCV"])
+
+
+def test_sessions_with_different_task_models_cannot_be_pooled(saved_sessions):
+    root, sessions, _, _ = saved_sessions
+    inputs = api("inputs")
+    first, other = (
+        inputs.load_one_session(root, "sub-07", s, ["OLS"]) for s in sessions[:2]
+    )
+    first["metadata"]["task_model_fingerprint"] = "1" * 64
+    other["metadata"]["task_model_fingerprint"] = "0" * 64
+    with pytest.raises(ValueError, match="task_model_fingerprint"):
+        inputs._compatible(first, other, ["OLS"])

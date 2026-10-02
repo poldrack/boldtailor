@@ -9,7 +9,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from boldtailor.hrf_library import HrfLibrary
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
+from examples.NSD.test_nsd_workflow import four_runs  # noqa: F401
+from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session
 from examples.NSD.test_ridge_workflow import six_run_dataset  # noqa: F401
 from examples.NSD import workflow_outputs
 
@@ -119,9 +122,30 @@ def test_reuse_rejects_partial_outputs(tmp_path):
 def test_reuse_rejects_changed_analysis_settings(tmp_path):
     from examples.NSD.workflow_reuse import validate_saved_settings
 
-    metadata = {"settings": {"ridge_mode": "fractional_cv", "hrf_seed": 0}}
+    metadata = {
+        "settings": {"ridge_mode": "fractional_cv", "hrf_seed": 0},
+        "task_model_fingerprint": NSD_TASK_MODEL.fingerprint,
+    }
     with pytest.raises(ValueError, match="hrf_seed"):
         validate_saved_settings(
             metadata, {"ridge_mode": "fractional_cv", "hrf_seed": 1}
         )
     validate_saved_settings(metadata, {**metadata["settings"], "n_jobs": 8})
+
+
+def test_saved_results_with_other_task_model_are_rejected():
+    from examples.NSD.workflow_reuse import validate_saved_settings
+
+    settings = {"ridge_mode": "off"}
+    stale = {"settings": settings, "task_model_fingerprint": "0" * 64}
+    with pytest.raises(ValueError, match="task_model_fingerprint"):
+        validate_saved_settings(stale, settings)
+    with pytest.raises(ValueError, match="task_model_fingerprint"):
+        validate_saved_settings({"settings": settings}, settings)
+
+
+def test_metadata_records_the_task_model_fingerprint(four_runs):  # noqa: F811
+    library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
+    runs = load_session(*four_runs)
+    published = workflow_outputs._metadata(runs, library, {})
+    assert published["task_model_fingerprint"] == NSD_TASK_MODEL.fingerprint
