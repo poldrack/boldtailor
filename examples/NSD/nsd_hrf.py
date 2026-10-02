@@ -384,7 +384,7 @@ def _metadata(library, runs, train, test):
             if available
             else "Requires at least two odd training runs and one even test run"
         ),
-        SelectionScore="nuisance-adjusted mean-stimulus leave-one-run-out CV R2; used for HRF selection, not independent performance",
+        SelectionScore="nuisance-adjusted task-model leave-one-run-out CV R²; used for HRF selection, not independent performance",
         TestScore="odd-selected HRF and odd-trained mean amplitude frozen for even runs; nuisance projected per run",
         RT="production maps descriptive; vertices selected using canonical OLS odd-run RT; even free trial betas use odd-selected HRFs",
         GroupedDesigns="one float64 NPZ per run: hrf_<id> trial matrices, shared nuisance, frame_times and string IDs; allow_pickle=False",

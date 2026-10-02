@@ -65,8 +65,8 @@ confound-only R², optimized-minus-canonical R², HRF parameter/peak-time maps,
 and separate odd/even selections. Fixed-penalty workflows use RT only for a
 descriptive check. In the notebook's CV mode, RT and trial type tune ridge;
 separate odd-to-even and even-to-odd evaluations assess encoding prediction
-after tuning on the training half. HRF selection remains based on the mean
-stimulus response. Its general API also fits condition
+after tuning on the training half. HRF selection remains based on the
+task-model response (the mean response under the default `TaskModel()`). Its general API also fits condition
 contrasts with OLS or AR(1), can apply selected voxelwise HRFs to those
 conventional GLMs, and accepts externally prepared designs.
 

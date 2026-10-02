@@ -225,7 +225,7 @@ def split_selection_artifacts(runs, brain, library, state, paths, train, test):
             LibraryFingerprint=library.fingerprint,
             CandidateCount=len(library.candidates),
             Splits=splits,
-            Method="Separate leave-one-run-out mean-stimulus prediction within each half",
+            Method="Separate task-model leave-one-run-out CV R² prediction within each half",
             Eligibility="Trial designs must be estimable across all runs; uses timing and confounds, never opposite-half BOLD",
             ParameterMaps=[*PARAMETER_NAMES, "peak_time"],
             PeakTime="Seconds at the full HRF maximum on the saved 0.1-second grid",

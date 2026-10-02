@@ -134,7 +134,13 @@ def _compatible(first, other, estimators):
         raise ValueError("Sessions have different grayordinate axes")
     if other["library"].fingerprint != first["library"].fingerprint:
         raise ValueError("Sessions must use the same HRF library")
-    keys = ("noise_model", "trimming", "high_pass", "hrf_selection")
+    keys = (
+        "noise_model",
+        "trimming",
+        "high_pass",
+        "hrf_selection",
+        "task_model_fingerprint",
+    )
     for key in keys:
         if other["metadata"].get(key) != first["metadata"].get(key):
             raise ValueError(f"Sessions use different {key}")

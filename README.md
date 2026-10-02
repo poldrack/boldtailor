@@ -121,8 +121,9 @@ across runs.
 
 The published GLMsingle workflow selects HRFs by in-sample fit, then uses
 repeated conditions to tune data-derived denoising and fractional ridge.
-Boldtailor's HRF selection needs no repeated images, but assumes that a mean
-stimulus response transfers between runs. Its ridge CV predicts trial
+Boldtailor's HRF selection needs no repeated images, but assumes that the
+task-model response (the mean response under the default `TaskModel()`)
+transfers between runs. Its ridge CV predicts trial
 beta series from variables such as trial type and RT. Fractional CV scores
 fixed OLS targets; shared-alpha CV scores candidate-regularized targets. Both
 assume that the predictor relationships transfer across runs. See the

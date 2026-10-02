@@ -12,7 +12,12 @@ from .hrf_reliability import CORRELATION_NAMES, hrf_curve_correlations
 from .nsd_cifti import _input_paths
 from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
 from .workflow_analysis import selection_maps
-from .workflow_inputs import NSD_TASK_MODEL, REGRESSORS, run_summary, selection_task_model
+from .workflow_inputs import (
+    NSD_TASK_MODEL,
+    REGRESSORS,
+    run_summary,
+    selection_task_model,
+)
 
 R2_NAMES = ["full_r2", "confounds_r2", "task_delta_r2"]
 
@@ -255,7 +260,11 @@ def _rt_check_description(include_rt, ridge_cv):
             "RT/type tune CV ridge strength; final all-run RT correlations are "
             "descriptive. Outer test runs are excluded from HRF and penalty selection."
         )
-        tail = " RT also enters HRF selection." if include_rt else " RT never enters HRF selection."
+        tail = (
+            " RT also enters HRF selection."
+            if include_rt
+            else " RT never enters HRF selection."
+        )
         return base + tail
     if include_rt:
         return (
@@ -284,6 +293,7 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
             contrast_exported=False,
             task_delta_r2="Includes the missing-RT indicator among task predictors",
         ),
+        task_model_fingerprint=NSD_TASK_MODEL.fingerprint,
         trial_type="Binary codes 0/1, uncentered; the task coefficient is the response on trial_type 0 trials at the run-mean RT",
         task="One unit per presentation; observed RT at its run mean, trial type 0, missing-RT indicator zero",
         orthogonalization=False,

@@ -366,8 +366,9 @@ compare independently estimated HRFs for `sub-07`, `ses-nsd10` through
 `ses-nsd19`. All sessions use the same 513-candidate Sobol library by default.
 The notebook fits only HRF selection, using all runs within each session and
 the same confounds and nonsteady-volume trimming as the full workflow.
-HRF selection needs only stimulus timing, so trials with missing reaction
-times are retained; RT and trial type do not enter this selection model.
+By default this notebook selects HRFs with the full task model (task, centered
+RT, uncentered trial type); pass `include_rt=False` for stimulus-timing-only
+selection. Trials with missing reaction times are retained.
 
 Completed session estimates are saved immediately under each session's `func`
 directory. Reruns reuse them when the input identities, library, settings,
