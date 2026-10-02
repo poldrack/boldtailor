@@ -13,7 +13,11 @@ from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
-from tests.oracles import nilearn_original_space_r2, nilearn_pooled_ols_r2
+from tests.oracles import (
+    peak_design_matrix,
+    nilearn_original_space_r2,
+    nilearn_pooled_ols_r2,
+)
 
 
 @pytest.fixture
@@ -27,7 +31,7 @@ def single_run_problem():
         }
     )
     frame_times = np.arange(30) * 2.0
-    design = make_first_level_design_matrix(
+    design = peak_design_matrix(
         frame_times,
         events=events,
         hrf_model="glover",
@@ -95,7 +99,7 @@ def delta_r2_problem():
         high_pass=0.01,
         noise_model="ar1",
     )
-    design = make_first_level_design_matrix(
+    design = peak_design_matrix(
         frame_times,
         events=events,
         hrf_model=model.hrf_model,
@@ -140,7 +144,7 @@ def _nilearn_contrast(signals, design, noise_model):
 
 def _full_ols_designs(data, model):
     return tuple(
-        make_first_level_design_matrix(
+        peak_design_matrix(
             frame_times,
             events=events,
             hrf_model=model.hrf_model,
@@ -292,7 +296,7 @@ def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
             "trial_type": ["face"],
         }
     )
-    saturated_design = make_first_level_design_matrix(
+    saturated_design = peak_design_matrix(
         saturated_times,
         events=saturated_events,
         hrf_model="glover",
@@ -747,3 +751,73 @@ def test_rounding_level_constants_are_undefined(
     result = fit(data, model)
     _assert_constant_feature_undefined(result, "face_gt_house", 1)
     assert np.isfinite(result.stat("face_gt_house")[0])
+
+
+def replace_indices(selection, indices):
+    """Rebuild a selection with new HRF IDs and a matching assignment identity."""
+    from dataclasses import replace
+    from hashlib import sha256
+
+    from boldtailor.provenance import ProvenanceRecord
+
+    indices = np.asarray(indices, dtype=np.int64)
+    record = selection.provenance.to_dict()
+    record["activities"][-1]["hrf_assignment_fingerprint"] = sha256(
+        indices.astype("<i8").tobytes()
+    ).hexdigest()
+    provenance = ProvenanceRecord.from_dict(record)
+    return replace(selection, hrf_indices=indices, provenance=provenance)
+
+
+@pytest.mark.parametrize("hrf_name", ["spm", "glover"])
+def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name):
+    from dataclasses import replace
+
+    from tests.oracles import peak_kernel
+
+    signals, events, _, model = single_run_problem
+    model = replace(model, hrf_model=hrf_name)
+    data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
+    design = fit(data, model).design_matrices[0]
+    assert list(design.columns) == ["face", "house", "constant"]
+    expected = make_first_level_design_matrix(
+        np.arange(30) * 2.0,
+        events=events,
+        hrf_model=peak_kernel(hrf_name),
+        drift_model=None,
+        min_onset=-24.0,
+    )
+    np.testing.assert_allclose(design.to_numpy(), expected.to_numpy(), atol=1e-12)
+
+
+def test_canonical_selection_and_plain_spm_fit_agree_in_scale(selected_fixture):
+    from boldtailor.model import TaskModel
+
+    data, selection = selected_fixture
+    canonical_only = replace_indices(selection, np.zeros(data.n_features, dtype=int))
+    model = ModelSpec(
+        contrasts={"task": "task"},
+        hrf_model="spm",
+        drift_model=None,
+        noise_model="ols",
+        task_model=TaskModel(),
+    )
+    plain = fit(data, model)
+    selected = fit(
+        data,
+        model,
+        hrf_selection=canonical_only,
+        feature_signature=selection.feature_signature,
+    )
+    np.testing.assert_allclose(selected.effect("task"), plain.effect("task"))
+
+
+@pytest.mark.parametrize("hrf_name", ["spm", "glover"])
+def test_plain_string_hrf_fit_records_peak_normalization(single_run_problem, hrf_name):
+    from dataclasses import replace
+
+    signals, events, _, model = single_run_problem
+    data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
+    result = fit(data, replace(model, hrf_model=hrf_name))
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["model"]["hrf_normalization"] == "peak_one"

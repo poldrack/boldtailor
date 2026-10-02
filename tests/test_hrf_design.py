@@ -144,15 +144,77 @@ def test_batched_trial_convolution_matches_nilearn_across_library(offset, irregu
         actual = trial_regressors(events, times, candidate)
         expected = np.column_stack(
             [
-                compute_regressor(
-                    np.array([[o], [d], [1.0]]),
-                    "spm" if cid == 0 else candidate.kernel,
-                    times,
-                )[0][:, 0]
+                compute_regressor(np.array([[o], [d], [1.0]]), candidate.kernel, times)[
+                    0
+                ][:, 0]
                 for o, d in zip(events.onset, events.duration, strict=True)
             ]
         )
-        if cid == 0:
-            np.testing.assert_array_equal(actual, expected)
-        else:
-            np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=2e-14)
+        np.testing.assert_allclose(actual, expected, rtol=1e-11, atol=2e-12)
+
+
+@pytest.mark.parametrize("name", ["spm", "glover"])
+def test_string_models_resolve_to_peak_normalized_kernels(name):
+    from boldtailor._hrf_design import hrf_kernel, hrf_model
+
+    kernel = hrf_kernel(name, 2.0, 50)
+    assert kernel.max() == pytest.approx(1.0)
+    assert not kernel.flags.writeable
+    model = hrf_model(name)
+    assert callable(model)
+    assert model.__name__ == "kernel"
+
+
+def test_candidate_kernels_are_peak_normalized_through_hrf_kernel(candidates):
+    from boldtailor._hrf_design import hrf_kernel, hrf_model
+
+    for candidate in candidates:
+        assert hrf_kernel(candidate, 1.6).max() == pytest.approx(1.0)
+        assert hrf_model(candidate).__name__ == "kernel"
+
+
+def test_trial_regressors_match_nilearn_with_the_peak_kernel(two_candidate_library):
+    from nilearn.glm.first_level import compute_regressor
+
+    from boldtailor._hrf_design import trial_regressors
+
+    times = 0.5 + 1.6 * np.arange(120)
+    events = pd.DataFrame(dict(onset=[10.0, 40.3, 77.1], duration=[1.0, 2.5, 0.0]))
+    for candidate in two_candidate_library.candidates:
+        fast = trial_regressors(events, times, candidate)
+        for j, (o, d) in enumerate(zip(events.onset, events.duration, strict=True)):
+            expected = compute_regressor(
+                np.array([[o], [d], [1.0]]), candidate.kernel, times
+            )[0][:, 0]
+            np.testing.assert_allclose(fast[:, j], expected, atol=1e-10)
+
+
+def test_canonical_metadata_records_peak_normalization():
+    from boldtailor._hrf_design import hrf_metadata
+    from boldtailor.hrf_library import CANONICAL_PARAMETERS
+
+    metadata = hrf_metadata("spm")
+    assert metadata["id"] == 0
+    assert metadata["kind"] == "spm"
+    assert metadata["parameters"] == list(CANONICAL_PARAMETERS)
+    assert metadata["normalization"] == "peak_one"
+    assert len(metadata["kernel_fingerprint"]) == 64
+
+
+def test_custom_metadata_records_peak_normalization(candidates):
+    from boldtailor._hrf_design import hrf_metadata
+
+    assert hrf_metadata(candidates[1])["normalization"] == "peak_one"
+    assert hrf_metadata(candidates[0]) == hrf_metadata("spm")
+
+
+def test_single_trial_provenance_records_peak_normalization(timing_fixture):
+    events, times, nuisance = timing_fixture
+    data = from_arrays(
+        np.random.default_rng(21).normal(size=(60, 2)),
+        events,
+        frame_times=times,
+        confounds=nuisance,
+    )
+    activity = fit_single_trials(data).provenance.to_dict()["activities"][-1]
+    assert activity["hrf_normalization"] == "peak_one"

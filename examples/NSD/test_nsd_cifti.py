@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
+from boldtailor._hrf_design import hrf_model
 
 
 def example():
@@ -96,12 +97,12 @@ def test_rt_modulation_is_centered_and_preserves_stimulus_timing(events):
     design = example().task_regressors(events, times)
     expected_stim, _ = compute_regressor(
         np.vstack([events.onset, events.duration, np.ones(6)]),
-        "spm",
+        hrf_model("spm"),
         times,
     )
     expected_rt, _ = compute_regressor(
         np.vstack([events.onset, events.duration, [-1, -0.5, 1, 0, 1.5, -1]]),
-        "spm",
+        hrf_model("spm"),
         times,
     )
     assert list(design.columns) == ["stimulus", "response_time"]
@@ -250,3 +251,8 @@ def test_external_fmriprep_root_has_explicit_provenance_error(dataset, tmp_path)
     root, *_ = dataset
     with pytest.raises(ValueError, match="inside bids_root"):
         example().run_analysis(root, tmp_path / "external", tmp_path / "output")
+
+
+def test_conventional_model_metadata_records_peak_normalization():
+    assert example().MODEL["hrf"] == "spm"
+    assert example().MODEL["hrf_normalization"] == "peak_one"

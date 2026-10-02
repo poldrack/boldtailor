@@ -14,7 +14,7 @@ from boldtailor.fit import fit
 from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared
-from tests.oracles import nilearn_original_space_diagnostics
+from tests.oracles import peak_design_matrix, nilearn_original_space_diagnostics
 
 
 def _problem():
@@ -45,7 +45,7 @@ def _problem():
     )
     frame_times = (np.arange(30) * 2.0, np.arange(60) * 2.0)
     designs = tuple(
-        make_first_level_design_matrix(
+        peak_design_matrix(
             times,
             events=run_events,
             hrf_model="glover",

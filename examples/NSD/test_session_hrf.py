@@ -405,3 +405,9 @@ def test_full_workflow_export_with_rt_is_not_imported_when_rt_is_off(
     )
     assert result[0].reused_from is None
     assert np.isfinite(result[0].maps[0, :3]).all()
+
+
+def test_cache_request_records_peak_hrf_normalization(session_data, library, tmp_path):
+    result = run_sessions(session_data, tmp_path / "out", library, sessions_limit=1)
+    metadata = json.loads(result[0].cache_path.read_text())
+    assert metadata["request"]["hrf_normalization"] == "peak_one"

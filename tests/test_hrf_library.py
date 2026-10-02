@@ -14,6 +14,21 @@ def library_api():
     return HrfLibrary, expanded_hrf_library
 
 
+def test_every_candidate_kernel_peaks_at_one(two_candidate_library):
+    for candidate in two_candidate_library.candidates:
+        kernel = candidate.kernel(1.6, 50)
+        assert kernel.max() == pytest.approx(1.0)
+        assert not kernel.flags.writeable
+
+
+def test_canonical_kernel_is_peak_scaled_nilearn_spm():
+    from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate
+
+    canonical = HrfCandidate(0, "spm", CANONICAL_PARAMETERS).kernel(1.6, 50)
+    reference = spm_hrf(1.6, 50)
+    np.testing.assert_allclose(canonical, reference / reference.max())
+
+
 def test_expanded_library_includes_legacy_anchor():
     _, expanded = library_api()
     library = expanded()
@@ -22,13 +37,14 @@ def test_expanded_library_includes_legacy_anchor():
     assert library.candidates[0].kind == "spm"
     assert library.candidates[1].parameters == (3.0, 10.0, 0.5, 0.5, 2.0, 0.0, 36.0)
     assert library.candidates[-1].parameters == (6.0, 16.0, 1.5, 2.5, 8.0, 2.0, 36.0)
-    np.testing.assert_array_equal(
-        library.candidates[0].kernel(1.6, 50), spm_hrf(1.6, 50)
+    reference = spm_hrf(1.6, 50)
+    np.testing.assert_allclose(
+        library.candidates[0].kernel(1.6, 50), reference / reference.max()
     )
     curves = library.curves
     assert curves.shape == (649, 360)
     assert np.isfinite(curves).all()
-    np.testing.assert_allclose(curves.sum(axis=1), 1, atol=1e-14)
+    np.testing.assert_allclose(curves.max(axis=1), 1, atol=1e-14)
     assert len(np.unique(curves, axis=0)) == 649
 
 
@@ -62,9 +78,10 @@ def test_expanded_library_includes_legacy_anchor():
 def test_custom_kernel_matches_notebook_and_independent_density(parameters, reference):
     cls, _ = library_api()
     kernel = cls.from_parameters([parameters]).candidates[1].kernel(0.1, 1)
-    # Literal reference values from the supplied notebook's spm_hrf function.
+    # Literal reference values from the supplied notebook's spm_hrf function,
+    # which sum-normalizes; the library kernel shares its shape at unit peak.
     np.testing.assert_allclose(
-        kernel[[10, 20, 50, 100, 200, 300]], reference, atol=1e-15
+        (kernel / kernel.sum())[[10, 20, 50, 100, 200, 300]], reference, atol=1e-15
     )
     t = np.arange(360) * 0.1 - parameters[5]
     density = lambda a, scale: np.where(
@@ -78,7 +95,7 @@ def test_custom_kernel_matches_notebook_and_independent_density(parameters, refe
         density(parameters[0] / parameters[2], parameters[2])
         - density(parameters[1] / parameters[3], parameters[3]) / parameters[4]
     )
-    np.testing.assert_allclose(kernel, expected / expected.sum(), atol=1e-15)
+    np.testing.assert_allclose(kernel, expected / expected.max(), atol=1e-14)
 
 
 def test_library_owns_parameters_tables_and_curves():

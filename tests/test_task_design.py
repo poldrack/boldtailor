@@ -7,6 +7,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.model import Modulator, TaskModel
+from tests.oracles import peak_kernel
 
 NSD = TaskModel(
     (
@@ -159,14 +160,15 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
     expanded = expand_events(events, TaskModel())
     spm = task_columns(expanded, times, "spm", min_onset=-10.0, oversampling=20)
     glover = task_columns(expanded, times, "glover", min_onset=-10.0, oversampling=20)
-    expected, _ = compute_regressor(
-        expanded[["onset", "duration", "modulation"]].to_numpy().T,
-        "spm",
-        times,
-        oversampling=20,
-        min_onset=-10.0,
-    )
-    np.testing.assert_allclose(spm["task"], expected[:, 0], atol=1e-13)
+    for name, actual in (("spm", spm), ("glover", glover)):
+        expected, _ = compute_regressor(
+            expanded[["onset", "duration", "modulation"]].to_numpy().T,
+            peak_kernel(name),
+            times,
+            oversampling=20,
+            min_onset=-10.0,
+        )
+        np.testing.assert_allclose(actual["task"], expected[:, 0], atol=1e-12)
     assert not np.allclose(spm["task"], glover["task"])
 
 

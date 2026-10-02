@@ -7,6 +7,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.data import from_arrays
 from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import peak_kernel
 
 
 def entry(module="single_trial", name="fit_single_trials"):
@@ -41,7 +42,9 @@ def problem():
     )
     x = np.column_stack(
         [
-            compute_regressor(np.array([[onset], [3.0], [1.0]]), "spm", times)[0][:, 0]
+            compute_regressor(
+                np.array([[onset], [3.0], [1.0]]), peak_kernel("spm"), times
+            )[0][:, 0]
             for onset in events.onset
         ]
     )
@@ -313,7 +316,9 @@ def test_known_rt_variability_with_ar_noise_and_nuisance_only_feature(alpha):
     onsets = 8 + np.arange(30) * 10.0
     x = np.column_stack(
         [
-            compute_regressor(np.array([[t], [3.0], [1.0]]), "spm", times)[0][:, 0]
+            compute_regressor(np.array([[t], [3.0], [1.0]]), peak_kernel("spm"), times)[
+                0
+            ][:, 0]
             for t in onsets
         ]
     )
@@ -360,7 +365,9 @@ def test_nested_event_metadata_is_owned_on_every_result_access(problem):
 def test_ols_and_ridge_preserve_supported_trials_with_small_hrf_support(alpha):
     times = np.arange(80) * 1.6
     onset = times[-1] - 0.1
-    x = compute_regressor(np.array([[onset], [0.0], [1.0]]), "spm", times)[0]
+    x = compute_regressor(np.array([[onset], [0.0], [1.0]]), peak_kernel("spm"), times)[
+        0
+    ]
     nuisance = pd.DataFrame({"motion": np.random.default_rng(8).normal(size=80) * 1e4})
     data = from_arrays(
         [2 * x],

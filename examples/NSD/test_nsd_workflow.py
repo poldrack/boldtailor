@@ -172,7 +172,7 @@ def independent_ols(runs, indices, library, ids):
             columns = [
                 compute_regressor(
                     np.vstack([e.onset, e.duration, a]),
-                    "spm" if hrf_id == 0 else candidate.kernel,
+                    candidate.kernel,
                     run.frame_times,
                 )[0][:, 0]
                 for a in amplitudes

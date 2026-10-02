@@ -7,6 +7,7 @@ from nilearn.glm.first_level import make_first_level_design_matrix
 from boldtailor.data import from_arrays
 from boldtailor.design import compile_designs, compile_nuisance_designs
 from boldtailor.model import ModelSpec, Modulator, TaskModel
+from tests.oracles import peak_design_matrix
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def test_compile_designs_matches_nilearn(inputs):
     )
 
     actual = compile_designs(data, model)[0].matrix
-    expected = make_first_level_design_matrix(
+    expected = peak_design_matrix(
         np.arange(20) * 2.0,
         events=events,
         hrf_model="glover",
@@ -222,7 +223,7 @@ def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance(
         ["task", "response_time", "trial_type", "missing_response_time"],
     ]
     for run, design in enumerate(compiled):
-        expected = make_first_level_design_matrix(
+        expected = peak_design_matrix(
             data.frame_times[run],
             events=expand_events(data.events[run], task_model, run),
             hrf_model="spm",

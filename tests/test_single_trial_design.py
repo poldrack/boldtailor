@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
+from tests.oracles import peak_kernel
 
 
 def compiler():
@@ -42,7 +43,7 @@ def test_subtr_timing_repeat_identity_and_row_order(inputs):
     np.testing.assert_array_equal(n.motion, confounds.motion)
     for i, (onset, duration) in enumerate([(12.0, 3.0), (8.0, 1.0)]):
         expected, _ = compute_regressor(
-            np.array([[onset], [duration], [1.0]]), "spm", times
+            np.array([[onset], [duration], [1.0]]), peak_kernel("spm"), times
         )
         np.testing.assert_allclose(x.iloc[:, i], expected[:, 0])
     pd.testing.assert_frame_equal(trials[events.columns], events)
@@ -60,7 +61,9 @@ def test_zero_duration_has_nilearn_impulse_convention(inputs):
     events, times, confounds = inputs
     events.loc[0, "duration"] = 0.0
     x, _, _ = compiler()(events, times, confounds, "run-01")
-    expected, _ = compute_regressor(np.array([[12.0], [0.0], [1.0]]), "spm", times)
+    expected, _ = compute_regressor(
+        np.array([[12.0], [0.0], [1.0]]), peak_kernel("spm"), times
+    )
     np.testing.assert_allclose(x.iloc[:, 0], expected[:, 0])
     assert np.any(x.iloc[:, 0] != 0)
 

@@ -40,7 +40,7 @@ def _oracle_design(events, times, confounds, candidate, model):
         selected = events.loc[events.trial_type == condition]
         values, _ = compute_regressor(
             selected[["onset", "duration", "modulation"]].to_numpy().T,
-            "spm" if candidate.id == 0 else candidate.kernel,
+            candidate.kernel,
             times,
             oversampling=model.oversampling,
             min_onset=model.min_onset,
@@ -315,6 +315,7 @@ def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
     assert info["hrf_assignment_fingerprint"]
     assert info["design_fingerprint"]
     assert info["model"]["hrf_model"]["kind"] == "selected"
+    assert info["hrf_normalization"] == "peak_one"
     assert result.provenance.analysis_fingerprint
     # An ignored fixed-HRF choice must not alter the effective model identity.
     other = _selected_fit(data, replace(model, hrf_model="spm"), selection)

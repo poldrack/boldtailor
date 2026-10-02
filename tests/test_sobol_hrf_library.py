@@ -21,8 +21,11 @@ def library():
 def test_default_matches_approved_preview_and_canonical_anchor(library):
     assert library.curves.shape == (513, 360)
     assert np.isfinite(library.curves).all()
-    np.testing.assert_allclose(library.curves.sum(axis=1), 1, atol=1e-14)
-    np.testing.assert_array_equal(library.candidates[0].kernel(1.6), spm_hrf(1.6, 50))
+    np.testing.assert_allclose(library.curves.max(axis=1), 1, atol=1e-14)
+    reference = spm_hrf(1.6, 50)
+    np.testing.assert_allclose(
+        library.candidates[0].kernel(1.6), reference / reference.max()
+    )
     assert len(np.unique(library.curves, axis=0)) == 513
 
 

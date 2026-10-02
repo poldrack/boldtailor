@@ -1,12 +1,39 @@
 """Independent numerical references and run subsets for scientific tests."""
 
 import numpy as np
-from nilearn.glm.first_level import run_glm
+from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
+from nilearn.glm.first_level.hemodynamic_models import glover_hrf, spm_hrf
 from scipy.linalg import block_diag
 from scipy.optimize import brentq
 
 from boldtailor._hrf_design import stimulus_regressor
 from boldtailor.data import from_arrays
+
+_NILEARN_SHAPES = {"spm": spm_hrf, "glover": glover_hrf}
+
+
+def peak_kernel(name):
+    """Nilearn's named HRF shape rescaled to unit peak, built independently."""
+    shape = _NILEARN_SHAPES[name]
+
+    def kernel(tr, oversampling=50):
+        values = shape(tr, oversampling)
+        return values / values.max()
+
+    return kernel
+
+
+def peak_design_matrix(frame_times, *, hrf_model="glover", **kwargs):
+    """Nilearn's design matrix with a named basis replaced by its peak kernel."""
+    if hrf_model not in _NILEARN_SHAPES:
+        return make_first_level_design_matrix(
+            frame_times, hrf_model=hrf_model, **kwargs
+        )
+    matrix = make_first_level_design_matrix(
+        frame_times, hrf_model=peak_kernel(hrf_model), **kwargs
+    )
+    matrix.columns = [name.removesuffix("_kernel") for name in matrix.columns]
+    return matrix
 
 
 def fractional_beta_oracle(x, n, y, fraction):

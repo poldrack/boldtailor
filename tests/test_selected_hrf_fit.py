@@ -34,9 +34,7 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
             c = selection.library.candidates[cid]
             x = np.column_stack(
                 [
-                    compute_regressor(
-                        np.array([[o], [d], [1.0]]), "spm" if cid == 0 else c.kernel, t
-                    )[0][:, 0]
+                    compute_regressor(np.array([[o], [d], [1.0]]), c.kernel, t)[0][:, 0]
                     for o, d in zip(e.onset, e.duration, strict=True)
                 ]
             )
@@ -171,3 +169,4 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
     assert info["library_fingerprint"] == selection.library.fingerprint
     assert info["design_fingerprint"]
     assert info["hrf_assignment_fingerprint"]
+    assert info["hrf_normalization"] == "peak_one"
