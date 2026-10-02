@@ -67,10 +67,12 @@ feature. The supplied signature must match the selection's signature; it may
 be omitted if selection also omitted it. `feature_signature` without a
 selection is an error.
 
-With `model.task_model` set, the selection must carry the same task model and
+With `model.task_model` set, the selection's task model must equal it or be a
+subset of it with identical modulator settings (`TaskModel.is_subset_of`), and
 the model's `oversampling` and `min_onset` must equal the selection's recorded
-values. With `task_model=None`, the selection must use the default task-only
-model.
+values. The selected-GLM provenance records both `task_model_fingerprint` and
+`selection_task_model_fingerprint`. With `task_model=None`, the selection must
+use the default task-only model.
 
 `CompiledDesign` contains `matrix`, `excluded_event_count`, and
 `min_onset_cutoff`. Events earlier than the cutoff are excluded with a warning.

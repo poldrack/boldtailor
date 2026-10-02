@@ -19,13 +19,13 @@ def _signature(runs, indices):
     return spatial_signature(runs[0].image.header.get_axis(1), indices)
 
 
-def _select_block(indices, runs, root, library):
+def _select_block(indices, runs, root, library, task_model):
     data = load_block(runs, root, indices)
     options = dict(
         library=library,
         run_labels=[r.label for r in runs],
         feature_signature=_signature(runs, indices),
-        task_model=NSD_TASK_MODEL,
+        task_model=task_model,
     )
     odd = [i for i, r in enumerate(runs) if r.number % 2]
     even = [i for i, r in enumerate(runs) if not r.number % 2]
@@ -36,11 +36,15 @@ def _select_block(indices, runs, root, library):
     )
 
 
-def select_hrfs(runs, root, blocks, library, *, n_jobs=1):
-    """Select on all runs and on each half; retain objects for later fits."""
+def select_hrfs(runs, root, blocks, library, *, n_jobs=1, task_model=NSD_TASK_MODEL):
+    """Select on all runs and on each half; retain objects for later fits.
+
+    The GLM keeps the full NSD task model; pass a subset (for example
+    selection_task_model(False)) to score HRFs without the RT regressor.
+    """
     selections = {}
     for indices, result in map_blocks(
-        _select_block, blocks, args=(runs, root, library), n_jobs=n_jobs
+        _select_block, blocks, args=(runs, root, library, task_model), n_jobs=n_jobs
     ):
         selections[tuple(indices)] = result
         print(f"HRF selection: {indices[0]}–{indices[-1]}", flush=True)

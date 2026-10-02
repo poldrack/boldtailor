@@ -19,7 +19,7 @@ from .workflow_inputs import NSD_TASK_MODEL, _trimmed_sources
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
 
 
-def request_metadata(runs, root, library, limit):
+def request_metadata(runs, root, library, limit, task_model=NSD_TASK_MODEL):
     records = []
     for run in runs:
         digest = sha256(run.events.to_csv(index=False).encode())
@@ -42,7 +42,7 @@ def request_metadata(runs, root, library, limit):
         spatial_fingerprint=spatial_signature(brain, np.arange(len(brain))),
         runs=records,
         model="task_model_leave_one_run_out",
-        task_model=NSD_TASK_MODEL.to_dict(),
+        task_model=task_model.to_dict(),
         oversampling=50,
         nuisance="motion24_top6_combined_acompcor_fmriprep_cosines_intercept",
         trimming="leading_nonsteady_volumes_original_acquisition_times",

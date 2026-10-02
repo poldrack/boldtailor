@@ -12,7 +12,7 @@ from .hrf_reliability import CORRELATION_NAMES, hrf_curve_correlations
 from .nsd_cifti import _input_paths
 from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
 from .workflow_analysis import selection_maps
-from .workflow_inputs import NSD_TASK_MODEL, REGRESSORS, run_summary
+from .workflow_inputs import NSD_TASK_MODEL, REGRESSORS, run_summary, selection_task_model
 
 R2_NAMES = ["full_r2", "confounds_r2", "task_delta_r2"]
 
@@ -240,7 +240,36 @@ def _activation_metadata():
     )
 
 
+def _selection_description(task_model):
+    names = ", ".join(task_model.regressor_names)
+    return (
+        f"leave-one-run-out task-model prediction over {names}; missing-RT "
+        "indicator profiled per run when present; pooled held-out error over "
+        "confound-adjusted energy"
+    )
+
+
+def _rt_check_description(include_rt, ridge_cv):
+    if ridge_cv:
+        base = (
+            "RT/type tune CV ridge strength; final all-run RT correlations are "
+            "descriptive. Outer test runs are excluded from HRF and penalty selection."
+        )
+        tail = " RT also enters HRF selection." if include_rt else " RT never enters HRF selection."
+        return base + tail
+    if include_rt:
+        return (
+            "Descriptive within-run-centered correlation; RT enters HRF selection as a "
+            "task-model regressor, so all-run optimized correlations are not independent checks"
+        )
+    return (
+        "Descriptive within-run-centered correlation, never used to select HRFs or "
+        "fixed ridge strength; all-run optimized HRFs use both halves"
+    )
+
+
 def _metadata(runs, library, settings, ridge_cv=None, activation=None):
+    include_rt = bool(settings.get("hrf_selection_rt", True))
     return dict(
         regressors=list(REGRESSORS),
         noise_model="ols",
@@ -265,13 +294,9 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
         r2="1 - sum(run SSE) / sum(within-run SST), on retained scans; native signal units",
         glm_comparison="Descriptive in-sample optimized minus canonical full R²; not an independent validation of HRF selection",
         inference="Contrasts use equal-run fixed effects; conditional on selected HRFs, without selection uncertainty correction",
-        hrf_selection="leave-one-run-out task-model prediction (task, centered RT, uncentered trial type; missing-RT indicator profiled per run); pooled held-out error over confound-adjusted energy",
+        hrf_selection=_selection_description(selection_task_model(include_rt)),
         split_prediction="Train HRF and mean amplitude on one half; freeze both for the other half; nuisance projection is conditional on each run",
-        rt_check=(
-            "RT/type tune CV ridge strength; final all-run RT correlations are descriptive. Outer test runs are excluded from HRF and penalty selection."
-            if ridge_cv
-            else "Descriptive within-run-centered correlation, never used to select HRFs or fixed ridge strength; all-run optimized HRFs use both halves"
-        ),
+        rt_check=_rt_check_description(include_rt, ridge_cv),
         ridge_cv=_ridge_metadata(settings, ridge_cv),
         beta_activation=_activation_metadata() if activation else None,
         library_candidates=len(library.candidates),

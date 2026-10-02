@@ -22,6 +22,7 @@ ANALYSIS_SETTINGS = (
     "ridge_percentile",
     "ridge_alpha",
     "hrf_library",
+    "hrf_selection_rt",
     "hrf_n_samples",
     "hrf_seed",
     "hrf_parameters",

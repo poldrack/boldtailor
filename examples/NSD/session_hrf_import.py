@@ -11,7 +11,7 @@ from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
 from .nsd_hrf import spatial_signature
 from .session_hrf_cache import read_selection
 from .workflow_outputs import _input_artifacts, _metadata, _stem
-from .workflow_inputs import _trimmed_sources, make_blocks
+from .workflow_inputs import _trimmed_sources, make_blocks, selection_task_model
 
 
 def _same_library(root, stem, library):
@@ -33,7 +33,7 @@ def _same_library(root, stem, library):
         )
 
 
-def _matching_provenance(records, runs, root, library, maps, limit):
+def _matching_provenance(records, runs, root, library, maps, limit, task_model):
     covered = set()
     brain = runs[0].image.header.get_axis(1)
     for block in records:
@@ -60,6 +60,7 @@ def _matching_provenance(records, runs, root, library, maps, limit):
             or activity["run_labels"] != [r.label for r in runs]
             or activity["oversampling"] != 50
             or activity["feature_signature"] != spatial_signature(brain, indices)
+            or activity.get("task_model_fingerprint") != task_model.fingerprint
         ):
             return False
         ids = np.asarray(selection["hrf_indices"])
@@ -78,7 +79,9 @@ def find_workflow_estimate(roots, runs, root, library, request, subject, session
     stem = _stem(subject, session)
     brain = runs[0].image.header.get_axis(1)
     limit = request["grayordinate_limit"]
-    expected = _metadata(runs, library, {})
+    include_rt = "response_time" in request["task_model"]["regressors"]
+    task_model = selection_task_model(include_rt)
+    expected = _metadata(runs, library, {"hrf_selection_rt": include_rt})
     for directory in dict.fromkeys(Path(p) for p in roots):
         metadata_path = directory / f"{stem}_desc-notebook_metadata.json"
         if not metadata_path.is_file():
@@ -115,7 +118,7 @@ def find_workflow_estimate(roots, runs, root, library, request, subject, session
             records = json.loads(
                 (directory / f"{stem}_desc-notebookHRF_provenance.json").read_text()
             )
-            if _matching_provenance(records, runs, root, library, maps, limit):
+            if _matching_provenance(records, runs, root, library, maps, limit, task_model):
                 return maps, records, str(path)
         except (
             OSError,

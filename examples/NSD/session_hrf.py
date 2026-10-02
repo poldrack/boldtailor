@@ -18,7 +18,13 @@ from .session_hrf_cache import (
     save_cache,
 )
 from .session_hrf_import import find_workflow_estimate
-from .workflow_inputs import NSD_TASK_MODEL, load_session, load_block, make_blocks
+from .workflow_inputs import (
+    NSD_TASK_MODEL,
+    load_session,
+    load_block,
+    make_blocks,
+    selection_task_model,
+)
 
 
 @dataclass(frozen=True)
@@ -31,18 +37,25 @@ class SessionEstimate:
     reused_from: str | None
 
 
-def _fit_block(indices, runs, root, library):
+def _fit_block(indices, runs, root, library, task_model):
     return select_hrf(
         load_block(runs, root, indices),
         library=library,
         run_labels=[r.label for r in runs],
         feature_signature=spatial_signature(runs[0].image.header.get_axis(1), indices),
-        task_model=NSD_TASK_MODEL,
+        task_model=task_model,
     )
 
 
 def fit_session(
-    runs, root, library, *, block_size=4096, max_grayordinates=None, n_jobs=1
+    runs,
+    root,
+    library,
+    *,
+    block_size=4096,
+    max_grayordinates=None,
+    n_jobs=1,
+    task_model=NSD_TASK_MODEL,
 ):
     blocks = make_blocks(
         runs, block_size=block_size, max_grayordinates=max_grayordinates
@@ -50,7 +63,7 @@ def fit_session(
     maps = np.full((4, runs[0].image.shape[1]), np.nan)
     provenance = []
     for indices, result in map_blocks(
-        _fit_block, blocks, args=(runs, root, library), n_jobs=n_jobs
+        _fit_block, blocks, args=(runs, root, library, task_model), n_jobs=n_jobs
     ):
         maps[:, indices] = np.vstack(
             [
@@ -99,7 +112,8 @@ def _session_estimate(
     brain = runs[0].image.header.get_axis(1)
     maximum = options["max_grayordinates"]
     limit = len(brain) if maximum is None else min(maximum, len(brain))
-    request = request_metadata(runs, root, library, int(limit))
+    task_model = options.get("task_model", NSD_TASK_MODEL)
+    request = request_metadata(runs, root, library, int(limit), task_model)
     identity = request_id(request)
     paths = cache_paths(subject, session, identity)
     roots = [Path(output), *map(Path, reuse_roots)]
@@ -129,7 +143,7 @@ def _session_estimate(
     else:
         maps, provenance, source = imported
         print(f"Reused HRF estimates: {session} ({source})", flush=True)
-    if request_metadata(runs, root, library, int(limit)) != request:
+    if request_metadata(runs, root, library, int(limit), task_model) != request:
         raise ValueError(
             "Input files changed while estimating HRFs; no cache was saved"
         )
@@ -152,6 +166,7 @@ def estimate_sessions(
     max_grayordinates=None,
     n_jobs=4,
     reuse_roots=(),
+    include_rt=True,
 ):
     """Preflight all sessions, then fit only incompatible or missing estimates.
 
@@ -172,7 +187,10 @@ def estimate_sessions(
             "All sessions must have identical grayordinate BrainModel axes"
         )
     options = dict(
-        block_size=block_size, max_grayordinates=max_grayordinates, n_jobs=n_jobs
+        block_size=block_size,
+        max_grayordinates=max_grayordinates,
+        n_jobs=n_jobs,
+        task_model=selection_task_model(include_rt),
     )
     return [
         _session_estimate(

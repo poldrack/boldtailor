@@ -14,6 +14,17 @@ from .nsd_single_trial import _load_runs
 
 REGRESSORS = ("task", "response_time", "trial_type")
 
+
+def selection_task_model(include_rt=True):
+    """The GLM task model, or trial type alone when RT must not drive HRF selection."""
+    if not isinstance(include_rt, bool):
+        raise ValueError("include_rt must be a boolean")
+    if include_rt:
+        return NSD_TASK_MODEL
+    return TaskModel(
+        tuple(m for m in NSD_TASK_MODEL.modulators if m.column != "response_time")
+    )
+
 NSD_TASK_MODEL = TaskModel(
     (
         Modulator("response_time", center=True, missing="indicator"),

@@ -30,6 +30,7 @@ from .nsd_hrf import spatial_signature
 from .parallel_blocks import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
+from boldtailor.model import TaskModel
 from .workflow_inputs import NSD_TASK_MODEL, load_block, _trimmed_sources
 
 
@@ -249,6 +250,7 @@ def _outer_block(
     test,
     fractional=False,
     encoding_mode="within_run",
+    task_model=NSD_TASK_MODEL,
 ):
     data = load_block(runs, root, indices)
     labels, signature = [r.label for r in runs], _signature(runs, indices)
@@ -260,7 +262,7 @@ def _outer_block(
             library=library,
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
-            task_model=NSD_TASK_MODEL,
+            task_model=task_model,
         )
     )
     options = (
@@ -323,10 +325,12 @@ def _evaluate(
     n_jobs,
     fractional=False,
     encoding_mode="within_run",
+    task_model=NSD_TASK_MODEL,
 ):
     n = runs[0].image.shape[1]
     result = dict(
         encoding_mode=encoding_mode,
+        selection_task_model=task_model.to_dict(),
         train_run_intercepts=np.full((len(train), n), np.nan),
         scoring_offsets=np.full((len(test), n), np.nan),
         encoding_r2=np.full(n, np.nan),
@@ -358,6 +362,7 @@ def _evaluate(
         test,
         fractional,
         encoding_mode,
+        task_model,
     )
     for indices, block in map_blocks(_outer_block, blocks, args=args, n_jobs=n_jobs):
         for key in (
@@ -392,25 +397,30 @@ def _evaluate(
     return result
 
 
-def _final_selection(indices, runs, root, library):
+def _final_selection(indices, runs, root, library, task_model):
     return dict(
         all=select_hrf(
             load_block(runs, root, indices),
             library=library,
             run_labels=[r.label for r in runs],
             feature_signature=_signature(runs, indices),
-            task_model=NSD_TASK_MODEL,
+            task_model=task_model,
         )
     )
 
 
-def _final_fit(runs, root, blocks, library, alpha, n_jobs, fractional=False):
+def _final_fit(
+    runs, root, blocks, library, alpha, n_jobs, fractional=False, task_model=NSD_TASK_MODEL
+):
     selections = None
     if library is not None:
         selections = {
             tuple(indices): selected
             for indices, selected in map_blocks(
-                _final_selection, blocks, args=(runs, root, library), n_jobs=n_jobs
+                _final_selection,
+                blocks,
+                args=(runs, root, library, task_model),
+                n_jobs=n_jobs,
             )
         }
     options = {"ridge_fraction": alpha} if fractional else {"ridge_alpha": alpha}
@@ -433,6 +443,7 @@ def fit_cv_beta_series(
     max_grayordinates=None,
     n_jobs=1,
     encoding_mode="within_run",
+    task_model=NSD_TASK_MODEL,
 ):
     """Tune per-feature fractions or one shared alpha, then evaluate and refit.
 
@@ -443,6 +454,8 @@ def fit_cv_beta_series(
     under training-selected HRFs; shared-alpha targets equal the fitted betas.
     """
     validate_encoding_mode(encoding_mode)
+    if not isinstance(task_model, TaskModel):
+        raise ValueError("task_model must be a TaskModel")
     if (alphas is None) == (fractions is None):
         raise ValueError("provide exactly one of alphas or fractions")
     fractional = fractions is not None
@@ -453,7 +466,12 @@ def fit_cv_beta_series(
     if fractional:
         alphas = tuple(reversed(alphas))
     predictors = trial_predictors(runs)
-    result = dict(tuning={}, evaluation={}, predictors=predictors)
+    result = dict(
+        tuning={},
+        evaluation={},
+        predictors=predictors,
+        selection_task_model=task_model.to_dict(),
+    )
     mode = "canonical" if library is None else "optimized"
     for scope, train in (*halves.items(), ("all", list(range(len(runs))))):
         print(f"Ridge CV ({mode}, {scope}): tuning {len(train)} runs", flush=True)
@@ -489,6 +507,7 @@ def fit_cv_beta_series(
                 n_jobs,
                 fractional,
                 encoding_mode,
+                task_model,
             )
             result["evaluation"][f"{scope}_to_{target}"][
                 "tuning_analysis_fingerprint"
@@ -499,7 +518,9 @@ def fit_cv_beta_series(
             else f"selected alpha={alpha:g}"
         )
         print(f"Ridge CV ({mode}, {scope}): {description}", flush=True)
-    result["final"] = _final_fit(runs, root, blocks, library, alpha, n_jobs, fractional)
+    result["final"] = _final_fit(
+        runs, root, blocks, library, alpha, n_jobs, fractional, task_model
+    )
     link_final_provenance(result["final"], result["tuning"]["all"]["provenance"])
     result["provenance"] = dict(
         **encoding_metadata(encoding_mode),

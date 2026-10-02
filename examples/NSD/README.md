@@ -235,6 +235,14 @@ package default task-only model; the final beta series use HRFs selected with
 the NSD task model. Training betas use the candidate fraction; validation targets are fixed OLS
 betas under the training-selected HRFs.
 
+Set `hrf_selection_rt=False` in the notebook settings to select HRFs without
+the RT regressor. Selection then scores task and uncentered trial type only,
+while the GLM still fits task, RT, and trial type; the selected-HRF fit accepts
+this because the selection task model is a subset of the GLM's. The exported
+`hrf_selection` metadata string and the session HRF cache identity record
+which model selected the HRFs, and saved results with a different setting are
+refitted rather than reused.
+
 A fraction of 1 gives OLS. Smaller fractions shrink the coefficient norm in the
 raw trial-coefficient basis after nuisance projection. Confounds remain unpenalized,
 and the exported betas retain native units. The chosen fraction is fixed across

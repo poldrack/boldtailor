@@ -113,8 +113,11 @@ it does not reuse the amplitudes from HRF selection.
 Set `ModelSpec(task_model=...)` to the task model used for selection. The
 GLM then builds its task columns from the same raw events with the same
 Nilearn call, so the fitted task design is the scored task design. `fit()`
-rejects a task model, `oversampling`, or `min_onset` that differ from the
-selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
+requires the selection's task model to equal the GLM's or to be a subset of
+it with identical modulator settings, so a selection scored without RT can
+still feed a GLM that fits RT; the shared columns are built identically
+either way. `fit()` rejects `oversampling` or `min_onset` values that differ
+from the selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
 to match selection's nuisance exactly, pass every confound column and set
 `drift_model=None`. Without a task model, events are Nilearn-format
 conditions as before, and the selection must have used the default task-only
