@@ -88,7 +88,7 @@ use the default task-only model.
 | `design_matrices`, `design_provenance` | Fitted run designs and their records |
 | `provenance` | Analysis record |
 
-A feature whose signal is exactly constant in any run has NaN for every contrast statistic and for R²; constant features cannot support inference.
+A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
 
 `boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
 `contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`

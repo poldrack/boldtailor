@@ -287,6 +287,9 @@ def _sums_of_squares(
 ) -> tuple[np.ndarray, np.ndarray]:
     residual_sum = np.sum((observed - predicted) ** 2, axis=0)
     total_sum = np.sum((observed - observed.mean(axis=0)) ** 2, axis=0)
+    constant = np.ptp(observed, axis=0) == 0
+    residual_sum[constant] = 0.0
+    total_sum[constant] = 0.0
     return residual_sum, total_sum
 
 

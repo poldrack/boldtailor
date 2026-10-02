@@ -82,7 +82,7 @@ For several runs, Boldtailor fits each run independently and combines
 contrasts as equal-weight fixed effects. P-values are directional, one-sided,
 and uncorrected for multiple comparisons. `result.run_r2` contains one R²
 array per run; `result.r2` pools residual and total sums of squares across runs.
-A feature whose signal is exactly constant in any run has NaN for every contrast statistic and for R²; constant features cannot support inference.
+A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
 
 ## Voxelwise HRFs in conventional GLMs
 
