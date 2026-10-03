@@ -12,7 +12,7 @@ from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.cifti import spatial_signature
-from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
+from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
 
 
 def workflow():
@@ -267,7 +267,7 @@ def test_final_provenance_identifies_the_tuning_decision(six_run_dataset):
 
 
 def test_rt_switch_reaches_every_ridge_selection(six_run_dataset, cv_library):
-    from examples.NSD.workflow_inputs import selection_task_model
+    from boldtailor.workflow.inputs import selection_task_model
 
     root, prep = six_run_dataset
     runs = load_session(root, prep)

@@ -60,7 +60,7 @@ def test_session_selection_matches_public_api_and_reuses_without_fitting(
     session_data, library, tmp_path, monkeypatch
 ):
     from boldtailor.hrf_selection import select_hrfs
-    from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
+    from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
 
     output = tmp_path / "output"
     estimates = run_sessions(session_data, output, library, n_jobs=2)
@@ -140,7 +140,7 @@ def test_malformed_cache_manifest_is_recomputed(
 @pytest.fixture
 def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
-    from examples.NSD.workflow_inputs import load_session, make_blocks
+    from boldtailor.workflow.inputs import load_session, make_blocks
     from examples.NSD.workflow_analysis import select_hrfs
     from examples.NSD.workflow_outputs import (
         _hrf_artifacts,
@@ -255,7 +255,7 @@ def test_damaged_full_workflow_exports_are_refitted(
 def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
     session_data, library, tmp_path
 ):
-    from examples.NSD.workflow_inputs import load_session
+    from boldtailor.workflow.inputs import load_session
 
     root, prep = session_data
     path = next((root / "sub-07/ses-nsd10").rglob("*events.tsv"))
@@ -375,7 +375,7 @@ def test_notebook_fits_three_sessions_exports_comparisons_and_resumes(
 def test_rt_switch_changes_request_identity_and_cache_metadata(
     session_data, library, tmp_path
 ):
-    from examples.NSD.workflow_inputs import selection_task_model
+    from boldtailor.workflow.inputs import selection_task_model
 
     with_rt = run_sessions(session_data, tmp_path / "rt", library, sessions_limit=1)
     without = run_sessions(

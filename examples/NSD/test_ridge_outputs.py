@@ -10,7 +10,7 @@ import pytest
 
 from boldtailor.publication import publish_artifact_set
 from examples.NSD.ridge_workflow import fit_cv_beta_series
-from examples.NSD.workflow_inputs import load_session
+from boldtailor.workflow.inputs import load_session
 
 
 def outputs():

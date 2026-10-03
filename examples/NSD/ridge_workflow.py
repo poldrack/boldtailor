@@ -32,7 +32,7 @@ from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
 from boldtailor.model import TaskModel
 from boldtailor.workflow.files import odd_even_parity
-from .workflow_inputs import (
+from boldtailor.workflow.inputs import (
     NSD_TASK_MODEL,
     _trimmed_sources,
     load_block,

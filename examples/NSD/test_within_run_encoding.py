@@ -10,7 +10,7 @@ from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials
 from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts
-from examples.NSD.workflow_inputs import load_session, load_block
+from boldtailor.workflow.inputs import load_session, load_block
 
 
 @pytest.mark.parametrize("mode", ["within_run", "absolute"])

@@ -1,4 +1,4 @@
-"""Input preparation shared by the cells in the NSD workflow notebook."""
+"""Session loading, modulator detection, and the GLM model for any task."""
 
 from dataclasses import dataclass, replace
 from numbers import Integral
@@ -16,26 +16,39 @@ from boldtailor.workflow.files import (
     run_sources,
 )
 
-REGRESSORS = ("task", "response_time", "trial_type")
+
+class InputError(ValueError):
+    """Inputs are missing or malformed; the CLI maps this to exit code 2."""
 
 
-def selection_task_model(include_rt=True):
-    """The GLM task model, or trial type alone when RT must not drive HRF selection."""
+def detect_task_model(events_tables, modulators=None):
+    """The task model from event columns, or explicit modulators checked per run."""
+    tables = list(events_tables)
+    if modulators is None:
+        modulators = tuple(
+            Modulator(column, missing=missing)
+            for column, missing in (
+                ("response_time", "indicator"),
+                ("trial_type", "error"),
+            )
+            if all(column in t.columns for t in tables)
+        )
+    for index, table in enumerate(tables, 1):
+        missing = [m.column for m in modulators if m.column not in table.columns]
+        if missing:
+            raise InputError(f"run {index} events lack modulator column(s) {missing}")
+    return TaskModel(tuple(modulators))
+
+
+def selection_task_model(task_model, include_rt=True):
+    """The GLM task model, or without RT when RT must not drive HRF selection."""
     if not isinstance(include_rt, bool):
         raise ValueError("include_rt must be a boolean")
     if include_rt:
-        return NSD_TASK_MODEL
+        return task_model
     return TaskModel(
-        tuple(m for m in NSD_TASK_MODEL.modulators if m.column != "response_time")
+        tuple(m for m in task_model.modulators if m.column != "response_time")
     )
-
-
-NSD_TASK_MODEL = TaskModel(
-    (
-        Modulator("response_time", center=True, missing="indicator"),
-        Modulator("trial_type", center=False),
-    )
-)
 
 
 @dataclass(frozen=True)
@@ -59,25 +72,34 @@ def _numeric_column(events, name):
         raise ValueError(f"{name} must contain numeric values") from error
 
 
-def validate_glm_events(events):
-    """Require an observed positive RT and both binary trial_type codes."""
-    rt = _numeric_column(events, "response_time")
-    if not (np.isfinite(rt) & (rt > 0)).any():
-        raise ValueError(
-            "response_time needs positive finite observations for the RT effect"
-        )
-    trial_type = _numeric_column(events, "trial_type")
-    if not np.isfinite(trial_type).all() or set(trial_type) != {0, 1}:
-        raise ValueError("trial_type must contain both binary codes 0 and 1")
+def _columns(task_model):
+    return {m.column for m in task_model.modulators}
+
+
+def validate_glm_events(events, task_model):
+    """Require an observed positive RT and both binary trial_type codes, if modeled."""
+    columns = _columns(task_model)
+    if "response_time" in columns:
+        rt = _numeric_column(events, "response_time")
+        if not (np.isfinite(rt) & (rt > 0)).any():
+            raise ValueError(
+                "response_time needs positive finite observations for the RT effect"
+            )
+    if "trial_type" in columns:
+        trial_type = _numeric_column(events, "trial_type")
+        if not np.isfinite(trial_type).all() or set(trial_type) != {0, 1}:
+            raise ValueError("trial_type must contain both binary codes 0 and 1")
 
 
 def _missing_nonpositive_rt(events):
     """Package semantics: missing means non-finite, so nonpositive RTs become NaN."""
+    if "response_time" not in events:
+        return events
     rt = _numeric_column(events, "response_time")
     return events.assign(response_time=np.where(np.isfinite(rt) & (rt > 0), rt, np.nan))
 
 
-def _trim(run):
+def _trim(run, task_model):
     flags = run.confounds.filter(like="non_steady_state_outlier")
     if not np.isin(flags.to_numpy(), [0, 1]).all():
         raise ValueError("Nonsteady flags must be binary")
@@ -87,7 +109,7 @@ def _trim(run):
     retained = np.arange(len(dropped), len(run.frame_times))
     if not len(retained):
         raise ValueError("No scans remain after trimming")
-    validate_glm_events(run.events)
+    validate_glm_events(run.events, task_model)
     return WorkflowRun(
         run.inputs,
         run.image,
@@ -100,18 +122,18 @@ def _trim(run):
     )
 
 
-def load_session(root, prep, *, subject="sub-07", session="ses-nsd10", hrf_only=False):
+def load_session(settings, *, hrf_only=False):
     """Keep original event onsets and acquisition times when dropping NSS scans."""
-    inputs = discover_runs(Path(root), Path(prep), subject=subject, session=session)
-    raw_runs, _ = load_runs(inputs)
-    runs = [_trim(run) for run in raw_runs]
+    raw_runs, _ = load_runs(discover_runs(settings))
+    task_model = detect_task_model([r.events for r in raw_runs], settings.modulators)
+    runs = [_trim(run, task_model) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
-        raise ValueError("Retained confound names must match across runs")
+        raise InputError("Retained confound names must match across runs")
     if len(runs) < 2:
-        raise ValueError("HRF selection needs at least two runs")
+        raise InputError("HRF selection needs at least two runs")
     if not hrf_only and any(len(half) < 2 for half in odd_even_parity(runs).values()):
-        raise ValueError("The full notebook needs at least two odd and two even runs")
-    return runs
+        raise InputError("The full workflow needs at least two odd and two even runs")
+    return tuple(runs)
 
 
 def block_signals(runs, indices):
@@ -139,7 +161,7 @@ def _trimmed_sources(run, root, indices):
     )
 
 
-def load_block(runs, root, indices):
+def load_block(runs, root, indices, task_model):
     """Raw trial rows for every analysis; the task model expands them."""
     return from_arrays(
         block_signals(runs, indices),
@@ -149,19 +171,19 @@ def load_block(runs, root, indices):
         sources=[_trimmed_sources(r, root, indices) for r in runs],
         provenance_metadata={
             "event_encoding": "raw_trials_with_task_model",
-            "task_model": NSD_TASK_MODEL.to_dict(),
+            "task_model": task_model.to_dict(),
         },
     )
 
 
-def glm_model(runs):
+def glm_model(runs, task_model):
     return ModelSpec(
-        contrasts={name: {name: 1} for name in REGRESSORS},
+        contrasts={name: {name: 1} for name in task_model.regressor_names},
         confounds=tuple(runs[0].confounds.columns),
         hrf_model="spm",
         drift_model=None,
         noise_model="ols",
-        task_model=NSD_TASK_MODEL,
+        task_model=task_model,
     )
 
 
@@ -191,20 +213,23 @@ def make_blocks(runs, *, block_size=4096, max_grayordinates=None):
     return blocks
 
 
-def run_summary(runs):
-    return pd.DataFrame(
-        [
-            dict(
-                run=r.label,
-                trials=len(r.events),
-                scans=r.image.shape[0],
-                retained_scans=len(r.frame_times),
-                dropped_scans=len(r.retained_frames) and int(r.retained_frames[0]),
-                first_frame_seconds=r.frame_times[0],
-                mean_rt_seconds=r.events.response_time.mean(),
-                type_0=int((r.events.trial_type == 0).sum()),
-                type_1=int((r.events.trial_type == 1).sum()),
-            )
-            for r in runs
-        ]
+def _run_row(run, columns):
+    row = dict(
+        run=run.label,
+        trials=len(run.events),
+        scans=run.image.shape[0],
+        retained_scans=len(run.frame_times),
+        dropped_scans=len(run.retained_frames) and int(run.retained_frames[0]),
+        first_frame_seconds=run.frame_times[0],
     )
+    if "response_time" in columns:
+        row["mean_rt_seconds"] = run.events.response_time.mean()
+    if "trial_type" in columns:
+        row["type_0"] = int((run.events.trial_type == 0).sum())
+        row["type_1"] = int((run.events.trial_type == 1).sum())
+    return row
+
+
+def run_summary(runs, task_model):
+    columns = _columns(task_model)
+    return pd.DataFrame([_run_row(r, columns) for r in runs])

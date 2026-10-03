@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import HrfLibrary
-from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session
+from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session
 from examples.NSD import workflow_outputs
 
 
@@ -276,7 +276,7 @@ def test_metadata_records_peak_hrf_normalization(four_runs):
 def test_metadata_pools_hrf_bound_flags_over_blocks(four_runs):
     from boldtailor.hrf_library import PARAMETER_NAMES
     from examples.NSD import workflow_analysis
-    from examples.NSD.workflow_inputs import make_blocks
+    from boldtailor.workflow.inputs import make_blocks
 
     library = HrfLibrary.from_parameters(
         [

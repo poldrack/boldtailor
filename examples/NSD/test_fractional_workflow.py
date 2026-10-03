@@ -18,7 +18,7 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts, tuning_table, tuning_figure
 from examples.NSD.workflow_outputs import _beta_artifacts
-from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
+from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
 
 
 def fit(runs, root, library=None, **kwargs):

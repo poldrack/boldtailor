@@ -14,7 +14,7 @@ from boldtailor.cifti import spatial_signature
 from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
 from boldtailor.workflow.files import odd_even_parity, reaction_times
-from .workflow_inputs import (
+from boldtailor.workflow.inputs import (
     NSD_TASK_MODEL,
     REGRESSORS,
     load_block,
