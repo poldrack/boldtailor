@@ -10,6 +10,7 @@ from boldtailor.hrf_library import (
     TIMING_BOUNDS,
     TIMING_NAMES,
     HrfLibrary,
+    LOG_SCALED_TIMING,
     realized_timing,
     sobol_hrf_library,
     spm_parameters,
@@ -179,3 +180,14 @@ def test_timing_sampler_keeps_drawing_when_most_of_the_box_is_infeasible():
     for candidate in library.candidates[1:]:
         peak_time, fwhm, *_ = realized_timing(candidate.parameters)
         assert 7.98 <= peak_time <= 8.52 and 5.47 <= fwhm <= 6.53
+
+
+def test_trough_depth_is_sampled_log_uniformly():
+    assert LOG_SCALED_TIMING == ("trough_depth",)
+    library = timing_hrf_library(n_samples=256, seed=5)
+    depths = np.array([realized_timing(c.parameters)[4] for c in library.candidates[1:]])
+    # log-uniform on 0.01-0.4 puts log(10)/log(40) = 62 % of the mass below 0.1;
+    # uniform sampling would put 23 % there.
+    assert 0.5 <= np.mean(depths < 0.1) <= 0.75
+    assert 0.04 <= np.median(depths) <= 0.09
+    assert dict(library.origin)["scales"] == {"trough_depth": "log"}
