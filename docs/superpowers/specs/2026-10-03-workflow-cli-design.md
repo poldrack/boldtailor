@@ -90,7 +90,7 @@ updated for the renamed descriptors.
 | `ridge_percentile` | 90.0 | fractional_cv and cv |
 | `ridge_alpha` | 0.1 | fixed |
 | `encoding_mode` | `"within_run"` | or `absolute` |
-| `stages` | all four | subset of `glms`, `reliability`, `betas`, `summaries`; `betas` and `summaries` require `glms` |
+| `stages` | all four | subset of `glms`, `reliability`, `betas`, `summaries`; `betas` requires `glms`, `summaries` requires `betas` |
 | `surface_maps`, `surface_meshes` | `True`, `None` | meshes found under `fmriprep_dir` when `None` |
 | `n_jobs`, `block_size`, `max_grayordinates` | 4, 4096, `None` | |
 | `existing_results` | `"error"` | or `overwrite` |
