@@ -53,6 +53,20 @@ def _assert_off_exports(files):
     ), "Disabled mode must not use the old default alpha"
 
 
+def _assert_two_point_grid_boundary(metadata):
+    # every winner of a two-value grid is an endpoint
+    rows = metadata["ridge_cv"]["at_boundary_fraction"]
+    assert {(r["mode"], r["scope"]) for r in rows} == {
+        (mode, scope)
+        for mode in ("canonical", "optimized")
+        for scope in ("all", "odd", "even")
+    }
+    assert all(r["fraction"] == 1.0 for r in rows)
+    scopes = {row["scope"] for row in metadata["hrf_boundary_summary"]}
+    assert scopes == {"all", "odd", "even"}
+    assert len(metadata["hrf_boundary_summary"]) == 36
+
+
 def _assert_cv_exports(files):
     _assert_tuned_betas(files, "RidgeCV")
     scores = [
@@ -64,6 +78,7 @@ def _assert_cv_exports(files):
     assert metadata["ridge_cv"]["percentile"] == 90.0
     assert metadata["noise_model"] == "ols"
     assert metadata["ridge_cv"]["encoding_mode"] == "within_run"
+    _assert_two_point_grid_boundary(metadata)
 
 
 def _assert_tuning_links(files):
@@ -103,6 +118,7 @@ def _assert_fractional_exports(files):
     assert metadata["ridge_cv"]["validation_target"] == "fixed_ols_betas"
     assert metadata["ridge_cv"]["objective"] == "maximum_encoding_r2_per_grayordinate"
     assert metadata["ridge_cv"]["percentile_role"] == "descriptive_only"
+    _assert_two_point_grid_boundary(metadata)
     _assert_tuning_links(files)
 
 
@@ -255,3 +271,37 @@ def test_metadata_records_peak_hrf_normalization(four_runs):
     runs = load_session(*four_runs)
     published = workflow_outputs._metadata(runs, library, {})
     assert published["hrf_normalization"] == "peak_one_event_response"
+
+
+def test_metadata_pools_hrf_bound_flags_over_blocks(four_runs):
+    from boldtailor.hrf_library import PARAMETER_NAMES
+    from examples.NSD import workflow_analysis
+    from examples.NSD.workflow_inputs import make_blocks
+
+    library = HrfLibrary.from_parameters(
+        [
+            [3, 10, 0.5, 0.5, 2, 0, 36],
+            [4, 12, 1, 1.5, 5, 1, 36],
+            [6, 16, 1.5, 2.5, 8, 2, 36],
+        ]
+    )
+    runs = load_session(*four_runs)
+    blocks = make_blocks(runs, block_size=2, max_grayordinates=4)
+    selections = workflow_analysis.select_hrfs(runs, four_runs[0], blocks, library)
+    assert len(selections) > 1
+    published = workflow_outputs._metadata(runs, library, {}, selections=selections)
+    rows = pd.DataFrame(published["hrf_boundary_summary"])
+    for scope in ("all", "odd", "even"):
+        picked = [
+            bundle[scope] if scope == "all" else bundle[scope].training_selection
+            for bundle in selections.values()
+        ]
+        ids = np.concatenate([p.hrf_indices for p in picked])
+        flags = np.concatenate([p.parameter_bound_flags for p in picked])[ids > 0]
+        table = rows.loc[rows.scope == scope]
+        assert (table.n_custom == (ids > 0).sum()).all()
+        for row in table.itertuples():
+            p = PARAMETER_NAMES.index(row.parameter)
+            e = ("low", "high").index(row.edge)
+            expected = flags[:, p, e].mean() if len(flags) else np.nan
+            np.testing.assert_allclose(row.fraction_flagged, expected)
