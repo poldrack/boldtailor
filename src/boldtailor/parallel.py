@@ -8,14 +8,14 @@ transfers small.
 """
 
 from itertools import islice
-from numbers import Integral
-
 from joblib import Parallel, delayed, parallel_config
+
+from boldtailor._scalars import is_integer
 
 
 def validate_n_jobs(n_jobs):
     """Return a positive integer worker count; booleans are rejected."""
-    if isinstance(n_jobs, bool) or not isinstance(n_jobs, Integral) or n_jobs < 1:
+    if not is_integer(n_jobs) or n_jobs < 1:
         raise ValueError("n_jobs must be a positive integer")
     return int(n_jobs)
 
