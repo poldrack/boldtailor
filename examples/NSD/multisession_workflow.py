@@ -30,7 +30,7 @@ SCIENCE_SETTINGS = (
 )
 
 
-def _with_paths(config, sessions):
+def resolve_paths(config, sessions):
     """Explicit or NSD_* paths; the output root defaults to the workflow's own."""
     config = {**config, **nsd_paths(config)}
     if "output_root" not in config:
@@ -42,7 +42,7 @@ def _with_paths(config, sessions):
 
 def _inherit_settings(config, sessions, estimators):
     """Use an existing session as the scientific template for missing sessions."""
-    config = _with_paths(config, sessions)
+    config = resolve_paths(config, sessions)
     subject = config.get("subject", "sub-07")
     for session in sessions:
         path = summary_paths(config["output_root"], subject, session, estimators)[
