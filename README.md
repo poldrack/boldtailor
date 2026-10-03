@@ -123,8 +123,13 @@ The published GLMsingle workflow selects HRFs by in-sample fit, then uses
 repeated conditions to tune data-derived denoising and fractional ridge.
 Boldtailor's HRF selection needs no repeated images, but assumes that the
 task-model response (the mean response under the default `TaskModel()`)
-transfers between runs. Like GLMsingle, Boldtailor scales every HRF kernel
-to a peak of one, so betas are peak responses in signal units. Its ridge CV predicts trial
+transfers between runs. Every event's predicted response is scaled to a peak of one (kernels are
+also stored at unit peak). A beta is therefore the peak BOLD response to that
+presentation in signal units, independent of TR, oversampling, and event
+duration, and comparable across grayordinates with different selected HRFs.
+This matches GLMsingle's convention. Nilearn derivative and FIR bases and
+user-supplied kernels are passed to Nilearn unchanged and keep its
+sum-to-one scaling. Its ridge CV predicts trial
 beta series from variables such as trial type and RT. Fractional CV scores
 fixed OLS targets; shared-alpha CV scores candidate-regularized targets. Both
 assume that the predictor relationships transfer across runs. See the

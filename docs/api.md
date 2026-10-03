@@ -291,10 +291,17 @@ SPM candidates require the exact canonical parameter tuple
 `(6, 16, 1, 1, 6, 0, 32)`.
 
 `HrfLibrary` exposes `candidates`, `parameter_table`, `curves`, `times`, and
-`fingerprint`. Every curve peaks at one. Plain `hrf_model="spm"` or
-`"glover"` in `ModelSpec` uses the same peak-one scaling, so canonical and
+`fingerprint`. Every curve peaks at one. Every event's predicted response is scaled to a peak of one (kernels are
+also stored at unit peak). A beta is therefore the peak BOLD response to that
+presentation in signal units, independent of TR, oversampling, and event
+duration, and comparable across grayordinates with different selected HRFs.
+This matches GLMsingle's convention. Nilearn derivative and FIR bases and
+user-supplied kernels are passed to Nilearn unchanged and keep its
+sum-to-one scaling. Plain `hrf_model="spm"` or
+`"glover"` in `ModelSpec` follows the same convention, so canonical and
 selected-HRF betas share a scale; provenance records
-`hrf_normalization="peak_one"`. Table rows and curve rows follow stable candidate IDs. The
+`hrf_normalization="peak_one_event_response"` (Nilearn basis strings record
+`"nilearn_sum_one"`). Table rows and curve rows follow stable candidate IDs. The
 table's `peak_time` is the full-curve maximum on the 0.1-second export grid.
 Custom rows are sorted deterministically; duplicate rows are rejected.
 

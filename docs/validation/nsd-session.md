@@ -4,11 +4,12 @@
 > revision/settings, not necessarily this checkout. See the
 > [documentation index](../README.md) for current API and methods guidance.
 
-> **Note (2026-10-02):** Recorded beta magnitudes below predate peak
-> normalization of HRF kernels. They were fitted with sum-to-one kernels;
-> current betas are smaller by each kernel's sum-to-peak ratio (about 148 for
-> canonical SPM at NSD's 1.6 s TR with oversampling 50; the ratio differs
-> between selected kernels). HRF selections, R², and fractions are
+> **Note (2026-10-02):** Recorded beta magnitudes below predate per-event
+> unit-peak normalization. They were fitted with sum-to-one kernels and unit
+> event amplitudes; current betas are the peak response to each presentation,
+> so their magnitudes differ by an event- and kernel-dependent factor (for
+> reference, canonical SPM's kernel sum-to-peak ratio at TR 1.6 s and
+> oversampling 50 is about 148). HRF selections, R², and fractions are
 > scale-invariant and unaffected.
 
 These measurements describe the September 2026 analyses of `sub-07/ses-nsd10`.

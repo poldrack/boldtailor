@@ -202,6 +202,8 @@ def _model_provenance(model: ModelSpec) -> _ModelProvenance:
     }
     if model.hrf_model in ("spm", "glover"):
         activity["hrf_normalization"] = HRF_NORMALIZATION
+    elif isinstance(model.hrf_model, str):
+        activity["hrf_normalization"] = "nilearn_sum_one"
     if model.task_model is not None:
         activity["task_model"] = model.task_model.to_dict()
         activity["task_model_fingerprint"] = model.task_model.fingerprint

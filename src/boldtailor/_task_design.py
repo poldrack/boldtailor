@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._hrf_design import resolve_hrf
+from boldtailor._hrf_design import resolve_hrf, scale_event_amplitudes
 from boldtailor.model import TaskModel
 
 
@@ -69,10 +69,13 @@ def expand_events(events, task_model, run=0):
 def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50):
     """Nilearn task columns for one HRF: no drift, no constant, semantic names.
 
-    Plain 'spm' and 'glover' become their peak-one kernels before Nilearn.
+    Plain 'spm' and 'glover' become their peak-one kernels before Nilearn, and
+    kernel amplitudes are scaled so each event's response peaks at one.
     """
     times = np.asarray(frame_times, dtype=float)
     hrf = resolve_hrf(hrf)
+    if callable(hrf):
+        expanded = scale_event_amplitudes(expanded, hrf, times, oversampling)
     with redirect_stdout(io.StringIO()):
         matrix = make_first_level_design_matrix(
             times,

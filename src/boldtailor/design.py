@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._hrf_design import resolve_hrf
+from boldtailor._hrf_design import resolve_hrf, scale_event_amplitudes
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import AnalysisData
 from boldtailor.model import ModelSpec
@@ -130,13 +130,15 @@ def _make_design_matrix(
 def kernel_task_columns(frame_times, events, kernel, model, run):
     """Nilearn condition columns for one peak-one kernel, in Nilearn's order.
 
-    Task columns are built apart from nuisance columns: Nilearn appends the
+    Each event's amplitude is scaled so its response peaks at one. Task
+    columns are built apart from nuisance columns: Nilearn appends the
     callable's name, which must neither rename contrasts nor hit a confound.
     """
     try:
+        scaled = scale_event_amplitudes(events, kernel, frame_times, model.oversampling)
         task = make_first_level_design_matrix(
             frame_times,
-            events=events,
+            events=scaled,
             hrf_model=kernel,
             drift_model=None,
             min_onset=model.min_onset,

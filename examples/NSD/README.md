@@ -483,9 +483,13 @@ coefficients are unpenalized and betas retain the input signal scale.
 ## How optimized HRFs are selected
 
 The expanded library has 649 candidates: canonical SPM plus 648 double-gamma
-HRFs varying in delay, dispersion, undershoot, and onset. Each kernel is
-scaled to a peak of one, so betas are peak responses in native signal units
-and canonical and optimized betas share a scale. Selection predicts each held-out run's task-model response
+HRFs varying in delay, dispersion, undershoot, and onset. Every event's predicted response is scaled to a peak of one (kernels are
+also stored at unit peak). A beta is therefore the peak BOLD response to that
+presentation in signal units, independent of TR, oversampling, and event
+duration, and comparable across grayordinates with different selected HRFs.
+This matches GLMsingle's convention. Nilearn derivative and FIR bases and
+user-supplied kernels are passed to Nilearn unchanged and keep its
+sum-to-one scaling. Canonical and optimized betas therefore share a scale. Selection predicts each held-out run's task-model response
 (task, centered RT, uncentered trial type) from the other runs; final beta estimation allows every trial its own amplitude.
 
 Three selections serve different purposes:

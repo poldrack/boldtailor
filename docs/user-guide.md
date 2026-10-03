@@ -462,13 +462,13 @@ confound columns are full rank with residual degrees of freedom in every run
 and the pooled training design is invertible in every fold.
 
 This method assumes that task-model amplitudes transfer across runs. It does
-not require repeated images. Every kernel Boldtailor builds or selects,
-including canonical SPM and Glover, is scaled to a peak amplitude of one. A
-beta is therefore the peak BOLD response to a unit-amplitude event in signal
-units, and betas are comparable across grayordinates with different selected
-HRFs. Nilearn basis strings with derivatives or FIR are passed to Nilearn
-unchanged and keep its sum-to-one scaling, so their betas are not on the same
-scale as selected-HRF betas.
+not require repeated images. Every event's predicted response is scaled to a
+peak of one (kernels are also stored at unit peak). A beta is therefore the
+peak BOLD response to that presentation in signal units, independent of TR,
+oversampling, and event duration, and comparable across grayordinates with
+different selected HRFs. This matches GLMsingle's convention. Nilearn
+derivative and FIR bases and user-supplied kernels are passed to Nilearn
+unchanged and keep its sum-to-one scaling.
 
 The winning selection-CV score was used to choose the HRF. For independent
 evaluation, select within a training set and predict a separate test set:
