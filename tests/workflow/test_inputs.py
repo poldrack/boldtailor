@@ -216,6 +216,7 @@ def test_trimming_errors_name_the_bids_run(four_runs, settings_for):
     root, prep = four_runs
     path = next(prep.rglob("*run-03*confounds_timeseries.tsv"))
     table = pd.read_csv(path, sep="\t")
+    table["non_steady_state_outlier00"] = table.non_steady_state_outlier00.astype(float)
     table.loc[0, "non_steady_state_outlier00"] = 0.5
     table.to_csv(path, sep="\t", index=False)
     with pytest.raises(inputs.InputError, match="run-03.*binary"):
