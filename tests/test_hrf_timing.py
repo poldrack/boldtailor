@@ -165,7 +165,7 @@ def test_default_timing_bounds_cover_the_requested_ranges():
         "response_fwhm": (2.0, 6.5),
         "trough_time": (8.0, 19.0),
         "undershoot_fwhm": (4.0, 10.0),
-        "trough_depth": (0.05, 0.4),
+        "trough_depth": (0.01, 0.4),
     }
 
 
