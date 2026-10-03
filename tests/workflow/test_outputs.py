@@ -645,3 +645,28 @@ def test_workflow_artifacts_are_the_published_set_less_report_and_description(
     assert {a.path for a in listed} <= published
     assert f"{settings.stem}_desc-Example_plot.png" in published
     assert not any("HRFOdd" in a.path for a in listed)
+
+
+def test_metadata_records_undefined_bound_fractions_as_null(four_runs, settings_for):
+    root, _ = four_runs
+    settings = settings_for(root, hrf_library="canonical")
+    runs, model, _ = _session(settings)
+    library = settings.build_library()
+    blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
+    selections = analysis.select_hrfs(
+        runs, root, blocks, library, task_model=model, splits=False
+    )
+    published = outputs.metadata(
+        runs,
+        library,
+        settings,
+        model,
+        beta_models={},
+        activation=None,
+        selections=selections,
+        skipped=(),
+        report=None,
+    )
+    rows = json.loads(json.dumps(published, allow_nan=False))["hrf_boundary_summary"]
+    assert rows and all(r["n_custom"] == 0 for r in rows)
+    assert all(r["fraction_flagged"] is None for r in rows)
