@@ -80,9 +80,7 @@ Raw beta magnitudes need care when comparing packages. Every event's predicted r
 also stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
 duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Nilearn derivative and FIR bases and
-user-supplied kernels are passed to Nilearn unchanged and keep its
-sum-to-one scaling. Remaining
+This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given. Remaining
 scale differences come from signal units and nuisance handling.
 [GLMsingle normalization FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#if-the-hrf-changes-from-voxel-to-voxel-doesn-t-that-pose-some-interpretation-difficulties-or-confounding-issues).
 

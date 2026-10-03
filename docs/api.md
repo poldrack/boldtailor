@@ -326,13 +326,11 @@ custom values and nonzero width), `candidate_bound_flags(margin=0.02)`
 also stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
 duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Nilearn derivative and FIR bases and
-user-supplied kernels are passed to Nilearn unchanged and keep its
-sum-to-one scaling. Plain `hrf_model="spm"` or
+This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given. Plain `hrf_model="spm"` or
 `"glover"` in `ModelSpec` follows the same convention, so canonical and
 selected-HRF betas share a scale; provenance records
-`hrf_normalization="peak_one_event_response"` (Nilearn basis strings record
-`"nilearn_sum_one"`). Table rows and curve rows follow stable candidate IDs. The
+`hrf_normalization="peak_one_event_response"` (Nilearn derivative bases record
+`"nilearn_sum_one"`; FIR and user-supplied kernels record no normalization). Table rows and curve rows follow stable candidate IDs. The
 table's `peak_time` is the full-curve maximum on the 0.1-second export grid.
 Custom rows are sorted deterministically; duplicate rows are rejected.
 
