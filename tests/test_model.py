@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from boldtailor.model import ModelSpec, TaskModel
+from boldtailor.model import (
+    ModelSpec,
+    TaskModel,
+    model_identity,
+    nuisance_model_settings,
+)
 
 
 def test_model_spec_owns_contrasts_and_confounds():
@@ -93,3 +98,43 @@ def test_model_spec_accepts_task_model_with_spm_or_glover():
 def test_model_spec_rejects_invalid_task_model(kwargs, message):
     with pytest.raises(ValueError, match=message):
         ModelSpec(contrasts={"task": {"task": 1}}, **kwargs)
+
+
+def test_model_identity_reports_selected_hrf_without_a_lazy_import():
+    import boldtailor.fit as fit_module
+
+    spec = ModelSpec(contrasts={"c": "a"}, task_model=TaskModel())
+    identity = model_identity(spec, hrf_model={"kind": "selected"})
+    assert identity.activity["hrf_model"] == {"kind": "selected"}
+    assert identity.activity["task_model"] == spec.task_model.to_dict()
+    assert identity.activity["task_model_fingerprint"] == spec.task_model.fingerprint
+    assert identity.fingerprint == identity.activity
+    assert not hasattr(fit_module, "_model_provenance")
+
+
+def test_model_identity_keeps_the_models_own_hrf_by_default():
+    spec = ModelSpec(contrasts={"c": "a"}, hrf_model="spm")
+    assert model_identity(spec).activity["hrf_model"] == "spm"
+
+
+def test_nuisance_model_settings_describe_the_nuisance_only_model():
+    spec = ModelSpec(contrasts={"c": "a"}, confounds=["motion"])
+    settings = nuisance_model_settings(spec)
+    assert settings["events"] is False
+    assert settings["confounds"] == ["motion"]
+    assert settings["noise_model"] == "ols"
+
+
+def test_fit_modules_import_without_a_cycle():
+    import subprocess
+    import sys
+
+    code = "import boldtailor._hrf_glm, boldtailor.fit, boldtailor.model"
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_prepared_shares_the_run_count_validator_with_data():
+    import boldtailor.data as data_module
+    import boldtailor.prepared as prepared_module
+
+    assert prepared_module._validate_run_count is data_module._validate_run_count
