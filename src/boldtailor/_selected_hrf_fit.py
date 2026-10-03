@@ -117,7 +117,8 @@ def _rebuilder(runs, ids):
     fitted = frozenset(int(cid) for cid in np.unique(ids[ids >= 0]))
 
     def rebuild(run, hrf_id):
-        if run not in range(len(runs)) or hrf_id not in fitted:
+        valid_run = isinstance(run, (int, np.integer)) and 0 <= run < len(runs)
+        if not valid_run or hrf_id not in fitted:
             raise KeyError(f"no fitted design for run {run!r}, HRF {hrf_id!r}")
         design = runs[run]
         return np.column_stack([design.trial_matrix(int(hrf_id)), design.nuisance])

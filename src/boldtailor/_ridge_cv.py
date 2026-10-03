@@ -80,22 +80,31 @@ class RunBetaPath:
         return betas
 
 
+def run_tables(data):
+    """Copy every run's events and confounds once for a per-run loop."""
+    return tuple(
+        zip(data.events, data.frame_times, data.confounds, data.signals, strict=True)
+    )
+
+
 def prepare_run_beta_path(data, run_index, prepared, ids, label, *, fractional=False):
     """Prepare each selected HRF group once for this run and fold."""
-    r = run_index
-    events, y = data.events[r], data.signals[r]
+    tables = run_tables(data)[run_index]
+    return _beta_path(tables, run_index, prepared, ids, label, fractional)
+
+
+def _beta_path(tables, r, prepared, ids, label, fractional):
+    events, times, confounds, y = tables
     groups = []
     prepare = prepare_fraction_betas if fractional else prepare_trial_betas
     if prepared is None:
-        x, n, _ = compile_trial_run(
-            events, data.frame_times[r], data.confounds[r], label
-        )
+        x, n, _ = compile_trial_run(events, times, confounds, label)
     for cid in np.unique(ids[ids >= 0]):
         features = np.flatnonzero(ids == cid)
         if prepared is not None:
             x, n = prepared[r].trial_matrix(int(cid)), prepared[r].nuisance
         groups.append((features, prepare(x, n, y[:, features])))
-    return RunBetaPath((len(events), data.n_features), tuple(groups))
+    return RunBetaPath((len(events), y.shape[1]), tuple(groups))
 
 
 def _fold_selection(data, library, labels, signature, train):
@@ -126,13 +135,9 @@ def _score_fold(
     train = [r for r in range(data.n_runs) if r != test]
     ids, selection_record = _fold_selection(data, library, labels, signature, train)
     paths = []
-    for r in range(data.n_runs):
+    for r, tables in enumerate(run_tables(data)):
         try:
-            paths.append(
-                prepare_run_beta_path(
-                    data, r, prepared, ids, labels[r], fractional=fractional
-                )
-            )
+            paths.append(_beta_path(tables, r, prepared, ids, labels[r], fractional))
         except ValueError as error:
             raise ValueError(
                 f"validation {labels[test]}, beta run {labels[r]}: {error}"

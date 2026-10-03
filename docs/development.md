@@ -100,7 +100,10 @@ and penalty metadata. Its `design` is a `SharedTrialDesign` for one HRF across
 features or a `SelectedTrialDesign` for grouped HRF assignments. Each design
 container owns its matrices (a selected design rebuilds them on request
 instead of retaining one per `(run, hrf_id)`), so the result does not duplicate
-that copying logic. Common numerical fields stay directly on the result. See
+that copying logic. `SingleTrialResult` with a `SelectedTrialDesign`, and
+`HrfAnalysisResult`, hold rebuild closures and cannot be pickled; parallel
+workers must return arrays or dicts (as the NSD examples do). Common numerical
+fields stay directly on the result. See
 [result migration](result-migration.md) for API changes.
 
 ## Numerical conventions
