@@ -7,7 +7,12 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._hrf_design import resolve_hrf, scale_event_amplitudes
+from boldtailor._hrf_design import (  # event_response_scales, hrf_model: public
+    event_response_scales,
+    hrf_model,
+    resolve_hrf,
+    scale_event_amplitudes,
+)
 from boldtailor._task_design import (  # expand_events, task_columns: public
     expand_events,
     run_task_columns,
