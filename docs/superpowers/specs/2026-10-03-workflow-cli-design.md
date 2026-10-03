@@ -10,7 +10,8 @@ the pipeline that today lives in `examples/NSD` into the package so it is
 tested by default and usable for tasks other than NSD.
 
 Success means: `boldtailor run --bids-dir D --subject S --session E --task T`
-writes a complete BIDS derivative under `D/derivatives/boldtailor_<name>`; the
+writes a complete BIDS derivative under `D/derivatives/boldtailor_<name>`
+with an HTML report of every stage; the
 NSD notebooks produce the same maps using the package; the default test suite
 covers every stage; no code in the package imports from `examples`.
 
@@ -49,6 +50,7 @@ src/boldtailor/workflow/
     artifacts.py     shared artifact helpers (tables, JSON, figures, scalars)
     plots.py         figures
     surfaces.py      surface rendering
+    report.py        self-contained HTML report of every stage
     run.py           run_workflow(settings) -> WorkflowPaths
 src/boldtailor/cli.py   argparse front end; console script `boldtailor`
 ```
@@ -159,6 +161,25 @@ map and tuning curve, or `None` for `fixed` and `off`), `encoding_scores`
 (held-out task ΔR² where cross-validated, else `None`), boundary flags, and
 provenance. One writer in `outputs.py` serialises it for every mode.
 
+## HTML report
+
+After the stages finish, `report.py` writes one self-contained file,
+`<output_dir>/<sub>_<ses>_task-<task>_report.html`, at the derivative root
+(fMRIPrep's convention). It is built with the standard library only; figures
+are embedded as base64 PNG so the file opens anywhere without the output tree.
+
+Sections, in stage order, each rendered from the stage's results rather than
+by re-reading files: settings and the equivalent command line; inputs (run
+summary table, confound names, detected task model, library fingerprint);
+design matrix figure; HRF library figure and table head; GLM comparison table
+with the cortical R² and ΔR² surface figures; selected-HRF and peak-time
+summaries; reliability tables and figures; beta-series tuning tables and
+figures, encoding scores, and boundary summaries; RT and activation figures;
+skipped stages with their reasons; and a file manifest linking every written
+artifact and its provenance JSON by relative path. A skipped or disabled stage
+renders a one-line note in its section. The report is written last and is
+listed in the settings file, so an incomplete run has no report.
+
 ## Outputs
 
 Layout: `<output_dir>/dataset_description.json`;
@@ -209,6 +230,9 @@ returns the exit code so tests call it directly.
   modes; `run_workflow` end to end on the fixture with each stage toggled and
   with too few runs for reliability; CLI parsing, `--dry-run`, exit codes;
   outputs readable back with the renamed descriptors.
+- Report: the HTML is produced on the fixture run, parses as well-formed
+  HTML, contains one section per stage, embeds every figure, lists every
+  written file, and notes skipped stages.
 - Opt-in `examples/NSD` tests cover the notebooks and the session and
   multisession helpers after re-pointing.
 - Package tests for the removed centering are replaced by tests asserting the
