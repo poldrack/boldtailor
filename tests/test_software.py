@@ -57,3 +57,31 @@ def test_imports_do_not_query_versions():
         [sys.executable, "-c", code], text=True, capture_output=True, timeout=30
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_software_environment_lists_interpreter_platform_and_packages():
+    import platform
+
+    import nilearn
+    import numpy
+    import pandas
+    import scipy
+
+    from boldtailor._software import software_environment
+
+    env = software_environment()
+    assert env["python"] == platform.python_version()
+    assert env["platform"] == platform.platform()
+    assert env["numpy"] == numpy.__version__
+    assert env["scipy"] == scipy.__version__
+    assert env["pandas"] == pandas.__version__
+    assert env["nilearn"] == nilearn.__version__
+    assert set(env) == {
+        "python",
+        "platform",
+        "boldtailor",
+        "numpy",
+        "scipy",
+        "pandas",
+        "nilearn",
+    }

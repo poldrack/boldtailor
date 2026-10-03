@@ -14,6 +14,7 @@ from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
+from boldtailor._software import software_environment
 
 ENTRY_POINTS = [
     "fit",
@@ -294,3 +295,10 @@ def test_early_argument_failure_logs_failed_and_never_completed(
     assert events[-1]["error_code"] == "invalid_input"
     assert "private" not in caplog.text
     _assert_context_reset()
+
+
+@pytest.mark.parametrize("name", ENTRY_POINTS)
+def test_every_operation_records_the_software_environment(name, run_entry_point):
+    result = run_entry_point(name)
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["software"] == software_environment()
