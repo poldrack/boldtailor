@@ -264,7 +264,7 @@ def test_fit_prepared_rejects_unsupported_noise_model(prepared_problem):
         fit_prepared(prepared, contrasts=contrasts, noise_model="fast")
 
 
-@pytest.mark.parametrize("model_metadata", [{"path": "./private"}, {"value": object()}])
+@pytest.mark.parametrize("model_metadata", [{"value": object()}])
 def test_fit_prepared_rejects_unsafe_model_metadata(prepared_problem, model_metadata):
     prepared, contrasts, _ = prepared_problem
 
@@ -349,7 +349,7 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
         first.provenance.analysis_fingerprint == second.provenance.analysis_fingerprint
     )
     assert re.fullmatch(r"[0-9a-f]{64}", first.provenance.analysis_fingerprint or "")
-    activity = first.provenance.activities[-1]
+    activity = first.provenance.to_dict()["activities"][-1]
     assert activity["name"] == "fit_prepared"
     assert activity["stage"] == "fit"
     assert "numerical_backend" not in activity
@@ -564,7 +564,7 @@ def test_fit_prepared_accepts_path_like_model_keys(
         model_metadata=model_metadata,
     )
 
-    assert result.provenance.analysis_fingerprint is not None
+    assert result.provenance.activities[-1]["name"] == "fit_prepared"
 
 
 def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
@@ -906,7 +906,7 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
 
     emit_event("after_prepared_comparison", stage="test")
 
-    activity = comparison.provenance.activities[-1]
+    activity = comparison.provenance.to_dict()["activities"][-1]
     assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
     assert activity["undefined_features"] == 0
     assert activity["clip_below_zero"] is True

@@ -415,7 +415,7 @@ def _as_metadata_runs(
 def _freeze_metadata(values: Mapping[str, object]) -> Mapping[str, object]:
     if not isinstance(values, Mapping):
         raise ValueError("run_metadata must contain mappings")
-    return _freeze_mapping(values, path_safe=True)
+    return _freeze_mapping(values)
 
 
 def _prepare_provenance_metadata(
@@ -423,4 +423,4 @@ def _prepare_provenance_metadata(
 ) -> Mapping[str, object] | None:
     if values is None:
         return None
-    return _freeze_mapping(values, path_safe=True)
+    return _freeze_mapping(values)

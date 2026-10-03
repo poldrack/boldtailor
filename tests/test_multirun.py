@@ -205,7 +205,7 @@ def test_fit_records_run_diagnostics_without_serializing_design_values(
         ),
         model,
     )
-    runs = result.provenance.activities[-1]["runs"]
+    runs = result.provenance.to_dict()["activities"][-1]["runs"]
     serialized = result.provenance.canonical_json()
 
     assert len(runs) == 2

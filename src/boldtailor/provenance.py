@@ -2,32 +2,21 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 import hashlib
 import json
 import math
 import re
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from types import MappingProxyType
 from uuid import UUID
 
 SCHEMA_ID = "boldtailor.provenance/1"
+_PATH_COMPONENT = re.compile(r"[A-Za-z0-9+_.-]+")
 _QUALITY_WARNING = {
     "code": "provenance_quality",
     "message": "source metadata incomplete or anonymous; metadata fingerprint unavailable",
 }
-
-
-class _FrozenSequence(tuple):
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, Sequence) and not isinstance(
-            other,
-            (str, bytes, bytearray),
-        ):
-            return tuple(self) == tuple(other)
-        return False
-
-    __hash__ = tuple.__hash__
 
 
 @dataclass(frozen=True)
@@ -47,11 +36,7 @@ class SourceRef:
         object.__setattr__(self, "byte_size", _validate_byte_size(self.byte_size))
         object.__setattr__(self, "modified_at", _validate_modified_at(self.modified_at))
         object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
-        object.__setattr__(
-            self,
-            "annotations",
-            _freeze_mapping(self.annotations, path_safe=True),
-        )
+        object.__setattr__(self, "annotations", _freeze_mapping(self.annotations))
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {"role": self.role}
@@ -151,7 +136,7 @@ class ProvenanceRecord:
             "warnings",
             _augment_warnings(_freeze_mapping_sequence(self.warnings), fingerprint),
         )
-        object.__setattr__(self, "_extra", _freeze_mapping(self._extra, path_safe=True))
+        object.__setattr__(self, "_extra", _freeze_mapping(self._extra))
         object.__setattr__(
             self,
             "_metadata_fingerprint",
@@ -221,7 +206,7 @@ def analysis_fingerprint(
         return None
     payload = {
         "data_fingerprint": metadata_fingerprint,
-        "model": _thaw(_freeze_mapping(model, path_safe=True)),
+        "model": _thaw(_freeze_mapping(model)),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -328,14 +313,15 @@ def _validate_sha256(value: object) -> str | None:
 def _validate_modified_at(value: object) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value.endswith("Z"):
-        raise ValueError("modified_at must be a UTC ISO-8601 string")
+    message = "modified_at must be a UTC ISO-8601 string ending in Z or +00:00"
+    if not isinstance(value, str) or not value.endswith(("Z", "+00:00")):
+        raise ValueError(message)
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError as error:
-        raise ValueError("modified_at must be a UTC ISO-8601 string") from error
-    if parsed.tzinfo != timezone.utc:
-        raise ValueError("modified_at must be a UTC ISO-8601 string")
+        raise ValueError(message) from error
+    if parsed.utcoffset() != timedelta(0):
+        raise ValueError(message)
     return value
 
 
@@ -348,34 +334,31 @@ def _validate_uri(value: object) -> str | None:
         return _validate_bids_uri(value)
     if _has_non_bids_scheme(value):
         raise ValueError("uri must be dataset-relative POSIX text or a valid BIDS URI")
-    return _validate_relative_uri(value)
+    return validate_relative_path(value, name="uri")
 
 
 def _validate_bids_uri(value: str) -> str:
     parts = value.split(":", 2)
     if len(parts) != 3 or not parts[1] or not parts[2]:
         raise ValueError("uri must be a valid BIDS URI")
-    _validate_relative_path(parts[2])
+    validate_relative_path(parts[2], name="uri")
     return value
 
 
-def _validate_relative_uri(value: str) -> str:
-    if value.startswith("/"):
-        raise ValueError("uri must be dataset-relative")
-    _validate_relative_path(value)
-    return value
-
-
-def _validate_relative_path(value: str) -> None:
-    if "\\" in value:
-        raise ValueError("uri must be dataset-relative POSIX text")
-    path = PurePosixPath(value)
-    if path.is_absolute():
-        raise ValueError("uri must be dataset-relative")
-    if any(part in {"..", "."} for part in path.parts):
-        raise ValueError("uri must not contain traversal")
-    if not path.parts:
-        raise ValueError("uri must be dataset-relative")
+def validate_relative_path(text: object, *, name: str = "path") -> str:
+    """Return ``text`` if it is a dataset-relative POSIX path of safe components."""
+    if not isinstance(text, str) or not text:
+        raise ValueError(f"{name} must be a non-empty dataset-relative path")
+    if text.startswith("/"):
+        raise ValueError(f"{name} must be a dataset-relative path, not absolute")
+    parts = text.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(
+            f"{name} must be a relative path without traversal or empty components"
+        )
+    if not all(_PATH_COMPONENT.fullmatch(part) for part in parts):
+        raise ValueError(f"{name} must be a relative path of [A-Za-z0-9+_.-] parts")
+    return text
 
 
 def _has_non_bids_scheme(value: str) -> bool:
@@ -406,64 +389,38 @@ def _validate_schema(value: object) -> str:
 def _freeze_mapping_sequence(
     values: Sequence[Mapping[str, object]],
 ) -> tuple[Mapping[str, object], ...]:
-    return tuple(_freeze_mapping(value, path_safe=True) for value in values)
+    return tuple(_freeze_mapping(value) for value in values)
 
 
-def _freeze_mapping(value: object, *, path_safe: bool) -> Mapping[str, object]:
+def _freeze_mapping(value: object) -> Mapping[str, object]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, Mapping):
         raise ValueError("annotations must be a mapping")
-    frozen = {
-        _freeze_key(key, path_safe=path_safe): _freeze_json(
-            item,
-            path_safe=path_safe,
-        )
-        for key, item in value.items()
-    }
+    frozen = {_freeze_key(key): _freeze_json(item) for key, item in value.items()}
     return MappingProxyType(frozen)
 
 
-def _freeze_key(value: object, *, path_safe: bool) -> str:
+def _freeze_key(value: object) -> str:
     if not isinstance(value, str):
         raise ValueError("JSON-safe mappings require string keys")
-    if path_safe and _looks_path_like(value):
-        raise ValueError("path-like keys are not allowed")
     return value
 
 
-def _freeze_json(value: object, *, path_safe: bool) -> object:
-    if value is None or isinstance(value, bool):
-        return value
-    if isinstance(value, int):
+def _freeze_json(value: object) -> object:
+    if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
             raise ValueError("values must be JSON-safe")
         return value
-    if isinstance(value, str):
-        if path_safe and _looks_path_like(value):
-            raise ValueError("path-like values are not allowed")
-        return value
     if isinstance(value, Path):
-        raise ValueError("path-like values are not allowed")
+        raise ValueError("path-like objects are not JSON-safe; pass text")
     if isinstance(value, Mapping):
-        return _freeze_mapping(value, path_safe=path_safe)
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return _FrozenSequence(
-            _freeze_json(item, path_safe=path_safe) for item in value
-        )
+        return _freeze_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        return tuple(_freeze_json(item) for item in value)
     raise ValueError("values must be JSON-safe")
-
-
-def _looks_path_like(value: str) -> bool:
-    if not value:
-        return False
-    if value.startswith(("~", "/", "../", "./")):
-        return True
-    if "\\" in value:
-        return True
-    return value.startswith("bids:") or "/../" in value or "/./" in value
 
 
 def _thaw(value: object) -> object:
@@ -482,7 +439,7 @@ def _augment_warnings(
         return warnings
     if any(warning.get("code") == _QUALITY_WARNING["code"] for warning in warnings):
         return warnings
-    return warnings + (_freeze_mapping(_QUALITY_WARNING, path_safe=True),)
+    return warnings + (_freeze_mapping(_QUALITY_WARNING),)
 
 
 def _metadata_fingerprint(sources: Sequence[RunSources]) -> str | None:

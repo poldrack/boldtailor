@@ -432,7 +432,7 @@ def test_fit_serializes_model_spec_and_run_diagnostics(
         ),
         model,
     )
-    activity = result.provenance.activities[-1]
+    activity = result.provenance.to_dict()["activities"][-1]
     run = activity["runs"][0]
     serialized = result.provenance.canonical_json()
 
@@ -677,7 +677,7 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
     data, model, full_result = delta_r2_problem
 
     comparison = task_delta_r2(data, model, full_result)
-    activity = comparison.provenance.activities[-1]
+    activity = comparison.provenance.to_dict()["activities"][-1]
 
     assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
     assert activity["undefined_features"] == 0

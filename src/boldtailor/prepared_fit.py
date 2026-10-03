@@ -231,47 +231,16 @@ def _prepare_fit_spec(
     noise_model: str,
     model_metadata: Mapping[str, object] | None,
 ) -> _PreparedFitSpec:
-    _validate_path_safe_model_keys(contrasts, model_metadata)
     if not isinstance(contrasts, Mapping):
         raise ValueError("contrasts must be a mapping")
     normalized = _prepare_contrasts(contrasts)
     _validate_noise_model(noise_model)
-    metadata = _freeze_mapping(model_metadata, path_safe=True)
+    metadata = _freeze_mapping(model_metadata)
     return _PreparedFitSpec(
         contrasts=MappingProxyType(normalized),
         noise_model=noise_model,
         model_metadata=metadata,
     )
-
-
-def _validate_path_safe_model_keys(
-    contrasts: object,
-    model_metadata: object,
-) -> None:
-    _validate_path_safe_mapping_keys(contrasts)
-    _validate_path_safe_mapping_keys(model_metadata)
-
-
-def _validate_path_safe_mapping_keys(values: object) -> None:
-    if isinstance(values, Mapping):
-        _validate_mapping_keys(values)
-        return
-    if isinstance(values, Sequence) and not isinstance(values, (str, bytes, bytearray)):
-        for value in values:
-            _validate_path_safe_mapping_keys(value)
-
-
-def _validate_mapping_keys(values: Mapping[object, object]) -> None:
-    for key, value in values.items():
-        if _is_path_like_key(key):
-            raise ValueError("model identity keys must not be path-like")
-        _validate_path_safe_mapping_keys(value)
-
-
-def _is_path_like_key(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    return value.startswith(("~", "/", "../", "./", "bids:")) or "\\" in value
 
 
 def _prepared_design_provenance(

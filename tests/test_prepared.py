@@ -320,7 +320,7 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
         second.provenance.execution_id
     }
 
-    activity = first.provenance.activities[-1]
+    activity = first.provenance.to_dict()["activities"][-1]
     assert activity == {
         "name": "normalize_prepared_design",
         "stage": "prepared_design",
