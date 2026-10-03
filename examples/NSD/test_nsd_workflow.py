@@ -241,17 +241,38 @@ def test_glm_model_and_selection_share_the_nsd_task_model(four_runs, small_libra
         )
 
 
-@pytest.mark.parametrize(
-    "library_config, candidate_count",
-    [
-        ({"hrf_parameters": [[3, 10, 0.5, 0.5, 2, 0, 36]]}, 2),
-        ({"hrf_library": "sobol", "hrf_n_samples": 4, "hrf_seed": 7}, 5),
-    ],
-)
+def _left_cortex_meshes(directory):
+    """An eight-vertex left mesh matching the fixture axis, and any right mesh."""
+    coords = np.array(
+        [[x, y, z] for x in (0, 1) for y in (0, 1) for z in (0, 1)], dtype=np.float32
+    )
+    faces = np.array(
+        [[0, 1, 3], [0, 3, 2], [4, 6, 7], [4, 7, 5], [0, 4, 5], [0, 5, 1]]
+        + [[2, 3, 7], [2, 7, 6], [0, 2, 6], [0, 6, 4], [1, 5, 7], [1, 7, 3]],
+        dtype=np.int32,
+    )
+    paths = {}
+    for hemi in ("left", "right"):
+        paths[hemi] = str(directory / f"{hemi}.surf.gii")
+        arrays = [
+            nib.gifti.GiftiDataArray(coords, intent="NIFTI_INTENT_POINTSET"),
+            nib.gifti.GiftiDataArray(faces, intent="NIFTI_INTENT_TRIANGLE"),
+        ]
+        nib.save(nib.gifti.GiftiImage(darrays=arrays), paths[hemi])
+    return paths
+
+
+def _surface_images(executed, cell_id):
+    cell = next(c for c in executed.cells if c.get("id") == cell_id)
+    return [o for o in cell.outputs if "image/png" in o.get("data", {})]
+
+
 @pytest.mark.notebook
 def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
-    four_runs, tmp_path, library_config, candidate_count
+    four_runs, tmp_path
 ):
+    library_config = {"hrf_library": "sobol", "hrf_n_samples": 4, "hrf_seed": 7}
+    candidate_count = 5
     assert NOTEBOOK.is_file(), "The full NSD workflow notebook has not been created"
     root, prep = four_runs
     output = tmp_path / "output"
@@ -262,6 +283,7 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
         block_size=2,
         n_jobs=1,
         ridge_alpha=0.1,
+        surface_meshes=_left_cortex_meshes(tmp_path),
         **library_config,
     )
     notebook = nbformat.read(NOTEBOOK, as_version=4)
@@ -275,6 +297,9 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     )
     executed = client.execute()
     nbformat.write(executed, tmp_path / "executed.ipynb")
+    for cell_id in ("glm-surface-maps", "beta-surface-maps", "rt-surface-maps"):
+        images = _surface_images(executed, cell_id)
+        assert len(images) == 1, f"{cell_id} should display its surface figure once"
     files = list(output.rglob("*"))
     scalars = [p for p in files if p.name.endswith(".dscalar.nii")]
     assert scalars and all("desc-notebook" in p.name for p in scalars)

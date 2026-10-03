@@ -1,10 +1,12 @@
 """Saved notebook results can be replotted without fitting or changing data."""
 
+import json
 from pathlib import Path
 import warnings
 
 import matplotlib.pyplot as plt
 import nbformat
+import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
@@ -31,6 +33,86 @@ def execute_notebook(config):
     return context
 
 
+def _metadata(files):
+    path = next(p for p in files if p.name.endswith("desc-notebook_metadata.json"))
+    return json.loads(path.read_text())
+
+
+def _assert_tuned_betas(files, suffix):
+    betas = [p for p in files if f"Trial{suffix}_betas.dscalar.nii" in p.name]
+    assert len(betas) == 12, "Both HRF modes need six tuned beta images"
+    for image in map(nib.load, betas):
+        assert image.shape == (6, 4)
+        assert np.isnan(image.get_fdata()[:, -1]).all()
+
+
+def _assert_off_exports(files):
+    assert not any("TrialRidgeCV_betas" in p.name for p in files)
+    assert not any(
+        "TrialRidge_betas" in p.name for p in files
+    ), "Disabled mode must not use the old default alpha"
+
+
+def _assert_cv_exports(files):
+    _assert_tuned_betas(files, "RidgeCV")
+    scores = [
+        p for p in files if p.name.endswith("_scores.tsv") and "RidgeCV" in p.name
+    ]
+    assert len(scores) == 6
+    metadata = _metadata(files)
+    assert metadata["ridge_cv"]["validation_target"] == "candidate_regularized_betas"
+    assert metadata["ridge_cv"]["percentile"] == 90.0
+    assert metadata["noise_model"] == "ols"
+    assert metadata["ridge_cv"]["encoding_mode"] == "within_run"
+
+
+def _assert_tuning_links(files):
+    for mode in ("Canonical", "Optimized"):
+        decision = json.loads(
+            next(
+                p for p in files if f"{mode}FractionalCVAll_provenance.json" in p.name
+            ).read_text()
+        )
+        final = json.loads(
+            next(
+                p for p in files if f"{mode}TrialFractionalCV_provenance.json" in p.name
+            ).read_text()
+        )
+        for block in final:
+            assert (
+                block["record"]["activities"][-1]["tuning_analysis_fingerprint"]
+                == decision["analysis_fingerprint"]
+            )
+
+
+def _assert_fractional_exports(files):
+    _assert_tuned_betas(files, "FractionalCV")
+    assert not any("TrialRidgeCV_betas" in p.name for p in files)
+    activation = [p for p in files if "_stat-activation.dscalar.nii" in p.name]
+    assert len(activation) == 4
+    assert sum("TrialFractionalCV" in p.name for p in activation) == 2
+    fractions = [
+        p
+        for p in files
+        if "FractionalCV" in p.name and "_stat-ridgefraction." in p.name
+    ]
+    assert (
+        len(fractions) == 12
+    )  # Three tuning scopes, two outer splits, final per mode.
+    metadata = _metadata(files)
+    assert metadata["ridge_cv"]["validation_target"] == "fixed_ols_betas"
+    assert metadata["ridge_cv"]["objective"] == "maximum_encoding_r2_per_grayordinate"
+    assert metadata["ridge_cv"]["percentile_role"] == "descriptive_only"
+    _assert_tuning_links(files)
+
+
+MODE_EXPORTS = dict(
+    off=_assert_off_exports,
+    cv=_assert_cv_exports,
+    fractional_cv=_assert_fractional_exports,
+)
+
+
 @pytest.mark.parametrize("mode", ["off", "cv", "fractional_cv"])
 def test_notebook_reuses_saved_results_without_fitting(
     six_run_dataset, tmp_path, monkeypatch, mode
@@ -53,6 +135,7 @@ def test_notebook_reuses_saved_results_without_fitting(
         existing_results="reuse",
     )
     original = execute_notebook(config)
+    MODE_EXPORTS[mode](list((tmp_path / "output").rglob("*")))
     if mode == "off":
         marker = tmp_path / "output/unrelated.txt"
         marker.write_text("keep")

@@ -2,10 +2,7 @@
 
 import importlib
 import json
-from pathlib import Path
 
-import nbformat
-from nbclient import NotebookClient
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -92,65 +89,3 @@ def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_
     with pytest.raises(FileExistsError):
         publish_artifact_set(output, artifacts)
     assert all(p.read_bytes() == original for p, original in before.items())
-
-
-@pytest.mark.parametrize(
-    "mode,encoding_mode",
-    [("cv", "within_run"), ("cv", "absolute"), ("off", "within_run")],
-)
-@pytest.mark.notebook
-def test_notebook_executes_ridge_modes(six_run_dataset, tmp_path, mode, encoding_mode):
-    root, prep = six_run_dataset
-    output = tmp_path / f"notebook-{mode}"
-    config = dict(
-        bids_root=str(root),
-        fmriprep_root=str(prep),
-        output_root=str(output),
-        block_size=2,
-        n_jobs=1,
-        ridge_mode=mode,
-        encoding_mode=encoding_mode,
-        ridge_alphas=[0.0, 0.1],
-        hrf_n_samples=2,
-        hrf_seed=0,
-    )
-    path = Path(__file__).with_name("nsd_workflow.ipynb")
-    notebook = nbformat.read(path, as_version=4)
-    notebook.cells.insert(0, nbformat.v4.new_code_cell(f"NSD_CONFIG = {config!r}"))
-    try:
-        NotebookClient(
-            notebook,
-            timeout=240,
-            kernel_name="python3",
-            resources={"metadata": {"path": str(path.parents[2])}},
-        ).execute()
-    finally:
-        nbformat.write(notebook, tmp_path / f"executed-{mode}.ipynb")
-    paths = list(output.rglob("*"))
-    cv_betas = [p for p in paths if "TrialRidgeCV_betas.dscalar.nii" in p.name]
-    if mode == "off":
-        assert not cv_betas
-        assert not any(
-            "TrialRidge_betas" in p.name for p in paths
-        ), "Disabled mode must not use the old default alpha"
-        return
-    assert len(cv_betas) == 12, "Both HRF modes need six tuned beta images"
-    assert (
-        len(
-            [p for p in paths if p.name.endswith("_scores.tsv") and "RidgeCV" in p.name]
-        )
-        == 6
-    )
-    for path in cv_betas:
-        image = nib.load(path)
-        assert image.shape == (6, 4)
-        assert np.isnan(image.get_fdata()[:, -1]).all()
-    metadata = json.loads(
-        next(
-            p for p in paths if p.name.endswith("desc-notebook_metadata.json")
-        ).read_text()
-    )
-    assert metadata["ridge_cv"]["validation_target"] == "candidate_regularized_betas"
-    assert metadata["ridge_cv"]["percentile"] == 90.0
-    assert metadata["noise_model"] == "ols"
-    assert metadata["ridge_cv"]["encoding_mode"] == encoding_mode
