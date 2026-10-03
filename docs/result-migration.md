@@ -16,7 +16,7 @@ For example:
 from boldtailor.fractional_ridge import score_fraction_candidates, select_ridge_fractions
 
 scores = score_fraction_candidates(data, predictors, fractions=[1.0, 0.7, 0.3])
-selection = select_ridge_fractions(scores.cv_r2, scores.grid)
+selection = select_ridge_fractions(scores)
 ```
 
 Selection results retain `RidgeSelection.alphas` and
@@ -48,3 +48,25 @@ request. Both live in
 `provenance` keep their existing access paths. Arrays remain owned and
 read-only; public tables and design mappings are defensive copies.
 Conventional GLM results retain their existing design access paths.
+
+## Entry-point names and keyword-only results
+
+| Before | After |
+| --- | --- |
+| `select_hrf(data, ...)` | `select_hrfs(data, ...)` |
+| `fit_selected_hrfs(data, selection=...)` | `fit_selected_hrfs(data, hrf_selection=...)` |
+| `fit_single_trials(data, hrf=...)` | `fit_single_trials(data, hrf_model=...)` |
+| `task_delta_r2_prepared(prepared, result, contrasts=..., noise_model=..., model_metadata=...)` | `task_delta_r2_prepared(prepared, result)` |
+| `select_ridge_penalty(scores.cv_r2, scores.grid)` | `select_ridge_penalty(scores)` (the array form still works) |
+| `select_ridge_fractions(scores.cv_r2, scores.grid)` | `select_ridge_fractions(scores)` (the array form still works) |
+
+The old names and keywords still work for one release and emit a
+`DeprecationWarning`. Old prepared-comparison keywords must match the model
+stored in the result's provenance. `evaluate_hrf_split` now accepts
+`candidate_batch_size` like `select_hrfs`.
+
+Every result dataclass is keyword-only: positional construction raises
+`TypeError`. Public attribute names are unchanged. The selected-HRF
+`trial_table` now has the same column order as the shared-HRF table:
+`trial_index`, `trial_id`, `run_label`, `event_index`, the event columns, then
+`run_index`.

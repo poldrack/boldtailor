@@ -258,7 +258,7 @@ BIDS 1.11.1 metadata plus an optional (`export_bids_prov`) draft subset pinned
 to `BEP028@02172700aac8d1bdd67b45191f43533f426848dc`. The logs equal the record
 (`logs/boldtailor_provenance.json` is its canonical JSON); no keys are dropped.
 Each Activity's `Command` names the entry point (`boldtailor.fit`,
-`boldtailor.select_hrf`, ...); the last carries `StartedAtTime`/`EndedAtTime`
+`boldtailor.select_hrfs`, ...); the last carries `StartedAtTime`/`EndedAtTime`
 from its lifecycle events; `Environments[0]` has `Python`, `Platform`, and a
 `Software` list taken from the last activity's `software`.
 

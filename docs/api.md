@@ -125,35 +125,40 @@ From `boldtailor.prepared_fit`:
 
 ```text
 fit_prepared(prepared, *, contrasts, noise_model="ar1", model_metadata=None)
-task_delta_r2_prepared(prepared, full_result, *, contrasts,
-                      noise_model="ar1", model_metadata=None)
+task_delta_r2_prepared(prepared, full_result)
 ```
 
 These return the same result types as their event-based counterparts. Neither
 function adds regressors or transforms the design. The R² comparison requires
-a complete task/nuisance/intercept partition, complete source metadata, and the
-same fit settings as `full_result`.
+a complete task/nuisance/intercept partition and complete source metadata. It
+reads the contrasts, noise model, and model metadata from `full_result`'s
+provenance, so `full_result` must come from `fit_prepared`. Passing
+`contrasts=`, `noise_model=`, or `model_metadata=` again is deprecated (a
+`DeprecationWarning`), and supplied values must match the stored model.
 
 ## Single-trial fits
 
 From `boldtailor.single_trial`:
 
 ```text
-fit_single_trials(data, *, ridge_alpha=0.0, run_labels=None, hrf="spm",
+fit_single_trials(data, *, ridge_alpha=0.0, run_labels=None, hrf_model="spm",
                   ridge_fraction=None)
-fit_selected_hrfs(data, *, selection, ridge_alpha=0.0, run_labels=None,
+fit_selected_hrfs(data, *, hrf_selection, ridge_alpha=0.0, run_labels=None,
                   feature_signature=None, ridge_fraction=None)
 ```
 
-`fit_single_trials` accepts `"spm"` or an `HrfCandidate` for its fixed HRF.
-`fit_selected_hrfs` takes an `HrfSelectionResult`. The ridge penalty must be
-finite and nonnegative. All supplied confounds and a run intercept are included.
+`fit_single_trials` accepts `"spm"` or an `HrfCandidate` as `hrf_model`, its
+fixed HRF. `fit_selected_hrfs` takes an `HrfSelectionResult` as
+`hrf_selection`, the same keyword `fit()` uses. The earlier keywords `hrf=` and
+`selection=` still work for one release with a `DeprecationWarning`. The ridge
+penalty must be finite and nonnegative. All supplied confounds and a run intercept are included.
 
 Both fitting functions return `SingleTrialResult`, which exposes:
 
 - `run_betas`: tuple of trials × features arrays.
-- `trial_table`: original event metadata plus `trial_id`, `event_index`,
-  `run_label`, `run_index`, and `trial_index`.
+- `trial_table`: `trial_index`, `trial_id`, `run_label`, `event_index`, the
+  original event metadata, then `run_index`. Both fitting functions build it
+  with the same helper, so the columns are identical.
 - `run_full_r2`, `run_nuisance_r2`: per-run diagnostic arrays.
 - `full_r2`, `nuisance_r2`, `delta_r2`: pooled diagnostics.
 - `diagnostics`, `ridge_alpha`, and `provenance`.
@@ -176,8 +181,12 @@ From `boldtailor.fractional_ridge`:
 score_fraction_candidates(data, predictors, *, fractions, library=None,
                           run_labels=None, feature_signature=None,
                       encoding_mode="within_run")
+select_ridge_fractions(scores, *, feature_mask=None)
 select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 ```
+
+Pass the `CandidateScores` returned by `score_fraction_candidates`, or a
+candidate-by-feature array together with its fraction grid.
 
 `CandidateScores` has `regularization="fractional_ridge"`, descending `grid`, `cv_r2`,
 `fold_sse`, `fold_sst`, `fold_hrf_indices`, `trial_masks`, `run_labels`, and
@@ -210,8 +219,13 @@ From `boldtailor.ridge_selection`:
 score_ridge_candidates(data, predictors, *, alphas, library=None,
                       run_labels=None, feature_signature=None,
                       encoding_mode="within_run")
+select_ridge_penalty(scores, *, percentile=90.0, feature_mask=None)
 select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=None)
 ```
+
+Pass the `CandidateScores` returned by `score_ridge_candidates`, or a
+candidate-by-feature array together with its alpha grid. Scores of the other
+regularization kind are rejected.
 
 `predictors` contains one numeric DataFrame per run, aligned positionally with
 event rows, with matching named columns. Do not include `task`: an intercept is
@@ -270,8 +284,9 @@ and never include scoring offsets. Within-run predictions depend only on trainin
 outcomes and test predictors; test beta validity affects scores, not predictions.
 Numerical arrays are owned, ordinary NumPy arrays marked read-only. This protects
 against accidental writes; it does not prevent deliberate flag changes. Use
-`.copy()` before editing. Direct construction of the result
-dataclass now requires the additional fields; existing field order is preserved.
+`.copy()` before editing. Every result dataclass is keyword-only: direct
+construction must name each field (positional construction raises
+`TypeError`), and each class copies its arrays into read-only storage.
 
 Within-run fitting requires at least one complete row per training run, positive
 residual degrees of freedom (`total complete rows > training runs + p`), and full
@@ -328,14 +343,18 @@ saved library records precisely which candidates were used.
 From `boldtailor.hrf_selection`:
 
 ```text
-select_hrf(data, *, library, run_labels=None, feature_signature=None,
-           candidate_batch_size=32, task_model=TaskModel())
+select_hrfs(data, *, library, run_labels=None, feature_signature=None,
+            candidate_batch_size=32, task_model=TaskModel())
 evaluate_hrf_split(data, *, library, train_runs, test_runs,
                    run_labels=None, feature_signature=None,
-                   task_model=TaskModel())
+                   task_model=TaskModel(), candidate_batch_size=32)
 ```
 
-`select_hrf` returns `HrfSelectionResult`: `hrf_indices`, `cv_r2`,
+`select_hrf` is a deprecated alias of `select_hrfs` for one release.
+`candidate_batch_size` bounds memory in both functions and never changes the
+result.
+
+`select_hrfs` returns `HrfSelectionResult`: `hrf_indices`, `cv_r2`,
 `canonical_cv_r2`, `delta_cv_r2`, `library`, `eligibility`, `run_labels`,
 `feature_signature`, `provenance`, and `at_parameter_bound` (boolean per
 feature: the selected custom kernel is within 2 % of the parameter box width

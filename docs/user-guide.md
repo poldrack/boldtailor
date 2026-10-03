@@ -97,7 +97,7 @@ and the OLS/AR(1) noise option still come from `ModelSpec`.
 from boldtailor.fit import fit, task_delta_r2
 
 # data contains your target runs; model names their conditions and contrasts.
-# selection was obtained from select_hrf() using the same feature ordering.
+# selection was obtained from select_hrfs() using the same feature ordering.
 result = fit(data, model, hrf_selection=selection)
 effects = result.effect("face_gt_house")
 z_scores = result.z_score("face_gt_house")
@@ -219,15 +219,16 @@ There are three distinct comparisons:
 | Does a task-model response predict a separate run? | HRF prediction R² after nuisance adjustment |
 
 For conventional models, `task_delta_r2(data, model, result)` and
-`task_delta_r2_prepared(prepared, prepared_result, contrasts=..., ...)` compute
+`task_delta_r2_prepared(prepared, prepared_result)` compute
 the first comparison. Both refit full and nuisance models with OLS, even if
 the original contrast inference used AR(1). Their result includes `full_r2`,
 `nuisance_r2`, `raw_delta_r2`, and `delta_r2`; the latter clips only tiny negative
 roundoff values. This is additional explained variance, not partial R².
 
 These comparison functions require complete source metadata so they can check
-that the supplied result belongs to the same input and model. Pass the same
-contrasts, noise setting, and model metadata used for the original fit. See
+that the supplied result belongs to the same input and model. `task_delta_r2`
+takes the same `ModelSpec`; `task_delta_r2_prepared` reads the contrasts, noise
+setting, and model metadata from the prepared result's provenance. See
 [source records](api.md#source-records-and-saving) for the required fields.
 For common-HRF and prepared-design fits, both comparison functions currently
 require finite pooled R² for every supplied feature. Exclude constant features
@@ -244,7 +245,8 @@ distinguishes these images from HRF-selection and independent prediction scores.
 `fit_single_trials(data, ridge_alpha=0.0)` creates a separate regressor for each
 event row. It preserves event order, recorded durations, and sub-TR timing.
 Repeated image IDs receive separate coefficients. The default HRF is SPM;
-pass an `HrfCandidate` through `hrf=` to use one specified library HRF everywhere.
+pass an `HrfCandidate` through `hrf_model=` to use one specified library HRF
+everywhere.
 
 ```python
 from boldtailor.single_trial import fit_single_trials
@@ -295,7 +297,7 @@ predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_fraction_candidates(
     data, predictors, fractions=[.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]
 )
-choice = select_ridge_fractions(scores.cv_r2, scores.grid)
+choice = select_ridge_fractions(scores)
 betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
 ```
 
@@ -360,7 +362,7 @@ predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_ridge_candidates(
     data, predictors, alphas=[0., .001, .01, .1, 1., 10., 100.]
 )
-choice = select_ridge_penalty(scores.cv_r2, scores.grid, percentile=90)
+choice = select_ridge_penalty(scores, percentile=90)
 betas = fit_single_trials(data, ridge_alpha=choice.ridge_alpha)
 ```
 
@@ -409,14 +411,14 @@ lists of runs as described above:
 
 ```python
 from boldtailor.hrf_library import sobol_hrf_library
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_selected_hrfs
 
 library = sobol_hrf_library(n_samples=512, seed=0)
-selection = select_hrf(multi_run_data, library=library)
-optimized = fit_selected_hrfs(multi_run_data, selection=selection)
+selection = select_hrfs(multi_run_data, library=library)
+optimized = fit_selected_hrfs(multi_run_data, hrf_selection=selection)
 optimized_ridge = fit_selected_hrfs(
-    multi_run_data, selection=selection, ridge_alpha=0.1
+    multi_run_data, hrf_selection=selection, ridge_alpha=0.1
 )
 ```
 
@@ -458,7 +460,7 @@ task_model = TaskModel((
     Modulator("response_time", center=True, missing="indicator"),
     Modulator("trial_type", center=False),
 ))
-selection = select_hrf(multi_run_data, library=library, task_model=task_model)
+selection = select_hrfs(multi_run_data, library=library, task_model=task_model)
 ```
 
 Each modulator names a numeric column of the raw per-trial events. `center`
