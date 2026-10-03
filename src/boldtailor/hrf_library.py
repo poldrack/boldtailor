@@ -48,14 +48,16 @@ REALIZED_NAMES = (
 )
 TIMING_BOUNDS = MappingProxyType(
     {
-        "peak_time": (3.5, 7.5),
-        "response_fwhm": (3.0, 6.0),
-        "trough_time": (11.0, 18.0),
-        "undershoot_fwhm": (6.0, 12.0),
+        "peak_time": (2.5, 8.5),
+        "response_fwhm": (2.0, 6.5),
+        "trough_time": (8.0, 19.0),
+        "undershoot_fwhm": (4.0, 10.0),
         "trough_depth": (0.05, 0.4),
     }
 )
 _REALIZED_DT = 0.01
+_MIN_TROUGH = 1e-6  # relative to the unit peak; smaller dips are round-off
+_MAX_DRAW_FACTOR = 64  # give up when this many Sobol points per sample are drawn
 
 
 def _parameters(values):
@@ -384,12 +386,13 @@ def realized_timing(parameters):
     the trough amplitude relative to the unit peak and the undershoot FWHM is
     the width at half that depth. These are the quantities
     :func:`timing_hrf_library` samples; :func:`timing_parameters` describes the
-    gamma lobes instead. Raises ``ValueError`` when the curve has no trough.
+    gamma lobes instead. Raises ``ValueError`` when the curve has no trough
+    after its peak deeper than one part in a million of the peak.
     """
     times, curve = _dense_curve(_parameters(parameters))
     peak, trough = int(np.argmax(curve)), int(np.argmin(curve))
-    if curve[trough] >= 0 or trough == len(curve) - 1:
-        raise ValueError("double gamma has no trough within its duration")
+    if trough <= peak or trough == len(curve) - 1 or curve[trough] > -_MIN_TROUGH:
+        raise ValueError("double gamma has no trough after its peak")
     peak_time, _ = _subgrid_extremum(times, curve, peak)
     trough_time, minimum = _subgrid_extremum(times, curve, trough)
     return (
@@ -512,17 +515,32 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
     return HrfLibrary.from_parameters(rows, origin={**origin, "duration": 36.0})
 
 
-def _sobol_points(n_samples, seed, *, dimensions, oversample=1):
+def _sobol_points(n_samples, seed, *, dimensions):
+    """The first ``n_samples`` scrambled Sobol points (``n_samples`` a power of two)."""
+    return next(_sobol_batches(n_samples, seed, dimensions=dimensions))
+
+
+def _sobol_batches(n_samples, seed, *, dimensions):
+    """Yield scrambled Sobol batches of ``n_samples``, ``n_samples``, ``2 n``, ``4 n``, ...
+
+    The batch sizes keep the total drawn a power of two, so every prefix is a
+    balanced Sobol set and the first batch equals :func:`_sobol_points`.
+    """
+    is_integer = lambda value: isinstance(value, (int, np.integer))  # noqa: E731
     if (
         not is_integer(n_samples)
         or n_samples < 1
-        or int(n_samples) & (int(n_samples) - 1)
+        or (int(n_samples) & (int(n_samples) - 1)) != 0
     ):
         raise ValueError("n_samples must be a positive integer power of two")
     if not is_integer(seed) or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
     sampler = qmc.Sobol(d=dimensions, scramble=True, rng=int(seed))
-    return sampler.random_base2((int(n_samples) * oversample).bit_length() - 1)
+    size = int(n_samples)
+    yield sampler.random_base2(size.bit_length() - 1)
+    while True:
+        yield sampler.random_base2(size.bit_length() - 1)
+        size *= 2
 
 
 def _timing_bounds(bounds):
@@ -535,6 +553,23 @@ def _timing_bounds(bounds):
             raise ValueError(f"bounds for {name!r} must be finite with low < high")
         merged[name] = (low, high)
     return merged
+
+
+def _feasible_timing_rows(n_samples, seed, limits, onset, duration):
+    """Accept the first ``n_samples`` realizable Sobol points; count the rest."""
+    names = REALIZED_NAMES[:5]
+    low, high = [limits[n][0] for n in names], [limits[n][1] for n in names]
+    rows, rejected = [], 0
+    for batch in _sobol_batches(n_samples, seed, dimensions=5):
+        for row in qmc.scale(batch, low, high):
+            try:
+                rows.append(spm_parameters_from_realized((*row, onset, duration)))
+            except ValueError:
+                rejected += 1
+            if len(rows) == int(n_samples):
+                return rows, rejected
+        if rejected > _MAX_DRAW_FACTOR * int(n_samples):
+            raise ValueError("too few feasible timing samples; widen the bounds")
 
 
 def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0):
@@ -554,22 +589,7 @@ def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duratio
     """
     limits = _timing_bounds(bounds)
     names = REALIZED_NAMES[:5]
-    points = _sobol_points(n_samples, seed, dimensions=5, oversample=4)
-    sampled = qmc.scale(
-        points, [limits[n][0] for n in names], [limits[n][1] for n in names]
-    )
-    rows, rejected = [], 0
-    for row in sampled:
-        if len(rows) == int(n_samples):
-            break
-        try:
-            rows.append(
-                spm_parameters_from_realized((*row, float(onset), float(duration)))
-            )
-        except ValueError:
-            rejected += 1
-    if len(rows) < int(n_samples):
-        raise ValueError("too few feasible timing samples; widen the bounds")
+    rows, rejected = _feasible_timing_rows(n_samples, seed, limits, onset, duration)
     origin = dict(
         kind="timing_sobol",
         n_samples=int(n_samples),
