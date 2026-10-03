@@ -28,7 +28,7 @@ log = logging.getLogger("boldtailor.workflow")
 SHORT_PARITY = "fewer than two odd or two even runs"
 _DESCRIPTOR = re.compile(r"_desc-([A-Za-z0-9]+)_")
 RIDGE_CV_PARITY = (
-    "ridge cross-validation needs at least two odd and two even runs; "
+    "ridge cross-validation needs at least three odd and three even runs; "
     "use --ridge-mode off|fixed or --skip-stage betas"
 )
 
@@ -104,14 +104,14 @@ def _load(settings):
     )
 
 
-def _splits_possible(runs):
-    return all(len(half) >= 2 for half in odd_even_parity(runs).values())
+def _splits_possible(runs, minimum=2):
+    return all(len(half) >= minimum for half in odd_even_parity(runs).values())
 
 
 def _check_ridge_cv(settings, runs):
-    """Ridge CV splits odd from even runs; refuse before any fitting."""
+    """Optimized-HRF ridge CV needs three runs per half; refuse before any fitting."""
     cv = settings.ridge_mode in ("cv", "fractional_cv")
-    if "betas" in settings.stages and cv and not _splits_possible(runs):
+    if "betas" in settings.stages and cv and not _splits_possible(runs, 3):
         raise inputs.InputError(RIDGE_CV_PARITY)
 
 

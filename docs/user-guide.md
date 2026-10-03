@@ -728,7 +728,7 @@ removes stale files from the earlier run; other sessions are untouched.
 | --- | --- |
 | 0 | Success |
 | 1 | Usage or settings error, including invalid choices such as `--ridge-mode lasso`; one line on stderr |
-| 2 | Input discovery or loading error: missing events or CIFTI files, a modulator column absent from a run, or ridge cross-validation with fewer than two odd and two even runs |
+| 2 | Input discovery or loading error: missing events or CIFTI files, a modulator column absent from a run, or ridge cross-validation with fewer than three odd and three even runs |
 
 ## Common problems
 

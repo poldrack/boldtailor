@@ -10,6 +10,7 @@ from boldtailor.workflow.settings import (
     EXISTING_RESULTS,
     HRF_LIBRARIES,
     RIDGE_MODES,
+    STAGE_REQUIRES,
     SUPPORTED_SPACES,
     WorkflowSettings,
     parse_modulator,
@@ -114,6 +115,14 @@ def build_parser():
     return parser
 
 
+def _stages(skipped):
+    """Enabled stages; skipping a stage also skips every stage that requires it."""
+    stages = {"glms", *_SKIPPABLE} - set(skipped)
+    while dropped := {s for s in stages if STAGE_REQUIRES.get(s, s) not in stages}:
+        stages -= dropped
+    return frozenset(stages)
+
+
 def settings_from_args(args):
     meshes = dict(args.surface_mesh) if args.surface_mesh else None
     return WorkflowSettings(
@@ -135,9 +144,7 @@ def settings_from_args(args):
         ridge_alphas=tuple(args.ridge_alphas),
         ridge_percentile=args.ridge_percentile,
         encoding_mode=args.encoding_mode,
-        stages=frozenset(
-            {"glms", *(s for s in _SKIPPABLE if s not in args.skip_stage)}
-        ),
+        stages=_stages(args.skip_stage),
         surface_maps=not args.no_surface_maps,
         surface_meshes=meshes,
         n_jobs=args.n_jobs,
