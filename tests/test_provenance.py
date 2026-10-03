@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 import re
 
@@ -5,7 +6,12 @@ from types import MappingProxyType
 
 import pytest
 
-from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
+from boldtailor.provenance import (
+    ProvenanceRecord,
+    RunSources,
+    SourceRef,
+    _metadata_fingerprint,
+)
 
 
 def _complete_source(role: str, uri: str) -> SourceRef:
@@ -204,7 +210,6 @@ def test_provenance_record_round_trips_without_sharing_state():
     [
         ({"execution_id": "not-a-uuid"}, "UUID"),
         ({"schema": "boldtailor.provenance/2"}, "major"),
-        ({"digest": "abc123"}, "digest"),
     ],
 )
 def test_provenance_record_rejects_invalid_payloads(overrides, message):
@@ -301,7 +306,7 @@ def test_incomplete_sources_clear_metadata_fingerprint_and_add_quality_warning()
     assert any("incomplete" in warning["message"] for warning in record.warnings)
 
 
-def test_serialized_record_excludes_environment_paths_and_digests(
+def test_serialized_record_excludes_environment_paths_and_absent_digests(
     monkeypatch, tmp_path
 ):
     sentinel_dir = tmp_path / "sentinel-home-boldtailor-secret"
@@ -314,7 +319,7 @@ def test_serialized_record_excludes_environment_paths_and_digests(
 
     assert str(sentinel_dir) not in serialized
     assert "sentinel-home-boldtailor-secret" not in serialized
-    assert "digest" not in serialized.lower()
+    assert "sha256" not in serialized.lower()
     with pytest.raises(ValueError, match="relative"):
         _complete_source("signal", str(sentinel_dir))
 
@@ -360,3 +365,28 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
     activity["settings"]["alpha"] = 99
     payload["extra_note"]["labels"].append("changed")
     assert extended.to_dict() == expected
+
+
+def test_sha256_changes_the_metadata_fingerprint(complete_sources):
+    a = complete_sources(1)
+    b = complete_sources(1)
+    with_digest = replace(b[0].signal, sha256="a" * 64)
+    b = [replace(b[0], signal=with_digest)]
+    assert _metadata_fingerprint(a) != _metadata_fingerprint(b)
+    assert SourceRef.from_dict(with_digest.to_dict()) == with_digest
+    assert with_digest.to_dict()["sha256"] == "a" * 64
+
+
+def test_source_without_sha256_serializes_without_the_key():
+    assert "sha256" not in _complete_source("signal", "a/b.tsv").to_dict()
+
+
+@pytest.mark.parametrize("bad", ["ABC", "g" * 64, "a" * 63, "A" * 64, 7])
+def test_sha256_must_be_64_lowercase_hex_characters(bad):
+    with pytest.raises(ValueError, match="sha256"):
+        SourceRef(role="signal", sha256=bad)
+
+
+def test_record_round_trips_a_digest_key_in_extra_fields_without_rejection():
+    record = ProvenanceRecord.from_dict(_record_payload(digest="abc123"))
+    assert record.to_dict()["digest"] == "abc123"

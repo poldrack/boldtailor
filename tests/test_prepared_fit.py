@@ -897,7 +897,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     else:
         supplied_metadata = {"origin": "fitlins", "node": "changed"}
 
-    with pytest.raises(ValueError, match="full result does not match prepared input"):
+    with pytest.raises(ValueError, match="provenance identity"):
         task_delta_r2_prepared(
             supplied_prepared,
             full_result,

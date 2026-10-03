@@ -668,7 +668,7 @@ def test_task_delta_r2_rejects_full_result_for_changed_model(delta_r2_problem):
         noise_model="ols",
     )
 
-    with pytest.raises(ValueError, match="full result does not match data and model"):
+    with pytest.raises(ValueError, match="provenance identity"):
         task_delta_r2(data, changed_model, full_result)
 
 
@@ -682,7 +682,7 @@ def test_task_delta_r2_rejects_full_result_for_changed_data(delta_r2_problem):
         sources=_delta_r2_sources(signal_byte_size=4097),
     )
 
-    with pytest.raises(ValueError, match="full result does not match data and model"):
+    with pytest.raises(ValueError, match="provenance identity"):
         task_delta_r2(changed_data, model, full_result)
 
 

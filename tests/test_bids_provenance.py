@@ -157,6 +157,21 @@ def test_projection_is_immutable_bytes_and_performs_no_io(
         projected["extra.json"] = b"{}\n"
 
 
+def test_file_entities_carry_digest_only_when_supplied(
+    provenance_record, projection_options
+):
+    payload = provenance_record.to_dict()
+    payload["sources"][0]["signal"]["sha256"] = "a" * 64
+    record = ProvenanceRecord.from_dict(payload)
+    projected = project_bids_provenance(record, **projection_options)
+    files = json.loads(projected["prov/prov-boldtailor_ent.json"])["Files"]
+    by_location = {item.get("AtLocation"): item for item in files}
+    signal = by_location["sub-01/func/sub-01_task-rest_bold.tsv"]
+    assert signal["Digest"] == {"sha256": "a" * 64}
+    others = [item for item in files if item is not signal]
+    assert others and all("Digest" not in item for item in others)
+
+
 def test_draft_records_form_semantic_activity_source_graph(
     provenance_record,
     projection_options,
@@ -213,7 +228,6 @@ def test_logs_are_deterministic_newline_terminated_and_exclude_sensitive_runtime
     assert len(events.splitlines()) == len(provenance_record.events)
     combined = (canonical + events).decode("utf-8").lower()
     for forbidden in (
-        '"digest"',
         '"argv"',
         '"cwd"',
         '"environment_variables"',
