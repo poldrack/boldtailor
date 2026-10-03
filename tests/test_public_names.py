@@ -7,12 +7,16 @@ import pytest
 PUBLIC = [
     ("design", "expand_events", "_task_design"),
     ("design", "task_columns", "_task_design"),
+    ("design", "hrf_model", "_hrf_design"),
+    ("design", "event_response_scales", "_hrf_design"),
     ("hrf_selection", "prepare_runs", "_hrf_cv"),
     ("hrf_selection", "subset_runs", "_ridge_cv"),
     ("fractional_ridge", "fraction_grid", "_fractional_ridge"),
     ("fractional_ridge", "regularization", "_fractional_ridge"),
     ("fractional_ridge", "NORM_BASIS", "_fractional_ridge"),
     ("single_trial", "r_squared", "_single_trial_fit"),
+    ("single_trial", "validate_alpha", "_single_trial_fit"),
+    ("single_trial", "compile_trial_run", "_single_trial_design"),
     ("model", "HRF_NORMALIZATION", "_hrf_design"),
 ]
 
