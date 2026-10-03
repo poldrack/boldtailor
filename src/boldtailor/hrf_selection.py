@@ -3,10 +3,10 @@
 from hashlib import sha256
 from numbers import Integral
 import re
-from uuid import uuid4
 
 import numpy as np
 
+from boldtailor._fit_lifecycle import fit_operation
 from boldtailor._hrf_cv import (
     MIN_ONSET,
     OVERSAMPLING,
@@ -21,7 +21,7 @@ from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor.provenance import analysis_fingerprint
 
 
 def run_labels_for(data, run_labels):
@@ -56,7 +56,7 @@ def _validate(library, signature, batch, task_model):
         raise ValueError("candidate_batch_size must be a positive integer")
 
 
-def _provenance(data, runs, library, labels, signature, task_model, name, **extra):
+def _activity(runs, library, labels, signature, task_model, name, **extra):
     activity = dict(
         name=name,
         library=dict(library.origin),
@@ -82,20 +82,25 @@ def _provenance(data, runs, library, labels, signature, task_model, name, **extr
         ),
         **extra,
     )
-    return extend_provenance(
-        data.provenance,
-        execution_id=str(uuid4()),
-        activity=activity,
-        events=data.provenance.events,
-        warnings=(),
-        analysis_id=analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        ),
-    )
+    return activity
+
+
+def _provenance(operation, data, activity):
+    analysis_id = analysis_fingerprint(data.provenance.metadata_fingerprint, activity)
+    return operation.provenance(activity, analysis_id=analysis_id)
 
 
 def _select(
-    data, runs, signals, library, labels, signature, batch, eligibility_runs, task_model
+    operation,
+    data,
+    runs,
+    signals,
+    library,
+    labels,
+    signature,
+    batch,
+    eligibility_runs,
+    task_model,
 ):
     a, b, c, energy = signal_statistics(runs, signals, batch)
     indices, scores, eligibility = choose_eligible(
@@ -107,8 +112,7 @@ def _select(
     canonical = scores[0].copy()
     canonical[~np.isfinite(canonical)] = np.nan
     canonical[~valid] = np.nan
-    provenance = _provenance(
-        data,
+    activity = _activity(
         runs,
         library,
         labels,
@@ -124,6 +128,7 @@ def _select(
         selection_statistic=True,
         hrf_assignment_fingerprint=sha256(indices.astype("<i8").tobytes()).hexdigest(),
     )
+    provenance = _provenance(operation, data, activity)
     return HrfSelectionResult(
         indices,
         selected,
@@ -154,19 +159,35 @@ def select_hrf(
     runs. Anonymous arrays without feature_signature require the caller to
     preserve feature order.
     """
-    _validate(library, feature_signature, candidate_batch_size, task_model)
+    with fit_operation("hrf_selection", data.provenance) as operation:
+        return _select_hrf(
+            operation,
+            data,
+            library,
+            run_labels,
+            feature_signature,
+            candidate_batch_size,
+            task_model,
+        )
+
+
+def _select_hrf(
+    operation, data, library, run_labels, feature_signature, batch, task_model
+):
+    _validate(library, feature_signature, batch, task_model)
     if data.n_runs < 2:
         raise ValueError("HRF selection requires at least two runs")
     labels = run_labels_for(data, run_labels)
     runs = prepare_runs(data, library, task_model)
     return _select(
+        operation,
         data,
         runs,
         data.signals,
         library,
         labels,
         feature_signature,
-        candidate_batch_size,
+        batch,
         runs,
         task_model,
     )
@@ -212,24 +233,73 @@ def evaluate_hrf_split(
     task_model=TaskModel(),
 ):
     """Select within training runs, then freeze HRF and amplitudes for test runs."""
+    with fit_operation("hrf_independent_evaluation", data.provenance) as operation:
+        return _evaluate_split(
+            operation,
+            data,
+            library,
+            (train_runs, test_runs),
+            run_labels,
+            feature_signature,
+            task_model,
+        )
+
+
+def _train_selection(data, runs, library, labels, signature, task_model, split):
+    train, test = split
+    with fit_operation("hrf_selection", data.provenance) as operation:
+        return _select(
+            operation,
+            data,
+            tuple(runs[i] for i in train),
+            tuple(data.signals[i] for i in train),
+            library,
+            tuple(labels[i] for i in train),
+            signature,
+            32,
+            tuple(runs[i] for i in (*train, *test)),
+            task_model,
+        )
+
+
+def _evaluate_split(
+    operation, data, library, split, run_labels, feature_signature, task_model
+):
     _validate(library, feature_signature, 32, task_model)
-    train = _fold_indices(train_runs, data.n_runs, 2, "train_runs")
-    test = _fold_indices(test_runs, data.n_runs, 1, "test_runs")
+    train = _fold_indices(split[0], data.n_runs, 2, "train_runs")
+    test = _fold_indices(split[1], data.n_runs, 1, "test_runs")
     if set(train) & set(test):
         raise ValueError("training and test runs must be disjoint")
     labels = run_labels_for(data, run_labels)
     runs = prepare_runs(data, library, task_model)
-    selection = _select(
-        data,
-        tuple(runs[i] for i in train),
-        tuple(data.signals[i] for i in train),
-        library,
-        tuple(labels[i] for i in train),
-        feature_signature,
-        32,
-        tuple(runs[i] for i in (*train, *test)),
-        task_model,
+    selection = _train_selection(
+        data, runs, library, labels, feature_signature, task_model, (train, test)
     )
+    scores = _held_out_scores(data, runs, selection, task_model, train, test)
+    activity = _activity(
+        runs,
+        library,
+        labels,
+        feature_signature,
+        task_model,
+        "hrf_independent_evaluation",
+        train_runs=list(train),
+        test_runs=list(test),
+        training_selection=selection.provenance.to_dict()["activities"][-1],
+        frozen_task_amplitudes=True,
+    )
+    provenance = _provenance(operation, data, activity)
+    return HrfEvaluationResult(
+        selection,
+        *scores,
+        train,
+        test,
+        provenance,
+        amplitude_names=task_model.regressor_names,
+    )
+
+
+def _held_out_scores(data, runs, selection, task_model, train, test):
     a, b, c, energy = signal_statistics(runs, data.signals, 32)
     amplitudes, scores = _predict(a, b, c, energy, train, test)
     ids = selection.hrf_indices
@@ -242,27 +312,4 @@ def evaluate_hrf_split(
     if not selection.eligibility.loc[0, "eligible"]:
         canonical[:] = np.nan
     canonical[ids < 0] = np.nan
-    provenance = _provenance(
-        data,
-        runs,
-        library,
-        labels,
-        feature_signature,
-        task_model,
-        "hrf_independent_evaluation",
-        train_runs=list(train),
-        test_runs=list(test),
-        training_selection=selection.provenance.to_dict()["activities"][-1],
-        frozen_task_amplitudes=True,
-    )
-    return HrfEvaluationResult(
-        selection,
-        coefficient,
-        chosen,
-        canonical,
-        chosen - canonical,
-        train,
-        test,
-        provenance,
-        amplitude_names=task_model.regressor_names,
-    )
+    return coefficient, chosen, canonical, chosen - canonical
