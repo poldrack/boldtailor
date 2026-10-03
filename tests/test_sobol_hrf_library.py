@@ -70,3 +70,29 @@ def test_invalid_sample_count_is_rejected(count):
 def test_invalid_seed_is_rejected(seed):
     with pytest.raises(ValueError, match="seed.*nonnegative integer"):
         sobol(seed=seed)
+
+
+def test_sobol_library_records_its_constructor():
+    library = sobol(n_samples=8, seed=3)
+    assert dict(library.origin) == {
+        "kind": "sobol",
+        "n_samples": 8,
+        "seed": 3,
+        "duration": 36.0,
+    }
+
+
+def test_origin_is_frozen_and_excluded_from_identity():
+    explicit = hrf_library.HrfLibrary.from_parameters([(5, 15, 1, 1, 5, 0, 32)])
+    noted = hrf_library.HrfLibrary.from_parameters(
+        [(5, 15, 1, 1, 5, 0, 32)], origin={"kind": "custom"}
+    )
+    assert dict(explicit.origin) == {"kind": "explicit", "n_candidates": 2}
+    assert dict(noted.origin) == {"kind": "custom"}
+    assert explicit.fingerprint == noted.fingerprint
+    with pytest.raises(TypeError):
+        noted.origin["kind"] = "other"
+
+
+def test_expanded_library_records_its_grid():
+    assert dict(hrf_library.expanded_hrf_library().origin) == {"kind": "expanded_grid"}

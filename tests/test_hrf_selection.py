@@ -411,3 +411,12 @@ def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
         replace(result, amplitude_names=("task", "extra"))
     with pytest.raises(ValueError, match="amplitude"):
         replace(result, training_amplitudes=result.training_amplitudes[0])
+
+
+def test_selection_provenance_records_library_origin(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+
+    data, library = cv_fixture
+    activity = select_hrf(data, library=library).provenance.to_dict()["activities"][-1]
+    assert activity["library"] == dict(library.origin)
+    assert activity["library_fingerprint"] == library.fingerprint
