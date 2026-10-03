@@ -30,11 +30,15 @@ def peak_kernel(name):
 def realized_event_response(
     kernel, onset, duration, times, oversampling=50, min_onset=-24.0
 ):
-    """One event's response on Nilearn's own oversampled boxcar and grid."""
+    """One event's response on Nilearn's own oversampled boxcar and grid.
+
+    The response is not truncated at the run end: the event's peak is that of
+    its full response, even when acquisition stops before it.
+    """
     boxcar, grid = _sample_condition(
         np.array([[onset], [duration], [1.0]]), times, oversampling, min_onset
     )
-    return np.convolve(boxcar, np.asarray(kernel))[: len(grid)], grid
+    return np.convolve(boxcar, np.asarray(kernel)), grid
 
 
 def oracle_event_scales(
