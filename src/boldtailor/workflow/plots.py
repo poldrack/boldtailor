@@ -1,7 +1,7 @@
-"""Presentation for the NSD tutorial; inputs are already fitted arrays and tables.
+"""Presentation for the workflow; inputs are already fitted arrays and tables.
 
 Functions return figures without displaying or saving them. They never refit a
-model or change the inputs. Scientific choices remain in the notebook.
+model or change the inputs.
 """
 
 import matplotlib.pyplot as plt
@@ -11,7 +11,9 @@ import numpy as np
 from boldtailor.hrf_library import PARAMETER_NAMES
 import pandas as pd
 
+from boldtailor.diagnostics import even_run_points
 from boldtailor.reliability import library_indices
+from boldtailor.workflow.files import reaction_times
 
 
 def design_figure(frame_times, design, regressors):
@@ -164,3 +166,74 @@ def curve_agreement(curve_r):
             fig, axis, curve_r[row, paired], curve_r[0, paired], labels[row], reference
         )
     return pd.DataFrame(summary), fig
+
+
+def activation_histogram(activation):
+    """Overlay finite one-sample t histograms, one step histogram per model."""
+    fig, ax = plt.subplots(figsize=(9, 4), layout="constrained")
+    for name, result in activation.items():
+        values = result["t"]
+        ax.hist(values[np.isfinite(values)], bins=60, histtype="step", label=name)
+    ax.axvline(0, color="black", linewidth=1)
+    ax.set(
+        xlabel="Mean trial beta versus zero: t (independent trials)",
+        ylabel="Grayordinates",
+    )
+    ax.legend()
+    return fig
+
+
+def _best_odd_vertex(model, brain):
+    odd_r = model.fit["rt"]["odd"]
+    eligible = np.flatnonzero(np.isfinite(odd_r) & (brain.vertex >= 0))
+    if not len(eligible):
+        return None
+    return int(eligible[np.argmax(np.abs(odd_r[eligible]))])
+
+
+def _plot_even_points(ax, model, runs, vertex):
+    x, y = even_run_points(
+        model.fit["betas"], reaction_times(runs), [r.number for r in runs], vertex
+    )
+    ax.scatter(x, y, s=10, alpha=0.4)
+    ax.set(
+        title=f"{model.name}: grayordinate {vertex}",
+        xlabel="Within-run RT deviation (s)",
+        ylabel="Within-run beta deviation",
+    )
+
+
+def rt_check_figure(beta_models, runs, brain):
+    """Even-run (RT, beta) points at the odd-run vertex with the largest |r|.
+
+    Return None when the models have no response times.
+    """
+    models = [beta_models[n] for n in ("CanonicalTrialOLS", "OptimizedTrialOLS")]
+    if models[0].fit["rt"] is None:
+        return None
+    vertex = _best_odd_vertex(models[0], brain)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3), layout="constrained")
+    for ax, model in zip(axes, models, strict=True):
+        if vertex is None:
+            ax.text(0.5, 0.5, "No eligible cortical vertices", ha="center")
+        else:
+            _plot_even_points(ax, model, runs, vertex)
+    fig.suptitle(
+        "Even-run trials at an odd-run-selected vertex; optimized HRF uses all runs"
+    )
+    return fig
+
+
+def fraction_selection_figure(table):
+    """Bar panels of grayordinates choosing each ridge fraction, by scope."""
+    modes = list(dict.fromkeys(table["mode"]))
+    fig, axes = plt.subplots(
+        1, len(modes), figsize=(6 * len(modes), 4), squeeze=False, layout="constrained"
+    )
+    for ax, mode in zip(axes[0], modes, strict=True):
+        counts = table.loc[table["mode"] == mode].pivot(
+            index="fraction", columns="scope", values="selected_grayordinates"
+        )
+        counts.plot.bar(ax=ax)
+        ax.set(title=mode, xlabel="Selected fraction", ylabel="Grayordinates")
+    return fig

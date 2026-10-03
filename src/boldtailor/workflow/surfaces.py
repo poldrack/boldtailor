@@ -1,4 +1,4 @@
-"""Offline cortical views of existing NSD grayordinate statistics."""
+"""Offline cortical views of existing grayordinate statistics."""
 
 from pathlib import Path
 
@@ -20,7 +20,7 @@ VIEWS = (
 )
 
 
-def find_surface_meshes(fmriprep_root, subject, *, paths=None):
+def find_surface_meshes(fmriprep_dir, subject, *, paths=None):
     """Find subject fsLR 32k midthickness meshes, or use explicit left/right paths.
 
     Return None if either hemisphere is unavailable. Multiple matches require
@@ -35,7 +35,7 @@ def find_surface_meshes(fmriprep_root, subject, *, paths=None):
             if not path.is_file():
                 raise FileNotFoundError(path)
         return result
-    folder = Path(fmriprep_root) / subject
+    folder = Path(fmriprep_dir) / subject
     result = {}
     for hemi, code in (("left", "L"), ("right", "R")):
         matches = sorted(

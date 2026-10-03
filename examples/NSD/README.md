@@ -162,7 +162,7 @@ The core accepts arrays and scientific model specifications, independently
 of the dataset and imaging format.
 
 The notebooks keep model specification, HRF library construction, selection,
-CV settings, and fit calls visible. `workflow_plots.py` and
+CV settings, and fit calls visible. `boldtailor.workflow.plots` and
 `session_hrf_plots.py` handle figure details from already computed results;
 they return figures without fitting, displaying, or writing files.
 `notebook_paths.py` supplies local paths. Figure names and scientific exports

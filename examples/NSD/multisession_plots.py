@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 
-from .workflow_surfaces import surface_figure
+from boldtailor.workflow.surfaces import surface_figure
 
 METRIC_LABELS = dict(
     mean_beta="Mean trial beta (native units)",

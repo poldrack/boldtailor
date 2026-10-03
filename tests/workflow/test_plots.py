@@ -69,7 +69,8 @@ def test_design_figure_plots_each_regressor_against_time():
 
 def test_library_figure_has_one_black_canonical_curve_and_colorbar(library):
     fig = plots.library_figure(library)
-    assert len(fig.axes) == 1  # a one-candidate library has no colored curves
+    assert len(fig.axes) == 2  # canonical plus one colored curve gets a colorbar
+    assert fig.axes[0].get_title() == "HRF library: 2 candidates"
     assert fig.axes[0].lines[0].get_color() == "black"
 
 
