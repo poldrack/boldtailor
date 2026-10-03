@@ -71,3 +71,18 @@ def test_delta_result_constructor_rejects_impossible_negative_delta():
             nuisance_designs=(pd.DataFrame({"constant": [1.0, 1.0]}),),
             provenance=None,
         )
+
+
+def test_delta_identity_is_activity_minus_run_specific_keys():
+    from boldtailor._fit_diagnostics import delta_r2_activity, delta_r2_identity
+
+    kwargs = dict(
+        name="task_delta_r2",
+        inferential_noise_model="ar1",
+        nuisance_model={"events": False},
+    )
+    identity = delta_r2_identity(**kwargs)
+    activity = delta_r2_activity(parent_id=None, undefined_features=0, **kwargs)
+    removed = {"stage", "parent_analysis_id", "undefined_features"}
+    assert not removed & set(identity)
+    assert identity == {k: v for k, v in activity.items() if k not in removed}

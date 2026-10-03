@@ -782,3 +782,20 @@ def test_task_model_selected_glm_matches_nilearn_on_known_amplitudes(
                 getattr(expected, oracle)()[0],
                 rtol=1e-8,
             )
+
+
+def test_selected_delta_analysis_id_hashes_shared_identity(hrf_glm_problem):
+    from boldtailor._fit_diagnostics import delta_r2_identity
+    from boldtailor.fit import _nuisance_model_settings
+    from boldtailor.provenance import analysis_fingerprint
+
+    data, model, selection, _ = hrf_glm_problem
+    result = _selected_fit(data, model, selection)
+    delta = task_delta_r2(data, model, result)
+    identity = delta_r2_identity(
+        name="task_delta_r2",
+        inferential_noise_model=model.noise_model,
+        nuisance_model=_nuisance_model_settings(model),
+    )
+    expected = analysis_fingerprint(result.provenance.analysis_fingerprint, identity)
+    assert delta.provenance.analysis_fingerprint == expected
