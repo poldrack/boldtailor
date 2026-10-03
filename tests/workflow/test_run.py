@@ -1,6 +1,8 @@
 """run_workflow executes the enabled stages, skips what it cannot do, and writes the derivative."""
 
 import json
+
+import matplotlib.pyplot as plt
 import pytest
 
 from boldtailor.workflow import run as workflow_run
@@ -23,7 +25,9 @@ def test_full_run_writes_every_stage_and_the_report(
         ridge_fractions=(0.4, 1.0),
         block_size=4,
     )
+    open_before = set(plt.get_fignums())
     result = workflow_run.run_workflow(settings)
+    assert set(plt.get_fignums()) <= open_before, "every figure is closed"
     names = {p.name for p in result.paths}
     assert "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json" in names
     assert (
@@ -124,3 +128,33 @@ def test_describe_inputs_reports_runs_model_and_output(
     assert (
         info["output_dir"] == str(tmp_path / "out") and info["library_candidates"] == 1
     )
+
+
+def test_surfaces_are_looked_up_only_when_requested(
+    four_runs, settings_for, tmp_path, monkeypatch
+):
+    root, _ = four_runs
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("meshes searched although surface_maps is off")
+
+    monkeypatch.setattr(workflow_run.surfaces, "find_surface_meshes", refuse)
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "off",
+        hrf_library="canonical",
+        stages=frozenset({"glms"}),
+    )
+    assert workflow_run.run_workflow(settings).paths
+    monkeypatch.setattr(
+        workflow_run.surfaces, "find_surface_meshes", lambda *a, **k: None
+    )
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "missing",
+        hrf_library="canonical",
+        stages=frozenset({"glms"}),
+        surface_maps=True,
+    )
+    result = workflow_run.run_workflow(settings)
+    assert not any("Surface" in p.name for p in result.paths)
