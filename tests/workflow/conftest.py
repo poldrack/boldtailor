@@ -60,3 +60,9 @@ def settings_for():
         return WorkflowSettings(bids_dir=root, **options)
 
     return build
+
+
+@pytest.fixture
+def bids_settings(dataset, settings_for):
+    root, *_ = dataset
+    return settings_for(root)
