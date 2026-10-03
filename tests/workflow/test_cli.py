@@ -188,3 +188,12 @@ def test_settings_stay_strict_about_stage_requirements(four_runs):
             task="nsdcore",
             stages=frozenset({"glms", "summaries"}),
         )
+
+
+def test_overwrite_into_the_fmriprep_directory_is_refused(four_runs, capsys):
+    root, prep = four_runs
+    bold = sorted(prep.rglob("*_bold.dtseries.nii"))
+    argv = _argv(root, "--output-dir", str(prep), "--existing-results", "overwrite")
+    assert cli.main([*argv, "--hrf-library", "canonical", "--ridge-mode", "off"]) == 1
+    assert "output_dir" in capsys.readouterr().err
+    assert bold and all(p.exists() for p in bold)

@@ -134,3 +134,26 @@ def test_round_trip_through_dict_and_library_builder(bids):
         == default_hrf_library(8, seed=0).fingerprint
     )
     assert len(required(bids, hrf_library="canonical").build_library().candidates) == 1
+
+
+@pytest.mark.parametrize(
+    "where",
+    [
+        lambda bids, prep: prep,
+        lambda bids, prep: prep / "boldtailor",
+        lambda bids, prep: bids / "derivatives",
+        lambda bids, prep: bids,
+    ],
+    ids=["fmriprep", "inside-fmriprep", "contains-fmriprep", "bids"],
+)
+def test_output_dir_may_not_overlap_the_inputs(bids, where):
+    prep = bids / "derivatives" / "fmriprep-25.2.5"
+    with pytest.raises(ValueError, match="output_dir"):
+        required(bids, output_dir=where(bids, prep))
+
+
+def test_output_dir_overlap_is_checked_on_resolved_paths(bids):
+    alias = bids.parent / "alias"
+    alias.symlink_to(bids / "derivatives" / "fmriprep-25.2.5")
+    with pytest.raises(ValueError, match="output_dir"):
+        required(bids, output_dir=alias)

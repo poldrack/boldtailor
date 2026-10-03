@@ -552,7 +552,7 @@ def test_hrf_outputs_accept_all_only_selection_bundles(selected):
     assert {r["scope"] for r in published["hrf_boundary_summary"]} == {"all"}
 
 
-def _save_inputs_only(settings):
+def _save_inputs_only(settings, figures=None, report_html=None):
     runs, model, _ = _session(settings)
     library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
     return outputs.save_workflow(
@@ -563,39 +563,111 @@ def _save_inputs_only(settings):
         None,
         {},
         {},
-        figures={},
+        figures=figures or {},
         activation=None,
         skipped=(),
-        report_html=None,
+        report_html=report_html,
     )
 
 
-def test_overwrite_replaces_the_session_task_output_set(
+def _figure():
+    figure = Figure()
+    figure.subplots().plot([0, 1])
+    return figure
+
+
+def test_overwrite_removes_only_stale_files_boldtailor_listed(
     four_runs, settings_for, tmp_path
 ):
     root, _ = four_runs
     out = tmp_path / "out"
-    first = _save_inputs_only(settings_for(root, output_dir=out))
+    first = _save_inputs_only(
+        settings_for(root, output_dir=out), figures={"Old": _figure()}
+    )
     func = out / "sub-07" / "ses-nsd10" / "func"
-    stale = func / "sub-07_ses-nsd10_task-nsdcore_desc-Old_stat-x.dscalar.nii"
-    other_task = func / "sub-07_ses-nsd10_task-other_desc-boldtailor_metadata.json"
+    stale = func / "sub-07_ses-nsd10_task-nsdcore_desc-Old_plot.png"
+    assert stale in first
     other_session = out / "sub-07" / "ses-nsd11" / "func"
     other_session.mkdir(parents=True)
     kept = [
-        other_task,
+        func / "sub-07_ses-nsd10_task-nsdcore_desc-Mine_stat-x.dscalar.nii",
+        func / "sub-07_ses-nsd10_task-other_desc-boldtailor_metadata.json",
         func / "notes.txt",
         out / "sub-07_ses-nsd10_task-nsdcore_notes.txt",
         other_session / "sub-07_ses-nsd11_task-nsdcore_desc-Old_stat-x.dscalar.nii",
     ]
-    for path in (stale, *kept):
+    for path in kept:
         path.write_text("x")
     second = _save_inputs_only(
         settings_for(root, output_dir=out, existing_results="overwrite")
     )
-    assert set(first) <= set(second)
+    assert set(first) - {stale} <= set(second)
     assert not stale.exists()
     assert all(path.exists() for path in kept)
     assert all(path.exists() for path in second)
+
+
+def test_overwrite_without_an_earlier_artifact_list_deletes_nothing(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    out = tmp_path / "out"
+    func = out / "sub-07" / "ses-nsd10" / "func"
+    func.mkdir(parents=True)
+    foreign = (
+        func / "sub-07_ses-nsd10_task-nsdcore_run-01_desc-confounds_timeseries.tsv"
+    )
+    foreign.write_text("x")
+    _save_inputs_only(settings_for(root, output_dir=out, existing_results="overwrite"))
+    assert foreign.read_text() == "x"
+
+
+def test_overwrite_ignores_listed_paths_outside_the_output_dir(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    out = tmp_path / "out"
+    settings = settings_for(root, output_dir=out)
+    _save_inputs_only(settings)
+    metadata_path = out / f"{settings.stem}_desc-boldtailor_metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    victim = tmp_path / "victim.txt"
+    victim.write_text("x")
+    bold = next((root / "derivatives").rglob("*run-01*_bold.dtseries.nii"))
+    metadata["artifacts"] += ["../victim.txt", str(victim), str(bold)]
+    metadata_path.write_text(json.dumps(metadata))
+    _save_inputs_only(settings_for(root, output_dir=out, existing_results="overwrite"))
+    assert victim.exists() and bold.exists()
+
+
+def test_metadata_lists_this_runs_published_artifacts(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    settings = settings_for(root, output_dir=tmp_path / "out")
+    paths = _save_inputs_only(
+        settings, figures={"Example": _figure()}, report_html=b"<html></html>"
+    )
+    out = settings.output_dir
+    metadata = json.loads(
+        (out / f"{settings.stem}_desc-boldtailor_metadata.json").read_text()
+    )
+    published = {p.relative_to(out).as_posix() for p in paths}
+    assert set(metadata["artifacts"]) == published - {"dataset_description.json"}
+
+
+def test_check_output_names_the_existing_files(four_runs, settings_for, tmp_path):
+    root, _ = four_runs
+    settings = settings_for(root, output_dir=tmp_path / "out")
+    func = tmp_path / "out" / "sub-07" / "ses-nsd10" / "func"
+    func.mkdir(parents=True)
+    (func / "sub-07_ses-nsd10_task-nsdcore_desc-Mine_plot.png").write_text("x")
+    with pytest.raises(FileExistsError) as raised:
+        outputs.check_output(settings)
+    message = str(raised.value)
+    assert "existing files" in message and "existing_results" in message
+    assert "sub-07_ses-nsd10_task-nsdcore_desc-Mine_plot.png" in message
+    assert "boldtailor outputs" not in message
 
 
 def test_hrf_boundary_table_is_the_pooled_summary_as_a_frame(selected):
