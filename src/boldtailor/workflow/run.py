@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.diagnostics import one_sample_t
+from boldtailor.model import TaskModel
 from boldtailor.reliability import curve_correlations
 from boldtailor.workflow import (
     analysis,
@@ -26,6 +27,10 @@ from boldtailor.workflow.settings import STAGES, WorkflowSettings
 log = logging.getLogger("boldtailor.workflow")
 SHORT_PARITY = "fewer than two odd or two even runs"
 _DESCRIPTOR = re.compile(r"_desc-([A-Za-z0-9]+)_")
+RIDGE_CV_PARITY = (
+    "ridge cross-validation needs at least two odd and two even runs; "
+    "use --ridge-mode off|fixed or --skip-stage betas"
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -34,7 +39,7 @@ class WorkflowResult:
     paths: tuple[Path, ...]
     report_path: Path | None
     skipped: tuple[tuple[str, str], ...]
-    task_model: object
+    task_model: TaskModel
     library_fingerprint: str
 
 
@@ -44,7 +49,7 @@ class _State:
 
     settings: WorkflowSettings
     runs: tuple
-    task_model: object
+    task_model: TaskModel
     library: object
     blocks: list
     selections: dict | None = None
@@ -81,6 +86,7 @@ def describe_inputs(settings):
 
 def _load(settings):
     runs = inputs.load_session(settings, hrf_only=True)
+    _check_ridge_cv(settings, runs)
     task_model = inputs.detect_task_model([r.events for r in runs], settings.modulators)
     blocks = inputs.make_blocks(
         runs,
@@ -100,6 +106,13 @@ def _load(settings):
 
 def _splits_possible(runs):
     return all(len(half) >= 2 for half in odd_even_parity(runs).values())
+
+
+def _check_ridge_cv(settings, runs):
+    """Ridge CV splits odd from even runs; refuse before any fitting."""
+    cv = settings.ridge_mode in ("cv", "fractional_cv")
+    if "betas" in settings.stages and cv and not _splits_possible(runs):
+        raise inputs.InputError(RIDGE_CV_PARITY)
 
 
 def _reliability_runs(state):
