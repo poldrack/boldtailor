@@ -19,9 +19,8 @@ def bids(tmp_path):
 
 
 def required(bids, **kwargs):
-    return WorkflowSettings(
-        bids_dir=bids, subject="sub-07", session="ses-nsd10", task="nsdcore", **kwargs
-    )
+    identity = dict(subject="sub-07", session="ses-nsd10", task="nsdcore")
+    return WorkflowSettings(bids_dir=bids, **{**identity, **kwargs})
 
 
 def test_defaults_derive_fmriprep_and_output_directories(bids):
