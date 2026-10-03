@@ -296,7 +296,7 @@ a worker failure prevents publication. Library/timing/design caches are
 process-local. Full output beta arrays and the assembled artifact set still
 consume memory.
 
-Each `desc-notebook<model>_designs.npz` stores, per run label and HRF ID, the
+Each `<stem>_desc-<GLM descriptor>_designs.npz` stores, per run label and HRF ID, the
 float64 design (`<run>_hrf-<id>`), its column names (`_columns`), and frame
 times (`_frame_times`). Load with `allow_pickle=False`. The installed core has
 no general loader that reconstructs an `HrfSelectionResult` from image files.
