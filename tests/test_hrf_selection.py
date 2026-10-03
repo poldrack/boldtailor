@@ -560,3 +560,18 @@ def test_evaluate_hrf_split_threads_candidate_batch_size(selected_fixture, monke
     np.testing.assert_array_equal(small.test_r2, default.test_r2)
     with pytest.raises(ValueError, match="candidate_batch_size"):
         hrf_selection.evaluate_hrf_split(data, **split, candidate_batch_size=0)
+
+
+def test_selection_defaults_to_the_default_library(cv_fixture):
+    from boldtailor.hrf_library import default_hrf_library
+    from boldtailor.hrf_selection import select_hrfs
+
+    data, _ = cv_fixture
+    result = select_hrfs(data, library=default_hrf_library(n_samples=8))
+    default = select_hrfs.__kwdefaults__["library"]
+    assert default is None
+    assert result.library.fingerprint == default_hrf_library(n_samples=8).fingerprint
+    with_default = select_hrfs(data)
+    assert with_default.library.fingerprint == default_hrf_library().fingerprint
+    activity = with_default.provenance.to_dict()["activities"][-1]
+    assert activity["library"]["kind"] == "default"
