@@ -426,7 +426,7 @@ def test_multirun_contrasts_are_equal_weight_fixed_effects(noise_model):
     )
 
 
-def _duplicated_fit_and_reduced_oracle():
+def _duplicated_fit_and_reduced_oracle(noise_model="ols"):
     from nilearn.glm import compute_contrast
     from nilearn.glm.first_level import run_glm
 
@@ -444,29 +444,30 @@ def _duplicated_fit_and_reduced_oracle():
     )
     contrasts = {"c": {"face": 0.5, "face_copy": 0.5, "house": -1.0}}
     with pytest.warns(UserWarning, match="design rank"):
-        result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
-    labels, fitted = run_glm(y, design.to_numpy(), noise_model="ols")
+        result = fit_prepared(prepared, contrasts=contrasts, noise_model=noise_model)
+    labels, fitted = run_glm(y, design.to_numpy(), noise_model=noise_model)
     # duplicated columns identify only b_f + b_c: 0.5*b_f + 0.5*b_c folds to 0.5.
     vector = _column_vector(design, {"face": 0.5, "house": -1.0})
     return result, compute_contrast(labels, fitted, vector, stat_type="t")
 
 
-def test_duplicated_regressor_effect_matches_reduced_design():
-    result, expected = _duplicated_fit_and_reduced_oracle()
+@pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+def test_duplicated_regressor_effect_matches_reduced_design(noise_model):
+    result, expected = _duplicated_fit_and_reduced_oracle(noise_model)
     np.testing.assert_allclose(result.effect("c"), expected.effect_size(), rtol=1e-8)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "finding: on a rank-deficient design nilearn's OLS dispersion divides by "
-        "n - n_columns (24) while df_residuals is n - rank (25), so the variance is "
-        "25/24 larger than on the reduced full-rank design"
-    ),
-)
-def test_duplicated_regressor_variance_and_stat_match_reduced_design():
-    result, expected = _duplicated_fit_and_reduced_oracle()
+@pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+def test_duplicated_regressor_variance_and_stat_match_reduced_design(noise_model):
+    result, expected = _duplicated_fit_and_reduced_oracle(noise_model)
     np.testing.assert_allclose(
         result.variance("c"), expected.effect_variance(), rtol=1e-8
     )
     np.testing.assert_allclose(result.stat("c"), expected.stat(), rtol=1e-8)
+
+
+def test_duplicated_regressor_residual_dof_is_n_minus_rank():
+    result, _ = _duplicated_fit_and_reduced_oracle()
+    run = result.provenance.activities[-1]["runs"][0]
+    assert run["design_rank"] == len(run["design_columns"]) - 1
+    assert run["residual_dof"] == run["n_scans"] - run["design_rank"]
