@@ -521,22 +521,24 @@ def _sobol_points(n_samples, seed, *, dimensions):
 
 
 def _sobol_batches(n_samples, seed, *, dimensions):
-    """Yield scrambled Sobol batches of ``n_samples``, ``n_samples``, ``2 n``, ``4 n``, ...
+    """Scrambled Sobol batches of ``n_samples``, ``n_samples``, ``2 n``, ``4 n``, ...
 
     The batch sizes keep the total drawn a power of two, so every prefix is a
     balanced Sobol set and the first batch equals :func:`_sobol_points`.
     """
-    is_integer = lambda value: isinstance(value, (int, np.integer))  # noqa: E731
     if (
         not is_integer(n_samples)
         or n_samples < 1
-        or (int(n_samples) & (int(n_samples) - 1)) != 0
+        or int(n_samples) & (int(n_samples) - 1)
     ):
         raise ValueError("n_samples must be a positive integer power of two")
     if not is_integer(seed) or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
     sampler = qmc.Sobol(d=dimensions, scramble=True, rng=int(seed))
-    size = int(n_samples)
+    return _doubling_batches(sampler, int(n_samples))
+
+
+def _doubling_batches(sampler, size):
     yield sampler.random_base2(size.bit_length() - 1)
     while True:
         yield sampler.random_base2(size.bit_length() - 1)
