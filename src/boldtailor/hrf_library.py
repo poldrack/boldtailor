@@ -153,12 +153,43 @@ class HrfLibrary:
         Computed over custom candidates; canonical SPM is used only when there
         are none. A parameter shared by all candidates has zero width.
         """
-        rows = [c.parameters[:6] for c in self.candidates if c.kind != "spm"]
-        rows = np.array(rows or [CANONICAL_PARAMETERS[:6]], dtype=float)
+        rows = self._custom_parameters()
         return pd.DataFrame(
             {"low": rows.min(axis=0), "high": rows.max(axis=0)},
             index=list(PARAMETER_NAMES[:6]),
         )
+
+    def _custom_parameters(self):
+        rows = [c.parameters[:6] for c in self.candidates if c.kind != "spm"]
+        return np.array(rows or [CANONICAL_PARAMETERS[:6]], dtype=float)
+
+    @property
+    def informative_parameters(self) -> tuple[str, ...]:
+        """Sampled parameters with at least three distinct custom values.
+
+        Constant and two-level grid parameters put every pick at an edge, so
+        they are excluded from the scalar ``at_parameter_bound`` diagnostic.
+        """
+        rows = self._custom_parameters()
+        return tuple(
+            name
+            for name, column in zip(PARAMETER_NAMES[:6], rows.T, strict=True)
+            if len(np.unique(column)) >= 3 and np.ptp(column) > 0
+        )
+
+    def candidate_bound_flags(self, margin=0.02):
+        """Per-candidate ``(n_candidates, 6, 2)`` flags for ``[low, high]`` edges.
+
+        True where a custom candidate's parameter lies within ``margin`` of the
+        box width of that edge; canonical SPM rows are False.
+        """
+        bounds = self.parameter_bounds
+        low, high = bounds["low"].to_numpy(), bounds["high"].to_numpy()
+        tol = margin * (high - low)
+        params = np.array([c.parameters[:6] for c in self.candidates], dtype=float)
+        flags = np.stack([params - low <= tol, high - params <= tol], axis=-1)
+        flags[[c.kind == "spm" for c in self.candidates]] = False
+        return flags
 
     @property
     def parameter_table(self):

@@ -71,21 +71,6 @@ def _provenance(operation, data, activity):
     return operation.provenance(activity, analysis_id=analysis_id)
 
 
-def _at_parameter_bound(library, indices, margin=0.02):
-    """Flag custom picks within ``margin`` of the box width of any edge.
-
-    Canonical (0) and ineligible (-1) features are False. A zero-width
-    parameter range counts as at the bound.
-    """
-    bounds = library.parameter_bounds
-    low, high = bounds["low"].to_numpy(), bounds["high"].to_numpy()
-    tol = margin * (high - low)
-    params = np.array([c.parameters[:6] for c in library.candidates], dtype=float)
-    near = (params - low <= tol) | (high - params <= tol)
-    flags = near.any(axis=1) & np.array([c.kind != "spm" for c in library.candidates])
-    return flags[np.maximum(indices, 0)] & (indices > 0)
-
-
 def _select(
     operation,
     data,
@@ -136,7 +121,6 @@ def _select(
         feature_signature=signature,
         provenance=provenance,
         task_model=task_model,
-        at_parameter_bound=_at_parameter_bound(library, indices),
     )
 
 

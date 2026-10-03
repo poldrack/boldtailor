@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_fields, own_tuples, rebind
+from boldtailor._arrays import own_fields, own_tuples, readonly_array, rebind
 from boldtailor.data import _owned_table
-from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_library import PARAMETER_NAMES, HrfLibrary
 from boldtailor.model import TaskModel
 from boldtailor.provenance import ProvenanceRecord
 
@@ -23,7 +23,6 @@ class HrfSelectionResult:
     feature_signature: str | None
     provenance: ProvenanceRecord
     task_model: TaskModel = TaskModel()
-    at_parameter_bound: np.ndarray | None = None
 
     def __post_init__(self):
         if not isinstance(self.task_model, TaskModel):
@@ -32,13 +31,43 @@ class HrfSelectionResult:
         own_fields(self, ("cv_r2", "canonical_cv_r2", "delta_cv_r2"))
         own_tuples(self, ("run_labels",))
         rebind(self, _eligibility=_owned_table(self._eligibility))
-        if self.at_parameter_bound is None:
-            rebind(self, at_parameter_bound=np.zeros(self.hrf_indices.shape, bool))
-        own_fields(self, ("at_parameter_bound",), dtype=bool)
 
     @property
     def eligibility(self):
         return _owned_table(self._eligibility)
+
+    @property
+    def parameter_bound_flags(self) -> np.ndarray:
+        """``(n_features, 6, 2)`` edge flags of each selected custom kernel.
+
+        Parameters follow ``PARAMETER_NAMES[:6]``; the last axis is
+        ``[low, high]``. True within 2 % of the library box width of an edge;
+        canonical (0) and ineligible (-1) features are all False.
+        """
+        flags = self.library.candidate_bound_flags()[np.maximum(self.hrf_indices, 0)]
+        flags &= (self.hrf_indices > 0)[:, None, None]
+        return readonly_array(flags, dtype=bool)
+
+    @property
+    def at_parameter_bound(self) -> np.ndarray:
+        """Features flagged at an edge of any informative library parameter."""
+        informative = [
+            PARAMETER_NAMES.index(name) for name in self.library.informative_parameters
+        ]
+        flags = self.parameter_bound_flags[:, informative]
+        return readonly_array(flags.any(axis=(1, 2)), dtype=bool)
+
+    def parameter_bound_table(self) -> pd.DataFrame:
+        """Fraction of custom picks (ID > 0) flagged at each parameter edge."""
+        custom = self.parameter_bound_flags[self.hrf_indices > 0]
+        fractions = custom.mean(axis=0) if len(custom) else np.full((6, 2), np.nan)
+        return pd.DataFrame(
+            [
+                dict(parameter=name, edge=edge, fraction_flagged=float(fractions[p, e]))
+                for p, name in enumerate(PARAMETER_NAMES[:6])
+                for e, edge in enumerate(("low", "high"))
+            ]
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
