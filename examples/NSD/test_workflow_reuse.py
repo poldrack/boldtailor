@@ -125,7 +125,7 @@ def test_reuse_rejects_changed_analysis_settings(tmp_path):
     metadata = {
         "settings": {"ridge_mode": "fractional_cv", "hrf_seed": 0},
         "task_model_fingerprint": NSD_TASK_MODEL.fingerprint,
-        "hrf_normalization": "peak_one",
+        "hrf_normalization": "peak_one_event_response",
     }
     with pytest.raises(ValueError, match="hrf_seed"):
         validate_saved_settings(
@@ -165,11 +165,13 @@ def test_saved_results_with_other_hrf_normalization_are_rejected():
         validate_saved_settings(stale, settings)
     with pytest.raises(ValueError, match="hrf_normalization"):
         validate_saved_settings(current, settings)
-    validate_saved_settings({**current, "hrf_normalization": "peak_one"}, settings)
+    validate_saved_settings(
+        {**current, "hrf_normalization": "peak_one_event_response"}, settings
+    )
 
 
 def test_metadata_records_peak_hrf_normalization(four_runs):  # noqa: F811
     library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
     runs = load_session(*four_runs)
     published = workflow_outputs._metadata(runs, library, {})
-    assert published["hrf_normalization"] == "peak_one"
+    assert published["hrf_normalization"] == "peak_one_event_response"

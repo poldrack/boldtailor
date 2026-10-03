@@ -310,7 +310,7 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
     assert activity["min_onset"] == -24.0
     assert activity["oversampling"] == 50
     assert activity["score"] == "nuisance_adjusted_task_model_prediction_r2"
-    assert activity["hrf_normalization"] == "peak_one"
+    assert activity["hrf_normalization"] == "peak_one_event_response"
 
 
 def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):

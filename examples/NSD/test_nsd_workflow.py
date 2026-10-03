@@ -15,6 +15,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor.hrf_library import HrfLibrary
+from tests.oracles import scaled_condition
 
 NOTEBOOK = Path(__file__).with_name("nsd_workflow.ipynb")
 
@@ -171,7 +172,9 @@ def independent_ols(runs, indices, library, ids):
                 amplitudes += (e.response_time.isna().astype(float),)
             columns = [
                 compute_regressor(
-                    np.vstack([e.onset, e.duration, a]),
+                    scaled_condition(
+                        e.onset, e.duration, a, candidate.kernel, run.frame_times
+                    ),
                     candidate.kernel,
                     run.frame_times,
                 )[0][:, 0]

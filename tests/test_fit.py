@@ -820,4 +820,17 @@ def test_plain_string_hrf_fit_records_peak_normalization(single_run_problem, hrf
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
     result = fit(data, replace(model, hrf_model=hrf_name))
     activity = result.provenance.to_dict()["activities"][-1]
-    assert activity["model"]["hrf_normalization"] == "peak_one"
+    assert activity["model"]["hrf_normalization"] == "peak_one_event_response"
+
+
+@pytest.mark.parametrize("hrf_name", ["spm + derivative", "glover + derivative"])
+def test_nilearn_basis_fit_records_nilearn_sum_normalization(
+    single_run_problem, hrf_name
+):
+    from dataclasses import replace
+
+    signals, events, _, model = single_run_problem
+    data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
+    result = fit(data, replace(model, hrf_model=hrf_name, contrasts={"face": "face"}))
+    activity = result.provenance.to_dict()["activities"][-1]
+    assert activity["model"]["hrf_normalization"] == "nilearn_sum_one"

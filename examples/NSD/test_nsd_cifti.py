@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 from boldtailor._hrf_design import hrf_model
+from tests.oracles import scaled_condition
 
 
 def example():
@@ -96,12 +97,18 @@ def test_rt_modulation_is_centered_and_preserves_stimulus_timing(events):
     times = 0.775 + np.arange(96) * 1.6
     design = example().task_regressors(events, times)
     expected_stim, _ = compute_regressor(
-        np.vstack([events.onset, events.duration, np.ones(6)]),
+        scaled_condition(events.onset, events.duration, 1.0, hrf_model("spm"), times),
         hrf_model("spm"),
         times,
     )
     expected_rt, _ = compute_regressor(
-        np.vstack([events.onset, events.duration, [-1, -0.5, 1, 0, 1.5, -1]]),
+        scaled_condition(
+            events.onset,
+            events.duration,
+            [-1, -0.5, 1, 0, 1.5, -1],
+            hrf_model("spm"),
+            times,
+        ),
         hrf_model("spm"),
         times,
     )
@@ -137,7 +144,15 @@ def dataset(tmp_path, confounds, events):
         np.column_stack(
             [
                 compute_regressor(
-                    np.vstack([events.onset, events.duration, amp]), hrf, times
+                    (
+                        np.vstack([events.onset, events.duration, amp])
+                        if hrf == "spm"
+                        else scaled_condition(
+                            events.onset, events.duration, amp, hrf, times
+                        )
+                    ),
+                    hrf,
+                    times,
                 )[0]
                 for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
             ]
@@ -261,4 +276,4 @@ def test_external_fmriprep_root_has_explicit_provenance_error(dataset, tmp_path)
 
 def test_conventional_model_metadata_records_peak_normalization():
     assert example().MODEL["hrf"] == "spm"
-    assert example().MODEL["hrf_normalization"] == "peak_one"
+    assert example().MODEL["hrf_normalization"] == "peak_one_event_response"

@@ -23,14 +23,41 @@ def peak_kernel(name):
     return kernel
 
 
-def peak_design_matrix(frame_times, *, hrf_model="glover", **kwargs):
-    """Nilearn's design matrix with a named basis replaced by its peak kernel."""
+def oracle_event_scales(kernel_fn, durations, times, oversampling=50):
+    """Brute-force unit-peak amplitude per event: 1 / max(boxcar * kernel)."""
+    tr = float(np.min(np.diff(times)))
+    kernel = np.asarray(kernel_fn(tr, oversampling))
+    dt = tr / oversampling
+    return np.array(
+        [
+            1 / np.convolve(np.ones(max(1, int(round(d / dt)))), kernel).max()
+            for d in np.asarray(durations, dtype=float)
+        ]
+    )
+
+
+def scaled_condition(onsets, durations, amplitudes, kernel_fn, times, oversampling=50):
+    """Nilearn condition rows with amplitudes scaled to unit event peaks."""
+    scales = oracle_event_scales(kernel_fn, durations, times, oversampling)
+    amplitudes = np.broadcast_to(np.asarray(amplitudes, dtype=float), scales.shape)
+    return np.array([onsets, durations, amplitudes * scales], dtype=float)
+
+
+def peak_design_matrix(frame_times, *, hrf_model="glover", events=None, **kwargs):
+    """Nilearn's design matrix with a named basis replaced by its peak kernel,
+    each event's amplitude scaled so its response peaks at one."""
     if hrf_model not in _NILEARN_SHAPES:
         return make_first_level_design_matrix(
-            frame_times, hrf_model=hrf_model, **kwargs
+            frame_times, hrf_model=hrf_model, events=events, **kwargs
         )
+    kernel = peak_kernel(hrf_model)
+    if events is not None:
+        scales = oracle_event_scales(
+            kernel, events.duration, frame_times, kwargs.get("oversampling", 50)
+        )
+        events = events.assign(modulation=events.get("modulation", 1.0) * scales)
     matrix = make_first_level_design_matrix(
-        frame_times, hrf_model=peak_kernel(hrf_model), **kwargs
+        frame_times, hrf_model=kernel, events=events, **kwargs
     )
     matrix.columns = [name.removesuffix("_kernel") for name in matrix.columns]
     return matrix

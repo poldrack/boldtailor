@@ -13,6 +13,7 @@ from boldtailor.hrf_library import HrfLibrary
 from examples.NSD.nsd_single_trial import run_single_trial_analysis
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor._hrf_design import hrf_model
+from tests.oracles import scaled_condition
 
 
 @pytest.fixture
@@ -249,7 +250,13 @@ def test_hrf_comparison_uses_pooled_matching_canonical_trial_fit(hrf_nsd, tmp_pa
                 trial = np.column_stack(
                     [
                         compute_regressor(
-                            np.array([[onset], [duration], [1.0]]),
+                            scaled_condition(
+                                [onset],
+                                [duration],
+                                1.0,
+                                hrf_model("spm"),
+                                saved["frame_times"],
+                            ),
                             hrf_model("spm"),
                             saved["frame_times"],
                         )[0][:, 0]

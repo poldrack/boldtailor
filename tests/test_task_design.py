@@ -7,7 +7,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.model import Modulator, TaskModel
-from tests.oracles import peak_kernel
+from tests.oracles import scaled_condition, peak_kernel
 
 NSD = TaskModel(
     (
@@ -143,7 +143,7 @@ def test_task_columns_match_compute_regressor_per_condition(events, cid, capsys)
     for name in result.columns:
         rows = expanded.loc[expanded.trial_type == name]
         expected, _ = compute_regressor(
-            rows[["onset", "duration", "modulation"]].to_numpy().T,
+            scaled_condition(rows.onset, rows.duration, rows.modulation, hrf, times),
             hrf,
             times,
             oversampling=50,
@@ -162,7 +162,14 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
     glover = task_columns(expanded, times, "glover", min_onset=-10.0, oversampling=20)
     for name, actual in (("spm", spm), ("glover", glover)):
         expected, _ = compute_regressor(
-            expanded[["onset", "duration", "modulation"]].to_numpy().T,
+            scaled_condition(
+                expanded.onset,
+                expanded.duration,
+                expanded.modulation,
+                peak_kernel(name),
+                times,
+                oversampling=20,
+            ),
             peak_kernel(name),
             times,
             oversampling=20,
@@ -180,3 +187,23 @@ def test_string_hrf_keeps_kernel_suffix_in_regressor_names(events):
     times = 0.775 + 1.6 * np.arange(90)
     result = task_columns(expand_events(frame, model), times, "spm")
     assert list(result.columns) == ["task", "foo_kernel"]
+
+
+@pytest.mark.parametrize("hrf", ["spm", "glover", 1])
+def test_task_column_peaks_do_not_depend_on_oversampling(hrf):
+    from boldtailor._hrf_design import hrf_model
+    from boldtailor._task_design import expand_events, task_columns
+
+    if hrf == 1:
+        library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
+        hrf = hrf_model(library.candidates[1])
+    times = np.arange(0, 60, 0.1)
+    expanded = expand_events(
+        pd.DataFrame(dict(onset=[5.0], duration=[3.0])), TaskModel()
+    )
+    peaks = [
+        task_columns(expanded, times, hrf, oversampling=o)["task"].max()
+        for o in (20, 50)
+    ]
+    assert peaks[0] == pytest.approx(peaks[1], rel=0.02)
+    assert peaks[1] == pytest.approx(1.0, rel=0.05)

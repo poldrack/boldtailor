@@ -11,6 +11,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor._hrf_design import hrf_model
+from tests.oracles import scaled_condition
 
 
 def example():
@@ -36,9 +37,15 @@ def mini_nsd(dataset):
         x, simulated = (
             np.column_stack(
                 [
-                    compute_regressor(np.array([[t], [3.0], [1.0]]), hrf, times)[0][
-                        :, 0
-                    ]
+                    compute_regressor(
+                        (
+                            np.array([[t], [3.0], [1.0]])
+                            if hrf == "spm"
+                            else scaled_condition([t], [3.0], 1.0, hrf, times)
+                        ),
+                        hrf,
+                        times,
+                    )[0][:, 0]
                     for t in table.onset
                 ]
             )
