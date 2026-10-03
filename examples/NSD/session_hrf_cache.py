@@ -19,12 +19,12 @@ from boldtailor.workflow.artifacts import (
     table_artifact,
 )
 from boldtailor.workflow.files import input_paths
-from boldtailor.workflow.inputs import NSD_TASK_MODEL, _trimmed_sources
+from boldtailor.workflow.inputs import _trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
 
 
-def request_metadata(runs, root, library, limit, task_model=NSD_TASK_MODEL):
+def request_metadata(runs, root, library, limit, task_model):
     records = []
     for run in runs:
         digest = sha256(run.events.to_csv(index=False).encode())

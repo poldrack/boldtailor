@@ -151,7 +151,9 @@ def test_loader_rejects_wrong_scalar_names(saved_sessions, pattern):
 
 def test_loader_rejects_incompatible_libraries_and_missing_results(saved_sessions):
     root, sessions, _, _ = saved_sessions
-    path = next((root / "sub-07" / sessions[0]).rglob("*_desc-boldtailor_metadata.json"))
+    path = next(
+        (root / "sub-07" / sessions[0]).rglob("*_desc-boldtailor_metadata.json")
+    )
     metadata = json.loads(path.read_text())
     metadata["library_fingerprint"] = "different"
     path.write_text(json.dumps(metadata))

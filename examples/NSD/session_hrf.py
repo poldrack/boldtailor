@@ -1,15 +1,20 @@
 """Estimate or reuse one independent HRF selection for each NSD session."""
 
 from dataclasses import dataclass
-from numbers import Integral
 from pathlib import Path
 
 import numpy as np
 
-from boldtailor.hrf_selection import select_hrfs
-from boldtailor.cifti import spatial_signature
-from boldtailor.parallel import map_blocks, validate_n_jobs
+from boldtailor.workflow import analysis
+from boldtailor.workflow.inputs import (
+    detect_task_model,
+    load_session,
+    make_blocks,
+    selection_task_model,
+)
+from .nsd_settings import nsd_settings
 from .session_hrf_cache import (
+    MAP_NAMES,
     cache_paths,
     load_cache,
     request_id,
@@ -17,14 +22,6 @@ from .session_hrf_cache import (
     save_cache,
 )
 from .session_hrf_import import find_workflow_estimate
-from boldtailor.workflow.files import bids_label
-from boldtailor.workflow.inputs import (
-    NSD_TASK_MODEL,
-    load_session,
-    load_block,
-    make_blocks,
-    selection_task_model,
-)
 
 
 @dataclass(frozen=True)
@@ -37,35 +34,28 @@ class SessionEstimate:
     reused_from: str | None
 
 
-def _fit_block(indices, runs, root, library, task_model):
-    return select_hrfs(
-        load_block(runs, root, indices),
-        library=library,
-        run_labels=[r.label for r in runs],
-        feature_signature=spatial_signature(runs[0].image.header.get_axis(1), indices),
-        task_model=task_model,
-    )
-
-
 def fit_session(
     runs,
     root,
     library,
     *,
+    task_model,
     block_size=4096,
     max_grayordinates=None,
     n_jobs=1,
-    task_model=NSD_TASK_MODEL,
 ):
+    """All-run selection maps and per-block provenance for one session."""
     blocks = make_blocks(
         runs, block_size=block_size, max_grayordinates=max_grayordinates
     )
-    maps = np.full((4, runs[0].image.shape[1]), np.nan)
+    selections = analysis.select_hrfs(
+        runs, root, blocks, library, task_model=task_model, n_jobs=n_jobs, splits=False
+    )
+    maps = np.full((len(MAP_NAMES), runs[0].image.shape[1]), np.nan)
     provenance = []
-    for indices, result in map_blocks(
-        _fit_block, blocks, args=(runs, root, library, task_model), n_jobs=n_jobs
-    ):
-        maps[:, indices] = np.vstack(
+    for indices, bundle in selections.items():
+        result = bundle["all"]
+        maps[:, list(indices)] = np.vstack(
             [
                 np.where(result.hrf_indices >= 0, result.hrf_indices, np.nan),
                 result.cv_r2,
@@ -75,83 +65,105 @@ def fit_session(
         )
         provenance.append(
             dict(
-                grayordinate_indices=indices.tolist(),
+                grayordinate_indices=[int(i) for i in indices],
                 record=result.provenance.to_dict(),
             )
         )
     return maps, provenance
 
 
-def _validate_settings(subject, sessions, block_size, max_grayordinates, n_jobs):
-    if not bids_label(subject, "sub"):
-        raise ValueError("subject must be a BIDS subject label")
-    if (
-        not sessions
-        or len(sessions) != len(set(sessions))
-        or any(not bids_label(s, "ses") for s in sessions)
-    ):
-        raise ValueError("sessions must be nonempty, unique BIDS session labels")
-    for name, value in (
-        ("block_size", block_size),
-        ("max_grayordinates", max_grayordinates),
-    ):
-        if value is None and name == "max_grayordinates":
-            continue
-        if (
-            isinstance(value, (bool, np.bool_))
-            or not isinstance(value, Integral)
-            or value < 1
-        ):
-            raise ValueError(f"{name} must be a positive integer")
-    validate_n_jobs(n_jobs)
+def _session_settings(root, prep, output, subject, session, options):
+    config = dict(bids_root=root, output_root=output, subject=subject)
+    if prep is not None:
+        config["fmriprep_root"] = prep
+    return nsd_settings(config, session=session, **options)
 
 
-def _session_estimate(
-    runs, root, output, library, subject, session, reuse_roots, options
-):
+def _limit(settings, brain):
+    maximum = settings.max_grayordinates
+    return len(brain) if maximum is None else min(maximum, len(brain))
+
+
+def _request(settings, runs, library):
+    """The cache request, plus the full GLM model a workflow export used."""
     brain = runs[0].image.header.get_axis(1)
-    maximum = options["max_grayordinates"]
-    limit = len(brain) if maximum is None else min(maximum, len(brain))
-    task_model = options.get("task_model", NSD_TASK_MODEL)
-    request = request_metadata(runs, root, library, int(limit), task_model)
-    identity = request_id(request)
-    paths = cache_paths(subject, session, identity)
-    roots = [Path(output), *map(Path, reuse_roots)]
+    task_model = detect_task_model([r.events for r in runs], settings.modulators)
+    selection = selection_task_model(task_model, settings.hrf_selection_rt)
+    limit = int(_limit(settings, brain))
+    request = request_metadata(runs, settings.bids_dir, library, limit, selection)
+    return request, task_model, selection
+
+
+def _reuse_cache(settings, roots, paths, request, brain, library):
     for directory in dict.fromkeys(roots):
         maps = load_cache(directory, paths, request, brain, library)
         if maps is not None:
             source = directory / paths["selection"]
-            print(f"Reused HRF estimates: {session} ({source})", flush=True)
+            print(f"Reused HRF estimates: {settings.session} ({source})", flush=True)
             return SessionEstimate(
-                session,
+                settings.session,
                 brain,
                 maps,
-                identity,
+                request_id(request),
                 directory / paths["metadata"],
                 str(source),
             )
+    return None
+
+
+def _fit_or_import(settings, runs, library, roots, request, models):
+    task_model, selection = models
     imported = find_workflow_estimate(
-        roots, runs, root, library, request, subject, session
+        roots, runs, settings, library, request, task_model
     )
-    if imported is None:
-        print(
-            f"Fitting HRFs: {session}, {len(runs)} runs, {limit:,} grayordinates",
-            flush=True,
-        )
-        maps, provenance = fit_session(runs, root, library, **options)
-        source = None
-    else:
+    if imported is not None:
         maps, provenance, source = imported
-        print(f"Reused HRF estimates: {session} ({source})", flush=True)
-    if request_metadata(runs, root, library, int(limit), task_model) != request:
+        print(f"Reused HRF estimates: {settings.session} ({source})", flush=True)
+        return maps, provenance, source
+    print(
+        f"Fitting HRFs: {settings.session}, {len(runs)} runs, "
+        f"{request['grayordinate_limit']:,} grayordinates",
+        flush=True,
+    )
+    maps, provenance = fit_session(
+        runs,
+        settings.bids_dir,
+        library,
+        task_model=selection,
+        block_size=settings.block_size,
+        max_grayordinates=settings.max_grayordinates,
+        n_jobs=settings.n_jobs,
+    )
+    return maps, provenance, None
+
+
+def _session_estimate(settings, runs, library, reuse_roots):
+    brain = runs[0].image.header.get_axis(1)
+    request, *models = _request(settings, runs, library)
+    identity = request_id(request)
+    paths = cache_paths(settings.subject, settings.session, identity)
+    roots = [settings.output_dir, *map(Path, reuse_roots)]
+    cached = _reuse_cache(settings, roots, paths, request, brain, library)
+    if cached is not None:
+        return cached
+    maps, provenance, source = _fit_or_import(
+        settings, runs, library, roots, request, models
+    )
+    if _request(settings, runs, library)[0] != request:
         raise ValueError(
             "Input files changed while estimating HRFs; no cache was saved"
         )
+    output = settings.output_dir
     save_cache(output, paths, request, runs, library, maps, provenance, source)
-    print(f"Saved HRF estimates: {session}", flush=True)
+    print(f"Saved HRF estimates: {settings.session}", flush=True)
     return SessionEstimate(
-        session, brain, maps, identity, Path(output) / paths["metadata"], source
+        settings.session, brain, maps, identity, output / paths["metadata"], source
     )
+
+
+def _check_sessions(sessions):
+    if not sessions or len(sessions) != len(set(sessions)):
+        raise ValueError("sessions must be nonempty, unique BIDS session labels")
 
 
 def estimate_sessions(
@@ -172,29 +184,26 @@ def estimate_sessions(
 
     Sessions are processed sequentially; grayordinate blocks run in parallel.
     The cache key covers source identities, library, geometry and fit settings.
-    Old grid/untrimmed command-line results are not mixed into this analysis.
+    ``prep`` may be None to use the dataset's derivatives/fmriprep* directory.
     """
     sessions = tuple(sessions)
-    _validate_settings(subject, sessions, block_size, max_grayordinates, n_jobs)
-    root, prep = Path(root), Path(prep)
-    all_runs = [
-        load_session(root, prep, subject=subject, session=s, hrf_only=True)
-        for s in sessions
+    _check_sessions(sessions)
+    options = dict(
+        block_size=block_size,
+        max_grayordinates=max_grayordinates,
+        n_jobs=n_jobs,
+        hrf_selection_rt=include_rt,
+    )
+    settings = [
+        _session_settings(root, prep, output, subject, s, options) for s in sessions
     ]
+    all_runs = [load_session(s, hrf_only=True) for s in settings]
     brain = all_runs[0][0].image.header.get_axis(1)
     if any(r.image.header.get_axis(1) != brain for runs in all_runs for r in runs):
         raise ValueError(
             "All sessions must have identical grayordinate BrainModel axes"
         )
-    options = dict(
-        block_size=block_size,
-        max_grayordinates=max_grayordinates,
-        n_jobs=n_jobs,
-        task_model=selection_task_model(include_rt),
-    )
     return [
-        _session_estimate(
-            runs, root, output, library, subject, session, reuse_roots, options
-        )
-        for session, runs in zip(sessions, all_runs, strict=True)
+        _session_estimate(s, runs, library, reuse_roots)
+        for s, runs in zip(settings, all_runs, strict=True)
     ]

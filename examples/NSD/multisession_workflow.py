@@ -1,47 +1,48 @@
-"""Run the existing single-session notebook only for missing result sets."""
+"""Run the package workflow only for missing single-session result sets."""
 
 import json
-from pathlib import Path
 
-import nbformat
-from nbclient import NotebookClient
 import pandas as pd
 
+from boldtailor.workflow.run import run_workflow
 from .multisession_inputs import (
     _compatible,
     load_one_session,
     summary_paths,
     validate_sessions,
 )
-from .notebook_paths import notebook_paths
-from .workflow_reuse import ANALYSIS_SETTINGS
+from .nsd_settings import nsd_paths, nsd_settings
 
-SCIENCE_SETTINGS = tuple(
-    k
-    for k in ANALYSIS_SETTINGS
-    if k not in ("bids_root", "fmriprep_root", "subject", "session")
+SCIENCE_SETTINGS = (
+    "task",
+    "modulators",
+    "max_grayordinates",
+    "encoding_mode",
+    "ridge_mode",
+    "ridge_fractions",
+    "ridge_alphas",
+    "ridge_percentile",
+    "ridge_alpha",
+    "hrf_library",
+    "hrf_selection_rt",
+    "hrf_n_samples",
+    "hrf_seed",
 )
 
 
-def _execute_workflow(config):
-    """A separate kernel per session releases its arrays before the next fit."""
-    path = Path(__file__).with_name("nsd_workflow.ipynb")
-    notebook = nbformat.read(path, as_version=4)
-    for cell in notebook.cells:
-        if cell.cell_type == "code":
-            cell.outputs, cell.execution_count = [], None
-    notebook.cells.insert(0, nbformat.v4.new_code_cell(f"NSD_CONFIG = {config!r}"))
-    NotebookClient(
-        notebook,
-        timeout=None,
-        kernel_name="python3",
-        resources={"metadata": {"path": str(path.parents[2])}},
-    ).execute()
+def _with_paths(config, sessions):
+    """Explicit or NSD_* paths; the output root defaults to the workflow's own."""
+    config = {**config, **nsd_paths(config)}
+    if "output_root" not in config:
+        config.setdefault("subject", "sub-07")
+        default = nsd_settings(config, session=sessions[0]).output_dir
+        config["output_root"] = str(default)
+    return config
 
 
 def _inherit_settings(config, sessions, estimators):
     """Use an existing session as the scientific template for missing sessions."""
-    config = {**config, **notebook_paths(config)}
+    config = _with_paths(config, sessions)
     subject = config.get("subject", "sub-07")
     for session in sessions:
         path = summary_paths(config["output_root"], subject, session, estimators)[
@@ -84,7 +85,17 @@ def _producer_config(config, estimators):
     return dict(config, ridge_mode=mode)
 
 
+def _workflow_settings(config, subject, session):
+    return nsd_settings(
+        dict(config, subject=subject),
+        session=session,
+        surface_maps=False,
+        existing_results="overwrite",
+    )
+
+
 def _preflight(config, subject, sessions, estimators, fit_missing):
+    """Check every session, and build settings for the missing ones, before fitting."""
     requests, first = [], None
     for session in sessions:
         paths = summary_paths(config["output_root"], subject, session, estimators)
@@ -101,7 +112,10 @@ def _preflight(config, subject, sessions, estimators, fit_missing):
             else:
                 _compatible(first, record, estimators)
         requests.append((session, missing))
-    return requests
+    return [
+        (s, _workflow_settings(config, subject, s) if missing else None)
+        for s, missing in requests
+    ]
 
 
 def ensure_session_outputs(
@@ -111,7 +125,7 @@ def ensure_session_outputs(
 
     Scientific settings inherit from the first existing session unless explicitly
     supplied. Completed outputs are read only. Incomplete sessions are rerun with
-    the single-session workflow's transactional overwrite behavior.
+    ``run_workflow`` and ``existing_results="overwrite"``.
     """
     subject = config.get("subject", "sub-07")
     validate_sessions(subject, sessions, estimators)
@@ -121,20 +135,12 @@ def ensure_session_outputs(
     output = config["output_root"]
     requests = _preflight(config, subject, sessions, estimators, fit_missing)
     rows = []
-    for session, missing in requests:
-        if missing:
+    for session, settings in requests:
+        if settings is not None:
             print(f"Fitting missing session outputs: {session}", flush=True)
-            _execute_workflow(
-                dict(
-                    config,
-                    subject=subject,
-                    session=session,
-                    surface_maps=False,
-                    existing_results="overwrite",
-                )
-            )
+            run_workflow(settings)
         record = load_one_session(output, subject, session, estimators)
-        status = "fitted" if missing else "reused"
+        status = "fitted" if settings is not None else "reused"
         print(f"{session}: {status}", flush=True)
         rows.append(
             dict(

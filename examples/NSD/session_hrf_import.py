@@ -1,4 +1,4 @@
-"""Conservatively import matching HRFs exported by the full NSD notebook."""
+"""Conservatively import matching HRFs exported by the boldtailor workflow."""
 
 import json
 from pathlib import Path
@@ -10,25 +10,40 @@ import pandas as pd
 from boldtailor.cifti import spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
-from .session_hrf_cache import read_selection
-from boldtailor.workflow.outputs import _input_artifacts, _metadata, _stem
 from boldtailor.workflow.inputs import (
     _trimmed_sources,
     make_blocks,
     selection_task_model,
 )
+from boldtailor.workflow.outputs import input_artifacts, metadata
+from .session_hrf_cache import read_selection
+
+METADATA_KEYS = (
+    "library_fingerprint",
+    "retained_scans",
+    "trimming",
+    "nuisance_columns",
+    "high_pass",
+    "hrf_selection",
+)
+_ERRORS = (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    IndexError,
+    nib.filebasedimages.ImageFileError,
+)
 
 
 def _same_library(root, stem, library):
     table = pd.read_csv(
-        root / f"{stem}_desc-notebookHRF_library.tsv",
+        root / f"{stem}_desc-HRF_library.tsv",
         sep="\t",
         float_precision="round_trip",
     )
     recovered = HrfLibrary.from_table(table)
-    with np.load(
-        root / f"{stem}_desc-notebookHRF_library.npz", allow_pickle=False
-    ) as curves:
+    with np.load(root / f"{stem}_desc-HRF_library.npz", allow_pickle=False) as curves:
         return (
             recovered.fingerprint == library.fingerprint
             and np.array_equal(curves["curves"], library.curves)
@@ -78,61 +93,84 @@ def _matching_provenance(records, runs, root, library, maps, limit, task_model):
     )
 
 
-def find_workflow_estimate(roots, runs, root, library, request, subject, session):
-    """Return maps and provenance only when input identities and settings agree."""
-    stem = _stem(subject, session)
+def _expected_metadata(runs, library, settings, task_model):
+    """The settings-file fields a selection-only analysis would have written."""
+    return metadata(
+        runs,
+        library,
+        settings,
+        task_model,
+        beta_models={},
+        activation=None,
+        selections=None,
+        skipped=(),
+        report=None,
+    )
+
+
+def _compatible_export(directory, settings, expected, limit, n_features):
+    path = directory / f"{settings.stem}_desc-boldtailor_metadata.json"
+    if not path.is_file():
+        return False
+    saved = json.loads(path.read_text())
+    if any(saved[k] != expected[k] for k in METADATA_KEYS):
+        return False
+    saved_limit = saved["settings"].get("max_grayordinates")
+    covered = n_features if saved_limit is None else min(saved_limit, n_features)
+    return covered == limit
+
+
+def _same_inputs(directory, artifacts):
+    return all((directory / a.path).read_bytes() == a.payload for a in artifacts)
+
+
+def _read_export(directory, settings, brain, library, limit):
+    stem = settings.stem
+    path = (
+        directory
+        / f"{stem}_{settings.space_entity}_desc-HRFAll_stat-selection.dscalar.nii"
+    )
+    maps = read_selection(path, brain, library, limit)
+    records = json.loads((directory / f"{stem}_desc-HRF_provenance.json").read_text())
+    return maps, records, str(path)
+
+
+def _import_from(directory, runs, settings, library, expected, inputs, task_model):
     brain = runs[0].image.header.get_axis(1)
-    limit = request["grayordinate_limit"]
-    include_rt = "response_time" in request["task_model"]["regressors"]
-    task_model = selection_task_model(include_rt)
-    expected = _metadata(runs, library, {"hrf_selection_rt": include_rt})
+    limit = inputs["limit"]
+    if not _compatible_export(directory, settings, expected, limit, len(brain)):
+        return None
+    stem = settings.stem
+    if not _same_library(directory, stem, library):
+        return None
+    if not _same_inputs(directory, inputs["artifacts"]):
+        return None
+    maps, records, path = _read_export(directory, settings, brain, library, limit)
+    root = settings.bids_dir
+    if _matching_provenance(records, runs, root, library, maps, limit, task_model):
+        return maps, records, path
+    return None
+
+
+def find_workflow_estimate(roots, runs, settings, library, request, task_model):
+    """Return maps and provenance only when input identities and settings agree.
+
+    ``task_model`` is the session's full GLM model; HRF selection used its
+    ``settings.hrf_selection_rt`` subset, recorded in ``request``.
+    """
+    selection_model = selection_task_model(task_model, settings.hrf_selection_rt)
+    expected = _expected_metadata(runs, library, settings, task_model)
+    inputs = dict(
+        limit=request["grayordinate_limit"],
+        artifacts=input_artifacts(settings, runs, task_model),
+    )
     for directory in dict.fromkeys(Path(p) for p in roots):
-        metadata_path = directory / f"{stem}_desc-notebook_metadata.json"
-        if not metadata_path.is_file():
-            continue
         try:
-            metadata = json.loads(metadata_path.read_text())
-            keys = (
-                "library_fingerprint",
-                "retained_scans",
-                "trimming",
-                "nuisance_columns",
-                "high_pass",
-                "hrf_selection",
+            imported = _import_from(
+                directory, runs, settings, library, expected, inputs, selection_model
             )
-            if any(metadata[k] != expected[k] for k in keys):
-                continue
-            saved_limit = metadata["settings"].get("max_grayordinates")
-            if (
-                len(brain) if saved_limit is None else min(saved_limit, len(brain))
-            ) != limit:
-                continue
-            if not _same_library(directory, stem, library):
-                continue
-            if any(
-                (directory / a.path).read_bytes() != a.payload
-                for a in _input_artifacts(stem, runs)
-            ):
-                continue
-            path = (
-                directory
-                / f"{stem}_space-fsLR_den-91k_desc-notebookHRFAll_stat-selection.dscalar.nii"
-            )
-            maps = read_selection(path, brain, library, limit)
-            records = json.loads(
-                (directory / f"{stem}_desc-notebookHRF_provenance.json").read_text()
-            )
-            if _matching_provenance(
-                records, runs, root, library, maps, limit, task_model
-            ):
-                return maps, records, str(path)
-        except (
-            OSError,
-            ValueError,
-            KeyError,
-            TypeError,
-            IndexError,
-            nib.filebasedimages.ImageFileError,
-        ):
+        except _ERRORS:
             continue
+        if imported is not None:
+            return imported
     return None

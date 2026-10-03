@@ -11,14 +11,14 @@ from boldtailor.hrf_library import HrfLibrary
 from boldtailor.cifti import read_scalar
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
 from boldtailor.reliability import library_indices
-from .session_hrf_cache import MAP_NAMES as HRF_NAMES
-from boldtailor.workflow.outputs import R2_NAMES, _stem
 from boldtailor.workflow.files import bids_label
-from boldtailor.workflow.inputs import REGRESSORS
+from boldtailor.workflow.outputs import R2_NAMES
+from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 
 METRICS = ("mean_beta", "task_t", "task_delta_r2", "rt_r", "rt_abs_r")
 GLM_METRICS = ("task", "response_time")
 ESTIMATORS = ("OLS", "FractionalCV", "RidgeCV", "Ridge")
+TASK = "nsdcore"
 
 
 def validate_sessions(subject, sessions, estimators):
@@ -39,11 +39,11 @@ def validate_sessions(subject, sessions, estimators):
 
 
 def summary_paths(output, subject, session, estimators):
-    base = Path(output) / _stem(subject, session)
+    base = Path(output) / f"{subject}/{session}/func/{subject}_{session}_task-{TASK}"
     paths = dict(
-        metadata=Path(f"{base}_desc-notebook_metadata.json"),
-        parameters=Path(f"{base}_desc-notebookHRF_library.tsv"),
-        curves=Path(f"{base}_desc-notebookHRF_library.npz"),
+        metadata=Path(f"{base}_desc-boldtailor_metadata.json"),
+        parameters=Path(f"{base}_desc-HRF_library.tsv"),
+        curves=Path(f"{base}_desc-HRF_library.npz"),
     )
     descriptors = {
         "HRFAll": ("selection",),
@@ -60,7 +60,7 @@ def summary_paths(output, subject, session, estimators):
     for descriptor, stats in descriptors.items():
         for stat in stats:
             paths[descriptor, stat] = Path(
-                f"{base}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{stat}.dscalar.nii"
+                f"{base}_space-fsLR_den-91k_desc-{descriptor}_stat-{stat}.dscalar.nii"
             )
     return paths
 
@@ -86,6 +86,13 @@ def _beta(paths, brain, descriptor):
     return np.stack([activation[0], activation[1], r2[2], rt[0], np.abs(rt[0])])
 
 
+def _glm_effects(path, brain, metadata):
+    """Task and RT effect maps, read with the session's saved regressor names."""
+    regressors = list(metadata["regressors"])
+    effects = read_scalar(path, brain, regressors)
+    return effects[[regressors.index(name) for name in GLM_METRICS]]
+
+
 def load_one_session(output, subject, session, estimators):
     paths = summary_paths(output, subject, session, estimators)
     for path in paths.values():
@@ -104,9 +111,7 @@ def load_one_session(output, subject, session, estimators):
         hrf_indices=ids,
         sources=list(paths.values()),
         glm={
-            prefix: read_scalar(paths[prefix + "GLM", "effects"], brain, REGRESSORS)[
-                [REGRESSORS.index(name) for name in GLM_METRICS]
-            ]
+            prefix: _glm_effects(paths[prefix + "GLM", "effects"], brain, metadata)
             for prefix in ("Canonical", "Optimized")
         },
         beta={

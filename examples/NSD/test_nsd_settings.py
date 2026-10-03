@@ -44,9 +44,7 @@ def test_settings_reject_unknown_configuration_keys(config):
         nsd_settings({**config, "not_a_setting": 1})
 
 
-def test_paths_come_from_the_configuration_then_the_environment(
-    monkeypatch, tmp_path
-):
+def test_paths_come_from_the_configuration_then_the_environment(monkeypatch, tmp_path):
     for name in ("NSD_BIDS_ROOT", "NSD_FMRIPREP_ROOT", "NSD_OUTPUT_ROOT"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(ValueError, match="NSD_BIDS_ROOT"):
