@@ -8,7 +8,7 @@ from types import MappingProxyType
 from urllib.parse import urlsplit
 
 from boldtailor._software import package_version
-from boldtailor.provenance import ProvenanceRecord
+from boldtailor.provenance import ProvenanceRecord, validate_relative_path
 
 STABLE_BIDS_VERSION = "1.11.1"
 BEP028_DRAFT_IDENTIFIER = "BEP028"
@@ -23,19 +23,17 @@ BEP028_SUPPORTED_SUBSET = (
 )
 
 _BIDS_LABEL = re.compile(r"[A-Za-z0-9]+\Z")
-_PATH_COMPONENT = re.compile(r"[A-Za-z0-9+_.-]+\Z")
 _SOURCE_DATASET_KEYS = frozenset({"URL", "DOI", "Version"})
 _CONTAINER_KEYS = frozenset({"Type", "Tag", "URI"})
-_SENSITIVE_KEYS = frozenset(
-    {
-        "argv",
-        "cwd",
-        "environment_variables",
-        "hostname",
-        "username",
-        "working_directory",
-    }
-)
+_COMMANDS = {
+    "normalize": "from_arrays",
+    "normalize_prepared_design": "PreparedDesignAnalysis.from_arrays",
+    "selected_hrf_glm": "fit",
+    "single_trial": "fit_single_trials",
+    "selected_hrf_single_trial": "fit_selected_hrfs",
+    "hrf_selection": "select_hrf",
+    "hrf_independent_evaluation": "evaluate_hrf_split",
+}
 
 
 def project_bids_provenance(
@@ -98,11 +96,11 @@ def _stable_artifacts(
         description["SourceDatasets"] = list(source_datasets)
     if dataset_links:
         description["DatasetLinks"] = dict(dataset_links)
-    safe_record = _safe_json(record.to_dict())
+    serialized = record.to_dict()
     return {
         "dataset_description.json": _pretty_json(description),
-        "logs/boldtailor_events.jsonl": _json_lines(safe_record["events"]),
-        "logs/boldtailor_provenance.json": _compact_json(safe_record),
+        "logs/boldtailor_events.jsonl": _json_lines(serialized["events"]),
+        "logs/boldtailor_provenance.json": _compact_json(serialized),
     }
 
 
@@ -142,6 +140,17 @@ def _draft_graph(
         software_id=software_id,
         used=(*source_ids, environment_id),
     )
+    return {
+        "activities": activities,
+        "activity_ids": activity_ids,
+        "entities": entities,
+        "source_ids": source_ids,
+        "environments": [_environment(record, environment_id)],
+        "software": [_software(software_id, code_url)],
+    }
+
+
+def _software(software_id: str, code_url: str | None) -> dict[str, object]:
     software: dict[str, object] = {
         "Id": software_id,
         "Label": "Boldtailor",
@@ -149,19 +158,26 @@ def _draft_graph(
     }
     if code_url is not None:
         software["AlternativeIdentifier"] = [code_url]
-    return {
-        "activities": activities,
-        "activity_ids": activity_ids,
-        "entities": entities,
-        "source_ids": source_ids,
-        "environments": [
-            {
-                "Id": environment_id,
-                "Label": "Boldtailor execution environment",
-            }
-        ],
-        "software": [software],
+    return software
+
+
+def _environment(record: ProvenanceRecord, identifier: str) -> dict[str, object]:
+    environment: dict[str, object] = {
+        "Id": identifier,
+        "Label": "Boldtailor execution environment",
     }
+    activities = record.to_dict()["activities"]
+    software = dict(activities[-1].get("software", {})) if activities else {}
+    if "python" in software:
+        environment["Python"] = software.pop("python")
+    if "platform" in software:
+        environment["Platform"] = software.pop("platform")
+    if software:
+        environment["Software"] = [
+            {"Label": name, "Version": version}
+            for name, version in sorted(software.items())
+        ]
+    return environment
 
 
 def _activities(
@@ -173,32 +189,38 @@ def _activities(
 ) -> tuple[list[dict[str, object]], tuple[str, ...]]:
     source = tuple(record.activities) or ({"name": "provenance", "stage": "record"},)
     activities = []
-    identifiers = []
     for index, activity in enumerate(source):
-        safe_activity = _safe_json(activity)
-        name = _slug(safe_activity.get("name", f"activity{index}"), "activity")
-        identifier = f"bids::prov#{name}-{token}-{index}"
-        identifiers.append(identifier)
+        name = _slug(activity.get("name", f"activity{index}"), "activity")
         activities.append(
             {
-                "Id": identifier,
+                "Id": f"bids::prov#{name}-{token}-{index}",
                 "Label": name,
-                "Command": _activity_command(safe_activity),
+                "Command": _activity_command(activity.get("name")),
                 "AssociatedWith": [software_id],
                 "Used": list(used),
             }
         )
-    return activities, tuple(identifiers)
+    activities[-1].update(_activity_times(record))
+    return activities, tuple(activity["Id"] for activity in activities)
 
 
-def _activity_command(activity: Mapping[str, object]) -> str:
-    payload = json.dumps(
-        activity,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    return f"boldtailor Python API activity {payload}"
+def _activity_command(name: object) -> str:
+    if not isinstance(name, str):
+        return "boldtailor"
+    return f"boldtailor.{_COMMANDS.get(name, name)}"
+
+
+def _activity_times(record: ProvenanceRecord) -> dict[str, str]:
+    """Bounds of the lifecycle events of the execution that wrote the last activity."""
+    stamps = [
+        event["timestamp"]
+        for event in record.events
+        if event.get("execution_id") == record.execution_id
+        and isinstance(event.get("timestamp"), str)
+    ]
+    if not stamps:
+        return {}
+    return {"StartedAtTime": min(stamps), "EndedAtTime": max(stamps)}
 
 
 def _entities(
@@ -207,7 +229,6 @@ def _entities(
 ) -> tuple[dict[str, list[dict[str, object]]], tuple[str, ...]]:
     files: dict[str, dict[str, object]] = {}
     anonymous: list[dict[str, object]] = []
-    seen_paths: dict[str, str] = {}
     for run_index, run in enumerate(record.sources):
         for source in (run.signal, run.events, run.confounds):
             if source is None:
@@ -215,7 +236,6 @@ def _entities(
             if source.uri is None:
                 anonymous.append(_anonymous_entity(source.role, run_index, token))
                 continue
-            _check_case_collision(source.uri, seen_paths, "source path")
             files.setdefault(source.uri, _file_entity(source.uri, source.sha256))
     document: dict[str, list[dict[str, object]]] = {}
     if files:
@@ -233,9 +253,9 @@ def _file_entity(uri: str, sha256: str | None = None) -> dict[str, object]:
     if uri.startswith("bids:"):
         identifier = uri
         location = uri.split(":", 2)[2]
-        _validate_relative_path(location, "record source path")
+        validate_relative_path(location, name="record source path")
     else:
-        _validate_relative_path(uri, "record source path")
+        validate_relative_path(uri, name="record source path")
         identifier = f"bids::{uri}"
         location = uri
     entity: dict[str, object] = {
@@ -359,7 +379,7 @@ def _validate_link_location(value: object) -> str:
     text = _validate_text(value, "dataset link location")
     if urlsplit(text).scheme:
         return _validate_uri(text, "dataset link location")
-    return _validate_relative_path(text, "dataset link location")
+    return validate_relative_path(text, name="dataset link location")
 
 
 def _normalize_sidecars(
@@ -372,10 +392,8 @@ def _normalize_sidecars(
         raise ValueError("derivative_sidecars must be a mapping")
     record_sources = _record_source_uris(record)
     normalized = {}
-    seen: dict[str, str] = {}
     for path, sources in values.items():
         safe_path = _validate_sidecar_path(path)
-        _check_case_collision(safe_path, seen, "output path")
         normalized[safe_path] = _normalize_relationship_sources(
             sources,
             record_sources,
@@ -405,24 +423,10 @@ def _record_source_uris(record: ProvenanceRecord) -> frozenset[str]:
 
 
 def _validate_sidecar_path(value: object) -> str:
-    path = _validate_relative_path(value, "derivative sidecar path")
+    path = validate_relative_path(value, name="derivative sidecar path")
     if not path.endswith(".json"):
         raise ValueError("derivative sidecar path must end in .json")
     return path
-
-
-def _validate_relative_path(value: object, name: str) -> str:
-    text = _validate_text(value, name)
-    if text.startswith("/") or "\\" in text:
-        raise ValueError(f"{name} must be a dataset-relative POSIX path")
-    path = PurePosixPath(text)
-    if path.as_posix() != text or any(part in {".", ".."} for part in path.parts):
-        raise ValueError(f"{name} must not contain traversal or empty components")
-    if not path.parts or any(
-        not _PATH_COMPONENT.fullmatch(part) for part in path.parts
-    ):
-        raise ValueError(f"{name} contains invalid path characters")
-    return text
 
 
 def _validate_label(value: object, name: str = "label") -> str:
@@ -466,37 +470,14 @@ def _require_record(record: object) -> None:
         raise ValueError("record must be a ProvenanceRecord")
 
 
-def _check_case_collision(value: str, seen: dict[str, str], name: str) -> None:
-    folded = value.casefold()
-    previous = seen.get(folded)
-    if previous is not None and previous != value:
-        raise ValueError(f"case-folded {name} collision: {previous!r} and {value!r}")
-    seen[folded] = value
-
-
 def _extend_artifacts(
     artifacts: dict[str, bytes],
     additions: Mapping[str, bytes],
 ) -> None:
-    seen = {path.casefold(): path for path in artifacts}
     for path, payload in additions.items():
-        previous = seen.get(path.casefold())
-        if previous is not None:
-            raise ValueError(f"artifact path collision: {previous!r} and {path!r}")
-        seen[path.casefold()] = path
+        if path in artifacts:
+            raise ValueError(f"artifact path collision: {path!r}")
         artifacts[path] = payload
-
-
-def _safe_json(value: object) -> object:
-    if isinstance(value, Mapping):
-        return {
-            key: _safe_json(item)
-            for key, item in value.items()
-            if key.casefold() not in _SENSITIVE_KEYS
-        }
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return [_safe_json(item) for item in value]
-    return value
 
 
 def _provenance_tsv(label: str) -> bytes:
@@ -531,11 +512,9 @@ def _provenance_sidecar() -> dict[str, object]:
 
 
 def _freeze_artifacts(artifacts: Mapping[str, bytes]) -> Mapping[str, bytes]:
-    seen: dict[str, str] = {}
     ordered = {}
     for path in sorted(artifacts):
-        safe_path = _validate_relative_path(path, "artifact path")
-        _check_case_collision(safe_path, seen, "artifact path")
+        safe_path = validate_relative_path(path, name="artifact path")
         payload = artifacts[path]
         if not isinstance(payload, bytes):
             raise ValueError("artifact payloads must be bytes")
