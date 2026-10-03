@@ -1,6 +1,10 @@
 """Bounded process batches; workers compute and the parent assembles outputs.
 
-Workers must return picklable arrays or dictionaries, not result objects.
+Result objects that hold rebuild closures (``SingleTrialResult`` with a
+``SelectedTrialDesign``, ``HrfAnalysisResult``) cannot be serialized with the
+standard ``pickle`` module; loky's cloudpickle can move them between
+processes, but workers should prefer returning arrays or dicts to keep
+transfers small.
 """
 
 from itertools import islice

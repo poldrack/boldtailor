@@ -118,7 +118,8 @@ def _centered(beta, rt):
     return b, r, counts, valid
 
 
-def _correlation(cross, beta_ss, rt_ss, counts):
+def pearson_correlation(cross, beta_ss, rt_ss, counts):
+    """Pearson r from centered cross/sum-of-squares; NaN below 3 trials or no variance."""
     r = np.full(np.shape(cross), np.nan)
     denominator = np.sqrt(beta_ss * rt_ss)
     np.divide(cross, denominator, out=r, where=(counts >= 3) & (denominator > 0))
@@ -146,7 +147,7 @@ def correlate_rt(beta_runs, rt_runs, *, run_numbers):
     _validate_runs(beta_runs, rt_runs, run_numbers)
     moments, counts = _run_moments(beta_runs, rt_runs)
     result = {
-        "per_run": _correlation(*np.moveaxis(moments, 1, 0), counts),
+        "per_run": pearson_correlation(*np.moveaxis(moments, 1, 0), counts),
         "counts": {"per_run": counts},
     }
     numbers = np.asarray(run_numbers)
@@ -156,7 +157,7 @@ def correlate_rt(beta_runs, rt_runs, *, run_numbers):
         ("even", numbers % 2 == 0),
     ):
         count = counts[mask].sum(axis=0)
-        result[name] = _correlation(*moments[mask].sum(axis=0), count)
+        result[name] = pearson_correlation(*moments[mask].sum(axis=0), count)
         result["counts"][name] = count
     return result
 

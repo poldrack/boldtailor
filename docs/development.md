@@ -107,9 +107,7 @@ and penalty metadata. Its `design` is a `SharedTrialDesign` for one HRF across
 features or a `SelectedTrialDesign` for grouped HRF assignments. Each design
 container owns its matrices (a selected design rebuilds them on request
 instead of retaining one per `(run, hrf_id)`), so the result does not duplicate
-that copying logic. `SingleTrialResult` with a `SelectedTrialDesign`, and
-`HrfAnalysisResult`, hold rebuild closures and cannot be pickled; parallel
-workers must return arrays or dicts (as the NSD examples do). Common numerical
+that copying logic. Result objects that hold rebuild closures (`SingleTrialResult` with a `SelectedTrialDesign`, `HrfAnalysisResult`) cannot be serialized with the standard `pickle` module; loky's cloudpickle can move them between processes, but workers should prefer returning arrays or dicts to keep transfers small. The NSD examples return arrays and dicts. Common numerical
 fields stay directly on the result. See
 [result migration](result-migration.md) for API changes.
 
@@ -286,7 +284,8 @@ The NSD notebook helpers load feature blocks, preserve CIFTI axes, and
 reconstruct full output arrays in the parent process. `n_jobs>1` uses
 `boldtailor.parallel.map_blocks`: bounded batches of joblib loky processes,
 each with all runs for its assigned feature block and one numerical-library
-thread. Workers return arrays and dictionaries, never write derivatives, and
+thread. Workers return arrays and dictionaries (see the serialization note
+above), never write derivatives, and
 a worker failure prevents publication. Library/timing/design caches are
 process-local. Full output beta arrays and the assembled artifact set still
 consume memory.

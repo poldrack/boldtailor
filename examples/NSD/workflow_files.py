@@ -213,3 +213,28 @@ def run_sources(run, root, indices):
             sidecar=source_ref(inputs.confounds_json, root, "confounds").to_dict(),
         ),
     )
+
+
+def odd_even_parity(runs):
+    """Run positions with odd and even BIDS run numbers, in input order."""
+    return dict(
+        odd=[i for i, r in enumerate(runs) if r.number % 2],
+        even=[i for i, r in enumerate(runs) if not r.number % 2],
+    )
+
+
+def reaction_times(runs, *, missing_ok=False):
+    """Per-run RT arrays; unavailable (nonpositive or missing) RTs are NaN.
+
+    With ``missing_ok``, raw event tables may lack ``response_time`` or hold
+    non-numeric entries; those trials get NaN.
+    """
+    if not missing_ok:
+        return [r.events.response_time.to_numpy() for r in runs]
+    return [
+        pd.to_numeric(
+            r.events.get("response_time", pd.Series(np.nan, index=r.events.index)),
+            errors="coerce",
+        ).to_numpy(dtype=float)
+        for r in runs
+    ]

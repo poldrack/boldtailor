@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from importlib.metadata import version
-import json
 from pathlib import Path
 
 import nibabel as nib
@@ -20,25 +19,28 @@ from nilearn.glm.first_level import compute_regressor
 from boldtailor.design import event_response_scales, hrf_model
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
+from boldtailor.cifti import scalar_artifact
 from boldtailor.publication import Artifact, publish_artifact_set
 
 if __package__:
     from .notebook_paths import notebook_paths
+    from .workflow_artifacts import dataset_description, json_artifact
     from .workflow_files import (
         RunInputs,
         discover_runs,
-        input_paths as _input_paths,
+        input_paths,
         load_inputs,
-        run_sources as _sources,
+        run_sources,
     )
 else:
     from notebook_paths import notebook_paths
+    from workflow_artifacts import dataset_description, json_artifact
     from workflow_files import (
         RunInputs,
         discover_runs,
-        input_paths as _input_paths,
+        input_paths,
         load_inputs,
-        run_sources as _sources,
+        run_sources,
     )
 
 BIDS_ROOT = None  # Use --bids-root or NSD_BIDS_ROOT; no personal default.
@@ -126,7 +128,7 @@ def _fit_block(runs, signals, root, indices):
         design_matrices=[run.design for run in runs],
         frame_times=[run.frame_times for run in runs],
         column_roles=roles,
-        sources=[_sources(run, root, indices) for run in runs],
+        sources=[run_sources(run, root, indices) for run in runs],
         run_metadata=[{"run": run.inputs.stem} for run in runs],
     )
     full = fit_prepared(
@@ -172,24 +174,17 @@ def _fit_session(runs, root, block_size):
     return maps, provenance
 
 
-def _json_artifact(path, value):
-    return Artifact(
-        path, (json.dumps(value, indent=2, allow_nan=False) + "\n").encode()
-    )
-
-
 def _scalar_artifacts(stem, brain, maps, metadata):
     names = [("full", "rsquared"), ("confounds", "rsquared"), ("task", "deltarsquared")]
     artifacts = []
     for (label, statistic), values in zip(names, maps, strict=True):
         name = f"{stem}_space-fsLR_den-91k_desc-{label}_stat-{statistic}"
-        axes = (nib.cifti2.ScalarAxis([f"{label}_{statistic}"]), brain)
-        image = nib.Cifti2Image(
-            values[None].astype(np.float32), nib.Cifti2Header.from_axes(axes)
+        artifacts.append(
+            scalar_artifact(
+                f"{name}.dscalar.nii", brain, values[None], [f"{label}_{statistic}"]
+            )
         )
-        image.nifti_header.set_intent("ConnDenseScalar")
-        artifacts.append(Artifact(f"{name}.dscalar.nii", image.to_bytes()))
-        artifacts.append(_json_artifact(f"{name}.json", {**metadata, "Map": label}))
+        artifacts.append(json_artifact(f"{name}.json", {**metadata, "Map": label}))
     return artifacts
 
 
@@ -222,8 +217,8 @@ def _result_artifacts(runs, maps, provenance, root, subject, session):
                 frame.to_csv(sep="\t", index=False).encode(),
             )
         )
-    artifacts.append(_json_artifact(f"{stem}_desc-model_metadata.json", metadata))
-    artifacts.append(_json_artifact(f"{stem}_desc-blocks_provenance.json", provenance))
+    artifacts.append(json_artifact(f"{stem}_desc-model_metadata.json", metadata))
+    artifacts.append(json_artifact(f"{stem}_desc-blocks_provenance.json", provenance))
     return artifacts
 
 
@@ -262,23 +257,11 @@ def run_analysis(
     maps, provenance = _fit_session(runs, root, block_size)
     artifacts = _result_artifacts(runs, maps, provenance, root, subject, session)
     if not (output / "dataset_description.json").exists():
-        artifacts.append(
-            _json_artifact(
-                "dataset_description.json",
-                {
-                    "Name": "NSD stimulus and response-time GLM",
-                    "BIDSVersion": "1.11.1",
-                    "DatasetType": "derivative",
-                    "GeneratedBy": [
-                        {"Name": "boldtailor", "Version": version("boldtailor")}
-                    ],
-                },
-            )
-        )
+        artifacts.append(dataset_description("NSD stimulus and response-time GLM"))
     paths = publish_artifact_set(
         output,
         artifacts,
-        source_paths=[path for item in inputs for path in _input_paths(item)],
+        source_paths=[path for item in inputs for path in input_paths(item)],
     )
     for name, values in zip(("full R2", "confounds R2", "delta R2"), maps, strict=True):
         finite = values[np.isfinite(values)]

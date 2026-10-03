@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from examples.NSD.workflow_artifacts import dataset_description
-from examples.NSD.workflow_inputs import reaction_times
+from examples.NSD.workflow_files import reaction_times
 
 
 def test_dataset_description_is_a_boldtailor_derivative():

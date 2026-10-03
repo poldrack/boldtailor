@@ -3,7 +3,6 @@
 from importlib.metadata import version
 
 import numpy as np
-import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor import hrf_library, hrf_selection
@@ -22,12 +21,13 @@ if __package__:
         _merge_block_arrays,
     )
     from .parallel_blocks import execution_settings
-    from .nsd_cifti import _sources, _input_paths
+    from .workflow_artifacts import dataset_description
+    from .workflow_files import input_paths, run_sources
+    from .workflow_files import odd_even_parity, reaction_times
     from .rt_diagnostics import select_vertices
     from .single_trial_artifacts import (
         all_model_paths,
         model_paths,
-        json_artifact,
         single_trial_artifacts,
     )
     from .hrf_artifacts import (
@@ -45,12 +45,13 @@ else:
         _merge_block_arrays,
     )
     from parallel_blocks import execution_settings
-    from nsd_cifti import _sources, _input_paths
+    from workflow_artifacts import dataset_description
+    from workflow_files import input_paths, run_sources
+    from workflow_files import odd_even_parity, reaction_times
     from rt_diagnostics import select_vertices
     from single_trial_artifacts import (
         all_model_paths,
         model_paths,
-        json_artifact,
         single_trial_artifacts,
     )
     from hrf_artifacts import (
@@ -86,18 +87,8 @@ def block_data(runs, root, indices):
         [r.events for r in runs],
         frame_times=[r.frame_times for r in runs],
         confounds=[r.confounds for r in runs],
-        sources=[_sources(r, root, indices) for r in runs],
+        sources=[run_sources(r, root, indices) for r in runs],
     )
-
-
-def reaction_times(runs):
-    return [
-        pd.to_numeric(
-            r.events.get("response_time", pd.Series(np.nan, index=r.events.index)),
-            errors="coerce",
-        ).to_numpy(dtype=float)
-        for r in runs
-    ]
 
 
 def _collect_fit(target, fit, start, stop):
@@ -188,7 +179,7 @@ def _canonical_rt(runs, root, indices, library, state):
     canonical = fit_single_trials(data, run_labels=[r.label for r in runs])
     return correlate_rt(
         canonical.run_betas,
-        reaction_times(runs),
+        reaction_times(runs, missing_ok=True),
         run_numbers=[r.number for r in runs],
     )["odd"]
 
@@ -405,8 +396,7 @@ def run_expanded_analysis(
         + list(all_model_paths(selection_paths_)),
     )
     library = hrf_library.expanded_hrf_library()
-    train = [i for i, r in enumerate(runs) if r.number % 2 == 1]
-    test = [i for i, r in enumerate(runs) if r.number % 2 == 0]
+    train, test = odd_even_parity(runs).values()
     print(
         f"Expanded HRF analysis: {len(runs)} runs, {len(library.candidates)} candidates, {len(brain)} grayordinates, {n_jobs} requested workers",
         flush=True,
@@ -439,7 +429,9 @@ def run_expanded_analysis(
             GroupedDesigns=selection_paths_["designs"],
         )
         diagnostics = correlate_rt(
-            result["betas"], reaction_times(runs), run_numbers=[r.number for r in runs]
+            result["betas"],
+            reaction_times(runs, missing_ok=True),
+            run_numbers=[r.number for r in runs],
         )
         artifacts.extend(
             single_trial_artifacts(runs, brain, result, diagnostics, paths[name], meta)
@@ -467,23 +459,11 @@ def run_expanded_analysis(
         )
     )
     if not (output / "dataset_description.json").exists():
-        artifacts.append(
-            json_artifact(
-                "dataset_description.json",
-                dict(
-                    Name="NSD expanded HRF single-trial models",
-                    BIDSVersion="1.11.1",
-                    DatasetType="derivative",
-                    GeneratedBy=[
-                        dict(Name="boldtailor", Version=version("boldtailor"))
-                    ],
-                ),
-            )
-        )
+        artifacts.append(dataset_description("NSD expanded HRF single-trial models"))
     published = publish_artifact_set(
         output,
         artifacts,
-        source_paths=[p for r in runs for p in _input_paths(r.inputs)],
+        source_paths=[p for r in runs for p in input_paths(r.inputs)],
     )
     print(f"Saved {len(published)} files to {output}", flush=True)
     return published

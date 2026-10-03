@@ -10,7 +10,7 @@ PUBLIC = [
     ("design", "hrf_model", "_hrf_design"),
     ("design", "event_response_scales", "_hrf_design"),
     ("hrf_selection", "prepare_runs", "_hrf_cv"),
-    ("hrf_selection", "subset_runs", "_ridge_cv"),
+    ("hrf_selection", "subset_runs", "_hrf_cv"),
     ("fractional_ridge", "fraction_grid", "_fractional_ridge"),
     ("fractional_ridge", "regularization", "_fractional_ridge"),
     ("fractional_ridge", "NORM_BASIS", "_fractional_ridge"),

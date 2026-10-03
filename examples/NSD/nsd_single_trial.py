@@ -8,10 +8,8 @@ import argparse
 from importlib.metadata import version
 from numbers import Integral
 from pathlib import Path
-import re
 
 import numpy as np
-import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.single_trial import fit_single_trials
@@ -25,42 +23,38 @@ if __package__:
     from .nsd_cifti import (
         BIDS_ROOT,
         MODEL,
-        _input_paths,
-        _sources,
         discover_runs,
         script_roots,
     )
     from .rt_diagnostics import scatter_artifact, select_vertices
-    from .workflow_files import load_runs as _load_runs
+    from .workflow_artifacts import dataset_description, table_artifact
+    from .workflow_files import bids_label, input_paths, load_runs, run_sources
+    from .workflow_files import reaction_times
     from .single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
-        json_artifact,
         model_paths,
         selected_vertex_table,
         single_trial_artifacts,
-        table_artifact,
     )
 else:
     from parallel_blocks import execution_settings
     from nsd_cifti import (
         BIDS_ROOT,
         MODEL,
-        _input_paths,
-        _sources,
         discover_runs,
         script_roots,
     )
     from rt_diagnostics import scatter_artifact, select_vertices
-    from workflow_files import load_runs as _load_runs
+    from workflow_artifacts import dataset_description, table_artifact
+    from workflow_files import bids_label, input_paths, load_runs, run_sources
+    from workflow_files import reaction_times
     from single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
-        json_artifact,
         model_paths,
         selected_vertex_table,
         single_trial_artifacts,
-        table_artifact,
     )
 
 
@@ -93,7 +87,7 @@ def _fit_trial_block(bounds, runs, root, models):
         [r.events for r in runs],
         frame_times=[r.frame_times for r in runs],
         confounds=[r.confounds for r in runs],
-        sources=[_sources(r, root, np.arange(start, stop)) for r in runs],
+        sources=[run_sources(r, root, np.arange(start, stop)) for r in runs],
     )
     results = {}
     for name, alpha in models.items():
@@ -171,13 +165,7 @@ def _model_metadata(runs, root, alpha, result):
 
 
 def _build_artifacts(runs, root, brain, models, results, paths, checks):
-    rt = [
-        pd.to_numeric(
-            r.events.get("response_time", pd.Series(np.nan, index=r.events.index)),
-            errors="coerce",
-        ).to_numpy(dtype=float)
-        for r in runs
-    ]
+    rt = reaction_times(runs, missing_ok=True)
     numbers = [r.number for r in runs]
     diagnostics = {
         name: correlate_rt(result["betas"], rt, run_numbers=numbers)
@@ -236,9 +224,7 @@ def run_single_trial_analysis(
         or block_size <= 0
     ):
         raise ValueError("block_size must be a positive integer")
-    if not re.fullmatch(r"sub-[A-Za-z0-9]+", subject) or not re.fullmatch(
-        r"ses-[A-Za-z0-9]+", session
-    ):
+    if not bids_label(subject, "sub") or not bids_label(session, "ses"):
         raise ValueError("subject and session must be BIDS labels")
     models = {"OLS": 0.0}
     if ridge_alpha is not None:
@@ -251,7 +237,7 @@ def run_single_trial_analysis(
     root, prep, output = script_roots(bids_root, fmriprep_root, output_root)
     output = output.absolute()
     inputs = discover_runs(root, prep, subject=subject, session=session)
-    runs, brain = _load_runs(inputs)
+    runs, brain = load_runs(inputs)
     if hrf_library == "expanded":
         if __package__:
             from .nsd_hrf import run_expanded_analysis
@@ -281,21 +267,9 @@ def run_single_trial_analysis(
     results = _fit_blocks(runs, root, brain, models, block_size, n_jobs=n_jobs)
     artifacts = _build_artifacts(runs, root, brain, models, results, paths, checks)
     if not (output / "dataset_description.json").exists():
-        artifacts.append(
-            json_artifact(
-                "dataset_description.json",
-                {
-                    "Name": "NSD single-trial models",
-                    "BIDSVersion": "1.11.1",
-                    "DatasetType": "derivative",
-                    "GeneratedBy": [
-                        {"Name": "boldtailor", "Version": version("boldtailor")}
-                    ],
-                },
-            )
-        )
+        artifacts.append(dataset_description("NSD single-trial models"))
     published = publish_artifact_set(
-        output, artifacts, source_paths=[p for r in inputs for p in _input_paths(r)]
+        output, artifacts, source_paths=[p for r in inputs for p in input_paths(r)]
     )
     print(f"Saved {len(published)} files to {output}", flush=True)
     return published

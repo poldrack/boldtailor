@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.fractional_ridge import fraction_grid
-from boldtailor._single_trial_design import compile_trial_run
+from boldtailor.single_trial import compile_trial_run
 from boldtailor.single_trial import r_squared
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.trial_encoding import evaluate_trial_encoding

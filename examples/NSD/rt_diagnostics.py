@@ -6,15 +6,8 @@ from numbers import Integral
 from matplotlib.figure import Figure
 import numpy as np
 
-from boldtailor.diagnostics import even_run_points
+from boldtailor.diagnostics import even_run_points, pearson_correlation
 from boldtailor.publication import Artifact
-
-
-def _correlation(cross, beta_ss, rt_ss, counts):
-    r = np.full(np.shape(cross), np.nan)
-    denominator = np.sqrt(beta_ss * rt_ss)
-    np.divide(cross, denominator, out=r, where=(counts >= 3) & (denominator > 0))
-    return np.clip(r, -1.0, 1.0)
 
 
 def select_vertices(odd_r, cortical_mask, *, count=5):
@@ -49,7 +42,7 @@ def scatter_artifact(
             x, y = even_run_points(beta, rt_runs, run_numbers, vertex)
             axis = axes[row, column]
             axis.scatter(x, y, s=9, alpha=0.45, edgecolors="none")
-            r = _correlation(np.sum(x * y), np.sum(y * y), np.sum(x * x), len(x))
+            r = pearson_correlation(np.sum(x * y), np.sum(y * y), np.sum(x * x), len(x))
             label = vertex if vertex_labels is None else vertex_labels[row]
             axis.set(
                 title=f"{model} · grayordinate {label} · even r={float(r):.3f}",

@@ -19,6 +19,7 @@ if __package__:
         table_artifact,
     )
     from .rt_diagnostics import scatter_artifact
+    from .workflow_files import reaction_times
 else:
     from workflow_artifacts import (
         figure_artifact,
@@ -28,6 +29,7 @@ else:
         table_artifact,
     )
     from rt_diagnostics import scatter_artifact
+    from workflow_files import reaction_times
 
 
 def selection_paths(runs, subject, session):
@@ -291,13 +293,7 @@ def _selected_curves(library, state, vertices, path):
 
 def rt_artifacts(runs, brain, library, state, vertices, fits, evaluation, paths, test):
     even = [runs[i] for i in test]
-    rt = [
-        pd.to_numeric(
-            r.events.get("response_time", pd.Series(np.nan, index=r.events.index)),
-            errors="coerce",
-        ).to_numpy(dtype=float)
-        for r in even
-    ]
+    rt = reaction_times(even, missing_ok=True)
     numbers = [r.number for r in even]
     diagnostics = {
         name: correlate_rt(fit.run_betas, rt, run_numbers=numbers)

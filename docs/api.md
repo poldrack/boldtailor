@@ -440,8 +440,8 @@ These modules operate on fitted arrays and CIFTI axes; none fits a model.
 | `boldtailor.reliability.compare_hrfs(library, hrf_indices, sessions)` | Pairwise session curve agreement, matched canonical baselines, parameter SDs, and mean peak times |
 | `boldtailor.parallel.map_blocks(function, blocks, *, args=(), n_jobs=1)` | Ordered `(block, result)` pairs; several workers run in bounded loky batches with one inner thread |
 
-`map_blocks` workers should return arrays or dictionaries; result objects are
-not picklable. `library_indices`, `finite_mean`, and `validate_n_jobs` are the
+For `map_blocks` workers: result objects that hold rebuild closures (`SingleTrialResult` with a `SelectedTrialDesign`, `HrfAnalysisResult`) cannot be serialized with the standard `pickle` module; loky's cloudpickle can move them between processes, but workers should prefer returning arrays or dicts to keep transfers small.
+`library_indices`, `finite_mean`, and `validate_n_jobs` are the
 corresponding validation helpers.
 
 Lower-level helpers used by the examples are also importable from public

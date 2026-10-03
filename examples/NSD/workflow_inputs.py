@@ -9,22 +9,9 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.model import ModelSpec, Modulator, TaskModel
-from .workflow_files import discover_runs, load_runs, run_sources
+from .workflow_files import discover_runs, load_runs, odd_even_parity, run_sources
 
 REGRESSORS = ("task", "response_time", "trial_type")
-
-
-def odd_even_parity(runs):
-    """Run positions with odd and even BIDS run numbers, in input order."""
-    return dict(
-        odd=[i for i, r in enumerate(runs) if r.number % 2],
-        even=[i for i, r in enumerate(runs) if not r.number % 2],
-    )
-
-
-def reaction_times(runs):
-    """Per-run RT arrays; unavailable (nonpositive or missing) RTs are NaN."""
-    return [r.events.response_time.to_numpy() for r in runs]
 
 
 def selection_task_model(include_rt=True):

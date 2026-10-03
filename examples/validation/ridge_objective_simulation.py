@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._fractional_ridge import fraction_beta_path
-from boldtailor._single_trial_design import compile_trial_run
+from boldtailor.single_trial import compile_trial_run
 from boldtailor._single_trial_fit import trial_beta_path
 from boldtailor.single_trial import r_squared
 from boldtailor.trial_encoding import evaluate_trial_encoding
