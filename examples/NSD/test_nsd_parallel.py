@@ -105,16 +105,8 @@ def test_parallel_canonical_cli_matches_serial(mini_nsd, tmp_path):
         timeout=90,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    # The API lists published artifacts; the publisher's persistent lock is
-    # private bookkeeping and is absent from that list in both modes.
-    _assert_same_artifacts(
-        serial,
-        [
-            p
-            for p in output.rglob("*")
-            if p.is_file() and ".boldtailor" not in p.relative_to(output).parts
-        ],
-    )
+    # The publisher's lock lives in the sibling <output>.boldtailor directory.
+    _assert_same_artifacts(serial, [p for p in output.rglob("*") if p.is_file()])
     metadata = json.loads(
         next(output.rglob("*desc-singletrialOLS_metadata.json")).read_text()
     )

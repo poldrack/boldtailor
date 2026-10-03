@@ -210,8 +210,9 @@ and JSON annotations; `RunSources` groups signal, events, and confounds. One
 rule, `provenance.validate_relative_path`, governs URIs and BIDS projection
 paths: POSIX, no traversal or empty parts, components `[A-Za-z0-9+_.-]+`.
 Annotation, metadata, and model-key text is stored as given, even if it looks
-like a path. `metadata_fingerprint` hashes source metadata (not file contents)
-and is absent for incomplete sources. Each activity records `software`, which
+like a path: callers must not put secrets or environment details in
+annotations or metadata; they are written verbatim. `metadata_fingerprint`
+hashes source metadata (not file contents) and is absent for incomplete sources. Each activity records `software`, which
 analysis identities exclude. Execution IDs are fresh UUIDs per attempt.
 
 ## Logging
@@ -263,13 +264,14 @@ Workflows build `Artifact` objects in memory and pass them to
 `<destination>.boldtailor/stage-<uuid>/`, moves overwritten files to
 `backup-<uuid>/`, `os.replace`s each file into place, and fsyncs files (not
 directories). Failure restores the backups. Writers serialize; readers can see a
-partial set. Payloads are not parsed. Ancestor symlinks such as macOS `/tmp` are
-resolved; a symlinked destination or a symlink inside it is refused, as are
-unrequested overwrites and outputs overlapping `source_paths`.
+partial set. Payloads are not parsed. The destination is resolved first (so a
+linked destination or macOS `/tmp` works); symlinks inside it are refused, as
+are unrequested overwrites and outputs overlapping `source_paths`.
 `<destination>.boldtailor/` is a sibling, not part of the dataset (so no
 `.bidsignore`); it holds `lock` and `failures.jsonl`, whose fixed-field records
 omit exception text. If rollback fails, `PublicationError.recovery_directory`
-names the retained `backup-<uuid>/`; `rollback_errors` lists the failures.
+names the retained `backup-<uuid>/` (or `stage-<uuid>/` when nothing was backed
+up); `rollback_errors` lists the failures.
 
 ## NSD exports and parallel execution
 

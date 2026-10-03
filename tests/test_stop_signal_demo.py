@@ -659,7 +659,7 @@ def _assert_published_metadata(published, bids_root, expected_delta):
     shareable_text = "\n".join(
         path.read_text()
         for path in sorted(published.rglob("*"))
-        if path.is_file() and path.suffix != ".gz" and ".boldtailor" not in path.parts
+        if path.is_file() and path.suffix != ".gz"
     )
     assert str(bids_root.resolve()) not in shareable_text
 

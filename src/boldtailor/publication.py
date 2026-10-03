@@ -162,11 +162,8 @@ def _validate_lock_timeout(timeout: float) -> None:
 
 
 def _resolve_destination(destination: str | os.PathLike[str]) -> Path:
-    """Resolve ancestors (e.g. macOS /tmp); the destination itself must not be a link."""
-    path = Path(destination).absolute()
-    if path.is_symlink():
-        raise ValueError(f"publication destination is a symlink: {path}")
-    root = path.resolve(strict=False)
+    """Resolve the destination (and links such as macOS /tmp) before any checks."""
+    root = Path(destination).resolve(strict=False)
     if root.exists() and not root.is_dir():
         raise ValueError(f"publication destination is not a directory: {root}")
     return root
@@ -261,7 +258,7 @@ def _handle_failure(
     error: Exception,
 ) -> PublicationError:
     rollback_errors = _rollback(destination, transaction)
-    recovery = transaction.backups if rollback_errors else None
+    recovery = _recovery_directory(transaction) if rollback_errors else None
     _record_failure(
         transaction.control,
         transaction.identifier,
@@ -277,6 +274,14 @@ def _handle_failure(
     return PublicationError(
         message, recovery_directory=recovery, rollback_errors=rollback_errors
     )
+
+
+def _recovery_directory(transaction: _Transaction) -> Path | None:
+    """The retained directory holding originals, else the staged outputs."""
+    for path in (transaction.backups, transaction.stage):
+        if path in transaction.created:
+            return path
+    return None
 
 
 def _record_failure(

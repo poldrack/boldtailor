@@ -33,6 +33,8 @@ _COMMANDS = {
     "selected_hrf_single_trial": "fit_selected_hrfs",
     "hrf_selection": "select_hrf",
     "hrf_independent_evaluation": "evaluate_hrf_split",
+    "encoding_guided_ridge_cv": "score_ridge_candidates",
+    "encoding_guided_fractional_ridge_cv": "score_fraction_candidates",
 }
 
 
@@ -166,7 +168,7 @@ def _environment(record: ProvenanceRecord, identifier: str) -> dict[str, object]
         "Id": identifier,
         "Label": "Boldtailor execution environment",
     }
-    activities = record.to_dict()["activities"]
+    activities = record.activities
     software = dict(activities[-1].get("software", {})) if activities else {}
     if "python" in software:
         environment["Python"] = software.pop("python")
