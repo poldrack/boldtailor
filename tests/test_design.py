@@ -317,3 +317,18 @@ def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
         call()
         assert access_counts["events"] <= 1
         assert access_counts["confounds"] <= 1
+
+
+@pytest.mark.parametrize("fractional", [False, True])
+def test_ridge_cv_fold_copies_run_tables_once(ridge_problem, access_counts, fractional):
+    from boldtailor import _ridge_cv as cv
+
+    data, predictors, _ = ridge_problem
+    labels = [f"run-{r}" for r in range(data.n_runs)]
+    grid = [0.5, 1.0] if fractional else [0.0, 1.0]
+    access_counts.update(events=0, confounds=0)
+    cv._score_fold(
+        data, predictors, None, None, labels, None, grid, 0, fractional=fractional
+    )
+    assert access_counts["events"] <= 1
+    assert access_counts["confounds"] <= 1

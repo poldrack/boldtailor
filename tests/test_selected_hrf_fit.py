@@ -194,7 +194,9 @@ def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
     assert result.design.design_fingerprint == info["design_fingerprint"]
 
 
-@pytest.mark.parametrize("key", [(0, 0), (0, 2), (0, 3), (3, 1), (-1, 1), (0, -1)])
+@pytest.mark.parametrize(
+    "key", [(0, 0), (0, 2), (0, 3), (3, 1), (-1, 1), (0, -1), (1.0, 1)]
+)
 def test_selected_design_rejects_pairs_that_were_not_fitted(selected_fixture, key):
     from boldtailor.single_trial import fit_selected_hrfs
     from tests.test_fit import replace_indices
