@@ -1,6 +1,6 @@
 """Spatial grouping must preserve trial/feature order and normalized estimates."""
 
-from dataclasses import replace
+from dataclasses import fields, replace
 import sys
 import numpy as np
 import pytest
@@ -251,3 +251,35 @@ def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
             if isinstance(value, np.ndarray) and name != "hrf_indices"
         ]
         assert all(a.size <= data.n_features for a in arrays)
+
+
+def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
+    from hashlib import sha256
+
+    from boldtailor import _selected_hrf_fit as module
+    from boldtailor.hrf_selection import prepare_runs
+
+    data, selection = selected_fixture
+    run = prepare_runs(data, selection.library)[0]
+    fit = module._fit_run(run, data.signals[0], selection.hrf_indices, 0.0, 0, sha256())
+    assert type(fit) is module.GroupRunFit
+    assert [f.name for f in fields(module.GroupRunFit)] == [
+        "betas",
+        "full_sse",
+        "nuisance_sse",
+        "total_ss",
+        "diagnostics",
+        "alphas",
+    ]
+    assert fit.betas.shape == (len(data.events[0]), data.n_features)
+    assert {d["run_index"] for d in fit.diagnostics} == {0}
+
+
+def test_fit_groups_takes_keywords_only():
+    import inspect
+
+    from boldtailor._selected_hrf_fit import fit_groups
+
+    parameters = list(inspect.signature(fit_groups).parameters.values())[1:]
+    assert parameters
+    assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in parameters)

@@ -126,3 +126,28 @@ def test_nuisance_cannot_reuse_a_generated_trial_name(inputs):
     confounds = confounds.rename(columns={confounds.columns[0]: "run-01_trial-0001"})
     with pytest.raises(ValueError, match="trial|reserved|collision"):
         compiler()(events, times, confounds, "run-01")
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_both_single_trial_paths_share_one_trial_table(selected_fixture, selected):
+    from boldtailor._single_trial_design import trial_table
+    from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
+
+    data, selection = selected_fixture
+    labels = ("first", "second", "third")[: data.n_runs]
+    result = (
+        fit_selected_hrfs(data, selection=selection, run_labels=labels)
+        if selected
+        else fit_single_trials(data, run_labels=labels)
+    )
+    expected = trial_table(data.events, labels)
+    pd.testing.assert_frame_equal(result.trial_table, expected)
+    assert list(expected.columns[:4]) == [
+        "trial_index",
+        "trial_id",
+        "run_label",
+        "event_index",
+    ]
+    assert expected.columns[-1] == "run_index"
+    assert expected.trial_index.tolist() == list(range(len(expected)))
+    assert expected.trial_id.iloc[0] == f"{labels[0]}_trial-0001"
