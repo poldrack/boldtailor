@@ -20,13 +20,20 @@ from boldtailor._hrf_glm_design import (
 )
 from boldtailor.hrf_glm_results import HrfAnalysisResult
 from boldtailor._fit_lifecycle import fit_operation
+from boldtailor.data import AnalysisData
+from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.model import (
+    ModelSpec,
     TaskModel,
     model_identity,
     nuisance_model_settings,
 )
 from boldtailor.provenance import analysis_fingerprint, identity_activity
-from boldtailor.results import _ContrastResult, make_task_delta_r2_result
+from boldtailor.results import (
+    TaskDeltaR2Result,
+    _ContrastResult,
+    make_task_delta_r2_result,
+)
 
 SELECTED_HRF = {"kind": "selected"}
 
@@ -137,7 +144,12 @@ def _assemble(data, model, selection, context, fits, provenance):
     )
 
 
-def fit_selected_glm(data, model, selection, signature):
+def fit_selected_glm(
+    data: AnalysisData,
+    model: ModelSpec,
+    selection: HrfSelectionResult,
+    signature: str | None,
+) -> HrfAnalysisResult:
     with fit_operation("fit", data.provenance) as operation:
         settings = model_identity(model, hrf_model=SELECTED_HRF).activity
         context = _prepare(data, model, selection, signature, settings)
@@ -174,7 +186,9 @@ def _ols_comparison(data, selection, context):
     return full, nuisance, nuisance_designs
 
 
-def selected_task_delta_r2(data, model, result):
+def selected_task_delta_r2(
+    data: AnalysisData, model: ModelSpec, result: HrfAnalysisResult
+) -> TaskDeltaR2Result:
     with fit_operation("task_delta_r2", result.provenance) as operation:
         selection = result.hrf_selection
         settings = model_identity(model, hrf_model=SELECTED_HRF).activity

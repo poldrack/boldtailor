@@ -138,7 +138,7 @@ def test_both_single_trial_paths_share_one_trial_table(selected_fixture, selecte
     result = (
         fit_selected_hrfs(
             data,
-            selection=selection,
+            hrf_selection=selection,
             run_labels=labels,
             feature_signature="ordered-axis",
         )

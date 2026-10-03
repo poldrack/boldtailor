@@ -11,7 +11,7 @@ from boldtailor.fractional_ridge import (
     score_fraction_candidates,
     select_ridge_fractions,
 )
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
@@ -58,14 +58,14 @@ def test_fraction_workflow_matches_whole_array_and_exports(
     outer_selection = (
         None
         if library is None
-        else select_hrf(
+        else select_hrfs(
             load_block([runs[r] for r in train], root, np.arange(4)),
             library=library,
             task_model=NSD_TASK_MODEL,
         )
     )
     fitter = fit_single_trials if outer_selection is None else fit_selected_hrfs
-    kwargs = {} if outer_selection is None else {"selection": outer_selection}
+    kwargs = {} if outer_selection is None else {"hrf_selection": outer_selection}
     shrunk = fitter(data, ridge_fraction=chosen, **kwargs)
     ols = fitter(
         data, ridge_fraction=np.where(np.isfinite(chosen), 1.0, np.nan), **kwargs
@@ -85,12 +85,12 @@ def test_fraction_workflow_matches_whole_array_and_exports(
     selection = (
         None
         if library is None
-        else select_hrf(data, library=library, task_model=NSD_TASK_MODEL)
+        else select_hrfs(data, library=library, task_model=NSD_TASK_MODEL)
     )
     expected = (
         fit_single_trials(data, ridge_fraction=fractions)
         if selection is None
-        else fit_selected_hrfs(data, selection=selection, ridge_fraction=fractions)
+        else fit_selected_hrfs(data, hrf_selection=selection, ridge_fraction=fractions)
     )
     for beta, reference in zip(result["final"]["betas"], expected.run_betas):
         np.testing.assert_allclose(beta, reference, atol=2e-6)

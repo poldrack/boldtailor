@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs
+from boldtailor._deprecation import UNSET, deprecated
 from boldtailor._fit_diagnostics import (
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
@@ -23,6 +24,7 @@ from boldtailor.model import (
     _prepare_contrasts,
     _validate_noise_model,
     contrast_metadata,
+    contrasts_from_metadata,
 )
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.provenance import (
@@ -78,17 +80,20 @@ def task_delta_r2_prepared(
     prepared: PreparedDesignAnalysis,
     full_result: AnalysisResult,
     *,
-    contrasts: Mapping[str, ContrastValue],
-    noise_model: str = "ar1",
-    model_metadata: Mapping[str, object] | None = None,
+    contrasts: Mapping[str, ContrastValue] = UNSET,
+    noise_model: str = UNSET,
+    model_metadata: Mapping[str, object] | None = UNSET,
 ) -> TaskDeltaR2Result:
+    """Nested-OLS task delta r-squared for a :func:`fit_prepared` result.
+
+    The contrasts, noise model, and model metadata are read from
+    ``full_result``'s provenance. Passing them again is deprecated; supplied
+    values must match the stored model.
+    """
     with fit_operation("task_delta_r2_prepared", full_result.provenance) as operation:
-        fit_spec, parent_id, comparison_id = _prepare_comparison_identity(
-            prepared,
-            contrasts,
-            noise_model,
-            model_metadata,
-            prepared.provenance.metadata_fingerprint,
+        fit_spec = _parent_fit_spec(full_result, contrasts, noise_model, model_metadata)
+        parent_id, comparison_id = _prepare_comparison_identity(
+            prepared, fit_spec, prepared.provenance.metadata_fingerprint
         )
         operation.analysis_id = comparison_id
         _validate_prepared_parent(prepared, full_result, parent_id)
@@ -116,17 +121,53 @@ def task_delta_r2_prepared(
         return replace(comparison, _provenance=provenance)
 
 
+def _parent_fit_spec(
+    full_result: AnalysisResult,
+    contrasts: object,
+    noise_model: object,
+    model_metadata: object,
+) -> _PreparedFitSpec:
+    stored = _stored_fit_spec(full_result)
+    if all(value is UNSET for value in (contrasts, noise_model, model_metadata)):
+        return stored
+    deprecated(
+        "task_delta_r2_prepared(contrasts=, noise_model=, model_metadata=) is "
+        "deprecated; the model is read from full_result's provenance",
+        stacklevel=4,
+    )
+    supplied = _prepare_fit_spec(
+        stored.contrasts if contrasts is UNSET else contrasts,
+        "ar1" if noise_model is UNSET else noise_model,
+        None if model_metadata is UNSET else model_metadata,
+    )
+    if supplied != stored:
+        raise ValueError(
+            "supplied contrasts, noise_model, or model_metadata disagree with the "
+            "full result's provenance identity"
+        )
+    return stored
+
+
+def _stored_fit_spec(full_result: AnalysisResult) -> _PreparedFitSpec:
+    activities = full_result.provenance.to_dict()["activities"]
+    model = activities[-1].get("model") if activities else None
+    if not isinstance(model, Mapping) or model.get("kind") != "prepared_design":
+        raise ValueError("full_result must be an AnalysisResult from fit_prepared")
+    return _prepare_fit_spec(
+        contrasts_from_metadata(model["contrasts"]),
+        model["noise_model"],
+        model["metadata"],
+    )
+
+
 def _prepare_comparison_identity(
     prepared: PreparedDesignAnalysis,
-    contrasts: Mapping[str, ContrastValue],
-    noise_model: str,
-    model_metadata: Mapping[str, object] | None,
+    fit_spec: _PreparedFitSpec,
     data_id: str | None,
-) -> tuple[_PreparedFitSpec, str | None, str | None]:
-    fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
+) -> tuple[str | None, str | None]:
     parent_id = analysis_fingerprint(data_id, _model_identity(prepared, fit_spec))
     comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
-    return fit_spec, parent_id, comparison_id
+    return parent_id, comparison_id
 
 
 def _prepared_comparison_id(

@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.fit import fit, task_delta_r2
-from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
+from boldtailor import hrf_selection as selection_api
+from boldtailor.hrf_selection import evaluate_hrf_split
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.cifti import spatial_signature
 from boldtailor.diagnostics import correlate_rt
@@ -34,7 +35,7 @@ def _select_block(indices, runs, root, library, task_model):
     )
     odd, even = odd_even_parity(runs).values()
     return dict(
-        all=select_hrf(data, **options),
+        all=selection_api.select_hrfs(data, **options),
         odd=evaluate_hrf_split(data, train_runs=odd, test_runs=even, **options),
         even=evaluate_hrf_split(data, train_runs=even, test_runs=odd, **options),
     )
@@ -169,11 +170,11 @@ def _beta_block(job, runs, root, alpha, fractions=None):
     if fractions is not None:
         options["ridge_fraction"] = fractions[indices]
     if selection is None:
-        result = fit_single_trials(data, hrf="spm", **options)
+        result = fit_single_trials(data, hrf_model="spm", **options)
     else:
         result = fit_selected_hrfs(
             data,
-            selection=selection,
+            hrf_selection=selection,
             feature_signature=_signature(runs, indices),
             **options,
         )

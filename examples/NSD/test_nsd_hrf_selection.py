@@ -276,7 +276,7 @@ def test_collision_and_publication_rollback(hrf_nsd, tmp_path, monkeypatch):
         def forbidden(*args, **kwargs):
             pytest.fail("collision must precede selection")
 
-        patch.setattr(selection, "select_hrf", forbidden)
+        patch.setattr(selection, "select_hrfs", forbidden)
         with pytest.raises(FileExistsError):
             run(hrf_nsd, output)
     assert target.read_text() == "old"
@@ -409,7 +409,7 @@ def test_comparison_collisions_precede_fitting(hrf_nsd, tmp_path, monkeypatch, s
     def forbidden(*args, **kwargs):
         pytest.fail("comparison collision must be caught before selection")
 
-    monkeypatch.setattr("boldtailor.hrf_selection.select_hrf", forbidden)
+    monkeypatch.setattr("boldtailor.hrf_selection.select_hrfs", forbidden)
     with pytest.raises(FileExistsError):
         run(hrf_nsd, output)
     assert target.read_bytes() == b"preserve"

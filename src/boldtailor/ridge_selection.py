@@ -1,11 +1,16 @@
 """Select one ridge penalty using held-out trial encoding across features."""
 
+from collections.abc import Sequence
+
 import numpy as np
+import pandas as pd
 
 from boldtailor._hrf_design import TIE_TOLERANCE
 from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import validate_alpha
-from boldtailor.ridge_results import RidgeSelection
+from boldtailor.data import AnalysisData
+from boldtailor.hrf_library import HrfLibrary
+from boldtailor.ridge_results import CandidateScores, RidgeSelection, paired_scores
 
 
 def _alpha_grid(alphas):
@@ -15,8 +20,17 @@ def _alpha_grid(alphas):
     return grid
 
 
-def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=None):
+def select_ridge_penalty(
+    scores: CandidateScores | np.ndarray,
+    alphas: Sequence[float] | None = None,
+    *,
+    percentile: float = 90.0,
+    feature_mask: np.ndarray | None = None,
+) -> RidgeSelection:
     """Reduce once across the complete feature population, never per block.
+
+    Pass the ``CandidateScores`` from :func:`score_ridge_candidates`, or a
+    candidate-by-feature score array together with its ``alphas``.
 
     Only features finite for every candidate enter the common mask. Negative
     scores are valid. Objective ties within ``TIE_TOLERANCE`` prefer the smaller
@@ -24,6 +38,9 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     ``at_boundary`` is True when the winner is the smallest or largest alpha
     (always True for a one-point grid).
     """
+    candidate_r2, alphas = paired_scores(
+        scores, alphas, kind="normalized_ridge", grid_name="alphas"
+    )
     grid = _alpha_grid(alphas)
     scores = np.asarray(candidate_r2, dtype=float)
     if scores.ndim != 2 or scores.shape[0] != len(grid):
@@ -60,15 +77,15 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
 
 
 def score_ridge_candidates(
-    data,
-    predictors,
+    data: AnalysisData,
+    predictors: Sequence[pd.DataFrame],
     *,
-    alphas,
-    library=None,
-    run_labels=None,
-    feature_signature=None,
-    encoding_mode="within_run",
-):
+    alphas: Sequence[float],
+    library: HrfLibrary | None = None,
+    run_labels: Sequence[str] | None = None,
+    feature_signature: str | None = None,
+    encoding_mode: str = "within_run",
+) -> CandidateScores:
     """Score candidate-regularized trial betas with leave-one-run-out encoding.
 
     Supply only outer-training runs when nesting this selection. A library

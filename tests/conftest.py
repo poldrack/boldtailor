@@ -7,7 +7,7 @@ from nilearn.glm.first_level import compute_regressor
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from tests.oracles import peak_design_matrix
@@ -212,7 +212,7 @@ def selected_fixture(two_candidate_library):
         confounds.append(n)
         signals.append(y)
     data = from_arrays(signals, events, frame_times=times, confounds=confounds)
-    selection = select_hrf(data, library=library, feature_signature="ordered-axis")
+    selection = select_hrfs(data, library=library, feature_signature="ordered-axis")
     np.testing.assert_array_equal(selection.hrf_indices, [1, 0, 1, 2, -1])
     return data, selection
 

@@ -1,9 +1,11 @@
 """Select HRFs by held-out task-model prediction across runs, without repeated images."""
 
+from collections.abc import Sequence
 from hashlib import sha256
 
 import numpy as np
 
+from boldtailor._deprecation import deprecated
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor._hrf_cv import (
     prepare_runs,  # public re-export
@@ -16,7 +18,7 @@ from boldtailor._hrf_cv import (
 )
 from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
 from boldtailor._scalars import is_integer
-from boldtailor.data import run_labels_for
+from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
@@ -138,15 +140,15 @@ def _select(
     )
 
 
-def select_hrf(
-    data,
+def select_hrfs(
+    data: AnalysisData,
     *,
-    library,
-    run_labels=None,
-    feature_signature=None,
-    candidate_batch_size=32,
-    task_model=TaskModel(),
-):
+    library: HrfLibrary,
+    run_labels: Sequence[str] | None = None,
+    feature_signature: str | None = None,
+    candidate_batch_size: int = 32,
+    task_model: TaskModel = TaskModel(),
+) -> HrfSelectionResult:
     """Choose each feature's HRF by leave-one-run-out task-model prediction.
 
     This is a selection statistic. Confounds and missing-value indicators are
@@ -155,7 +157,7 @@ def select_hrf(
     preserve feature order.
     """
     with fit_operation("hrf_selection", data.provenance) as operation:
-        return _select_hrf(
+        return _select_hrfs(
             operation,
             data,
             library,
@@ -166,7 +168,13 @@ def select_hrf(
         )
 
 
-def _select_hrf(
+def select_hrf(data: AnalysisData, **options) -> HrfSelectionResult:
+    """Deprecated alias of :func:`select_hrfs`, kept for one release."""
+    deprecated("select_hrf is deprecated; use select_hrfs", stacklevel=3)
+    return select_hrfs(data, **options)
+
+
+def _select_hrfs(
     operation, data, library, run_labels, feature_signature, batch, task_model
 ):
     _validate(library, feature_signature, batch, task_model)
@@ -213,16 +221,21 @@ def _predict(a, b, c, energy, train, test):
 
 
 def evaluate_hrf_split(
-    data,
+    data: AnalysisData,
     *,
-    library,
-    train_runs,
-    test_runs,
-    run_labels=None,
-    feature_signature=None,
-    task_model=TaskModel(),
-):
-    """Select within training runs, then freeze HRF and amplitudes for test runs."""
+    library: HrfLibrary,
+    train_runs: Sequence[int],
+    test_runs: Sequence[int],
+    run_labels: Sequence[str] | None = None,
+    feature_signature: str | None = None,
+    task_model: TaskModel = TaskModel(),
+    candidate_batch_size: int = 32,
+) -> HrfEvaluationResult:
+    """Select within training runs, then freeze HRF and amplitudes for test runs.
+
+    ``candidate_batch_size`` bounds memory exactly as in :func:`select_hrfs`;
+    it never changes the result.
+    """
     with fit_operation("hrf_independent_evaluation", data.provenance) as operation:
         return _evaluate_split(
             operation,
@@ -232,10 +245,11 @@ def evaluate_hrf_split(
             run_labels,
             feature_signature,
             task_model,
+            candidate_batch_size,
         )
 
 
-def _train_selection(data, runs, library, labels, signature, task_model, split):
+def _train_selection(data, runs, library, labels, signature, task_model, split, batch):
     train, test = split
     with fit_operation("hrf_selection", data.provenance) as operation:
         return _select(
@@ -246,16 +260,16 @@ def _train_selection(data, runs, library, labels, signature, task_model, split):
             library,
             tuple(labels[i] for i in train),
             signature,
-            32,
+            batch,
             tuple(runs[i] for i in (*train, *test)),
             task_model,
         )
 
 
 def _evaluate_split(
-    operation, data, library, split, run_labels, feature_signature, task_model
+    operation, data, library, split, run_labels, feature_signature, task_model, batch
 ):
-    _validate(library, feature_signature, 32, task_model)
+    _validate(library, feature_signature, batch, task_model)
     train = _fold_indices(split[0], data.n_runs, 2, "train_runs")
     test = _fold_indices(split[1], data.n_runs, 1, "test_runs")
     if set(train) & set(test):
@@ -263,9 +277,9 @@ def _evaluate_split(
     labels = run_labels_for(data, run_labels)
     runs = prepare_runs(data, library, task_model)
     selection = _train_selection(
-        data, runs, library, labels, feature_signature, task_model, (train, test)
+        data, runs, library, labels, feature_signature, task_model, (train, test), batch
     )
-    scores = _held_out_scores(data, runs, selection, task_model, train, test)
+    scores = _held_out_scores(data, runs, selection, task_model, (train, test), batch)
     activity = _activity(
         runs,
         library,
@@ -293,8 +307,9 @@ def _evaluate_split(
     )
 
 
-def _held_out_scores(data, runs, selection, task_model, train, test):
-    a, b, c, energy = signal_statistics(runs, data.signals, 32)
+def _held_out_scores(data, runs, selection, task_model, split, batch):
+    train, test = split
+    a, b, c, energy = signal_statistics(runs, data.signals, batch)
     amplitudes, scores = _predict(a, b, c, energy, train, test)
     ids = selection.hrf_indices
     valid = np.flatnonzero(ids >= 0)

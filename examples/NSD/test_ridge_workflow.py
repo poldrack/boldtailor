@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.cifti import spatial_signature
@@ -67,7 +67,7 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
     if library is None:
         expected_fit = fit_single_trials(data, ridge_alpha=final_alpha)
     else:
-        selection = select_hrf(
+        selection = select_hrfs(
             data,
             library=library,
             feature_signature=signature,
@@ -75,7 +75,7 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
         )
         expected_fit = fit_selected_hrfs(
             data,
-            selection=selection,
+            hrf_selection=selection,
             ridge_alpha=final_alpha,
             feature_signature=signature,
         )
@@ -96,14 +96,17 @@ def test_workflow_matches_whole_array_reference(six_run_dataset, cv_library, opt
             fitted = fit_single_trials(data, ridge_alpha=alpha)
         else:
             train_data = load_block([runs[i] for i in train], root, np.arange(4))
-            selected = select_hrf(
+            selected = select_hrfs(
                 train_data,
                 library=library,
                 feature_signature=signature,
                 task_model=NSD_TASK_MODEL,
             )
             fitted = fit_selected_hrfs(
-                data, selection=selected, ridge_alpha=alpha, feature_signature=signature
+                data,
+                hrf_selection=selected,
+                ridge_alpha=alpha,
+                feature_signature=signature,
             )
         reference = evaluate_trial_encoding(
             fitted.run_betas,

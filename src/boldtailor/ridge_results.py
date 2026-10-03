@@ -98,3 +98,20 @@ class FractionSelection:
         own_fields(self, ("at_boundary", "scoring_mask"), dtype=bool)
         own_fields(self, ("ridge_fraction", "selected_r2"))
         own_fields(self, ("fraction_indices",), dtype=np.int64)
+
+
+def paired_scores(scores, grid, *, kind, grid_name):
+    """Score matrix and grid from CandidateScores, or from an array plus grid."""
+    if isinstance(scores, CandidateScores):
+        if grid is not None:
+            raise TypeError(
+                f"the grid comes from the CandidateScores; do not pass {grid_name}"
+            )
+        if scores.regularization != kind:
+            raise ValueError(
+                f"scores are {scores.regularization}; this selector needs {kind}"
+            )
+        return scores.cv_r2, scores.grid
+    if grid is None:
+        raise TypeError(f"{grid_name} is required with an array of candidate scores")
+    return scores, grid

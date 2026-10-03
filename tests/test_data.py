@@ -357,7 +357,7 @@ def test_run_labels_for_rejects_invalid_labels(two_run_data, labels):
 
 @pytest.fixture
 def run_entry_point_with_labels(ridge_problem, selected_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
     from boldtailor.ridge_selection import score_ridge_candidates
     from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 
@@ -370,11 +370,11 @@ def run_entry_point_with_labels(ridge_problem, selected_fixture):
             "fit_single_trials": lambda: fit_single_trials(data, run_labels=full),
             "fit_selected_hrfs": lambda: fit_selected_hrfs(
                 sel_data,
-                selection=selection,
+                hrf_selection=selection,
                 feature_signature="ordered-axis",
                 run_labels=labels + ["z"],
             ),
-            "select_hrf": lambda: select_hrf(data, library=library, run_labels=full),
+            "select_hrfs": lambda: select_hrfs(data, library=library, run_labels=full),
             "score_ridge_candidates": lambda: score_ridge_candidates(
                 data, predictors, alphas=(0.0, 1.0), run_labels=full
             ),
@@ -386,7 +386,7 @@ def run_entry_point_with_labels(ridge_problem, selected_fixture):
 
 @pytest.mark.parametrize(
     "entry",
-    ["fit_single_trials", "fit_selected_hrfs", "select_hrf", "score_ridge_candidates"],
+    ["fit_single_trials", "fit_selected_hrfs", "select_hrfs", "score_ridge_candidates"],
 )
 def test_every_entry_point_uses_the_same_run_label_error(
     entry, run_entry_point_with_labels

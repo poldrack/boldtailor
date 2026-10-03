@@ -142,6 +142,16 @@ def contrast_metadata(contrasts):
     }
 
 
+def contrasts_from_metadata(metadata):
+    """Invert :func:`contrast_metadata` back to expressions and weight maps."""
+    return {
+        name: (
+            value["value"] if value["kind"] == "expression" else dict(value["weights"])
+        )
+        for name, value in metadata.items()
+    }
+
+
 def _prepare_contrasts(
     contrasts: Mapping[str, ContrastValue],
 ) -> dict[str, ContrastValue]:

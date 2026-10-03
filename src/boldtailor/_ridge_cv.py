@@ -13,7 +13,7 @@ from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
 from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.data import run_labels_for
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.provenance import (
     analysis_fingerprint,
     extend_provenance,
@@ -96,7 +96,7 @@ def _beta_path(tables, r, prepared, ids, label, fractional):
 def _fold_selection(data, library, labels, signature, train):
     if library is None:
         return np.zeros(data.n_features, dtype=int), None
-    selected = select_hrf(
+    selected = select_hrfs(
         subset_runs(data, train),
         library=library,
         run_labels=[labels[r] for r in train],

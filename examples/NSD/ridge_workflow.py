@@ -6,7 +6,7 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from boldtailor.hrf_selection import select_hrf, subset_runs
+from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.provenance import ProvenanceRecord
 from boldtailor.ridge_results import CandidateScores
 from boldtailor.fractional_ridge import (
@@ -216,9 +216,9 @@ def _tune(
         encoding_mode,
     )
     selection = (
-        select_ridge_fractions(scores.cv_r2, scores.grid)
+        select_ridge_fractions(scores)
         if fractional
-        else select_ridge_penalty(scores.cv_r2, scores.grid, percentile=percentile)
+        else select_ridge_penalty(scores, percentile=percentile)
     )
     return dict(
         scores=scores,
@@ -234,7 +234,7 @@ def _fit_outer_trials(data, selection, labels, signature, options):
         return fit_single_trials(data, **options, run_labels=labels)
     return fit_selected_hrfs(
         data,
-        selection=selection,
+        hrf_selection=selection,
         **options,
         run_labels=labels,
         feature_signature=signature,
@@ -259,7 +259,7 @@ def _outer_block(
     selection = (
         None
         if library is None
-        else select_hrf(
+        else select_hrfs(
             subset_runs(data, train),
             library=library,
             run_labels=[labels[i] for i in train],
@@ -401,7 +401,7 @@ def _evaluate(
 
 def _final_selection(indices, runs, root, library, task_model):
     return dict(
-        all=select_hrf(
+        all=select_hrfs(
             load_block(runs, root, indices),
             library=library,
             run_labels=[r.label for r in runs],

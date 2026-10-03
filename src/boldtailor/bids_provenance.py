@@ -31,7 +31,7 @@ _COMMANDS = {
     "selected_hrf_glm": "fit",
     "single_trial": "fit_single_trials",
     "selected_hrf_single_trial": "fit_selected_hrfs",
-    "hrf_selection": "select_hrf",
+    "hrf_selection": "select_hrfs",
     "hrf_independent_evaluation": "evaluate_hrf_split",
     "encoding_guided_ridge_cv": "score_ridge_candidates",
     "encoding_guided_fractional_ridge_cv": "score_fraction_candidates",

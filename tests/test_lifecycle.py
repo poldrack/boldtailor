@@ -9,7 +9,7 @@ import pytest
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
-from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
+from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 from boldtailor.logging import emit_event
 from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -141,7 +141,7 @@ def _glm_calls(glm_problem):
 
 def _single_trial_calls(selected_fixture):
     data, selection = selected_fixture
-    selected = dict(selection=selection, feature_signature="ordered-axis")
+    selected = dict(hrf_selection=selection, feature_signature="ordered-axis")
     return {
         "single_trial": (
             lambda: fit_single_trials(data),
@@ -160,8 +160,8 @@ def _selection_calls(selected_fixture):
     split = dict(library=library, train_runs=[0, 1], test_runs=[2])
     return {
         "hrf_selection": (
-            lambda: select_hrf(data, library=library),
-            lambda: select_hrf(data, library="not a library"),
+            lambda: select_hrfs(data, library=library),
+            lambda: select_hrfs(data, library="not a library"),
         ),
         "hrf_independent_evaluation": (
             lambda: evaluate_hrf_split(data, **split),
@@ -173,15 +173,16 @@ def _selection_calls(selected_fixture):
 def _prepared_calls(prepared_problem):
     prepared, kwargs, full = prepared_problem
     bad = dict(kwargs, model_metadata={"bad": object()})
-    changed = dict(kwargs, model_metadata={"changed": True})
+    record = full.provenance
+    unprepared = replace(full, _provenance=replace(record, activities=()))
     return {
         "prepared_fit": (
             lambda: fit_prepared(prepared, **kwargs),
             lambda: fit_prepared(prepared, **bad),
         ),
         "prepared_task_delta_r2": (
-            lambda: task_delta_r2_prepared(prepared, full, **kwargs),
-            lambda: task_delta_r2_prepared(prepared, full, **changed),
+            lambda: task_delta_r2_prepared(prepared, full),
+            lambda: task_delta_r2_prepared(prepared, unprepared),
         ),
     }
 
@@ -339,11 +340,11 @@ def sourced_calls(selected_fixture, selected_glm_problem, complete_sources):
     split = dict(library=library, train_runs=[0, 1], test_runs=[2])
 
     def choose(target):
-        return select_hrf(target, library=library, feature_signature="ordered-axis")
+        return select_hrfs(target, library=library, feature_signature="ordered-axis")
 
     def selected_fit():
         return fit_selected_hrfs(
-            sourced, selection=choose(sourced), feature_signature="ordered-axis"
+            sourced, hrf_selection=choose(sourced), feature_signature="ordered-axis"
         )
 
     def glm_fit():

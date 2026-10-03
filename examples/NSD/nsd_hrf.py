@@ -227,7 +227,7 @@ def _fit_expanded_block(bounds, runs, root, brain, models, library, train, test)
     indices = np.arange(start, stop)
     signature = spatial_signature(brain, indices)
     data = block_data(runs, root, indices)
-    selection = hrf_selection.select_hrf(
+    selection = hrf_selection.select_hrfs(
         data, library=library, run_labels=labels, feature_signature=signature
     )
     evaluation = (
@@ -248,7 +248,7 @@ def _fit_expanded_block(bounds, runs, root, brain, models, library, train, test)
     for name, alpha in models.items():
         fit = fit_selected_hrfs(
             data,
-            selection=selection,
+            hrf_selection=selection,
             ridge_alpha=alpha,
             run_labels=labels,
             feature_signature=signature,
@@ -342,7 +342,7 @@ def _independent_rt(runs, root, brain, models, library, state, train, test):
     fits = {
         name: fit_selected_hrfs(
             even_data,
-            selection=evaluation.training_selection,
+            hrf_selection=evaluation.training_selection,
             ridge_alpha=alpha,
             run_labels=[r.label for r in even_runs],
             feature_signature=signature,

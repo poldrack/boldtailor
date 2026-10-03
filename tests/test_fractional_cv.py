@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from tests.oracles import fractional_beta_oracle as oracle
 from tests.oracles import subset_runs as subset
 
@@ -62,7 +62,7 @@ def reference(data, predictors, library, fractions, encoding_mode="within_run"):
         ids = (
             np.zeros(data.n_features, int)
             if library is None
-            else select_hrf(subset(data, train), library=library).hrf_indices
+            else select_hrfs(subset(data, train), library=library).hrf_indices
         )
         assignments.append(ids)
         fold_loss, fold_total = [], []

@@ -134,13 +134,7 @@ def _fit_block(runs, signals, root, indices):
     full = fit_prepared(
         prepared, contrasts=CONTRASTS, noise_model="ols", model_metadata=MODEL
     )
-    comparison = task_delta_r2_prepared(
-        prepared,
-        full,
-        contrasts=CONTRASTS,
-        noise_model="ols",
-        model_metadata=MODEL,
-    )
+    comparison = task_delta_r2_prepared(prepared, full)
     maps = np.stack(
         [comparison.full_r2, comparison.nuisance_r2, comparison.raw_delta_r2]
     )

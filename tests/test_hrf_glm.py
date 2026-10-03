@@ -15,7 +15,7 @@ from nilearn.glm.first_level import (
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import ModelSpec, Modulator, TaskModel
 from boldtailor.provenance import RunSources, SourceRef
 from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
@@ -129,7 +129,7 @@ def hrf_glm_problem(two_candidate_library):
         frame_times=times,
         confounds=[n[["motion"]] for n in confounds],
     )
-    selection = select_hrf(training_data, library=library, feature_signature="axis-v1")
+    selection = select_hrfs(training_data, library=library, feature_signature="axis-v1")
     np.testing.assert_array_equal(selection.hrf_indices, [*ids, -1])
     data = from_arrays(
         signals,
@@ -205,7 +205,7 @@ def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model)
         frame_times=data.frame_times,
         confounds=data.confounds,
     )
-    selection = select_hrf(selection_data, library=HrfLibrary.from_parameters([]))
+    selection = select_hrfs(selection_data, library=HrfLibrary.from_parameters([]))
     model = replace(model, hrf_model="spm", noise_model=noise_model)
     actual = fit(data, model, hrf_selection=selection)
     expected = fit(data, model)
@@ -369,7 +369,7 @@ def test_all_undefined_hrfs_return_nan_maps(hrf_glm_problem):
         frame_times=data.frame_times,
         confounds=data.confounds,
     )
-    selection = select_hrf(constant, library=HrfLibrary.from_parameters([]))
+    selection = select_hrfs(constant, library=HrfLibrary.from_parameters([]))
     result = fit(data, model, hrf_selection=selection)
     assert np.isnan(result.r2).all()
     assert np.isnan(result.z_score("stimulus")).all()
@@ -461,7 +461,7 @@ def _undefined_selection(data):
         frame_times=data.frame_times,
         confounds=data.confounds,
     )
-    return select_hrf(constant, library=HrfLibrary.from_parameters([]))
+    return select_hrfs(constant, library=HrfLibrary.from_parameters([]))
 
 
 @pytest.mark.parametrize(
@@ -534,7 +534,7 @@ def task_model_problem(two_candidate_library):
         noise_model="ols",
         task_model=_nsd_model(),
     )
-    selection = select_hrf(
+    selection = select_hrfs(
         data, library=library, feature_signature="axis-tm", task_model=_nsd_model()
     )
     return data, model, selection, library
@@ -585,7 +585,7 @@ def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem
 
     data, model, selection, library = task_model_problem
     canonical = HrfLibrary.from_parameters([])
-    spm_only = select_hrf(
+    spm_only = select_hrfs(
         data, library=canonical, feature_signature="axis-tm", task_model=_nsd_model()
     )
     result = fit(data, model, hrf_selection=spm_only, feature_signature="axis-tm")
@@ -625,7 +625,7 @@ def test_selected_glm_rejects_mismatched_selection_settings(
 ):
     data, model, selection, library = task_model_problem
     if selection_task_model is not None:
-        selection = select_hrf(
+        selection = select_hrfs(
             data,
             library=library,
             feature_signature="axis-tm",
@@ -647,7 +647,7 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
 
     data, model, selection, library = task_model_problem
     subset = TaskModel((Modulator("trial_type", center=False),))
-    narrow = select_hrf(
+    narrow = select_hrfs(
         data, library=library, feature_signature="axis-tm", task_model=subset
     )
     result = fit(data, model, hrf_selection=narrow, feature_signature="axis-tm")
@@ -667,7 +667,7 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
     assert activity["task_model_fingerprint"] == model.task_model.fingerprint
     assert activity["selection_task_model_fingerprint"] == subset.fingerprint
     assert np.isfinite(result.effect("response_time")).all()
-    plain = select_hrf(data, library=library, feature_signature="axis-tm")
+    plain = select_hrfs(data, library=library, feature_signature="axis-tm")
     assert fit(
         data, model, hrf_selection=plain, feature_signature="axis-tm"
     ).group_design_provenance
@@ -684,7 +684,7 @@ def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem
         frame_times=data.frame_times,
         confounds=data.confounds,
     )
-    chosen = select_hrf(
+    chosen = select_hrfs(
         complete, library=library, feature_signature="axis-tm", task_model=strict
     )
     with pytest.raises(
@@ -740,7 +740,7 @@ def known_amplitude_problem(two_candidate_library):
     runs = [_oracle_run(library, task_model, run) for run in range(3)]
     signals, events, times, confounds = (list(part) for part in zip(*runs))
     data = from_arrays(signals, events, frame_times=times, confounds=confounds)
-    selection = select_hrf(
+    selection = select_hrfs(
         data, library=library, feature_signature="axis-oracle", task_model=task_model
     )
     return data, selection, task_model

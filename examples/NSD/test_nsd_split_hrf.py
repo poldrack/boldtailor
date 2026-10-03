@@ -151,7 +151,7 @@ def test_new_map_collision_is_checked_before_fitting(
     def forbidden(*args, **kwargs):
         pytest.fail("new map collision must precede fitting")
 
-    monkeypatch.setattr("boldtailor.hrf_selection.select_hrf", forbidden)
+    monkeypatch.setattr("boldtailor.hrf_selection.select_hrfs", forbidden)
     with pytest.raises(FileExistsError):
         run(hrf_nsd, output)
     assert target.read_bytes() == b"preserve"

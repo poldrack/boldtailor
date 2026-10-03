@@ -1,11 +1,11 @@
 """Apply an identified HRF assignment, fitting only its feature groups."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 import json
 
 import numpy as np
-import pandas as pd
 
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
@@ -22,7 +22,8 @@ from boldtailor._fractional_ridge import (
     fraction_metadata,
 )
 from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
-from boldtailor.data import run_labels_for
+from boldtailor.data import AnalysisData, run_labels_for
+from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import analysis_fingerprint, identity_activity
 from boldtailor._fit_lifecycle import fit_operation
 
@@ -140,14 +141,14 @@ def _rebuilder(runs, ids):
 
 
 def fit_groups(
-    data,
+    data: AnalysisData,
     *,
-    selection,
-    ridge_alpha,
-    run_labels,
-    feature_signature,
-    ridge_fraction=None,
-):
+    selection: HrfSelectionResult,
+    ridge_alpha: float,
+    run_labels: Sequence[str] | None,
+    feature_signature: str | None,
+    ridge_fraction: float | np.ndarray | None = None,
+) -> SingleTrialResult:
     with fit_operation("selected_hrf_single_trial", data.provenance) as operation:
         alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
         assignment = validate_selection(data, selection, feature_signature)

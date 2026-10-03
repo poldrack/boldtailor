@@ -13,7 +13,7 @@ from boldtailor.data import from_arrays
 from boldtailor.fractional_ridge import score_fraction_candidates
 from boldtailor.fractional_ridge import select_ridge_fractions
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.ridge_selection import score_ridge_candidates
 from boldtailor.ridge_selection import select_ridge_penalty
 from boldtailor.single_trial import fit_single_trials
@@ -124,7 +124,7 @@ def _hrf_selection(rng, library, kernels, motion, *, motion_weight, jitter):
         times.append(HRF_TIMES)
         confounds.append(n)
     data = from_arrays(signals, events, frame_times=times, confounds=confounds)
-    return select_hrf(data, library=library)
+    return select_hrfs(data, library=library)
 
 
 def test_hrf_selection_recovers_the_generating_kernel_under_ar1_noise():

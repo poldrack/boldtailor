@@ -1,6 +1,9 @@
 """Select relative shrinkage independently for each feature using encoding CV."""
 
+from collections.abc import Sequence
+
 import numpy as np
+import pandas as pd
 
 from boldtailor._hrf_design import TIE_TOLERANCE
 from boldtailor._fractional_ridge import (  # public re-exports
@@ -8,17 +11,30 @@ from boldtailor._fractional_ridge import (  # public re-exports
     fraction_grid,
     regularization,
 )
-from boldtailor.ridge_results import FractionSelection
+from boldtailor.data import AnalysisData
+from boldtailor.hrf_library import HrfLibrary
+from boldtailor.ridge_results import CandidateScores, FractionSelection, paired_scores
 
 
-def select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None):
+def select_ridge_fractions(
+    scores: CandidateScores | np.ndarray,
+    fractions: Sequence[float] | None = None,
+    *,
+    feature_mask: np.ndarray | None = None,
+) -> FractionSelection:
     """Maximize each feature's score; ties favor less shrinkage (larger f).
+
+    Pass the ``CandidateScores`` from :func:`score_fraction_candidates`, or a
+    candidate-by-feature score array together with its ``fractions``.
 
     A feature must have finite scores at every candidate. Ineligible features
     return NaN fractions/scores and index -1, including entirely invalid blocks.
     ``at_boundary`` is True for scored features whose winner is the largest or
     smallest fraction; with a one-point grid every scored feature is flagged.
     """
+    candidate_r2, fractions = paired_scores(
+        scores, fractions, kind="fractional_ridge", grid_name="fractions"
+    )
     grid = fraction_grid(fractions)
     scores = np.asarray(candidate_r2, dtype=float)
     if scores.ndim != 2 or scores.shape[0] != len(grid):
@@ -53,15 +69,15 @@ def select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None):
 
 
 def score_fraction_candidates(
-    data,
-    predictors,
+    data: AnalysisData,
+    predictors: Sequence[pd.DataFrame],
     *,
-    fractions,
-    library=None,
-    run_labels=None,
-    feature_signature=None,
-    encoding_mode="within_run",
-):
+    fractions: Sequence[float],
+    library: HrfLibrary | None = None,
+    run_labels: Sequence[str] | None = None,
+    feature_signature: str | None = None,
+    encoding_mode: str = "within_run",
+) -> CandidateScores:
     """Score fixed OLS beta targets in held-out runs; no image repeats needed.
 
     A supplied library selects HRFs only on each fold's training runs. Pass

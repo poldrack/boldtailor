@@ -44,7 +44,9 @@ def test_trial_results_share_science_and_name_their_design(
     data, selection = selected_fixture
     function = fit_selected_hrfs if selected else fit_single_trials
     options = (
-        dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+        dict(hrf_selection=selection, feature_signature="ordered-axis")
+        if selected
+        else {}
     )
     options.update({"ridge_fraction": 0.5} if fractional else {"ridge_alpha": 0.1})
     result = function(data, **options)
@@ -107,7 +109,7 @@ def test_custom_hrf_has_a_shared_trial_design(selected_fixture):
     from boldtailor.single_trial_results import SharedTrialDesign
 
     data, selection = selected_fixture
-    result = fit_single_trials(data, hrf=selection.library.candidates[1])
+    result = fit_single_trials(data, hrf_model=selection.library.candidates[1])
     assert type(result.design) is SharedTrialDesign
     assert len(result.design.matrices) == data.n_runs
 
@@ -133,7 +135,7 @@ def _selected_instances(selected_fixture):
 
     data, selection = selected_fixture
     signature = dict(feature_signature="ordered-axis")
-    selected = lambda: fit_selected_hrfs(data, selection=selection, **signature)
+    selected = lambda: fit_selected_hrfs(data, hrf_selection=selection, **signature)
     return {
         "HrfSelectionResult": lambda: selection,
         "HrfEvaluationResult": lambda: evaluate_hrf_split(

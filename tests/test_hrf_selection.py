@@ -60,10 +60,10 @@ def replace_data(data, signals=None, events=None, confounds=None):
 
 @pytest.mark.parametrize("batch", [1, 2, 32])
 def test_pooled_loro_matches_stacked_training_ols(cv_fixture, batch):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
-    result = select_hrf(data, library=library, candidate_batch_size=batch)
+    result = select_hrfs(data, library=library, candidate_batch_size=batch)
     expected = oracle_cv(data, library)[:, :3]
     np.testing.assert_array_equal(result.hrf_indices[:3], [0, 1, 2])
     np.testing.assert_allclose(result.cv_r2[:3], expected.max(axis=0), atol=1e-12)
@@ -76,7 +76,7 @@ def test_pooled_loro_matches_stacked_training_ols(cv_fixture, batch):
 
 
 def test_noise_free_mean_response_and_rank_redundant_nuisance(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     ys = [
@@ -87,7 +87,7 @@ def test_noise_free_mean_response_and_rank_redundant_nuisance(cv_fixture):
     ]
     ns = [n.assign(duplicate=n.motion * 1e4) for n in data.confounds]
     clean = replace_data(data, signals=ys, confounds=ns)
-    result = select_hrf(clean, library=library)
+    result = select_hrfs(clean, library=library)
     np.testing.assert_array_equal(result.hrf_indices, [2])
     np.testing.assert_allclose(result.cv_r2, 1, atol=1e-13)
 
@@ -169,7 +169,7 @@ def test_invalid_folds_rejected(cv_fixture, train, test):
 
 
 def test_selection_requires_two_runs_and_valid_batch(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     single = from_arrays(
@@ -179,14 +179,14 @@ def test_selection_requires_two_runs_and_valid_batch(cv_fixture):
         confounds=data.confounds[0],
     )
     with pytest.raises(ValueError, match="two|2"):
-        select_hrf(single, library=library)
+        select_hrfs(single, library=library)
     for batch in (0, -1, True, 1.5):
         with pytest.raises(ValueError):
-            select_hrf(data, library=library, candidate_batch_size=batch)
+            select_hrfs(data, library=library, candidate_batch_size=batch)
 
 
 def test_canonical_only_negative_scores_and_stable_ties(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, _ = cv_fixture
     library = HrfLibrary.from_parameters([])
@@ -195,7 +195,7 @@ def test_canonical_only_negative_scores_and_stable_ties(cv_fixture):
         for r, (e, t) in enumerate(zip(data.events, data.frame_times, strict=True))
     ]
     negative = replace_data(data, signals=ys)
-    result = select_hrf(negative, library=library)
+    result = select_hrfs(negative, library=library)
     assert result.cv_r2[0] < 0
     assert result.hrf_indices[0] == 0
     # Custom candidates differing only after the acquired response are tied.
@@ -206,12 +206,12 @@ def test_canonical_only_negative_scores_and_stable_ties(cv_fixture):
     t = np.arange(60) * 1.6
     x = stimulus_regressor(e, t, tied.candidates[1])
     short = from_arrays([x[:, None], x[:, None]], [e, e], frame_times=[t, t])
-    answer = select_hrf(short, library=tied)
+    answer = select_hrfs(short, library=tied)
     assert answer.hrf_indices[0] == 1
 
 
 def test_structurally_invalid_candidate_excluded_and_canonical_nan(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     # Canonical trial columns are all absorbed by supplied nuisance columns.
@@ -220,29 +220,29 @@ def test_structurally_invalid_candidate_excluded_and_canonical_nan(cv_fixture):
         x, _, _ = compile_trial_run(e, t, n, "r")
         ns.append(pd.concat([n, x.rename(columns=lambda c: "null_" + c)], axis=1))
     altered = replace_data(data, confounds=ns)
-    result = select_hrf(altered, library=library)
+    result = select_hrfs(altered, library=library)
     assert not np.any(result.hrf_indices == 0)
     assert np.isnan(result.canonical_cv_r2).all()
     assert np.isnan(result.delta_cv_r2).all()
     assert result.eligibility.loc[0, "eligible"] == False
     with pytest.raises(ValueError, match="eligib|estimab"):
-        select_hrf(altered, library=HrfLibrary.from_parameters([]))
+        select_hrfs(altered, library=HrfLibrary.from_parameters([]))
 
 
 def test_results_owned_metadata_independent_and_fingerprinted(cv_fixture):
-    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
+    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 
     data, library = cv_fixture
-    result = select_hrf(data, library=library, feature_signature="axis-a")
+    result = select_hrfs(data, library=library, feature_signature="axis-a")
     es = [e.assign(response_time=[-2, -3, -4], image=[7, 7, 7]) for e in data.events]
-    same = select_hrf(
+    same = select_hrfs(
         replace_data(data, events=es), library=library, feature_signature="axis-a"
     )
     key = lambda r: r.provenance.to_dict()["activities"][-1]["design_fingerprint"]
     assert key(result) == key(same)
     es[0].loc[0, "onset"] += 0.3
     assert key(result) != key(
-        select_hrf(replace_data(data, events=es), library=library)
+        select_hrfs(replace_data(data, events=es), library=library)
     )
     for array in (
         result.hrf_indices,
@@ -293,11 +293,11 @@ def with_trial_types(data):
 
 
 def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     data = with_trial_types(data)
-    result = select_hrf(data, library=library, task_model=nsd_model())
+    result = select_hrfs(data, library=library, task_model=nsd_model())
     expected = loro_oracle(data, library, nsd_model())[:, :3]
     np.testing.assert_allclose(result.cv_r2[:3], expected.max(axis=0), atol=1e-10)
     np.testing.assert_allclose(result.canonical_cv_r2[:3], expected[0], atol=1e-10)
@@ -317,7 +317,7 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
 
 
 def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     data = with_trial_types(data)
@@ -325,8 +325,8 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
     def key(result):
         return result.provenance.to_dict()["activities"][-1]["design_fingerprint"]
 
-    plain = select_hrf(data, library=library)
-    modeled = select_hrf(data, library=library, task_model=nsd_model())
+    plain = select_hrfs(data, library=library)
+    modeled = select_hrfs(data, library=library, task_model=nsd_model())
     assert key(plain) != key(modeled)
     changed = replace_data(
         data,
@@ -335,9 +335,9 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
         ],
     )
     assert key(modeled) != key(
-        select_hrf(changed, library=library, task_model=nsd_model())
+        select_hrfs(changed, library=library, task_model=nsd_model())
     )
-    assert key(plain) == key(select_hrf(changed, library=library))
+    assert key(plain) == key(select_hrfs(changed, library=library))
 
 
 def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture):
@@ -378,11 +378,11 @@ def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
 
 
 def test_task_model_argument_is_validated(cv_fixture):
-    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
+    from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 
     data, library = cv_fixture
     with pytest.raises(ValueError, match="TaskModel"):
-        select_hrf(data, library=library, task_model={"modulators": []})
+        select_hrfs(data, library=library, task_model={"modulators": []})
     with pytest.raises(ValueError, match="TaskModel"):
         evaluate_hrf_split(
             data, library=library, train_runs=[0, 2], test_runs=[1], task_model="nsd"
@@ -390,13 +390,13 @@ def test_task_model_argument_is_validated(cv_fixture):
 
 
 def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, library = cv_fixture
     data = with_trial_types(data)
-    selection = select_hrf(data, library=library, task_model=nsd_model())
-    result = fit_selected_hrfs(data, selection=selection)
+    selection = select_hrfs(data, library=library, task_model=nsd_model())
+    result = fit_selected_hrfs(data, hrf_selection=selection)
     assert result.run_betas[0].shape == (5, data.n_features)
     assert np.isfinite(result.run_betas[0][:, :3]).all()
 
@@ -417,10 +417,10 @@ def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
 
 
 def test_selection_provenance_records_library_origin(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
-    activity = select_hrf(data, library=library).provenance.to_dict()["activities"][-1]
+    activity = select_hrfs(data, library=library).provenance.to_dict()["activities"][-1]
     assert activity["library"] == dict(library.origin)
     assert activity["library_fingerprint"] == library.fingerprint
 
@@ -435,10 +435,10 @@ def _near_edge(library, cid):
 
 
 def test_selection_flags_features_at_the_parameter_box_edge(cv_fixture):
-    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
-    selection = select_hrf(data, library=library)
+    selection = select_hrfs(data, library=library)
     expected = np.array(
         [cid > 0 and _near_edge(library, cid) for cid in selection.hrf_indices]
     )

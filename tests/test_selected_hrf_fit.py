@@ -8,7 +8,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_single_trials
 from tests.oracles import scaled_condition
 
@@ -19,7 +19,10 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
 
     data, selection = selected_fixture
     result = fit_selected_hrfs(
-        data, selection=selection, ridge_alpha=alpha, feature_signature="ordered-axis"
+        data,
+        hrf_selection=selection,
+        ridge_alpha=alpha,
+        feature_signature="ordered-axis",
     )
     np.testing.assert_array_equal(result.design.hrf_indices, selection.hrf_indices)
     sses = []
@@ -92,17 +95,19 @@ def test_identity_checks_and_apply_to_new_runs(selected_fixture):
     data, selection = selected_fixture
     for signature in (None, "different-axis"):
         with pytest.raises(ValueError, match="signature"):
-            fit_selected_hrfs(data, selection=selection, feature_signature=signature)
+            fit_selected_hrfs(
+                data, hrf_selection=selection, feature_signature=signature
+            )
     incompatible = replace(
         selection, library=HrfLibrary.from_parameters([[4, 12, 1, 1, 6, 0, 36]])
     )
     with pytest.raises(ValueError, match="library|fingerprint|identity"):
         fit_selected_hrfs(
-            data, selection=incompatible, feature_signature="ordered-axis"
+            data, hrf_selection=incompatible, feature_signature="ordered-axis"
         )
     invalid = replace(selection, hrf_indices=[1, 0, 1, 99, -1])
     with pytest.raises(ValueError, match="HRF|hrf|identity"):
-        fit_selected_hrfs(data, selection=invalid, feature_signature="ordered-axis")
+        fit_selected_hrfs(data, hrf_selection=invalid, feature_signature="ordered-axis")
     subset = from_arrays(
         data.signals[1],
         data.events[1],
@@ -111,7 +116,7 @@ def test_identity_checks_and_apply_to_new_runs(selected_fixture):
     )
     result = fit_selected_hrfs(
         subset,
-        selection=selection,
+        hrf_selection=selection,
         feature_signature="ordered-axis",
         run_labels=["new-run"],
     )
@@ -124,7 +129,9 @@ def test_identity_checks_and_apply_to_new_runs(selected_fixture):
         confounds=data.confounds[1],
     )
     with pytest.raises(ValueError, match="feature"):
-        fit_selected_hrfs(fewer, selection=selection, feature_signature="ordered-axis")
+        fit_selected_hrfs(
+            fewer, hrf_selection=selection, feature_signature="ordered-axis"
+        )
 
 
 def test_canonical_only_matches_legacy_including_per_run_constant(selected_fixture):
@@ -136,9 +143,9 @@ def test_canonical_only_matches_legacy_including_per_run_constant(selected_fixtu
     data = from_arrays(
         ys, data.events, frame_times=data.frame_times, confounds=data.confounds
     )
-    selection = select_hrf(data, library=HrfLibrary.from_parameters([]))
+    selection = select_hrfs(data, library=HrfLibrary.from_parameters([]))
     for alpha in [0.0, 0.1]:
-        actual = fit_selected_hrfs(data, selection=selection, ridge_alpha=alpha)
+        actual = fit_selected_hrfs(data, hrf_selection=selection, ridge_alpha=alpha)
         legacy = fit_single_trials(data, ridge_alpha=alpha)
         for a, b in zip(actual.run_betas, legacy.run_betas, strict=True):
             np.testing.assert_allclose(a, b, atol=1e-12)
@@ -151,7 +158,7 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
 
     data, selection = selected_fixture
     result = fit_selected_hrfs(
-        data, selection=selection, feature_signature="ordered-axis"
+        data, hrf_selection=selection, feature_signature="ordered-axis"
     )
     for values in (
         *result.run_betas,
@@ -183,7 +190,7 @@ def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
 
     data, selection = selected_fixture
     result = fit_selected_hrfs(
-        data, selection=selection, feature_signature="ordered-axis"
+        data, hrf_selection=selection, feature_signature="ordered-axis"
     )
     run = prepare_runs(data, selection.library)[0]
     expected = np.column_stack([run.trial_matrix(1), run.nuisance])
@@ -203,7 +210,9 @@ def test_selected_design_rejects_pairs_that_were_not_fitted(selected_fixture, ke
 
     data, selection = selected_fixture
     narrow = replace_indices(selection, [1, 1, 1, 1, -1])
-    result = fit_selected_hrfs(data, selection=narrow, feature_signature="ordered-axis")
+    result = fit_selected_hrfs(
+        data, hrf_selection=narrow, feature_signature="ordered-axis"
+    )
     assert result.design.matrix(0, 1).shape[0] == len(data.frame_times[0])
     with pytest.raises(KeyError):
         result.design.matrix(*key)
@@ -234,7 +243,7 @@ def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
     data, selection = selected_fixture
     narrow = replace_indices(selection, [1, 1, 1, 1, -1])
     results = [
-        fit_selected_hrfs(data, selection=s, feature_signature="ordered-axis")
+        fit_selected_hrfs(data, hrf_selection=s, feature_signature="ordered-axis")
         for s in (narrow, selection)
     ]
     counts = [

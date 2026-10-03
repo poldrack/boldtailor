@@ -673,13 +673,7 @@ def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
 ):
     prepared, contrasts, metadata, full_result = prepared_delta_problem
 
-    comparison = task_delta_r2_prepared(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model="ar1",
-        model_metadata=metadata,
-    )
+    comparison = task_delta_r2_prepared(prepared, full_result)
 
     nuisance_designs = comparison.nuisance_design_matrices
     assert [list(design.columns) for design in nuisance_designs] == [
@@ -705,13 +699,7 @@ def test_task_delta_r2_prepared_returns_owned_readonly_arrays_and_copied_designs
     prepared_delta_problem,
 ):
     prepared, contrasts, metadata, full_result = prepared_delta_problem
-    comparison = task_delta_r2_prepared(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model="ar1",
-        model_metadata=metadata,
-    )
+    comparison = task_delta_r2_prepared(prepared, full_result)
     returned_design = comparison.nuisance_design_matrices[0]
     returned_design.iloc[0, 0] = -99.0
 
@@ -768,12 +756,7 @@ def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(
     )
 
     with pytest.raises(ValueError, match=message):
-        task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts={"face": {"face": 1.0}},
-            noise_model="ols",
-        )
+        task_delta_r2_prepared(prepared, full_result)
 
 
 @pytest.mark.parametrize(
@@ -828,7 +811,14 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     else:
         supplied_metadata = {"origin": "fitlins", "node": "changed"}
 
-    with pytest.raises(ValueError, match="provenance identity"):
+    if changed in ("sources", "design"):
+        with pytest.raises(ValueError, match="provenance identity"):
+            task_delta_r2_prepared(supplied_prepared, full_result)
+        return
+    with (
+        pytest.warns(DeprecationWarning),
+        pytest.raises(ValueError, match="provenance identity"),
+    ):
         task_delta_r2_prepared(
             supplied_prepared,
             full_result,
@@ -845,13 +835,7 @@ def test_task_delta_r2_prepared_rejects_invalid_parent_dimensions(
     mismatched = replace(full_result, _r2=np.zeros(prepared.n_features + 1))
 
     with pytest.raises(ValueError, match="feature dimensions do not match prepared"):
-        task_delta_r2_prepared(
-            prepared,
-            mismatched,
-            contrasts=contrasts,
-            noise_model="ar1",
-            model_metadata=metadata,
-        )
+        task_delta_r2_prepared(prepared, mismatched)
 
 
 def test_task_delta_r2_prepared_requires_reliable_parent_identity(prepared_problem):
@@ -859,12 +843,7 @@ def test_task_delta_r2_prepared_requires_reliable_parent_identity(prepared_probl
     full_result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
 
     with pytest.raises(ValueError, match="requires fingerprintable prepared sources"):
-        task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts=contrasts,
-            noise_model="ols",
-        )
+        task_delta_r2_prepared(prepared, full_result)
 
 
 def test_task_delta_r2_prepared_rejects_materially_negative_nested_ols_difference(
@@ -879,13 +858,7 @@ def test_task_delta_r2_prepared_rejects_materially_negative_nested_ols_differenc
     )
 
     with pytest.raises(ValueError, match="nested OLS monotonicity violated"):
-        task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts=contrasts,
-            noise_model="ar1",
-            model_metadata=metadata,
-        )
+        task_delta_r2_prepared(prepared, full_result)
 
 
 def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
@@ -895,13 +868,7 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, metadata, full_result = prepared_delta_problem
 
-    comparison = task_delta_r2_prepared(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model="ar1",
-        model_metadata=metadata,
-    )
+    comparison = task_delta_r2_prepared(prepared, full_result)
     from boldtailor.logging import emit_event
 
     emit_event("after_prepared_comparison", stage="test")
@@ -957,13 +924,7 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
 ):
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, metadata, full_result = prepared_delta_problem
-    successful = task_delta_r2_prepared(
-        prepared,
-        full_result,
-        contrasts=contrasts,
-        noise_model="ar1",
-        model_metadata=metadata,
-    )
+    successful = task_delta_r2_prepared(prepared, full_result)
     comparison_id = successful.provenance.analysis_fingerprint
     caplog.clear()
 
@@ -976,13 +937,7 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
     )
 
     with pytest.raises(ValueError, match="downstream diagnostic failure"):
-        task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts=contrasts,
-            noise_model="ar1",
-            model_metadata=metadata,
-        )
+        task_delta_r2_prepared(prepared, full_result)
     from boldtailor.logging import emit_event
 
     emit_event("after_prepared_comparison_failure", stage="test")
@@ -1015,7 +970,10 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
     prepared, contrasts, _, full_result = prepared_delta_problem
     private_key = "/private/secret/prepared-comparison.json"
 
-    with pytest.raises(ValueError, match="noise_model"):
+    with (
+        pytest.warns(DeprecationWarning),
+        pytest.raises(ValueError, match="noise_model"),
+    ):
         task_delta_r2_prepared(
             prepared,
             full_result,

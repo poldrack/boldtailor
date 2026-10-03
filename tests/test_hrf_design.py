@@ -107,8 +107,8 @@ def test_identified_hrf_fit_and_provenance(timing_fixture, candidates):
         confounds=nuisance,
     )
     default = fit_single_trials(data)
-    explicit = fit_single_trials(data, hrf=candidates[0])
-    custom = fit_single_trials(data, hrf=candidates[1])
+    explicit = fit_single_trials(data, hrf_model=candidates[0])
+    custom = fit_single_trials(data, hrf_model=candidates[1])
     np.testing.assert_array_equal(default.run_betas[0], explicit.run_betas[0])
     assert not np.allclose(custom.run_betas[0], default.run_betas[0])
     metadata = custom.provenance.to_dict()["activities"][-1]

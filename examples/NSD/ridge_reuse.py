@@ -32,9 +32,9 @@ def _tuning(base, descriptor, brain, fractional):
     )
     percentile = meta["summary_percentile" if fractional else "percentile"]
     selected = (
-        select_ridge_fractions(scores, grid)
+        select_ridge_fractions(candidates)
         if fractional
-        else select_ridge_penalty(scores, grid, percentile=percentile)
+        else select_ridge_penalty(candidates, percentile=percentile)
     )
     return dict(scores=candidates, selection=selected, summary_percentile=percentile)
 

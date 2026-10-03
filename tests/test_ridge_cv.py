@@ -7,7 +7,7 @@ import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from tests.oracles import subset_runs as subset
 
 
@@ -59,7 +59,7 @@ def reference_scores(
         ids = (
             np.zeros(data.n_features, dtype=int)
             if library is None
-            else select_hrf(subset(data, train), library=library).hrf_indices
+            else select_hrfs(subset(data, train), library=library).hrf_indices
         )
         assignments.append(ids)
         fold_loss, fold_total = [], []
@@ -158,7 +158,7 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
     score(data, predictors, alphas=[0.0], library=library)
     module = importlib.import_module("boldtailor._ridge_cv")
     original_select, original_encoding = (
-        module.select_hrf,
+        module.select_hrfs,
         module.evaluate_trial_encoding,
     )
     seen_selections, seen_encodings = [], []
@@ -173,7 +173,7 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
         seen_encodings.append(result)
         return result
 
-    monkeypatch.setattr(module, "select_hrf", observe_selection)
+    monkeypatch.setattr(module, "select_hrfs", observe_selection)
     monkeypatch.setattr(module, "evaluate_trial_encoding", observe_encoding)
     options = dict(
         alphas=[0.0, 0.2],

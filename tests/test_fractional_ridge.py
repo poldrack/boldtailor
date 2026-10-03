@@ -128,7 +128,9 @@ def test_public_fraction_fits_keep_trial_units_and_hrf_groups(
     data, selection = selected_fixture
     fit = fit_selected_hrfs if selected else fit_single_trials
     kwargs = (
-        dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+        dict(hrf_selection=selection, feature_signature="ordered-axis")
+        if selected
+        else {}
     )
     fractions = np.array([1, 0.7, 0.4, 0.2, np.nan])
     result = fit(data, ridge_fraction=fractions, **kwargs)
@@ -216,7 +218,9 @@ def test_fraction_results_own_arrays_without_solver_mutation(
     data, selection = selected_fixture
     fit = fit_selected_hrfs if selected else fit_single_trials
     options = (
-        dict(selection=selection, feature_signature="ordered-axis") if selected else {}
+        dict(hrf_selection=selection, feature_signature="ordered-axis")
+        if selected
+        else {}
     )
 
     result = fit(data, ridge_fraction=[1, 0.7, 0.4, 0.2, np.nan], **options)

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrfs
 from boldtailor.cifti import spatial_signature
 from boldtailor.parallel import map_blocks, validate_n_jobs
 from .session_hrf_cache import (
@@ -38,7 +38,7 @@ class SessionEstimate:
 
 
 def _fit_block(indices, runs, root, library, task_model):
-    return select_hrf(
+    return select_hrfs(
         load_block(runs, root, indices),
         library=library,
         run_labels=[r.label for r in runs],

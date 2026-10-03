@@ -112,14 +112,24 @@ def candidate_scores(ridge_problem):
     return score_ridge_candidates(data, predictors, alphas=[0.0, 0.1, 10.0])
 
 
+def _same_choice(left, right):
+    assert (left.ridge_alpha, left.alphas, left.percentile, left.at_boundary) == (
+        right.ridge_alpha,
+        right.alphas,
+        right.percentile,
+        right.at_boundary,
+    )
+    np.testing.assert_array_equal(left.objective_scores, right.objective_scores)
+    np.testing.assert_array_equal(left.scoring_mask, right.scoring_mask)
+
+
 def test_select_ridge_penalty_accepts_candidate_scores(candidate_scores):
     scores = candidate_scores
-    paired = select(scores)
-    unpaired = select(scores.cv_r2, scores.grid)
-    assert paired == unpaired
+    _same_choice(select(scores), select(scores.cv_r2, scores.grid))
     mask = np.array([True, False, True, True, True])
-    assert select(scores, percentile=50.0, feature_mask=mask) == select(
-        scores.cv_r2, scores.grid, percentile=50.0, feature_mask=mask
+    _same_choice(
+        select(scores, percentile=50.0, feature_mask=mask),
+        select(scores.cv_r2, scores.grid, percentile=50.0, feature_mask=mask),
     )
     with pytest.raises(TypeError, match="grid"):
         select(scores, scores.grid)
