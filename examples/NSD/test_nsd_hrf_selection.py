@@ -323,7 +323,7 @@ def test_canonical_ineligible_diagnostic_does_not_abort_expanded_outputs(
     from dataclasses import replace
     from boldtailor.single_trial import compile_trial_run
     from examples.NSD.nsd_cifti import discover_runs
-    from examples.NSD.workflow_files import load_runs
+    from boldtailor.workflow.files import load_runs
     from examples.NSD.nsd_hrf import run_expanded_analysis
 
     root, prep, brain, *_ = hrf_nsd

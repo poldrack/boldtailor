@@ -13,7 +13,7 @@ from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
 from boldtailor.reliability import library_indices
 from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 from .workflow_outputs import R2_NAMES, _stem
-from .workflow_files import bids_label
+from boldtailor.workflow.files import bids_label
 from .workflow_inputs import REGRESSORS
 
 METRICS = ("mean_beta", "task_t", "task_delta_r2", "rt_r", "rt_abs_r")

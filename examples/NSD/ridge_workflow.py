@@ -31,7 +31,7 @@ from boldtailor.parallel import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
 from boldtailor.model import TaskModel
-from .workflow_files import odd_even_parity
+from boldtailor.workflow.files import odd_even_parity
 from .workflow_inputs import (
     NSD_TASK_MODEL,
     _trimmed_sources,

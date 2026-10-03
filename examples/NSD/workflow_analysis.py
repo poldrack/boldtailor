@@ -13,7 +13,7 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.cifti import spatial_signature
 from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
-from .workflow_files import odd_even_parity, reaction_times
+from boldtailor.workflow.files import odd_even_parity, reaction_times
 from .workflow_inputs import (
     NSD_TASK_MODEL,
     REGRESSORS,

@@ -17,7 +17,7 @@ from .session_hrf_cache import (
     save_cache,
 )
 from .session_hrf_import import find_workflow_estimate
-from .workflow_files import bids_label
+from boldtailor.workflow.files import bids_label
 from .workflow_inputs import (
     NSD_TASK_MODEL,
     load_session,

@@ -18,7 +18,7 @@ from .workflow_artifacts import (
     parameter_artifact,
     table_artifact,
 )
-from .workflow_files import input_paths
+from boldtailor.workflow.files import input_paths
 from .workflow_inputs import NSD_TASK_MODEL, _trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")

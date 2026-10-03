@@ -9,7 +9,12 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.model import ModelSpec, Modulator, TaskModel
-from .workflow_files import discover_runs, load_runs, odd_even_parity, run_sources
+from boldtailor.workflow.files import (
+    discover_runs,
+    load_runs,
+    odd_even_parity,
+    run_sources,
+)
 
 REGRESSORS = ("task", "response_time", "trial_type")
 

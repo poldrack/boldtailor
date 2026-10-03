@@ -26,7 +26,7 @@ from boldtailor.publication import Artifact, publish_artifact_set
 if __package__:
     from .notebook_paths import notebook_paths
     from .workflow_artifacts import dataset_description, json_artifact
-    from .workflow_files import (
+    from boldtailor.workflow.files import (
         RunInputs,
         discover_runs,
         input_paths,
@@ -36,7 +36,7 @@ if __package__:
 else:
     from notebook_paths import notebook_paths
     from workflow_artifacts import dataset_description, json_artifact
-    from workflow_files import (
+    from boldtailor.workflow.files import (
         RunInputs,
         discover_runs,
         input_paths,

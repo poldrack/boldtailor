@@ -22,8 +22,8 @@ if __package__:
     )
     from .parallel_blocks import execution_settings
     from .workflow_artifacts import dataset_description
-    from .workflow_files import input_paths, run_sources
-    from .workflow_files import odd_even_parity, reaction_times
+    from boldtailor.workflow.files import input_paths, run_sources
+    from boldtailor.workflow.files import odd_even_parity, reaction_times
     from .rt_diagnostics import select_vertices
     from .single_trial_artifacts import (
         all_model_paths,
@@ -46,8 +46,8 @@ else:
     )
     from parallel_blocks import execution_settings
     from workflow_artifacts import dataset_description
-    from workflow_files import input_paths, run_sources
-    from workflow_files import odd_even_parity, reaction_times
+    from boldtailor.workflow.files import input_paths, run_sources
+    from boldtailor.workflow.files import odd_even_parity, reaction_times
     from rt_diagnostics import select_vertices
     from single_trial_artifacts import (
         all_model_paths,

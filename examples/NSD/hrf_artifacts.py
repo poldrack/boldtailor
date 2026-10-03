@@ -19,7 +19,7 @@ if __package__:
         table_artifact,
     )
     from .rt_diagnostics import scatter_artifact
-    from .workflow_files import reaction_times
+    from boldtailor.workflow.files import reaction_times
 else:
     from workflow_artifacts import (
         figure_artifact,
@@ -29,7 +29,7 @@ else:
         table_artifact,
     )
     from rt_diagnostics import scatter_artifact
-    from workflow_files import reaction_times
+    from boldtailor.workflow.files import reaction_times
 
 
 def selection_paths(runs, subject, session):

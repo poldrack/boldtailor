@@ -1,7 +1,4 @@
-"""NSD BIDS/fMRIPrep discovery, CIFTI loading, nuisance selection, and sources.
-
-CIFTI I/O and event handling belong to this example, not to boldtailor.
-"""
+"""BIDS/fMRIPrep discovery, CIFTI loading, nuisance selection, and sources."""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -52,9 +49,9 @@ def input_paths(run):
     return run.bold, run.events, run.confounds, run.confounds_json, run.bold_json
 
 
-def _run_inputs(event, derivative):
+def _run_inputs(event, derivative, space_entity):
     stem = event.name.removesuffix("_events.tsv")
-    bold = derivative / f"{stem}_space-fsLR_den-91k_bold.dtseries.nii"
+    bold = derivative / f"{stem}_{space_entity}_bold.dtseries.nii"
     item = RunInputs(
         stem,
         bold,
@@ -69,19 +66,18 @@ def _run_inputs(event, derivative):
     return item
 
 
-def discover_runs(bids_root, fmriprep_root, *, subject="sub-07", session="ses-nsd10"):
-    """Require a unique fsLR 91k CIFTI and complete metadata for every raw run."""
-    raw = Path(bids_root) / subject / session / "func"
-    derivative = Path(fmriprep_root) / subject / session / "func"
-    events = sorted(raw.glob(f"{subject}_{session}_task-nsdcore_run-*_events.tsv"))
+def discover_runs(settings):
+    """Require a unique CIFTI in the settings' space and complete metadata per run."""
+    func = Path(settings.subject) / settings.session / "func"
+    raw = settings.bids_dir / func
+    derivative = settings.fmriprep_dir / func
+    prefix = f"{settings.subject}_{settings.session}_task-{settings.task}_run-*"
+    pattern = f"{prefix}_events.tsv"
+    events = sorted(raw.glob(pattern))
     if not events:
-        raise FileNotFoundError(f"No NSD events found in {raw}")
-    runs = [_run_inputs(event, derivative) for event in events]
-    found = set(
-        derivative.glob(
-            f"{subject}_{session}_task-nsdcore_run-*_space-fsLR_den-91k_bold.dtseries.nii"
-        )
-    )
+        raise FileNotFoundError(f"No events matching {pattern} found in {raw}")
+    runs = [_run_inputs(event, derivative, settings.space_entity) for event in events]
+    found = set(derivative.glob(f"{prefix}_{settings.space_entity}_bold.dtseries.nii"))
     if found != {run.bold for run in runs}:
         raise ValueError("CIFTI runs and events runs do not match")
     return tuple(runs)

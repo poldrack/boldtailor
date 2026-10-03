@@ -28,8 +28,13 @@ if __package__:
     )
     from .rt_diagnostics import scatter_artifact, select_vertices
     from .workflow_artifacts import dataset_description, table_artifact
-    from .workflow_files import bids_label, input_paths, load_runs, run_sources
-    from .workflow_files import reaction_times
+    from boldtailor.workflow.files import (
+        bids_label,
+        input_paths,
+        load_runs,
+        run_sources,
+    )
+    from boldtailor.workflow.files import reaction_times
     from .single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
@@ -47,8 +52,13 @@ else:
     )
     from rt_diagnostics import scatter_artifact, select_vertices
     from workflow_artifacts import dataset_description, table_artifact
-    from workflow_files import bids_label, input_paths, load_runs, run_sources
-    from workflow_files import reaction_times
+    from boldtailor.workflow.files import (
+        bids_label,
+        input_paths,
+        load_runs,
+        run_sources,
+    )
+    from boldtailor.workflow.files import reaction_times
     from single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
