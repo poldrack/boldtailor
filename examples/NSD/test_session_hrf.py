@@ -2,18 +2,15 @@
 
 import importlib
 import json
-from pathlib import Path
 
-import nbformat
-from nbclient import NotebookClient
 import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import sobol_hrf_library
-
-NOTEBOOK = Path(__file__).with_name("nsd_session_hrf_reliability.ipynb")
+from boldtailor.workflow.inputs import detect_task_model, load_session
+from examples.NSD.nsd_settings import nsd_settings
 
 
 def session_api():
@@ -23,19 +20,13 @@ def session_api():
         pytest.fail("The session HRF estimation workflow is not implemented")
 
 
-@pytest.fixture
-def session_data(four_runs):
-    root, prep = four_runs
-    for directory in (root, prep):
-        source = directory / "sub-07/ses-nsd10/func"
-        for session in ("ses-nsd11", "ses-nsd12"):
-            target = directory / "sub-07" / session / "func"
-            target.mkdir(parents=True)
-            for path in source.iterdir():
-                (target / path.name.replace("ses-nsd10", session)).write_bytes(
-                    path.read_bytes()
-                )
-    return root, prep
+def session_settings(root, prep, session="ses-nsd10"):
+    config = dict(bids_root=root, fmriprep_root=prep, subject="sub-07")
+    return nsd_settings(config, session=session)
+
+
+def task_model(runs):
+    return detect_task_model([r.events for r in runs])
 
 
 @pytest.fixture
@@ -60,15 +51,16 @@ def test_session_selection_matches_public_api_and_reuses_without_fitting(
     session_data, library, tmp_path, monkeypatch
 ):
     from boldtailor.hrf_selection import select_hrfs
-    from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
+    from boldtailor.workflow.inputs import load_block
 
     output = tmp_path / "output"
     estimates = run_sessions(session_data, output, library, n_jobs=2)
     assert [e.session for e in estimates] == ["ses-nsd10", "ses-nsd11", "ses-nsd12"]
     root, prep = session_data
-    runs = load_session(root, prep)
+    runs = load_session(session_settings(root, prep))
+    model = task_model(runs)
     expected = select_hrfs(
-        load_block(runs, root, [0, 1, 2]), library=library, task_model=NSD_TASK_MODEL
+        load_block(runs, root, [0, 1, 2], model), library=library, task_model=model
     )
     np.testing.assert_array_equal(estimates[0].maps[0, :3], expected.hrf_indices)
     np.testing.assert_allclose(estimates[0].maps[1, :3], expected.cv_r2, atol=1e-7)
@@ -140,29 +132,34 @@ def test_malformed_cache_manifest_is_recomputed(
 @pytest.fixture
 def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
-    from boldtailor.workflow.inputs import load_session, make_blocks
-    from boldtailor.workflow.analysis import select_hrfs
-    from boldtailor.workflow.outputs import (
-        _hrf_artifacts,
-        _input_artifacts,
-        _metadata,
-        _stem,
-    )
+    from boldtailor.workflow import analysis, outputs
+    from boldtailor.workflow.inputs import make_blocks
     from boldtailor.workflow.artifacts import json_artifact
 
     root, prep = session_data
-    runs = load_session(root, prep)
-    selections = select_hrfs(runs, root, make_blocks(runs, block_size=2), library)
-    stem = _stem("sub-07", "ses-nsd10")
-    artifacts = _hrf_artifacts(
-        stem, runs[0].image.header.get_axis(1), selections, library
+    settings = session_settings(root, prep)
+    runs = load_session(settings)
+    model = task_model(runs)
+    blocks = make_blocks(runs, block_size=2)
+    selections = analysis.select_hrfs(
+        runs, settings.bids_dir, blocks, library, task_model=model
     )
-    artifacts.extend(_input_artifacts(stem, runs))
+    brain = runs[0].image.header.get_axis(1)
+    artifacts = outputs.hrf_artifacts(settings, brain, selections, library)
+    artifacts.extend(outputs.input_artifacts(settings, runs, model))
+    metadata = outputs.metadata(
+        runs,
+        library,
+        settings,
+        model,
+        beta_models={},
+        activation=None,
+        selections=selections,
+        skipped=(),
+        report=None,
+    )
     artifacts.append(
-        json_artifact(
-            stem + "_desc-notebook_metadata.json",
-            _metadata(runs, library, {"max_grayordinates": None}),
-        )
+        json_artifact(settings.stem + "_desc-boldtailor_metadata.json", metadata)
     )
     existing = tmp_path / "existing"
     publish_artifact_set(existing, artifacts)
@@ -201,12 +198,12 @@ def test_partial_full_workflow_exports_are_refitted(
     session_data, library, tmp_path, workflow_export, empty
 ):
     root, prep = session_data
-    path = next(workflow_export.rglob("*desc-notebookHRF_provenance.json"))
+    path = next(workflow_export.rglob("*desc-HRF_provenance.json"))
     records = json.loads(path.read_text())
     removed = records if empty else records[-1:]
     path.write_text(json.dumps([] if empty else records[:-1]))
     selected_path = next(
-        workflow_export.rglob("*desc-notebookHRFAll_stat-selection.dscalar.nii")
+        workflow_export.rglob("*desc-HRFAll_stat-selection.dscalar.nii")
     )
     image = nib.load(selected_path)
     maps = image.get_fdata()
@@ -231,12 +228,10 @@ def test_damaged_full_workflow_exports_are_refitted(
 ):
     root, prep = session_data
     if damage == "image":
-        path = next(
-            workflow_export.rglob("*desc-notebookHRFAll_stat-selection.dscalar.nii")
-        )
+        path = next(workflow_export.rglob("*desc-HRFAll_stat-selection.dscalar.nii"))
         path.write_bytes(b"truncated image")
     else:
-        path = next(workflow_export.rglob("*desc-notebookHRF_provenance.json"))
+        path = next(workflow_export.rglob("*desc-HRF_provenance.json"))
         records = json.loads(path.read_text())
         records[0]["scopes"]["all"]["selection_provenance"]["activities"] = []
         path.write_text(json.dumps(records))
@@ -255,8 +250,6 @@ def test_damaged_full_workflow_exports_are_refitted(
 def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
     session_data, library, tmp_path
 ):
-    from boldtailor.workflow.inputs import load_session
-
     root, prep = session_data
     path = next((root / "sub-07/ses-nsd10").rglob("*events.tsv"))
     events = pd.read_csv(path, sep="\t")
@@ -266,10 +259,11 @@ def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
         root, prep, tmp_path / "output", library=library, sessions=["ses-nsd10"]
     )
     assert np.isfinite(result[0].maps[0, :3]).all()
-    runs = load_session(root, prep, hrf_only=True)
+    settings = session_settings(root, prep)
+    runs = load_session(settings, hrf_only=True)
     assert len(runs[0].events) == len(events)
     assert pd.isna(runs[0].events.response_time).sum() == 1
-    glm_runs = load_session(root, prep)
+    glm_runs = load_session(settings)
     pd.testing.assert_frame_equal(glm_runs[0].events, runs[0].events)
 
 
@@ -314,66 +308,8 @@ def test_incompatible_axes_or_missing_sessions_fail_before_fitting(
         )
 
 
-@pytest.mark.notebook
-def test_notebook_fits_three_sessions_exports_comparisons_and_resumes(
-    session_data, tmp_path
-):
-    assert NOTEBOOK.exists(), "The session HRF reliability notebook is missing"
-    root, prep = session_data
-    output = tmp_path / "output"
-    config = dict(
-        bids_root=str(root),
-        fmriprep_root=str(prep),
-        output_root=str(output),
-        sessions=["ses-nsd10", "ses-nsd11", "ses-nsd12"],
-        hrf_n_samples=4,
-        hrf_seed=0,
-        block_size=2,
-        n_jobs=1,
-        reuse_roots=[],
-    )
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    notebook.cells.insert(
-        0, nbformat.v4.new_code_cell(f"HRF_RELIABILITY_CONFIG = {config!r}")
-    )
-    client = NotebookClient(
-        notebook,
-        timeout=180,
-        kernel_name="python3",
-        resources={"metadata": {"path": str(NOTEBOOK.parents[2])}},
-    )
-    executed = client.execute()
-    nbformat.write(executed, tmp_path / "executed.ipynb")
-    files = list(output.rglob("*.dscalar.nii"))
-    pairwise = nib.load(next(p for p in files if "stat-pairwise" in p.name))
-    canonical = nib.load(next(p for p in files if "stat-canonical" in p.name))
-    summary = nib.load(next(p for p in files if "stat-summary" in p.name))
-    assert pairwise.shape == canonical.shape == (3, 4)
-    assert summary.shape == (5, 4)
-    assert np.isnan(pairwise.get_fdata()[:, 3]).all()
-    assert np.isnan(summary.get_fdata()[:3, 3]).all()
-    assert len([p for p in files if "stat-selection" in p.name]) == 3
-    assert len([p for p in files if "stat-hrfparameters" in p.name]) == 3
-    # Identical input copies must select identical HRFs in every session.
-    np.testing.assert_allclose(pairwise.get_fdata()[:, :3], 1, atol=1e-7)
-    np.testing.assert_allclose(
-        summary.get_fdata()[2, :3],
-        1 - canonical.get_fdata()[:, :3].mean(axis=0),
-        atol=1e-7,
-    )
-    assert list(output.rglob("*.png"))
-    assert not any("betas" in p.name for p in files)
-    # Rerunning must use the completed per-session cache and update the report.
-    rerun = client.execute()
-    text = "\n".join(
-        o.get("text", "") for c in rerun.cells for o in c.get("outputs", [])
-    )
-    assert text.count("Reused HRF estimates") == 3
-    assert "Fitting HRFs" not in text
-
-
 def test_rt_switch_changes_request_identity_and_cache_metadata(
-    session_data, library, tmp_path
+    session_data, library, tmp_path, events
 ):
     from boldtailor.workflow.inputs import selection_task_model
 
@@ -383,7 +319,8 @@ def test_rt_switch_changes_request_identity_and_cache_metadata(
     )
     assert with_rt[0].request_id != without[0].request_id
     metadata = json.loads(without[0].cache_path.read_text())
-    assert metadata["request"]["task_model"] == selection_task_model(False).to_dict()
+    without_rt = selection_task_model(detect_task_model([events]), False)
+    assert metadata["request"]["task_model"] == without_rt.to_dict()
     assert metadata["request"]["task_model"]["regressors"] == ["task", "trial_type"]
     assert np.isfinite(without[0].maps[0, :3]).all()
 

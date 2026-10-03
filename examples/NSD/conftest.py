@@ -92,6 +92,33 @@ def cv_library():
     return HrfLibrary.from_parameters([[4, 12, 0.8, 1, 5, 0, 36]])
 
 
+def _copy_session(directories, source, targets):
+    for directory in directories:
+        origin = directory / "sub-07" / source / "func"
+        for session in targets:
+            target = directory / "sub-07" / session / "func"
+            target.mkdir(parents=True)
+            for path in origin.iterdir():
+                if path.is_file():
+                    name = path.name.replace(source, session)
+                    (target / name).write_bytes(path.read_bytes())
+
+
+@pytest.fixture
+def session_data(four_runs):
+    """Three identical four-run sessions, ses-nsd10 to ses-nsd12."""
+    _copy_session(four_runs, "ses-nsd10", ("ses-nsd11", "ses-nsd12"))
+    return four_runs
+
+
+@pytest.fixture
+def two_raw_sessions(six_run_dataset):
+    """Two identical six-run sessions as notebook path settings."""
+    _copy_session(six_run_dataset, "ses-nsd10", ("ses-nsd11",))
+    root, prep = six_run_dataset
+    return dict(bids_root=str(root), fmriprep_root=str(prep))
+
+
 @pytest.fixture
 def saved_sessions(tmp_path):
     brain = nib.cifti2.BrainModelAxis.from_surface([0, 2, 3], 5, "CortexLeft")
@@ -102,14 +129,13 @@ def saved_sessions(tmp_path):
         meta = dict(
             settings=dict(subject="sub-07", session=session, ridge_mode="off"),
             library_fingerprint=library.fingerprint,
+            regressors=["task", "response_time", "trial_type"],
         )
         artifacts = [
-            json_artifact(base + "_desc-notebook_metadata.json", meta),
-            table_artifact(
-                base + "_desc-notebookHRF_library.tsv", library.parameter_table
-            ),
+            json_artifact(base + "_desc-boldtailor_metadata.json", meta),
+            table_artifact(base + "_desc-HRF_library.tsv", library.parameter_table),
             npz_artifact(
-                base + "_desc-notebookHRF_library.npz",
+                base + "_desc-HRF_library.npz",
                 times=library.times,
                 curves=library.curves,
             ),
@@ -119,7 +145,7 @@ def saved_sessions(tmp_path):
             artifacts.append(
                 scalar_artifact(
                     base
-                    + f"_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{stat}.dscalar.nii",
+                    + f"_space-fsLR_den-91k_desc-{descriptor}_stat-{stat}.dscalar.nii",
                     brain,
                     values,
                     labels,

@@ -151,7 +151,7 @@ def test_loader_rejects_wrong_scalar_names(saved_sessions, pattern):
 
 def test_loader_rejects_incompatible_libraries_and_missing_results(saved_sessions):
     root, sessions, _, _ = saved_sessions
-    path = next((root / "sub-07" / sessions[0]).rglob("*_desc-notebook_metadata.json"))
+    path = next((root / "sub-07" / sessions[0]).rglob("*_desc-boldtailor_metadata.json"))
     metadata = json.loads(path.read_text())
     metadata["library_fingerprint"] = "different"
     path.write_text(json.dumps(metadata))
@@ -178,7 +178,7 @@ def test_loader_rejects_different_global_alpha_selection_percentiles(saved_sessi
             source.with_name(
                 source.name.replace("TrialOLS", "TrialRidgeCV")
             ).write_bytes(source.read_bytes())
-        path = next(folder.glob("*_desc-notebook_metadata.json"))
+        path = next(folder.glob("*_desc-boldtailor_metadata.json"))
         meta = json.loads(path.read_text())
         meta["settings"].update(ridge_mode="cv", ridge_percentile=50 if i == 0 else 90)
         path.write_text(json.dumps(meta))
