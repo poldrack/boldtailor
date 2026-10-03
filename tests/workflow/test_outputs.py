@@ -377,6 +377,27 @@ def test_metadata_prose_follows_the_task_model(four_runs, small_library, setting
     assert "trial_type" in published
     assert "response_time" not in published
     assert "response_time" not in published["task_model_description"]
+    assert "missing_response_time" not in published
+    assert "rt_check" not in published
+    assert "RT" not in published["hrf_selection"]
+
+
+def test_metadata_rt_check_follows_the_rt_selection_switch(selected, settings_for):
+    settings, runs, model, _, library, _, selections = selected
+    assert "RT enters HRF selection" in _metadata(selected)["rt_check"]
+    off = settings_for(settings.bids_dir, hrf_selection_rt=False)
+    published = outputs.metadata(
+        runs,
+        library,
+        off,
+        model,
+        beta_models={},
+        activation=None,
+        selections=selections,
+        skipped=(),
+        report=None,
+    )
+    assert "never used to select HRFs" in published["rt_check"]
 
 
 def test_metadata_pools_hrf_bound_flags_over_blocks(selected):
@@ -504,3 +525,73 @@ def test_save_workflow_keeps_another_sessions_dataset_description(
     assert existing not in paths
     assert json.loads(existing.read_text()) == {"Name": "earlier session"}
     assert (settings.output_dir / f"{settings.stem}_desc-boldtailor_runs.tsv") in paths
+
+
+def test_hrf_outputs_accept_all_only_selection_bundles(selected):
+    settings, _, _, brain, library, _, selections = selected
+    all_only = {k: {"all": bundle["all"]} for k, bundle in selections.items()}
+    written = outputs.hrf_artifacts(
+        settings, brain, all_only, library, include_splits=False
+    )
+    names = {a.path for a in written}
+    stem, space = settings.stem, settings.space_entity
+    assert f"{stem}_{space}_desc-HRFAll_stat-selection.dscalar.nii" in names
+    full = outputs.hrf_artifacts(
+        settings, brain, selections, library, include_splits=False
+    )
+    for one, two in zip(
+        sorted(written, key=lambda a: a.path), sorted(full, key=lambda a: a.path)
+    ):
+        assert one.path == two.path
+        if one.path.endswith(".dscalar.nii"):
+            assert one.payload == two.payload
+    rows = pd.DataFrame(outputs.hrf_boundary_summary(all_only))
+    assert set(rows.scope) == {"all"}
+    published = _metadata(selected, selections=all_only)
+    assert {r["scope"] for r in published["hrf_boundary_summary"]} == {"all"}
+
+
+def _save_inputs_only(settings):
+    runs, model, _ = _session(settings)
+    library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
+    return outputs.save_workflow(
+        settings,
+        runs,
+        model,
+        library,
+        None,
+        {},
+        {},
+        figures={},
+        activation=None,
+        skipped=(),
+        report_html=None,
+    )
+
+
+def test_overwrite_replaces_the_session_task_output_set(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    out = tmp_path / "out"
+    first = _save_inputs_only(settings_for(root, output_dir=out))
+    func = out / "sub-07" / "ses-nsd10" / "func"
+    stale = func / "sub-07_ses-nsd10_task-nsdcore_desc-Old_stat-x.dscalar.nii"
+    other_task = func / "sub-07_ses-nsd10_task-other_desc-boldtailor_metadata.json"
+    other_session = out / "sub-07" / "ses-nsd11" / "func"
+    other_session.mkdir(parents=True)
+    kept = [
+        other_task,
+        func / "notes.txt",
+        out / "sub-07_ses-nsd10_task-nsdcore_notes.txt",
+        other_session / "sub-07_ses-nsd11_task-nsdcore_desc-Old_stat-x.dscalar.nii",
+    ]
+    for path in (stale, *kept):
+        path.write_text("x")
+    second = _save_inputs_only(
+        settings_for(root, output_dir=out, existing_results="overwrite")
+    )
+    assert set(first) <= set(second)
+    assert not stale.exists()
+    assert all(path.exists() for path in kept)
+    assert all(path.exists() for path in second)
