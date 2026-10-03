@@ -445,10 +445,12 @@ not picklable. `library_indices`, `finite_mean`, and `validate_n_jobs` are the
 corresponding validation helpers.
 
 Lower-level helpers used by the examples are also importable from public
-modules: `expand_events` and `task_columns` (`boldtailor.design`),
+modules: `expand_events`, `task_columns`, `hrf_model`, and
+`event_response_scales` (`boldtailor.design`),
 `prepare_runs` and `subset_runs` (`boldtailor.hrf_selection`),
 `fraction_grid`, `regularization`, and `NORM_BASIS`
-(`boldtailor.fractional_ridge`), `r_squared` (`boldtailor.single_trial`), and
+(`boldtailor.fractional_ridge`), `r_squared`, `validate_alpha`, and
+`compile_trial_run` (`boldtailor.single_trial`), and
 `HRF_NORMALIZATION` (`boldtailor.model`).
 
 ## Example workflows
@@ -465,7 +467,15 @@ Run them from the repository checkout:
 | `examples.NSD.workflow_outputs.save_workflow` | Publish the notebook's maps, designs, tables, and provenance together |
 | `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
 | `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
+| `examples.NSD.nsd_cifti.run_analysis` | Script: conventional stimulus-plus-RT CIFTI analysis |
+| `examples.NSD.nsd_single_trial.run_single_trial_analysis` | Script: canonical or selected-HRF CIFTI beta series and RT diagnostics |
+| `examples.NSD.rt_diagnostics.select_vertices`, `scatter_artifact` | Script: select cortical vertices by odd-run RT correlation; even-run RT scatterplots |
 | `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
 | `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 
-See [running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks).
+The scripts accept BIDS, fMRIPrep, and output roots (the BIDS root from
+`--bids-root` or `NSD_BIDS_ROOT`) plus `subject`, `session`, and `block_size`;
+the single-trial runner also accepts `ridge_alpha`, `hrf_library`
+(`"canonical"` or `"expanded"`), and `n_jobs`. See
+[running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks) and
+[command-line scripts](../examples/NSD/README.md#command-line-scripts).

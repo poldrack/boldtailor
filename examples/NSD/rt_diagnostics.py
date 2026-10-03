@@ -6,7 +6,7 @@ from numbers import Integral
 from matplotlib.figure import Figure
 import numpy as np
 
-from boldtailor.diagnostics import correlate_rt, even_run_points  # noqa: F401
+from boldtailor.diagnostics import even_run_points
 from boldtailor.publication import Artifact
 
 

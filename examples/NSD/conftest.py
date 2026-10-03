@@ -1,6 +1,7 @@
 """Shared NSD example fixtures: small real CIFTI sessions and saved results."""
 
 import json
+import shutil
 from pathlib import Path
 import sys
 
@@ -324,3 +325,94 @@ def saved_sessions(tmp_path):
             )
         publish_artifact_set(tmp_path, artifacts)
     return tmp_path, sessions, library, brain
+
+
+@pytest.fixture
+def hrf_nsd(dataset, monkeypatch):
+    root, prep, _, _, nuisance, brain = dataset
+    library = HrfLibrary.from_parameters(
+        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+    )
+    # Restrict only the library boundary; exercise the real selection/fitting/I/O.
+    import boldtailor.hrf_library as libraries
+
+    monkeypatch.setattr(libraries, "expanded_hrf_library", lambda: library)
+    raw = root / "sub-07/ses-nsd10/func"
+    prepared = prep / "sub-07/ses-nsd10/func"
+    for folder in (raw, prepared):
+        originals = list(folder.glob("*run-01*"))
+        for number in (3, 4):
+            for path in originals:
+                shutil.copyfile(
+                    path, folder / path.name.replace("run-01", f"run-{number:02d}")
+                )
+    rng = np.random.default_rng(617)
+    signals = []
+    for number in range(1, 5):
+        path = next(raw.glob(f"*run-{number:02d}_events.tsv"))
+        e = pd.read_csv(path, sep="\t")
+        e.onset += number * 0.17
+        e["73k_id"] = np.arange(6) + 10 * number
+        e.loc[1, "response_time"] = np.nan
+        e.to_csv(path, sep="\t", index=False)
+        t = 0.775 + 1.6 * np.arange(96)
+        columns = []
+        for cid in [1, 2, 1]:
+            c = library.candidates[cid]
+            x = np.column_stack(
+                [
+                    compute_regressor(np.array([[o], [d], [1.0]]), c.kernel, t)[0][:, 0]
+                    for o, d in zip(e.onset, e.duration, strict=True)
+                ]
+            )
+            beta = (
+                3 + 0.1 * e.response_time.fillna(1).to_numpy() + rng.normal(0, 0.03, 6)
+            )
+            columns.append(
+                x @ beta + nuisance @ rng.normal(0, 0.05, 33) + 100 + number * 7
+            )
+        y = np.column_stack([*columns, np.zeros(96)])
+        bold = next(prepared.glob(f"*run-{number:02d}*.dtseries.nii"))
+        nib.save(nib.Cifti2Image(y, nib.load(bold).header), bold)
+        signals.append(y)
+    return root, prep, brain, library, signals
+
+
+@pytest.fixture
+def mini_nsd(dataset):
+    root, prep, _, _, nuisance, brain = dataset
+    times = 0.775 + np.arange(96) * 1.6
+    rng = np.random.default_rng(92)
+    signals = []
+    for run in (1, 2):
+        event_path = next((root / "sub-07").rglob(f"*run-{run:02d}_events.tsv"))
+        table = pd.read_csv(event_path, sep="\t")
+        table["73k_id"] = [4, 4, 5, 5, 4, 5]
+        table.loc[1, "response_time"] = np.nan
+        table.loc[5, "response_time"] = -1.0
+        table.to_csv(event_path, sep="\t", index=False)
+        x, simulated = (
+            np.column_stack(
+                [
+                    compute_regressor(
+                        (
+                            np.array([[t], [3.0], [1.0]])
+                            if hrf == "spm"
+                            else scaled_condition([t], [3.0], 1.0, hrf, times)
+                        ),
+                        hrf,
+                        times,
+                    )[0][:, 0]
+                    for t in table.onset
+                ]
+            )
+            for hrf in (peak_kernel("spm"), "spm")
+        )
+        # x is the peak-one oracle; simulated responses keep original amplitudes.
+        y = simulated @ rng.normal(size=(6, 4)) + nuisance @ rng.normal(size=(33, 4))
+        y += rng.normal(scale=0.1 * run, size=y.shape) + 100 * run
+        y[:, -1] = 0
+        path = next(prep.rglob(f"*run-{run:02d}*.dtseries.nii"))
+        nib.save(nib.Cifti2Image(y, nib.load(path).header), path)
+        signals.append(y)
+    return root, prep, brain, signals, x, nuisance

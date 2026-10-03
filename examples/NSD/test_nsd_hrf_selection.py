@@ -1,7 +1,6 @@
 """Real CIFTI acceptance tests for selection, grouped exports and isolation."""
 
 import json
-import shutil
 
 import nibabel as nib
 import numpy as np
@@ -9,61 +8,9 @@ import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 
-from boldtailor.hrf_library import HrfLibrary
 from examples.NSD.nsd_single_trial import run_single_trial_analysis
-from boldtailor._hrf_design import hrf_model
+from boldtailor.design import hrf_model
 from tests.oracles import scaled_condition
-
-
-@pytest.fixture
-def hrf_nsd(dataset, monkeypatch):
-    root, prep, _, _, nuisance, brain = dataset
-    library = HrfLibrary.from_parameters(
-        [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
-    )
-    # Restrict only the library boundary; exercise the real selection/fitting/I/O.
-    import boldtailor.hrf_library as libraries
-
-    monkeypatch.setattr(libraries, "expanded_hrf_library", lambda: library)
-    raw = root / "sub-07/ses-nsd10/func"
-    prepared = prep / "sub-07/ses-nsd10/func"
-    for folder in (raw, prepared):
-        originals = list(folder.glob("*run-01*"))
-        for number in (3, 4):
-            for path in originals:
-                shutil.copyfile(
-                    path, folder / path.name.replace("run-01", f"run-{number:02d}")
-                )
-    rng = np.random.default_rng(617)
-    signals = []
-    for number in range(1, 5):
-        path = next(raw.glob(f"*run-{number:02d}_events.tsv"))
-        e = pd.read_csv(path, sep="\t")
-        e.onset += number * 0.17
-        e["73k_id"] = np.arange(6) + 10 * number
-        e.loc[1, "response_time"] = np.nan
-        e.to_csv(path, sep="\t", index=False)
-        t = 0.775 + 1.6 * np.arange(96)
-        columns = []
-        for cid in [1, 2, 1]:
-            c = library.candidates[cid]
-            x = np.column_stack(
-                [
-                    compute_regressor(np.array([[o], [d], [1.0]]), c.kernel, t)[0][:, 0]
-                    for o, d in zip(e.onset, e.duration, strict=True)
-                ]
-            )
-            beta = (
-                3 + 0.1 * e.response_time.fillna(1).to_numpy() + rng.normal(0, 0.03, 6)
-            )
-            columns.append(
-                x @ beta + nuisance @ rng.normal(0, 0.05, 33) + 100 + number * 7
-            )
-        y = np.column_stack([*columns, np.zeros(96)])
-        bold = next(prepared.glob(f"*run-{number:02d}*.dtseries.nii"))
-        nib.save(nib.Cifti2Image(y, nib.load(bold).header), bold)
-        signals.append(y)
-    return root, prep, brain, library, signals
 
 
 def find(paths, fragment):
@@ -374,7 +321,7 @@ def test_canonical_ineligible_diagnostic_does_not_abort_expanded_outputs(
     hrf_nsd, tmp_path
 ):
     from dataclasses import replace
-    from boldtailor._single_trial_design import compile_trial_run
+    from boldtailor.single_trial import compile_trial_run
     from examples.NSD.nsd_cifti import discover_runs
     from examples.NSD.nsd_single_trial import _load_runs
     from examples.NSD.nsd_hrf import run_expanded_analysis

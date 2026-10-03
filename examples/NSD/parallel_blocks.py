@@ -1,7 +1,5 @@
 """Execution records for the NSD scripts; batching lives in boldtailor.parallel."""
 
-from boldtailor.parallel import map_blocks, validate_n_jobs  # noqa: F401
-
 
 def execution_settings(n_jobs, block_size, n_features):
     workers = min(n_jobs, (n_features + block_size - 1) // block_size)

@@ -9,7 +9,22 @@ import pytest
 from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import PARAMETER_NAMES
-from examples.NSD.test_nsd_hrf_selection import find, hrf_nsd, run  # noqa: F401
+from examples.NSD.nsd_single_trial import run_single_trial_analysis
+
+
+def find(paths, fragment):
+    return next(p for p in paths if fragment in p.name)
+
+
+def run(fixture, output, block=2):
+    return run_single_trial_analysis(
+        fixture[0],
+        fixture[1],
+        output,
+        ridge_alpha=0.1,
+        block_size=block,
+        hrf_library="expanded",
+    )
 
 
 def replace_signals(fixture, numbers, candidate_ids):

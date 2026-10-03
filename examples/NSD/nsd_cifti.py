@@ -17,33 +17,31 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import compute_regressor
 
-from boldtailor._hrf_design import event_response_scales, hrf_model
+from boldtailor.design import event_response_scales, hrf_model
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.publication import Artifact, publish_artifact_set
 
 if __package__:
+    from .notebook_paths import notebook_paths
     from .workflow_files import (
-        MOTION,
         RunInputs,
         discover_runs,
         input_paths as _input_paths,
         load_inputs,
         run_sources as _sources,
-        select_confounds,
     )
 else:
+    from notebook_paths import notebook_paths
     from workflow_files import (
-        MOTION,
         RunInputs,
         discover_runs,
         input_paths as _input_paths,
         load_inputs,
         run_sources as _sources,
-        select_confounds,
     )
 
-BIDS_ROOT = Path("/Volumes/extdata1/NSD/BIDS")
+BIDS_ROOT = None  # Use --bids-root or NSD_BIDS_ROOT; no personal default.
 CONTRASTS = {"stimulus": {"stimulus": 1.0}, "response_time": {"response_time": 1.0}}
 MODEL = {
     "hrf": "spm",
@@ -229,6 +227,21 @@ def _result_artifacts(runs, maps, provenance, root, subject, session):
     return artifacts
 
 
+def script_roots(bids_root=None, fmriprep_root=None, output_root=None):
+    """Resolve roots like the notebooks: arguments, then NSD_* variables, then defaults."""
+    given = dict(
+        bids_root=bids_root, fmriprep_root=fmriprep_root, output_root=output_root
+    )
+    paths = notebook_paths({k: v for k, v in given.items() if v is not None})
+    root = Path(paths["bids_root"]).resolve()
+    prep = Path(paths["fmriprep_root"]).resolve()
+    if not prep.is_relative_to(root):
+        raise ValueError(
+            "fmriprep_root must be inside bids_root for relative provenance"
+        )
+    return root, prep, Path(paths["output_root"])
+
+
 def run_analysis(
     bids_root=BIDS_ROOT,
     fmriprep_root=None,
@@ -239,15 +252,7 @@ def run_analysis(
     block_size=4096,
 ):
     """Fit session runs and publish maps with per-file replacement and rollback."""
-    root = Path(bids_root).resolve()
-    prep = (
-        Path(fmriprep_root) if fmriprep_root else root / "derivatives/fmriprep-25.2.5"
-    ).resolve()
-    if not prep.is_relative_to(root):
-        raise ValueError(
-            "fmriprep_root must be inside bids_root for relative provenance"
-        )
-    output = Path(output_root) if output_root else root / "derivatives/boldtailor"
+    root, prep, output = script_roots(bids_root, fmriprep_root, output_root)
     inputs = discover_runs(root, prep, subject=subject, session=session)
     runs = tuple(_load_run(item) for item in inputs)
     print(

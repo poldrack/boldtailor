@@ -76,7 +76,9 @@ from fitted results. `notebook_paths.py` resolves explicit configuration and
 environment paths without file writes. See the [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
 Plotting helpers use development dependencies. Shared NSD test fixtures live in
 `examples/NSD/conftest.py`; each notebook has one `@pytest.mark.notebook`
-kernel smoke test.
+kernel smoke test. The older command-line scripts (`nsd_cifti.py`,
+`nsd_single_trial.py`, `nsd_hrf.py`) are retained pending a decision to retire
+them; they share `workflow_files.py` and the package helpers.
 
 Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
 `_arrays.readonly_array`. Float values use float64, indices use int64, and masks

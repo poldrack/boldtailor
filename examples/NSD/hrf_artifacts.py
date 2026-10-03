@@ -1,23 +1,33 @@
 """CIFTI maps, exact grouped designs, and labeled HRF/RT diagnostics."""
 
-from io import BytesIO
-
 from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 
 from boldtailor.hrf_selection import prepare_runs
 from boldtailor.data import from_arrays
+from boldtailor.cifti import scalar_artifact
+from boldtailor.diagnostics import correlate_rt
 from boldtailor.hrf_library import PARAMETER_NAMES
 
 if __package__:
-    from .workflow_artifacts import figure_artifact, npz_artifact, parameter_artifact
-    from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
-    from .rt_diagnostics import correlate_rt, scatter_artifact
+    from .workflow_artifacts import (
+        figure_artifact,
+        json_artifact,
+        npz_artifact,
+        parameter_artifact,
+        table_artifact,
+    )
+    from .rt_diagnostics import scatter_artifact
 else:
-    from workflow_artifacts import figure_artifact, npz_artifact, parameter_artifact
-    from single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
-    from rt_diagnostics import correlate_rt, scatter_artifact
+    from workflow_artifacts import (
+        figure_artifact,
+        json_artifact,
+        npz_artifact,
+        parameter_artifact,
+        table_artifact,
+    )
+    from rt_diagnostics import scatter_artifact
 
 
 def selection_paths(runs, subject, session):

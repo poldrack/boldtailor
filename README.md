@@ -96,7 +96,8 @@ which predicts beta series from trial variables such as trial type and RT.
 The [NSD guide](examples/NSD/README.md) covers the NSD notebooks: conventional
 and single-trial CIFTI models, optimized HRFs, odd/even HRF parameter maps, and
 their outputs. It explains the notebook settings (`examples/NSD/settings.py`),
-your own data paths, and running several workers.
+your own data paths, running several workers, and the command-line scripts
+retained for a few script-only exports.
 
 The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical

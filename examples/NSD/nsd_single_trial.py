@@ -10,27 +10,27 @@ from numbers import Integral
 from pathlib import Path
 import re
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.single_trial import fit_single_trials
-from boldtailor._single_trial_fit import validate_alpha
+from boldtailor.single_trial import validate_alpha
+from boldtailor.diagnostics import correlate_rt
+from boldtailor.parallel import map_blocks, validate_n_jobs
 from boldtailor.publication import publish_artifact_set
 
 if __package__:
-    from .parallel_blocks import map_blocks, validate_n_jobs, execution_settings
+    from .parallel_blocks import execution_settings
     from .nsd_cifti import (
         BIDS_ROOT,
         MODEL,
-        RunInputs,
         _input_paths,
         _sources,
         discover_runs,
-        load_inputs,
+        script_roots,
     )
-    from .rt_diagnostics import correlate_rt, scatter_artifact, select_vertices
+    from .rt_diagnostics import scatter_artifact, select_vertices
     from .workflow_files import load_runs as _load_runs
     from .single_trial_artifacts import (
         all_model_paths,
@@ -42,17 +42,16 @@ if __package__:
         table_artifact,
     )
 else:
-    from parallel_blocks import map_blocks, validate_n_jobs, execution_settings
+    from parallel_blocks import execution_settings
     from nsd_cifti import (
         BIDS_ROOT,
         MODEL,
-        RunInputs,
         _input_paths,
         _sources,
         discover_runs,
-        load_inputs,
+        script_roots,
     )
-    from rt_diagnostics import correlate_rt, scatter_artifact, select_vertices
+    from rt_diagnostics import scatter_artifact, select_vertices
     from workflow_files import load_runs as _load_runs
     from single_trial_artifacts import (
         all_model_paths,
@@ -249,17 +248,8 @@ def run_single_trial_analysis(
                 "optional ridge_alpha must be positive; OLS is always fitted"
             )
         models["Ridge"] = alpha
-    root = Path(bids_root).resolve()
-    prep = (
-        Path(fmriprep_root) if fmriprep_root else root / "derivatives/fmriprep-25.2.5"
-    ).resolve()
-    if not prep.is_relative_to(root):
-        raise ValueError(
-            "fmriprep_root must be inside bids_root for relative provenance"
-        )
-    output = (
-        Path(output_root) if output_root else root / "derivatives/boldtailor"
-    ).absolute()
+    root, prep, output = script_roots(bids_root, fmriprep_root, output_root)
+    output = output.absolute()
     inputs = discover_runs(root, prep, subject=subject, session=session)
     runs, brain = _load_runs(inputs)
     if hrf_library == "expanded":

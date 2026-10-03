@@ -1,12 +1,9 @@
 """In-memory CIFTI and metadata artifacts for the NSD single-trial example."""
 
-import json
-
-import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from boldtailor.cifti import scalar_artifact  # noqa: F401
+from boldtailor.cifti import scalar_artifact
 
 if __package__:
     from .workflow_artifacts import json_artifact, table_artifact

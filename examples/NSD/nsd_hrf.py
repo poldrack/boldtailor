@@ -2,7 +2,6 @@
 
 from importlib.metadata import version
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 
@@ -11,6 +10,8 @@ from boldtailor import hrf_library, hrf_selection
 from boldtailor.cifti import spatial_signature
 from boldtailor.hrf_selection import prepare_runs
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
+from boldtailor.diagnostics import correlate_rt
+from boldtailor.parallel import map_blocks, validate_n_jobs
 from boldtailor.publication import publish_artifact_set
 
 if __package__:
@@ -20,9 +21,9 @@ if __package__:
         _preflight,
         _merge_block_arrays,
     )
-    from .parallel_blocks import map_blocks, validate_n_jobs, execution_settings
+    from .parallel_blocks import execution_settings
     from .nsd_cifti import _sources, _input_paths
-    from .rt_diagnostics import correlate_rt, select_vertices
+    from .rt_diagnostics import select_vertices
     from .single_trial_artifacts import (
         all_model_paths,
         model_paths,
@@ -43,9 +44,9 @@ else:
         _preflight,
         _merge_block_arrays,
     )
-    from parallel_blocks import map_blocks, validate_n_jobs, execution_settings
+    from parallel_blocks import execution_settings
     from nsd_cifti import _sources, _input_paths
-    from rt_diagnostics import correlate_rt, select_vertices
+    from rt_diagnostics import select_vertices
     from single_trial_artifacts import (
         all_model_paths,
         model_paths,

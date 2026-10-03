@@ -3,6 +3,8 @@ import importlib
 import numpy as np
 import pytest
 
+from boldtailor.diagnostics import correlate_rt
+
 
 def diagnostics():
     try:
@@ -15,13 +17,13 @@ def test_select_cortex_stable_ties_and_no_even_run_leakage():
     rt = [np.arange(1, 5.0), np.arange(1, 5.0)]
     beta = [np.column_stack([rt[0], -rt[0], rt[0], np.ones(4)]), np.zeros((4, 4))]
     api = diagnostics()
-    first = api.correlate_rt(beta, rt, run_numbers=[1, 2])
+    first = correlate_rt(beta, rt, run_numbers=[1, 2])
     mask = np.array([True, True, False, True])
     chosen = api.select_vertices(first["odd"], mask)
     np.testing.assert_array_equal(chosen, [0, 1])
     beta[1] = np.arange(16).reshape(4, 4)
     rt[1] = rt[1][::-1]
-    changed = api.correlate_rt(beta, rt, run_numbers=[1, 2])
+    changed = correlate_rt(beta, rt, run_numbers=[1, 2])
     np.testing.assert_array_equal(api.select_vertices(changed["odd"], mask), chosen)
     assert len(api.select_vertices(np.full(4, np.nan), mask)) == 0
 

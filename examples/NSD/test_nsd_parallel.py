@@ -1,11 +1,9 @@
 """Real process execution must preserve scientific results and bounded work."""
 
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 
 import nibabel as nib
 import numpy as np
@@ -13,8 +11,6 @@ import pandas as pd
 import pytest
 
 from examples.NSD.nsd_single_trial import run_single_trial_analysis
-from examples.NSD.test_nsd_hrf_selection import hrf_nsd  # noqa: F401
-from examples.NSD.test_nsd_single_trial import mini_nsd  # noqa: F401
 
 
 def _assert_same_artifacts(serial, parallel):

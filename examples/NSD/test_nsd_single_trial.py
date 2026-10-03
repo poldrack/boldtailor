@@ -7,10 +7,6 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
-from nilearn.glm.first_level import compute_regressor
-
-from boldtailor._hrf_design import hrf_model
-from tests.oracles import scaled_condition
 
 
 def example():
@@ -18,46 +14,6 @@ def example():
         return importlib.import_module("examples.NSD.nsd_single_trial")
     except ModuleNotFoundError:
         pytest.fail("Single-trial CIFTI runner is not implemented")
-
-
-@pytest.fixture
-def mini_nsd(dataset):
-    root, prep, _, _, nuisance, brain = dataset
-    times = 0.775 + np.arange(96) * 1.6
-    rng = np.random.default_rng(92)
-    signals = []
-    for run in (1, 2):
-        event_path = next((root / "sub-07").rglob(f"*run-{run:02d}_events.tsv"))
-        table = pd.read_csv(event_path, sep="\t")
-        table["73k_id"] = [4, 4, 5, 5, 4, 5]
-        table.loc[1, "response_time"] = np.nan
-        table.loc[5, "response_time"] = -1.0
-        table.to_csv(event_path, sep="\t", index=False)
-        x, simulated = (
-            np.column_stack(
-                [
-                    compute_regressor(
-                        (
-                            np.array([[t], [3.0], [1.0]])
-                            if hrf == "spm"
-                            else scaled_condition([t], [3.0], 1.0, hrf, times)
-                        ),
-                        hrf,
-                        times,
-                    )[0][:, 0]
-                    for t in table.onset
-                ]
-            )
-            for hrf in (hrf_model("spm"), "spm")
-        )
-        # x is the peak-one oracle; simulated responses keep original amplitudes.
-        y = simulated @ rng.normal(size=(6, 4)) + nuisance @ rng.normal(size=(33, 4))
-        y += rng.normal(scale=0.1 * run, size=y.shape) + 100 * run
-        y[:, -1] = 0
-        path = next(prep.rglob(f"*run-{run:02d}*.dtseries.nii"))
-        nib.save(nib.Cifti2Image(y, nib.load(path).header), path)
-        signals.append(y)
-    return root, prep, brain, signals, x, nuisance
 
 
 def test_cifti_betas_and_pooled_maps_match_independent_fits(mini_nsd, tmp_path):
