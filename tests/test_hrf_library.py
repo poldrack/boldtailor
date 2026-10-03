@@ -177,3 +177,17 @@ def test_parameter_bounds_cover_custom_candidates(two_candidate_library):
     assert list(bounds.columns) == ["low", "high"]
     assert bounds.loc["response_delay", "low"] == 3
     assert bounds.loc["response_delay", "high"] == 6
+
+
+def test_informative_parameters_need_three_levels_and_nonzero_width():
+    from boldtailor.hrf_library import PARAMETER_NAMES, expanded_hrf_library
+
+    informative = expanded_hrf_library().informative_parameters
+    assert informative == tuple(
+        name for name in PARAMETER_NAMES[:6] if name != "undershoot_delay"
+    )
+    assert "duration" not in informative
+
+
+def test_two_level_library_has_no_informative_parameters(two_candidate_library):
+    assert two_candidate_library.informative_parameters == ()

@@ -1,5 +1,7 @@
 """Independent stacked-OLS oracles and strict train/test isolation."""
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -9,6 +11,7 @@ from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from tests.oracles import (
+    replace_indices,
     loro_oracle,
     oracle_cv,
     stacked_training_ols_oracle,
@@ -425,28 +428,98 @@ def test_selection_provenance_records_library_origin(cv_fixture):
     assert activity["library_fingerprint"] == library.fingerprint
 
 
-def _near_edge(library, cid):
+def _edge_oracle(library, cid):
     bounds = library.parameter_bounds
     values = np.asarray(library.candidates[cid].parameters[:6])
     width = (bounds["high"] - bounds["low"]).to_numpy()
     low = values - bounds["low"].to_numpy() <= 0.02 * width
     high = bounds["high"].to_numpy() - values <= 0.02 * width
-    return bool(np.any(low | high))
+    return np.column_stack([low, high])
 
 
-def test_selection_flags_features_at_the_parameter_box_edge(cv_fixture):
+def _flag_oracle(library, indices):
+    flags = np.zeros((len(indices), 6, 2), bool)
+    for feature, cid in enumerate(indices):
+        if cid > 0:
+            flags[feature] = _edge_oracle(library, cid)
+    return flags
+
+
+def test_selection_flags_each_parameter_edge_of_the_selected_kernel(cv_fixture):
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
     selection = select_hrfs(data, library=library)
-    expected = np.array(
-        [cid > 0 and _near_edge(library, cid) for cid in selection.hrf_indices]
-    )
+    flags = selection.parameter_bound_flags
+    expected = _flag_oracle(library, selection.hrf_indices)
     assert expected.any()
-    np.testing.assert_array_equal(selection.at_parameter_bound, expected)
+    np.testing.assert_array_equal(flags, expected)
+    assert flags.dtype == bool and not flags.flags.writeable
+    assert not flags[selection.hrf_indices <= 0].any()
+    # two-level parameters are uninformative, so no pick is flagged overall
+    assert not selection.at_parameter_bound.any()
     assert selection.at_parameter_bound.dtype == bool
     assert not selection.at_parameter_bound.flags.writeable
-    assert not selection.at_parameter_bound[selection.hrf_indices <= 0].any()
+
+
+def _grid_id(library, parameters):
+    return next(c.id for c in library.candidates if c.parameters == parameters)
+
+
+def test_expanded_grid_does_not_flag_every_custom_pick(selected_fixture):
+    from boldtailor.hrf_library import expanded_hrf_library
+
+    _, selection = selected_fixture
+    library = expanded_hrf_library()
+    interior = _grid_id(library, (4.5, 16.0, 1.0, 1.5, 4.0, 1.0, 36.0))
+    edge = _grid_id(library, (3.0, 10.0, 1.0, 1.5, 4.0, 1.0, 36.0))
+    picked = replace_indices(
+        replace(selection, library=library), [interior, edge, interior, 0, -1]
+    )
+    custom = picked.hrf_indices > 0
+    assert picked.parameter_bound_flags[custom][:, 1].all()  # two-level delay
+    np.testing.assert_array_equal(
+        picked.at_parameter_bound, [False, True, False, False, False]
+    )
+    assert picked.at_parameter_bound[custom].mean() < 1.0
+
+
+def test_sobol_pick_near_response_delay_low_edge_flags_only_that_edge(
+    selected_fixture,
+):
+    from boldtailor.hrf_library import sobol_hrf_library
+
+    _, selection = selected_fixture
+    library = sobol_hrf_library(64)
+    cid = 2  # response_delay 3.055 against a sampled low edge of 3.036
+    picked = replace_indices(replace(selection, library=library), [cid, 0, 0, 0, -1])
+    expected = np.zeros((6, 2), bool)
+    expected[0, 0] = True
+    np.testing.assert_array_equal(_edge_oracle(library, cid), expected)
+    np.testing.assert_array_equal(picked.parameter_bound_flags[0], expected)
+    np.testing.assert_array_equal(
+        picked.at_parameter_bound, [True, False, False, False, False]
+    )
+
+
+def test_parameter_bound_table_summarizes_the_flags(cv_fixture):
+    from boldtailor.hrf_library import PARAMETER_NAMES
+    from boldtailor.hrf_selection import select_hrfs
+
+    data, library = cv_fixture
+    selection = select_hrfs(data, library=library)
+    table = selection.parameter_bound_table()
+    assert list(table.columns) == ["parameter", "edge", "fraction_flagged"]
+    assert len(table) == 12
+    custom = selection.hrf_indices > 0
+    flags = selection.parameter_bound_flags[custom]
+    for row in table.itertuples():
+        p = PARAMETER_NAMES.index(row.parameter)
+        e = ("low", "high").index(row.edge)
+        assert row.fraction_flagged * custom.sum() == pytest.approx(
+            flags[:, p, e].sum()
+        )
+    assert list(table.parameter.unique()) == list(PARAMETER_NAMES[:6])
 
 
 def test_select_hrfs_is_the_name_and_select_hrf_a_deprecated_alias(selected_fixture):

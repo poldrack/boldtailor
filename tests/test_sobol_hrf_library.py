@@ -96,3 +96,9 @@ def test_origin_is_frozen_and_excluded_from_identity():
 
 def test_expanded_library_records_its_grid():
     assert dict(hrf_library.expanded_hrf_library().origin) == {"kind": "expanded_grid"}
+
+
+def test_every_sampled_sobol_parameter_is_informative():
+    assert hrf_library.sobol_hrf_library(64).informative_parameters == tuple(
+        hrf_library.PARAMETER_NAMES[:6]
+    )
