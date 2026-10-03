@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
-import sys
+from dataclasses import replace
 
 import numpy as np
 
 from boldtailor._conventional import ConventionalFit, fit_designs
 from boldtailor._fit_diagnostics import (
-    DIAGNOSTIC_NOISE_MODEL,
     rank_warnings,
     delta_r2_activity,
     delta_r2_identity,
@@ -16,10 +14,10 @@ from boldtailor._fit_diagnostics import (
     validate_result_dimensions,
 )
 from boldtailor.data import AnalysisData
-from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor._fit_lifecycle import fit_operation
-from boldtailor.model import ModelSpec, contrast_metadata
+from boldtailor._hrf_glm import fit_selected_glm, selected_task_delta_r2
+from boldtailor.model import ModelSpec, model_identity, nuisance_model_settings
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.hrf_glm_results import HrfAnalysisResult
 from boldtailor.provenance import analysis_fingerprint
@@ -29,13 +27,6 @@ from boldtailor.results import (
     make_result,
     make_task_delta_r2_result,
 )
-
-
-@dataclass(frozen=True)
-class _ModelProvenance:
-    activity: dict[str, object]
-    fingerprint: dict[str, object] | None
-    warnings: tuple[Mapping[str, object], ...]
 
 
 def fit(
@@ -52,13 +43,11 @@ def fit(
     Selected-HRF results expose group_designs instead of design_matrices.
     """
     if hrf_selection is not None:
-        from boldtailor._hrf_glm import fit_selected_glm
-
         return fit_selected_glm(data, model, hrf_selection, feature_signature)
     with fit_operation("fit", data.provenance) as operation:
         if feature_signature is not None:
             raise ValueError("feature_signature requires hrf_selection")
-        model_provenance = _model_provenance(model)
+        model_provenance = model_identity(model)
         operation.analysis_id = _analysis_id(
             data.provenance.metadata_fingerprint, model_provenance.fingerprint
         )
@@ -84,11 +73,9 @@ def task_delta_r2(
     full_result: AnalysisResult | HrfAnalysisResult,
 ) -> TaskDeltaR2Result:
     if isinstance(full_result, HrfAnalysisResult):
-        from boldtailor._hrf_glm import selected_task_delta_r2
-
         return selected_task_delta_r2(data, model, full_result)
     with fit_operation("task_delta_r2", full_result.provenance) as operation:
-        model_provenance = _model_provenance(model)
+        model_provenance = model_identity(model)
         data_id = data.provenance.metadata_fingerprint
         expected_parent_id = _analysis_id(data_id, model_provenance.fingerprint)
         operation.analysis_id = _comparison_id(expected_parent_id, model)
@@ -151,46 +138,9 @@ def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
     identity = delta_r2_identity(
         name="task_delta_r2",
         inferential_noise_model=model.noise_model,
-        nuisance_model=_nuisance_model_settings(model),
+        nuisance_model=nuisance_model_settings(model),
     )
     return _analysis_id(parent_id, identity)
-
-
-def _nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
-    return {
-        "events": False,
-        "confounds": list(model.confounds),
-        "drift_model": model.drift_model,
-        "high_pass": model.high_pass,
-        "drift_order": model.drift_order,
-        "noise_model": DIAGNOSTIC_NOISE_MODEL,
-    }
-
-
-def _model_provenance(model: ModelSpec) -> _ModelProvenance:
-    hrf_model, callable_warnings = _serialize_hrf(model.hrf_model)
-    activity = {
-        "contrasts": contrast_metadata(model.contrasts),
-        "confounds": list(model.confounds),
-        "hrf_model": hrf_model,
-        "drift_model": model.drift_model,
-        "high_pass": model.high_pass,
-        "drift_order": model.drift_order,
-        "oversampling": model.oversampling,
-        "min_onset": model.min_onset,
-        "noise_model": model.noise_model,
-    }
-    if model.hrf_model in ("spm", "glover"):
-        activity["hrf_normalization"] = HRF_NORMALIZATION
-    elif isinstance(model.hrf_model, str):
-        activity["hrf_normalization"] = "nilearn_sum_one"
-    if model.task_model is not None:
-        activity["task_model"] = model.task_model.to_dict()
-        activity["task_model_fingerprint"] = model.task_model.fingerprint
-    fingerprint = None
-    if not callable_warnings:
-        fingerprint = activity.copy()
-    return _ModelProvenance(activity, fingerprint, callable_warnings)
 
 
 def _analysis_id(
@@ -200,39 +150,6 @@ def _analysis_id(
     if model is None:
         return None
     return analysis_fingerprint(data_id, model)
-
-
-def _serialize_hrf(
-    value: object,
-) -> tuple[object, tuple[Mapping[str, object], ...]]:
-    if not callable(value):
-        return value, ()
-    identity = _callable_identity(value)
-    if identity is not None:
-        return {"kind": "callable", **identity}, ()
-    warning = {
-        "code": "reproducibility",
-        "message": "HRF callable is not importable; reproducibility is partial",
-    }
-    return {"kind": "callable", "reproducibility": "partial"}, (warning,)
-
-
-def _callable_identity(value: object) -> dict[str, str] | None:
-    module_name = getattr(value, "__module__", None)
-    qualname = getattr(value, "__qualname__", None)
-    if not isinstance(module_name, str) or not isinstance(qualname, str):
-        return None
-    if "<" in qualname or module_name not in sys.modules:
-        return None
-    resolved = sys.modules[module_name]
-    try:
-        for part in qualname.split("."):
-            resolved = getattr(resolved, part)
-    except AttributeError:
-        return None
-    if resolved is not value:
-        return None
-    return {"module": module_name, "qualname": qualname}
 
 
 def _fit_activity(
@@ -261,7 +178,7 @@ def _task_delta_r2_activity(
             name="task_delta_r2",
             parent_id=parent_id,
             inferential_noise_model=model.noise_model,
-            nuisance_model=_nuisance_model_settings(model),
+            nuisance_model=nuisance_model_settings(model),
             undefined_features=0,
         ),
         "runs": runs,

@@ -17,6 +17,7 @@ from boldtailor.data import (
     _prepare_signal,
     _prepare_sources,
     _prepare_timing,
+    _validate_run_count,
     _validate_feature_counts,
 )
 from boldtailor._software import software_environment
@@ -423,10 +424,3 @@ def _prepare_provenance_metadata(
     if values is None:
         return None
     return _freeze_mapping(values, path_safe=True)
-
-
-def _validate_run_count(
-    signals: Sequence[object], values: Sequence[object], name: str
-) -> None:
-    if len(signals) != len(values):
-        raise ValueError(f"{name} must contain one value per signal run")

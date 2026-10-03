@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
@@ -8,6 +9,9 @@ from numbers import Real
 from types import MappingProxyType
 
 import numpy as np
+
+from boldtailor._fit_diagnostics import DIAGNOSTIC_NOISE_MODEL
+from boldtailor._hrf_design import HRF_NORMALIZATION
 
 ContrastWeights = Mapping[str, float]
 ContrastValue = str | ContrastWeights
@@ -230,3 +234,99 @@ def _is_real_number(value: object) -> bool:
 
 def _is_integer(value: object) -> bool:
     return isinstance(value, int) and not _is_boolean(value)
+
+
+@dataclass(frozen=True)
+class ModelIdentity:
+    activity: dict[str, object]
+    fingerprint: dict[str, object] | None
+    warnings: tuple[Mapping[str, object], ...]
+
+
+def nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
+    return {
+        "events": False,
+        "confounds": list(model.confounds),
+        "drift_model": model.drift_model,
+        "high_pass": model.high_pass,
+        "drift_order": model.drift_order,
+        "noise_model": DIAGNOSTIC_NOISE_MODEL,
+    }
+
+
+def model_identity(model: ModelSpec, *, hrf_model: object = "keep") -> ModelIdentity:
+    """Return the activity and fingerprint settings that identify a model.
+
+    ``hrf_model`` overrides how the HRF is recorded, for example
+    ``{"kind": "selected"}`` when per-feature HRFs replace ``model.hrf_model``.
+    """
+    value = (
+        model.hrf_model
+        if isinstance(hrf_model, str) and hrf_model == "keep"
+        else hrf_model
+    )
+    serialized, callable_warnings = _serialize_hrf(value)
+    activity = _identity_activity(model, serialized, _hrf_normalization(value))
+    fingerprint = None if callable_warnings else activity.copy()
+    return ModelIdentity(activity, fingerprint, callable_warnings)
+
+
+def _identity_activity(
+    model: ModelSpec, hrf_model: object, normalization: str | None
+) -> dict[str, object]:
+    activity = {
+        "contrasts": contrast_metadata(model.contrasts),
+        "confounds": list(model.confounds),
+        "hrf_model": hrf_model,
+        "drift_model": model.drift_model,
+        "high_pass": model.high_pass,
+        "drift_order": model.drift_order,
+        "oversampling": model.oversampling,
+        "min_onset": model.min_onset,
+        "noise_model": model.noise_model,
+    }
+    if normalization is not None:
+        activity["hrf_normalization"] = normalization
+    if model.task_model is not None:
+        activity["task_model"] = model.task_model.to_dict()
+        activity["task_model_fingerprint"] = model.task_model.fingerprint
+    return activity
+
+
+def _hrf_normalization(value: object) -> str | None:
+    if value in ("spm", "glover"):
+        return HRF_NORMALIZATION
+    return "nilearn_sum_one" if isinstance(value, str) else None
+
+
+def _serialize_hrf(
+    value: object,
+) -> tuple[object, tuple[Mapping[str, object], ...]]:
+    if not callable(value):
+        return value, ()
+    identity = _callable_identity(value)
+    if identity is not None:
+        return {"kind": "callable", **identity}, ()
+    warning = {
+        "code": "reproducibility",
+        "message": "HRF callable is not importable; reproducibility is partial",
+    }
+    return {"kind": "callable", "reproducibility": "partial"}, (warning,)
+
+
+def _callable_identity(value: object) -> dict[str, str] | None:
+    module_name = getattr(value, "__module__", None)
+    qualname = getattr(value, "__qualname__", None)
+    if not isinstance(module_name, str) or not isinstance(qualname, str):
+        return None
+    if "<" in qualname or module_name not in sys.modules:
+        return None
+    resolved = sys.modules[module_name]
+    try:
+        for part in qualname.split("."):
+            resolved = getattr(resolved, part)
+    except AttributeError:
+        return None
+    if resolved is not value:
+        return None
+    return {"module": module_name, "qualname": qualname}
