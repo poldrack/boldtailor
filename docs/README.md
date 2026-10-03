@@ -6,7 +6,7 @@ from their named modules; package initializers are empty.
 | Document | Purpose |
 | --- | --- |
 | [Project README](../README.md) | Installation and a runnable first model |
-| [User guide](user-guide.md) | Scientific methods, examples, and interpretation |
+| [User guide](user-guide.md) | Scientific methods, examples, interpretation, and [`boldtailor run`](user-guide.md#running-the-full-workflow) |
 | [API reference](api.md) | Signatures, defaults, result fields, and source records |
 | [Developer guide](development.md) | Implementation, testing, ownership, logging, and publication |
 | [Publication migration](publication-migration.md) | Local writer guarantees and retained rollback backups |

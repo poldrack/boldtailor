@@ -24,6 +24,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
 | Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |
 | Fit and view whole-brain NIfTI contrast and R² maps | [Whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) |
+| Run the whole NSD-style CIFTI analysis from the shell | [Command line](#command-line) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
 ## Install
@@ -91,13 +92,29 @@ remain separate trials. To choose the penalty from data, use
 [encoding-guided fractional ridge CV](docs/user-guide.md#fractional-ridge-at-each-grayordinate),
 which predicts beta series from trial variables such as trial type and RT.
 
+## Command line
+
+`boldtailor run` fits the full workflow (canonical and optimized-HRF GLMs, HRF
+reliability, trial-wise beta series, and summaries) for one subject and session
+of a BIDS dataset with fMRIPrep CIFTI outputs, and writes a BIDS derivative
+plus an HTML report:
+
+```bash
+uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
+```
+
+Results go to `<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`
+unless `--output-dir` is given. Add `--dry-run` to see the resolved plan first.
+The [user guide](docs/user-guide.md#running-the-full-workflow) lists every flag,
+the output files, and the exit codes.
+
 ## Working with images
 
 The [NSD guide](examples/NSD/README.md) covers the NSD notebooks: conventional
 and single-trial CIFTI models, optimized HRFs, odd/even HRF parameter maps, and
-their outputs. It explains the notebook settings (`examples/NSD/settings.py`),
-your own data paths, running several workers, and the command-line scripts
-retained for a few script-only exports.
+their outputs. It explains the notebook settings (`examples/NSD/nsd_settings.py`),
+your own data paths, and running several workers. The single-session analysis
+is also available as the [`boldtailor run`](#command-line) command.
 
 The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical

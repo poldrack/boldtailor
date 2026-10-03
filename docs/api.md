@@ -492,6 +492,29 @@ modules: `expand_events`, `task_columns`, `hrf_model`, and
 `compile_trial_run` (`boldtailor.single_trial`), and
 `HRF_NORMALIZATION` (`boldtailor.model`).
 
+## Session workflow and command line
+
+`boldtailor.workflow` is the installed implementation behind `boldtailor run`:
+it discovers one subject/session/task, runs the enabled stages, and publishes a
+BIDS derivative with an HTML report. `boldtailor.cli` is the command-line
+front end.
+
+| Name | Module | Use |
+| --- | --- | --- |
+| `WorkflowSettings` | `boldtailor.workflow.settings` | Frozen, validated settings (paths, HRF library, ridge mode, stages, `existing_results`); `to_dict()` is the JSON form |
+| `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`paths`, `report_path`, `skipped`, `task_model`) |
+| `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model) without fitting; backs `--dry-run` |
+| `load_session(settings)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events |
+| `detect_task_model(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | `response_time`, `trial_type`, or explicit modulators to a `TaskModel` |
+| `fit_beta_models(runs, root, blocks, settings, library, selections, task_model)` | `boldtailor.workflow.beta_series` | Canonical and selected-HRF trial models (OLS plus the configured ridge mode) over feature blocks |
+| `BetaModel` | `boldtailor.workflow.beta_series` | One beta model: name, HRF, estimator, fit, and (tuned ridge) tuning and outer-split evaluation |
+| `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |
+| `render_report(settings, **sections)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded figures and the equivalent command line |
+| `build_parser`, `settings_from_args`, `main` | `boldtailor.cli` | Argument parser, args to `WorkflowSettings`, and the `boldtailor` entry point (returns the exit code) |
+
+See the [user guide](user-guide.md#running-the-full-workflow) for flags, outputs,
+and exit codes.
+
 ## Example workflows
 
 These functions live under `examples/`, rather than the installed core package.
@@ -499,22 +522,11 @@ Run them from the repository checkout:
 
 | Module / function | Use |
 | --- | --- |
-| `examples.NSD.settings.resolve_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
-| `examples.NSD.workflow_inputs.load_session`, `make_blocks`, `load_block` | Load, trim, and block an NSD session's CIFTI runs |
-| `examples.NSD.workflow_analysis.select_hrfs`, `fit_glms`, `fit_beta_series` | All/odd/even HRF selection, matched GLMs, and beta series over feature blocks |
-| `boldtailor.workflow.beta_series.fit_cv_beta_series` | Tune per-grayordinate fractions (`fractions=...`) or one global alpha (`alphas=...`), evaluate both odd/even outer splits, and fit final all-run betas |
-| `examples.NSD.workflow_outputs.save_workflow` | Publish the notebook's maps, designs, tables, and provenance together |
+| `examples.NSD.nsd_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
 | `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
 | `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
-| `examples.NSD.nsd_cifti.run_analysis` | Script: conventional stimulus-plus-RT CIFTI analysis |
-| `examples.NSD.nsd_single_trial.run_single_trial_analysis` | Script: canonical or selected-HRF CIFTI beta series and RT diagnostics |
-| `examples.NSD.rt_diagnostics.select_vertices`, `scatter_artifact` | Script: select cortical vertices by odd-run RT correlation; even-run RT scatterplots |
 | `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
 | `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 
-The scripts accept BIDS, fMRIPrep, and output roots (the BIDS root from
-`--bids-root` or `NSD_BIDS_ROOT`) plus `subject`, `session`, and `block_size`;
-the single-trial runner also accepts `ridge_alpha`, `hrf_library`
-(`"canonical"` or `"expanded"`), and `n_jobs`. See
-[running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks) and
-[command-line scripts](../examples/NSD/README.md#command-line-scripts).
+See [running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks).
+The retired NSD scripts are replaced by [`boldtailor run`](#session-workflow-and-command-line).

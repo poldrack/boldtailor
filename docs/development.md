@@ -62,26 +62,29 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
-| Dataset discovery and image reconstruction | `examples/NSD`, `examples/stop_signal_demo.py` |
+| Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `run`, `outputs`, `report`), `cli` |
+| Notebook-only dataset helpers and image reconstruction | `examples/NSD`, `examples/stop_signal_demo.py` |
 
 The core numerical functions accept arrays and tables and return results in
 memory. Example workflows own dataset discovery, image loading, spatial axes,
 and image reconstruction. The prepared-design API is the entry point for
 externally compiled designs; it does not perform BIDS parsing or transformations.
 
-Keep NSD-specific discovery and plotting in the examples, outside the
-installed package. Generic CIFTI dense-scalar I/O lives in `boldtailor.cifti`
-(nibabel is a runtime dependency). Examples import only public modules. The NSD
-notebooks retain scientific settings and fitting calls; `settings.py` resolves
-the workflow notebook's settings, `workflow_files.py` discovers and loads runs,
-and `workflow_plots.py` and `session_hrf_plots.py` return presentation figures
-from fitted results. `notebook_paths.py` resolves explicit configuration and
-environment paths without file writes. See the [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
-Plotting helpers use development dependencies. Shared NSD test fixtures live in
-`examples/NSD/conftest.py`; each notebook has one `@pytest.mark.notebook`
-kernel smoke test. The older command-line scripts (`nsd_cifti.py`,
-`nsd_single_trial.py`, `nsd_hrf.py`) are retained pending a decision to retire
-them; they share `workflow_files.py` and the package helpers.
+The installed `boldtailor.workflow` package and the `boldtailor run` command
+(`boldtailor.cli`) own NSD-style CIFTI discovery, loading, fitting stages,
+output naming, plotting, and the HTML report. Generic CIFTI dense-scalar I/O
+lives in `boldtailor.cifti` (nibabel is a runtime dependency). Package modules
+never import from `examples`. The remaining NSD example modules
+(`nsd_settings.py`, `session_hrf*.py`, `multisession_*.py`) and the notebooks
+import only public modules; plotting helpers use development dependencies.
+Shared NSD test fixtures live in `examples/NSD/conftest.py`; each notebook has
+one `@pytest.mark.notebook` kernel smoke test. See the
+[NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
+
+`tests/workflow` runs in the default suite (`uv run pytest -q`) using a small
+synthetic BIDS dataset. `examples/NSD` tests are opt-in
+(`uv run pytest -q examples/NSD`), and the notebook smoke tests additionally
+need `--run-notebooks`.
 
 Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
 `_arrays.readonly_array`. Float values use float64, indices use int64, and masks

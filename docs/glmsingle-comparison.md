@@ -16,6 +16,7 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 | Choice | Boldtailor | Published GLMsingle workflow |
 | --- | --- | --- |
 | HRF library | Default `default_hrf_library()`: canonical SPM, 512 timing-space Sobol double-gamma candidates, and GLMsingle's 20 empirical HRFs; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
+| Command line | `boldtailor run --bids-dir ... --subject ... --session ... --task ...` runs the whole NSD-style workflow and writes a BIDS derivative with an HTML report | A MATLAB or Python function call, `GLMestimatesingletrial`, with options passed as a struct or dict |
 | HRF selection | Predict each omitted run using task-model amplitudes learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
 | Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
 | Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |

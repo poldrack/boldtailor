@@ -626,6 +626,110 @@ protection and rollback if writing fails. The examples use this to keep images
 and metadata together. See the [API reference](api.md#source-records-and-saving)
 for an example and the [developer guide](development.md) for storage details.
 
+## Running the full workflow
+
+`boldtailor run` applies the NSD-style CIFTI analysis to one subject, session,
+and task of a BIDS dataset with fMRIPrep outputs (fsLR 91k dtseries, confounds,
+and BOLD sidecars), then publishes a BIDS derivative and an HTML report:
+
+```bash
+uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
+```
+
+Add `--dry-run` to print the resolved plan (runs, detected task model, output
+directory, stages) as JSON without fitting. The same analysis is available from
+Python as `WorkflowSettings` and `run_workflow` (see the
+[API reference](api.md#session-workflow-and-command-line)).
+
+### Flags
+
+Flags are grouped as in `boldtailor run --help`.
+
+| Group | Flag | Meaning (default) |
+| --- | --- | --- |
+| inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject and session labels such as `sub-01`, `ses-nsd01` |
+| inputs | `--fmriprep-dir` | fMRIPrep derivatives (found under `<bids-dir>/derivatives/fmriprep*`) |
+| inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`) |
+| inputs | `--space` | Only `fsLR-91k` |
+| inputs | `--modulator COLUMN[:indicator]` | Task modulator; repeat to list several (detected, see below) |
+| HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
+| HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sobol candidates and seed (512, 0) |
+| HRF selection | `--no-rt-in-hrf-selection` | Select HRFs from the task regressor only, without RT modulators |
+| beta series | `--ridge-mode` | `fractional_cv`, `cv`, `fixed`, or `off` (`fractional_cv`) |
+| beta series | `--ridge-alpha` | Penalty for `fixed` (0.1) |
+| beta series | `--ridge-fractions`, `--ridge-alphas` | Candidate grids for `fractional_cv` and `cv` |
+| beta series | `--ridge-percentile` | Spatial percentile for the shared-alpha (`cv`) selection (90) |
+| beta series | `--encoding-mode` | `within_run` or `absolute` encoding scores (`within_run`) |
+| stages and figures | `--skip-stage` | `reliability`, `betas`, or `summaries`; repeatable |
+| stages and figures | `--no-surface-maps`, `--surface-mesh left=PATH` / `right=PATH` | Skip cortical figures, or give the fsLR meshes explicitly |
+| execution | `--n-jobs`, `--block-size`, `--max-grayordinates` | Workers (4), grayordinates per block (4096), and an optional cap for quick tests |
+| execution | `--existing-results` | `error` or `overwrite` (`error`) |
+| execution | `--dry-run` | Print the plan and exit |
+
+The default output directory name records the analysis, for example
+`derivatives/boldtailor_hrf-default512s0_ridge-fractionalcv`. Different
+libraries or ridge modes therefore never collide.
+
+### Modulators
+
+If every run's events file has a `response_time` column, the task model is
+`Modulator("response_time", missing="indicator")`. If every run has a binary
+0/1 `trial_type` column, it is `Modulator("trial_type")`. With neither, the model
+is task-only. Passing `--modulator` replaces detection: give a column name, or
+`COLUMN:indicator` to code missing values with an indicator regressor, for
+example `--modulator response_time:indicator --modulator trial_type`. Modulators
+are never centered. A named column missing from any run is an input error.
+
+### Stages
+
+1. `glms` (always): canonical-HRF and optimized-HRF GLMs with the task model.
+2. `reliability`: HRF selection from odd and from even runs, with their
+   cross-prediction. It is skipped, with the reason recorded in the report, when
+   either parity has fewer than two runs, and the `HRFOdd`, `HRFEven`, ... files
+   are then not written.
+3. `betas`: one beta per trial for the canonical and selected HRFs with OLS and
+   the chosen ridge mode. It requires `glms`.
+4. `summaries`: beta activation and RT-correlation summaries. It requires `betas`.
+
+Skip stages with `--skip-stage reliability`, `--skip-stage betas`, or
+`--skip-stage summaries`. Skipping `betas` also removes `summaries`.
+
+### Output layout
+
+Files follow BIDS derivative naming under
+`<output_dir>/<sub>/<ses>/func/<sub>_<ses>_task-<task>_...`, with a
+`dataset_description.json` at the root. The `desc-` entity names the result:
+
+| Descriptor | Contents |
+| --- | --- |
+| `CanonicalGLM`, `OptimizedGLM` | Effects, variances, t, z, and R² maps; designs; provenance |
+| `GLMComparison` | Optimized-minus-canonical full-model R² |
+| `HRF`, `HRFOdd`, `HRFEven` | Selection maps, HRF parameter maps, library tables, provenance |
+| `HRFReliability`, `HRFOddToEven`, `HRFEvenToOdd` | Odd/even curve correlation and cross-prediction scores |
+| `CanonicalTrial...`, `OptimizedTrial...` (`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`) | Per-run beta series, trial tables, R², RT maps, ridge fraction or alpha maps, tuning and outer-split metadata |
+| `boldtailor` | `<stem>_desc-boldtailor_metadata.json`: the settings that produced the run |
+
+### Report
+
+`<output_dir>/<sub>_<ses>_task-<task>_report.html` is a single self-contained
+file: the equivalent command line, settings, runs and task model, HRF library,
+GLM, reliability, and beta summaries, embedded figures (including cortical maps
+when fsLR meshes are found), skipped stages with reasons, and a list of every
+output file with its provenance.
+
+### Existing results and exit codes
+
+By default (`--existing-results error`) the command stops before loading any
+data if any `<sub>_<ses>_task-<task>_*` file already exists in the output
+directory. With `overwrite`, it replaces that subject/session/task set and
+removes stale files from the earlier run; other sessions are untouched.
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Usage or settings error, including invalid choices such as `--ridge-mode lasso`; one line on stderr |
+| 2 | Input discovery or loading error: missing events or CIFTI files, a modulator column absent from a run, or ridge cross-validation with fewer than two odd and two even runs |
+
 ## Common problems
 
 | Symptom | What to check |
