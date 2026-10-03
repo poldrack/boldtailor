@@ -18,6 +18,9 @@ PUBLIC = [
     ("single_trial", "validate_alpha", "_single_trial_fit"),
     ("single_trial", "compile_trial_run", "_single_trial_design"),
     ("model", "HRF_NORMALIZATION", "_hrf_design"),
+    ("model", "is_boolean", "_scalars"),
+    ("model", "is_integer", "_scalars"),
+    ("model", "is_real", "_scalars"),
 ]
 
 
