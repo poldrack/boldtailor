@@ -7,6 +7,7 @@ from boldtailor.hrf_library import (
     CANONICAL_PARAMETERS,
     PARAMETER_NAMES,
     REALIZED_NAMES,
+    TIMING_BOUNDS,
     TIMING_NAMES,
     HrfLibrary,
     realized_timing,
@@ -149,3 +150,32 @@ def test_timing_table_reports_both_parameterizations():
     assert set(PARAMETER_NAMES) <= set(table.columns)
     assert len(table) == 9 and table.loc[0, "response_peak"] == pytest.approx(5.0)
     assert table.loc[0, "peak_time"] == pytest.approx(5.0, abs=0.02)
+
+
+def test_realized_timing_rejects_a_round_off_trough():
+    # The second gamma never pulls this curve below zero; the only negative
+    # samples are round-off near t = 0, which must not count as a trough.
+    with pytest.raises(ValueError, match="trough"):
+        realized_timing((14.4309, 15.1078, 2.4947, 2.6716, 1.6176, 0.0, 36.0))
+
+
+def test_default_timing_bounds_cover_the_requested_ranges():
+    assert dict(TIMING_BOUNDS) == {
+        "peak_time": (2.5, 8.5),
+        "response_fwhm": (2.0, 6.5),
+        "trough_time": (8.0, 19.0),
+        "undershoot_fwhm": (4.0, 10.0),
+        "trough_depth": (0.05, 0.4),
+    }
+
+
+def test_timing_sampler_keeps_drawing_when_most_of_the_box_is_infeasible():
+    # A late, wide response with troughs allowed from 8 s on: roughly one
+    # Sobol point in six is realizable, far below a fixed 4x oversample.
+    bounds = {"peak_time": (8.0, 8.5), "response_fwhm": (5.5, 6.5)}
+    library = timing_hrf_library(n_samples=32, seed=0, bounds=bounds)
+    assert len(library.candidates) == 33
+    assert dict(library.origin)["rejected"] > 3 * 32
+    for candidate in library.candidates[1:]:
+        peak_time, fwhm, *_ = realized_timing(candidate.parameters)
+        assert 7.98 <= peak_time <= 8.52 and 5.47 <= fwhm <= 6.53
