@@ -103,9 +103,19 @@ def test_timing_sampler_hits_realized_bounds_and_records_rejections():
     for candidate in library.candidates[1:]:
         peak_time, trough_time, depth = realized_timing(candidate.parameters)
         lobe = timing_parameters(candidate.parameters)
-        assert bounds["peak_time"][0] - 0.02 <= peak_time <= bounds["peak_time"][1] + 0.02
-        assert bounds["trough_time"][0] - 0.02 <= trough_time <= bounds["trough_time"][1] + 0.02
-        assert bounds["trough_depth"][0] * 0.99 <= depth <= bounds["trough_depth"][1] * 1.01
+        assert (
+            bounds["peak_time"][0] - 0.02 <= peak_time <= bounds["peak_time"][1] + 0.02
+        )
+        assert (
+            bounds["trough_time"][0] - 0.02
+            <= trough_time
+            <= bounds["trough_time"][1] + 0.02
+        )
+        assert (
+            bounds["trough_depth"][0] * 0.99
+            <= depth
+            <= bounds["trough_depth"][1] * 1.01
+        )
         assert bounds["response_sd"][0] <= lobe[1] <= bounds["response_sd"][1]
         assert bounds["undershoot_sd"][0] <= lobe[3] <= bounds["undershoot_sd"][1]
         assert lobe[5] == 0.0 and lobe[6] == 36.0

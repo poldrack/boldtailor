@@ -37,15 +37,25 @@ TIMING_NAMES = (
     "onset",
     "duration",
 )
+REALIZED_NAMES = (
+    "peak_time",
+    "response_sd",
+    "trough_time",
+    "undershoot_sd",
+    "trough_depth",
+    "onset",
+    "duration",
+)
 TIMING_BOUNDS = MappingProxyType(
     {
-        "response_peak": (3.5, 7.5),
+        "peak_time": (3.5, 7.5),
         "response_sd": (1.0, 3.0),
-        "undershoot_peak": (10.0, 18.0),
+        "trough_time": (10.0, 18.0),
         "undershoot_sd": (2.5, 6.0),
-        "undershoot_depth": (0.05, 0.5),
+        "trough_depth": (0.05, 0.5),
     }
 )
+_REALIZED_DT = 0.01
 
 
 def _parameters(values):
@@ -240,6 +250,13 @@ class HrfLibrary:
                             strict=True,
                         )
                     ),
+                    **dict(
+                        zip(
+                            ("peak_time", "trough_time", "trough_depth"),
+                            realized_timing(candidate.parameters),
+                            strict=True,
+                        )
+                    ),
                 )
             )
         return pd.DataFrame(rows)
@@ -311,6 +328,83 @@ def spm_parameters(timing):
     return _parameters((a, b, c, d, ratio, onset, duration))
 
 
+def _dense_curve(parameters):
+    a, b, c, d, ratio, onset, duration = parameters
+    t = np.arange(0.0, duration, _REALIZED_DT) - onset
+    curve = gamma.pdf(t, a / c, scale=c) - gamma.pdf(t, b / d, scale=d) / ratio
+    peak = np.max(curve)
+    if not np.isfinite(peak) or peak <= 0:
+        raise ValueError("double gamma has no finite positive response peak")
+    return t + onset, curve / peak
+
+
+def realized_timing(parameters):
+    """Peak time, trough time, and trough depth measured on the combined curve.
+
+    The curve is evaluated on a 0.01 s grid. Depth is the trough amplitude
+    relative to the unit peak. These are the quantities
+    :func:`timing_hrf_library` samples; :func:`timing_parameters` describes the
+    gamma lobes instead.
+    """
+    times, curve = _dense_curve(_parameters(parameters))
+    trough = int(np.argmin(curve))
+    return float(times[np.argmax(curve)]), float(times[trough]), float(-curve[trough])
+
+
+def _has_trough(parameters):
+    _, curve = _dense_curve(parameters)
+    trough = int(np.argmin(curve))
+    return curve[trough] < 0 and trough < len(curve) - 1
+
+
+def _corrected_lobe(lobe, realized, target, damping):
+    peak, _, trough, _, depth, onset, duration = target
+    lobe[0] -= damping * (realized[0] - peak)
+    lobe[2] -= damping * (realized[1] - trough)
+    lobe[4] *= (depth / realized[2]) ** damping
+    lobe[0] = max(lobe[0], onset + 0.1)
+    lobe[2] = min(max(lobe[2], lobe[0] + 0.5), duration - 2.0)
+    return lobe
+
+
+def spm_parameters_from_realized(
+    timing, *, seconds_tolerance=0.01, depth_tolerance=1e-3, max_iterations=80
+):
+    """SPM gamma parameters whose combined curve realizes the requested timing.
+
+    ``timing`` follows :data:`REALIZED_NAMES`: realized peak time, response
+    lobe SD, realized trough time, undershoot lobe SD, realized trough depth,
+    onset, duration. The lobe-based closed form is the starting point and the
+    lobe peak, lobe trough, and lobe depth are corrected by fixed-point
+    iteration until the measured curve matches within the tolerances. Targets
+    that no double gamma can realize (for example a trough too soon after a
+    wide peak) raise ``ValueError``.
+    """
+    target = tuple(float(v) for v in timing)
+    if len(target) != 7 or not np.isfinite(target).all():
+        raise ValueError("realized timing parameters must be seven finite numbers")
+    lobe = list(target)
+    for _ in range(max_iterations):
+        try:
+            candidate = spm_parameters(lobe)
+            trough = _has_trough(candidate)
+            realized = realized_timing(candidate) if trough else None
+        except ValueError as error:
+            raise ValueError(f"no feasible double gamma for {target[:5]}") from error
+        if not trough:
+            lobe[4] = min(lobe[4] * 2.0, 5.0)
+            lobe[2] = min(lobe[2] + 0.5, target[6] - 2.0)
+            continue
+        if (
+            abs(realized[0] - target[0]) <= seconds_tolerance
+            and abs(realized[1] - target[2]) <= seconds_tolerance
+            and abs(realized[2] / target[4] - 1.0) <= depth_tolerance
+        ):
+            return candidate
+        lobe = _corrected_lobe(lobe, realized, target, 0.8)
+    raise ValueError(f"no feasible double gamma for {target[:5]}")
+
+
 def expanded_hrf_library():
     """The original 648 double-gamma grid plus peak-scaled canonical SPM."""
     return HrfLibrary.from_parameters(
@@ -343,7 +437,7 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
     return HrfLibrary.from_parameters(rows, origin={**origin, "duration": 36.0})
 
 
-def _sobol_points(n_samples, seed, *, dimensions):
+def _sobol_points(n_samples, seed, *, dimensions, oversample=1):
     if (
         not is_integer(n_samples)
         or n_samples < 1
@@ -353,7 +447,7 @@ def _sobol_points(n_samples, seed, *, dimensions):
     if not is_integer(seed) or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
     sampler = qmc.Sobol(d=dimensions, scramble=True, rng=int(seed))
-    return sampler.random_base2(int(n_samples).bit_length() - 1)
+    return sampler.random_base2((int(n_samples) * oversample).bit_length() - 1)
 
 
 def _timing_bounds(bounds):
@@ -369,23 +463,37 @@ def _timing_bounds(bounds):
 
 
 def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0):
-    """Sample lobe timing with scrambled Sobol, plus peak-scaled canonical SPM at ID zero.
+    """Sample realized HRF timing with scrambled Sobol, plus canonical SPM at ID zero.
 
-    The five sampled quantities are the response lobe's peak time and SD, the
-    undershoot lobe's peak time and SD, and the undershoot depth relative to the
-    response (see :func:`timing_parameters`); ``onset`` is fixed because onset
-    and response delay trade off into the same peak time, which is what makes
-    the gamma-parameter box oversample near-identical waveforms. ``bounds``
-    overrides entries of :data:`TIMING_BOUNDS`. Candidates are stored with
-    their SPM gamma parameters, so downstream modeling is unchanged.
+    The five sampled quantities follow :data:`REALIZED_NAMES`: the realized peak
+    time, the response lobe's SD, the realized trough time, the undershoot
+    lobe's SD, and the realized trough depth relative to the peak. Each point is
+    converted to SPM gamma parameters by :func:`spm_parameters_from_realized`;
+    points no double gamma can realize are skipped deterministically, and the
+    count skipped is recorded in ``origin["rejected"]``. ``onset`` is fixed
+    because onset and response delay trade off into the same peak time, which
+    is what makes the gamma-parameter box oversample near-identical waveforms.
+    ``bounds`` overrides entries of :data:`TIMING_BOUNDS`. Candidates are stored
+    with their SPM parameters, so downstream modeling is unchanged.
     """
     limits = _timing_bounds(bounds)
-    points = _sobol_points(n_samples, seed, dimensions=5)
-    names = TIMING_NAMES[:5]
+    names = REALIZED_NAMES[:5]
+    points = _sobol_points(n_samples, seed, dimensions=5, oversample=4)
     sampled = qmc.scale(
         points, [limits[n][0] for n in names], [limits[n][1] for n in names]
     )
-    rows = [spm_parameters((*row, float(onset), float(duration))) for row in sampled]
+    rows, rejected = [], 0
+    for row in sampled:
+        if len(rows) == int(n_samples):
+            break
+        try:
+            rows.append(
+                spm_parameters_from_realized((*row, float(onset), float(duration)))
+            )
+        except ValueError:
+            rejected += 1
+    if len(rows) < int(n_samples):
+        raise ValueError("too few feasible timing samples; widen the bounds")
     origin = dict(
         kind="timing_sobol",
         n_samples=int(n_samples),
@@ -393,5 +501,6 @@ def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duratio
         onset=float(onset),
         duration=float(duration),
         bounds={name: list(limits[name]) for name in names},
+        rejected=rejected,
     )
     return HrfLibrary.from_parameters(rows, origin=origin)
