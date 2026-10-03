@@ -84,6 +84,8 @@ and uncorrected for multiple comparisons. `result.run_r2` contains one R²
 array per run; `result.r2` pools residual and total sums of squares across runs.
 A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
 
+Rank-deficient designs are fitted in a full-rank basis of their column space, so variances use `n - rank` degrees of freedom; a warning names the run and its rank.
+
 ## Voxelwise HRFs in conventional GLMs
 
 Pass an existing HRF selection to `fit()` to use a different HRF at each voxel

@@ -190,6 +190,8 @@ the HRF and mean amplitude for test prediction. Both halves of the NSD reliabili
 comparison use the same timing/confound eligibility context. Production HRFs
 selected over all runs are shared by the final OLS and ridge fits.
 
+Nilearn 0.14 divides the OLS/AR(1) dispersion by `n - columns` (`regression.py:196`), inconsistent with its `df_residuals = n - rank`; Boldtailor avoids it by fitting rank-deficient designs in a full-rank basis (`_conventional._full_rank_basis`).
+
 ## Source identity and provenance
 
 Every operation records `software` (interpreter, platform, package versions) in its activity; `analysis_id` is computed before this key is added, so identities do not change across environments.

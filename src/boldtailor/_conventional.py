@@ -35,6 +35,7 @@ class _GLMFit:
     regression_results: dict
     residual_sum: np.ndarray
     total_sum: np.ndarray
+    basis: np.ndarray | None
 
 
 def fit_designs(
@@ -91,7 +92,7 @@ def _fit_run(
         name: _nilearn_t_contrast(
             glm_fit.labels,
             glm_fit.regression_results,
-            vector,
+            _in_fitted_basis(vector, glm_fit.basis),
         )
         for name, vector in contrasts.items()
     }
@@ -108,14 +109,32 @@ def _fit_glm(
     design: np.ndarray,
     noise_model: str,
 ) -> _GLMFit:
-    labels, regression_results = run_glm(
-        signals,
-        design,
-        noise_model=noise_model,
-    )
-    prediction = _prediction(labels, regression_results, design, signals.shape)
+    basis = _full_rank_basis(design)
+    fitted = design if basis is None else design @ basis
+    labels, regression_results = run_glm(signals, fitted, noise_model=noise_model)
+    prediction = _prediction(labels, regression_results, fitted, signals.shape)
     residual_sum, total_sum = _sums_of_squares(signals, prediction)
-    return _GLMFit(labels, regression_results, residual_sum, total_sum)
+    return _GLMFit(labels, regression_results, residual_sum, total_sum, basis)
+
+
+def _full_rank_basis(design: np.ndarray) -> np.ndarray | None:
+    """Orthonormal row-space basis when the design is rank deficient, else None.
+
+    Nilearn divides the dispersion by ``n - columns`` but reports
+    ``n - rank`` degrees of freedom, so rank-deficient designs are fitted as
+    ``design @ basis`` instead.
+    """
+    _, singular, vt = np.linalg.svd(design, full_matrices=False)
+    tolerance = singular[0] * max(design.shape) * np.finfo(float).eps
+    rank = int(np.sum(singular > tolerance))
+    if rank == design.shape[1]:
+        return None
+    return vt[:rank].T
+
+
+def _in_fitted_basis(vector: np.ndarray, basis: np.ndarray | None) -> np.ndarray:
+    """Map an estimable contrast onto the columns actually fitted."""
+    return vector if basis is None else basis.T @ vector
 
 
 def _combine_contrasts(
