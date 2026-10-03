@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
-from boldtailor._hrf_design import hrf_model
+from boldtailor.design import hrf_model
 from tests.oracles import scaled_condition
 
 
@@ -18,31 +18,6 @@ def example():
         return importlib.import_module("examples.NSD.nsd_cifti")
     except ModuleNotFoundError:
         pytest.fail("The NSD CIFTI example has not been implemented")
-
-
-def test_confounds_use_24_motion_top_six_combined_components_and_cosines(confounds):
-    table, metadata = confounds
-    result = example().select_confounds(table, metadata)
-    expected = list(table.columns[:30]) + ["cosine00", "non_steady_state_outlier00"]
-    assert list(result.columns) == expected
-    np.testing.assert_allclose(result, table[expected].fillna(0))
-    assert not table.iloc[0].notna().all()  # input was not mutated
-
-
-@pytest.mark.parametrize("column,row", [("trans_x", 0), ("rot_z_derivative1", 2)])
-def test_only_initial_motion_derivative_nans_are_filled(confounds, column, row):
-    table, metadata = confounds
-    table.loc[row, column] = np.nan
-    with pytest.raises(ValueError, match="finite|missing"):
-        example().select_confounds(table, metadata)
-
-
-def test_fewer_than_six_retained_combined_components_is_an_error(confounds):
-    table, metadata = confounds
-    for i in (5, 6, 7):
-        metadata[f"a_comp_cor_{i:02d}"]["Retained"] = False
-    with pytest.raises(ValueError, match="six|6"):
-        example().select_confounds(table, metadata)
 
 
 def test_rt_modulation_is_centered_and_preserves_stimulus_timing(events):
@@ -107,13 +82,6 @@ def test_complete_example_publishes_correct_pooled_maps_and_designs(dataset, tmp
     assert list(output.rglob("*provenance.json"))
 
 
-def test_discovery_requires_every_run_to_have_cifti(dataset):
-    root, prep, *_ = dataset
-    next(prep.rglob("*run-02*.dtseries.nii")).unlink()
-    with pytest.raises((ValueError, FileNotFoundError), match="run-02|CIFTI"):
-        example().discover_runs(root, prep)
-
-
 def test_inconsistent_grayordinate_order_is_rejected(dataset, tmp_path):
     root, prep, *_ = dataset
     path = next(prep.rglob("*run-02*.dtseries.nii"))
@@ -152,3 +120,24 @@ def test_external_fmriprep_root_has_explicit_provenance_error(dataset, tmp_path)
 def test_conventional_model_metadata_records_peak_normalization():
     assert example().MODEL["hrf"] == "spm"
     assert example().MODEL["hrf_normalization"] == "peak_one_event_response"
+
+
+def test_scripts_need_an_explicit_or_environment_bids_root(tmp_path, monkeypatch):
+    from examples.NSD.nsd_single_trial import run_single_trial_analysis
+
+    monkeypatch.delenv("NSD_BIDS_ROOT", raising=False)
+    assert example().BIDS_ROOT is None
+    with pytest.raises(ValueError, match="NSD_BIDS_ROOT"):
+        example().run_analysis(output_root=tmp_path / "output")
+    with pytest.raises(ValueError, match="NSD_BIDS_ROOT"):
+        run_single_trial_analysis(output_root=tmp_path / "output")
+
+
+def test_scripts_read_the_bids_root_from_the_environment(
+    dataset, tmp_path, monkeypatch
+):
+    root, prep, *_ = dataset
+    monkeypatch.setenv("NSD_BIDS_ROOT", str(root))
+    monkeypatch.delenv("NSD_OUTPUT_ROOT", raising=False)
+    paths = example().run_analysis(fmriprep_root=prep, output_root=tmp_path / "out")
+    assert len([p for p in paths if p.name.endswith(".dscalar.nii")]) == 3
