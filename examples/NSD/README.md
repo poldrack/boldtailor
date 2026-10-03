@@ -2,8 +2,9 @@
 
 These notebooks analyze Natural Scenes Dataset sessions using fMRIPrep CIFTI
 time series. Start with the [full workflow notebook](nsd_workflow.ipynb); the
-other two notebooks reuse or extend its results. Older
-[command-line scripts](#command-line-scripts) remain for a few script-only exports.
+other two notebooks reuse or extend its results. The workflow notebook runs the
+package workflow, `boldtailor.workflow.run.run_workflow`, which is also available
+as the [`boldtailor run` command](#command-line-interface).
 
 | Notebook | What you get |
 | --- | --- |
@@ -26,8 +27,10 @@ All runs need the same CIFTI spatial axis. The fMRIPrep directory must be
 inside the BIDS root. Event durations and acquisition offsets are read from
 the inputs; onsets are not rounded to whole volumes.
 
-The defaults analyze `sub-07/ses-nsd10`, read `derivatives/fmriprep-25.2.5`,
-and write to `derivatives/boldtailor` under the selected BIDS root.
+The defaults analyze `sub-07/ses-nsd10`, read the BIDS root's single
+`derivatives/fmriprep*` directory, and write to
+`derivatives/boldtailor_hrf-<library>_ridge-<mode>` (for the defaults,
+`boldtailor_hrf-default512s0_ridge-fractionalcv`) under the selected BIDS root.
 That session has 12 runs, 750 trials, and 91,282 grayordinates. The data are
 not included in this repository.
 
@@ -36,10 +39,11 @@ not included in this repository.
 Open [nsd_workflow.ipynb](nsd_workflow.ipynb) in your notebook editor after
 running `uv sync --group dev`, and select the checkout's `.venv` Python kernel.
 Set `NSD_BIDS_ROOT` before starting the notebook kernel, then edit the
-`overrides` in the first code cell and run all cells. Every setting and its
-default is listed in `DEFAULTS` in [settings.py](settings.py);
-`resolve_settings` combines them with your overrides and the data paths.
-For example:
+`config` in the first code cell and run all cells. Every key is a
+`WorkflowSettings` field (`src/boldtailor/workflow/settings.py`), with
+`bids_root`, `fmriprep_root`, and `output_root` accepted for `bids_dir`,
+`fmriprep_dir`, and `output_dir`; [nsd_settings.py](nsd_settings.py) builds the
+settings, defaulting the task to `nsdcore`. For example:
 
 ```bash
 export NSD_BIDS_ROOT=/path/to/NSD/BIDS
@@ -51,7 +55,7 @@ notebook uses `HRF_RELIABILITY_CONFIG` instead. Both accept `fmriprep_root`
 and `output_root` explicitly, or through `NSD_FMRIPREP_ROOT` and
 `NSD_OUTPUT_ROOT`. Explicit dictionary paths override environment values;
 otherwise derivative defaults follow the BIDS root. Missing BIDS configuration
-raises an actionable error before loading or writing data. These helpers do
+raises an actionable error before loading or writing data. The helpers do
 not read `.env` files.
 
 The
@@ -62,14 +66,17 @@ optimized-HRF ridge CV needs at least three in each half. This
 notebook requires matching nuisance column names and order after trimming;
 it rejects mismatches before fitting.
 
-The notebook walks through input inspection, two conventional GLMs, optimized
-HRF selection, odd/even reliability, canonical and optimized single-trial
-models, encoding-guided ridge CV, RT checks, and export. The conventional GLMs
-fit these predictors jointly, without orthogonalization:
+One `run_workflow` call fits two conventional GLMs, optimized HRF selection,
+odd/even reliability, canonical and optimized single-trial models,
+encoding-guided ridge CV, and RT checks, and publishes every output together
+with an HTML report. The notebook then shows the run table and the saved
+figures section by section. The task model is detected from the event columns;
+for NSD the conventional GLMs fit these predictors jointly, without
+orthogonalization:
 
 - `task`: unit amplitude for every presentation.
-- `response_time`: positive finite seconds, centered over observed RTs within
-  each run; unavailable RTs receive zero modulation.
+- `response_time`: positive finite seconds, uncentered; unavailable RTs receive
+  zero modulation.
 - `trial_type`: binary codes 0/1, uncentered; the coefficient is type 1 minus
   type 0, controlling for RT, and the task coefficient is the response on
   trial_type 0 trials.
@@ -78,8 +85,8 @@ fit these predictors jointly, without orthogonalization:
 
 All presentations remain in the task and trial-type regressors. The extra
 indicator allows the mean response on unavailable-RT trials to differ; the
-task coefficient refers to observed-RT trial_type 0 trials at the run's mean
-observed RT. Runs with no observed RT cannot estimate an RT effect
+task coefficient is the response on trial_type 0 trials at zero RT
+modulation (modulators are uncentered). Runs with no observed RT cannot estimate an RT effect
 and are rejected. Complete runs retain their original three-predictor design.
 The indicator is saved in the event tables and design matrices; contrast maps
 remain task, RT, and trial type. Conventional task ΔR² includes the indicator's
@@ -95,9 +102,8 @@ Set `hrf_n_samples` to a power of two and `hrf_seed` to a nonnegative integer.
 The library cell plots every HRF, colored by time to peak, and runs separately
 from the following selection cell so you can inspect it before fitting.
 
-For the previous grid, set `hrf_library="expanded"`. Non-None
-`hrf_parameters` overrides the library choice with your own parameter rows.
-The metadata JSON saves these settings; the library TSV and NPZ save the
+For the previous grid, set `hrf_library="expanded"`; `"canonical"` uses SPM
+alone. The metadata JSON saves these settings; the library TSV and NPZ save the
 exact parameter values and curves used. When changing libraries, rerun
 selection and all subsequent models with a new output root: HRF IDs are only
 meaningful together with their original library.
@@ -106,54 +112,50 @@ Both GLMs use the same scans, motion/aCompCor/cosine columns, run intercepts,
 and OLS settings. The notebook removes leading flagged nonsteady volumes
 from every analysis and keeps original acquisition times and event onsets.
 
-Results use `desc-notebook...` filenames under the chosen derivative root.
-Set `existing_results` in the notebook:
+Results use `desc-<Name>` filenames under the chosen derivative root. Set
+`existing_results` in the configuration:
 
-- `"reuse"` (default): reload saved results and skip fitting; regenerate notebook
-  plots without modifying saved files.
-- `"overwrite"`: refit and replace matching notebook outputs.
-- `"error"`: stop before fitting if notebook outputs already exist.
+- `"error"` (default): stop before fitting if this session's outputs exist.
+- `"overwrite"`: refit, replace this session's outputs in one publication, and
+  remove earlier files of this subject/session/task that the new set lacks.
 
-With no saved results, all three modes fit and save normally. Reuse requires
-matching analysis settings, run lengths, and spatial axes. It reads the saved
-analysis rather than checking raw-file contents for changes; refit with
-`"overwrite"` after changing input data. Incomplete saved results require a refit.
+Saved results are not reloaded; to inspect earlier results, open the report or
+read the files directly.
 
 Each conventional `stat-rsquared.dscalar.nii` contains three maps: full R²,
 confounds-only R², and task-added ΔR². The
-`desc-notebookGLMComparison_stat-deltarsquared.dscalar.nii` map contains
+`desc-GLMComparison_stat-deltarsquared.dscalar.nii` map contains
 optimized minus canonical full R². This is a descriptive comparison using
 the fitted data; independent half-session prediction scores are saved separately.
 
 The notebook also saves contrast effects/variances/t/z, all/odd/even HRF
 parameters and indices, the complete HRF library with time to peak, per-run
 beta series, trial tables, grouped designs, scan times, provenance, and plots.
-The final cells explain how to read the outputs and reuse the saved HRFs.
-Section 7b compares full HRF curves at each grayordinate: odd versus even,
+The report links each output to its provenance record.
+The reliability stage also compares full HRF curves at each grayordinate: odd versus even,
 odd versus canonical SPM, and even versus canonical SPM. These are Pearson
 correlations across the library's complete 0.1-second time grid, including
 the undershoot, without shifting curves to align peaks. The canonical
 comparisons provide a baseline for shared HRF shape. The three correlations
-are saved in `desc-notebookHRFReliability_stat-curvecorrelation.dscalar.nii`.
+are saved in `desc-HRFReliability_stat-curvecorrelation.dscalar.nii`.
 The plots use the same grayordinates for every comparison, requiring both
-half-session HRFs to be defined. This section can run from existing
-`library` and `hrf_maps` variables without refitting.
+half-session HRFs to be defined. The odd/even HRF outputs are written only
+when the reliability stage ran.
 
 Spatially unprocessed or undefined grayordinates remain NaN on the original
 CIFTI axis. Beta-series RT plots are descriptive; all-run optimized HRFs use
 both halves of the session.
-Beta-series fitting prints one start and one completion message per model,
-including when blocks run in parallel.
 See the [notebook validation record](../../docs/validation/nsd-notebook.md)
 for the fixture and real-data checks.
 
 ### Example helpers and the core library
 
-NSD file discovery (`workflow_files.py`), settings (`settings.py`), artifact
-writers (`workflow_artifacts.py`), surfaces, and plotting stay under
-`examples/NSD/`; they are not installed as part of `boldtailor`. Run these
-notebooks from a repository checkout with the development dependencies.
-Generic helpers the notebooks share live in the package: `boldtailor.cifti`
+File discovery, settings, fitting stages, artifact writers, surfaces, plots,
+and the report live in the installed `boldtailor.workflow` package. Only the
+notebook configuration helper (`nsd_settings.py`) and the session-reliability
+and multi-session helpers (`session_hrf*.py`, `multisession_*.py`) stay under
+`examples/NSD/`; run these notebooks from a repository checkout with the
+development dependencies. Generic helpers live in the package: `boldtailor.cifti`
 (dense-scalar export and checked reloads, cortical projection, feature
 identity), `boldtailor.diagnostics` (one-sample t maps, RT correlations),
 `boldtailor.reliability` (HRF curve agreement), and `boldtailor.parallel`
@@ -161,21 +163,18 @@ identity), `boldtailor.diagnostics` (one-sample t maps, RT correlations),
 The core accepts arrays and scientific model specifications, independently
 of the dataset and imaging format.
 
-The notebooks keep model specification, HRF library construction, selection,
-CV settings, and fit calls visible. `boldtailor.workflow.plots` and
-`session_hrf_plots.py` handle figure details from already computed results;
-they return figures without fitting, displaying, or writing files.
-`notebook_paths.py` supplies local paths. Figure names and scientific exports
-are unchanged. Direct helper tests cover plotted values and missing-data masks,
-while notebook execution tests exercise fitting and export on synthetic CIFTI data.
+`boldtailor.workflow.plots` and `session_hrf_plots.py` handle figure details
+from already computed results; they return figures without fitting,
+displaying, or writing files. `nsd_paths` in `nsd_settings.py` supplies local
+paths. Package tests cover the workflow stages, while opt-in notebook
+execution tests (`--run-notebooks`) exercise the notebooks on synthetic CIFTI data.
 
 ### Cortical surface figures
 
 The workflow notebook shows left/right lateral and medial views of full-model
 BOLD R² for conventional GLMs and task ΔR² (full minus confound-only R²) for
 beta-series models, plus signed beta–RT
-correlations across all runs. The plots use existing fitted arrays, so the new
-cells can run in an active notebook kernel without refitting models. Both R²
+correlations across all runs. Both R²
 components pool errors across runs using the same within-run total variance.
 Task ΔR² measures the additional variance explained by trial regressors beyond
 confounds; it is an in-sample measure, distinct from the held-out
@@ -197,13 +196,13 @@ are omitted. R² and ΔR² use a common 0–1 range, extended below zero if need
 progression to emphasize smaller values; colorbar
 ticks remain in original ΔR² units. RT uses a
 shared symmetric range across the displayed models. No significance threshold
-is applied. The final save cell writes `desc-notebookGLMR2Surface_plot.png`,
-`desc-notebookBetaR2Surface_plot.png`, and `desc-notebookRTSurface_plot.png` beside
-the CIFTI outputs. Resolved surface paths are retained in notebook metadata.
+is applied. The workflow writes `desc-GLMR2Surface_plot.png`,
+`desc-BetaR2Surface_plot.png`, `desc-BetaActivationSurface_plot.png`, and
+`desc-RTSurface_plot.png` beside the CIFTI outputs.
 
 ### Descriptive beta-series activation maps
 
-Section 8d tests the mean trial beta against zero at every grayordinate for
+The summaries stage tests the mean trial beta against zero at every grayordinate for
 each fitted beta-series model, including OLS and the selected ridge mode.
 It pools finite trials across runs with equal weight per trial, without
 within-run centering, and computes `t = mean / (sample_sd / sqrt(n))` with
@@ -212,15 +211,14 @@ a descriptive activation-style summary relative to the fitted model baseline,
 not an explicit task-versus-rest contrast. It ignores covariance among trial
 estimates, shrinkage, and HRF/ridge selection uncertainty.
 
-The notebook displays t histograms and, when matching surfaces are available,
+The workflow plots t histograms and, when matching surfaces are available,
 signed cortical t maps using a shared −10 to +10 scale, with values outside that
 range shown in the endpoint colors. No significance threshold
-is applied. For each model, `desc-notebook<model>_stat-activation.dscalar.nii`
+is applied. For each model, `desc-<model>_stat-activation.dscalar.nii`
 contains `mean_beta`, `t`, `p_uncorrected` (two-sided), `n_trials`, and `df`.
 Fewer than two finite trials or zero sample variance gives NaN t/p; no finite
 trials gives NaN in all maps. The metadata records these assumptions and that
-no multiple-comparison correction is applied. This cell uses existing fits;
-rerun the save cell with a new output root to export the maps and figures.
+no multiple-comparison correction is applied.
 See the [activation-map validation record](../../docs/validation/nsd-beta-activation-2026-09-28.md)
 for numerical and notebook execution checks.
 
@@ -235,9 +233,8 @@ each held-out run/feature mean residual for scoring only. Set
 `NSD_CONFIG["encoding_mode"] = "absolute"` to reproduce shared-intercept fitting
 and uncentered scoring. Inner and outer evaluations use the same mode.
 HRFs are selected on the training runs within each fold using task-model
-prediction. Inner-fold HRF selection inside the ridge cross-validation uses the
-package default task-only model; the final beta series use HRFs selected with
-the NSD task model. Training betas use the candidate fraction; validation targets are fixed OLS
+prediction, with the same selection model as the all-run HRFs (the full task
+model, or without RT when `hrf_selection_rt=False`). Training betas use the candidate fraction; validation targets are fixed OLS
 betas under the training-selected HRFs.
 
 Set `hrf_selection_rt=False` in the notebook settings to select HRFs without
@@ -245,8 +242,8 @@ the RT regressor. Selection then scores task and uncentered trial type only,
 while the GLM still fits task, RT, and trial type; the selected-HRF fit accepts
 this because the selection task model is a subset of the GLM's. The exported
 `hrf_selection` metadata string and the session HRF cache identity record
-which model selected the HRFs, and saved results with a different setting are
-refitted rather than reused.
+which model selected the HRFs; session HRF estimates with a different setting
+are refitted rather than reused.
 
 A fraction of 1 gives OLS. Smaller fractions shrink the coefficient norm in the
 raw trial-coefficient basis after nuisance projection. Confounds remain unpenalized,
@@ -260,7 +257,7 @@ independently. Missing predictors exclude encoding rows only. Locations need
 finite scores for every candidate; undefined locations remain NaN.
 
 Use `ridge_fractions` to change the candidate grid. `ridge_percentile` controls
-a descriptive summary curve and does not select the fractions. The notebook
+a descriptive summary curve and does not select the fractions. The workflow
 also plots the counts of grayordinates choosing each fraction.
 
 The older modes remain available:
@@ -270,11 +267,11 @@ The older modes remain available:
 - `ridge_mode="fixed"`: use a positive `ridge_alpha`.
 - `ridge_mode="off"`: OLS alone.
 
-An older injected `NSD_CONFIG` with only `ridge_alpha` retains fixed/off behavior.
-An override with `ridge_alphas` and no mode retains shared-alpha CV.
+Set `ridge_mode` explicitly: `ridge_alpha` or `ridge_alphas` alone no longer
+imply a mode.
 
-Fractional beta files use `desc-notebookCanonicalTrialFractionalCV` and
-`desc-notebookOptimizedTrialFractionalCV`. Tuning and outer-evaluation descriptors
+Fractional beta files use `desc-CanonicalTrialFractionalCV` and
+`desc-OptimizedTrialFractionalCV`. Tuning and outer-evaluation descriptors
 contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
 `Even`, `All`, `OddToEven`, or `EvenToOdd`. Shared-alpha outputs retain `RidgeCV`.
 
@@ -293,9 +290,10 @@ contain `CanonicalFractionalCV` or `OptimizedFractionalCV`, followed by `Odd`,
 | `_loss.npz` | SSE/SST, training-run intercepts and predictor means, scoring offsets, and ordered run labels |
 | `_metadata.json`, `_provenance.json` | Run splits, transforms, norm definitions, sources and linked tuning identities |
 
-`desc-notebookFractionalCV_predictors.tsv` saves exact predictors, original trial
-IDs and excluded rows. `desc-notebookFractionalCV_tuning.png` saves the descriptive
-score curves. The complete HRF library is saved with the notebook outputs.
+`desc-<model>_predictors.tsv` (for example
+`desc-OptimizedTrialFractionalCV_predictors.tsv`) saves exact predictors,
+original trial IDs and excluded rows. `desc-RidgeTuning_plot.png` saves the
+descriptive score curves. The complete HRF library is saved with the outputs.
 In Python,
 candidate scores expose `grid` and `regularization`; beta results expose
 designs through `design.matrices` (canonical) or `design.matrix(run, hrf)`
@@ -318,8 +316,9 @@ For combined HRF **and beta-series** comparisons, use
 [nsd_multisession.ipynb](nsd_multisession.ipynb). It defaults to `sub-07`, sessions
 10–19, and canonical versus optimized OLS and fractional-CV models. Set paths in
 `NSD_MULTI_CONFIG` or the same `NSD_BIDS_ROOT` environment variable used above.
-The notebook automatically runs the full single-session workflow for missing
-sessions, sequentially in separate kernels. Completed sessions are reused;
+The notebook automatically runs `run_workflow` for missing sessions,
+sequentially, with `existing_results="overwrite"` and surface figures off.
+Completed sessions are reused;
 each new session is saved before the next begins. This can be a long computation
 with the full Sobol library and fractional CV. Set `fit_missing=False` to require
 existing results instead. `analysis_config` supplies fitting overrides; otherwise
@@ -372,8 +371,8 @@ compare independently estimated HRFs for `sub-07`, `ses-nsd10` through
 `ses-nsd19`. All sessions use the same 513-candidate Sobol library by default.
 The notebook fits only HRF selection, using all runs within each session and
 the same confounds and nonsteady-volume trimming as the full workflow.
-By default this notebook selects HRFs with the full task model (task, centered
-RT, uncentered trial type); pass `include_rt=False` for stimulus-timing-only
+By default this notebook selects HRFs with the full task model (task with
+uncentered RT and trial-type modulators); set `hrf_selection_rt=False` for stimulus-timing-only
 selection. Trials with missing reaction times are retained.
 
 Completed session estimates are saved immediately under each session's `func`
@@ -415,22 +414,21 @@ export NSD_BIDS_ROOT=/path/to/NSD/BIDS
 
 Then open a notebook and select the checkout's `.venv` kernel. To run the
 workflow notebook non-interactively, inject a configuration cell defining
-`NSD_CONFIG` before the setup cell (the multi-session notebook does this for
-each missing session). Keys and defaults are those of `DEFAULTS` in
-[settings.py](settings.py); `resolve_settings(NSD_CONFIG)` returns the
-settings the notebook uses:
+`NSD_CONFIG` before the setup cell. Keys are `WorkflowSettings` fields;
+`nsd_settings(NSD_CONFIG)` returns the settings the notebook runs:
 
 | Setting | Default | Use |
 | --- | --- | --- |
 | `bids_root` | `NSD_BIDS_ROOT` | Raw BIDS directory (required) |
-| `fmriprep_root` | `<bids_root>/derivatives/fmriprep-25.2.5` | Preprocessed inputs; or `NSD_FMRIPREP_ROOT` |
-| `output_root` | `<bids_root>/derivatives/boldtailor` | Results directory; or `NSD_OUTPUT_ROOT` |
+| `fmriprep_root` | `NSD_FMRIPREP_ROOT`, else `<bids_root>/derivatives/fmriprep*` | Preprocessed inputs |
+| `output_root` | `NSD_OUTPUT_ROOT`, else `<bids_root>/derivatives/boldtailor_hrf-..._ridge-...` | Results directory |
 | `subject`, `session` | `sub-07`, `ses-nsd10` | Select the session |
 | `block_size`, `max_grayordinates` | `4096`, `None` | Grayordinates processed together; optional spatial subset |
 | `n_jobs` | `4` | Worker processes for feature blocks |
 | `ridge_mode` | `fractional_cv` | `fractional_cv`, `cv` (global alpha), `fixed` (`ridge_alpha`), or `off` |
-| `hrf_library` | `sobol` | `sobol` (`hrf_n_samples`, `hrf_seed`) or `expanded`; `hrf_parameters` rows override both |
-| `existing_results` | `reuse` | `reuse`, `overwrite`, or `error` |
+| `hrf_library` | `default` | `default` or `sobol` (`hrf_n_samples`, `hrf_seed`), `expanded`, or `canonical` |
+| `stages` | all | Subset of `glms`, `reliability`, `betas`, `summaries` |
+| `existing_results` | `error` | `error` or `overwrite` |
 
 More workers trade memory for speed. A four-worker benchmark on this dataset
 was about 2.5 times faster than serial fitting for 16,384 grayordinates, using
@@ -469,7 +467,7 @@ duration, and comparable across grayordinates with different selected HRFs.
 This matches GLMsingle's convention. Nilearn derivative and FIR bases and
 user-supplied kernels are passed to Nilearn unchanged and keep its
 sum-to-one scaling. Canonical and optimized betas therefore share a scale. Selection predicts each held-out run's task-model response
-(task, centered RT, uncentered trial type) from the other runs; final beta estimation allows every trial its own amplitude.
+(task with uncentered RT and trial-type modulators) from the other runs; final beta estimation allows every trial its own amplitude.
 
 Three selections serve different purposes:
 
@@ -493,7 +491,8 @@ splits and undefined grayordinates have NaN outputs and recorded reasons.
 ## Finding your results
 
 Outputs are placed in `<output_root>/<subject>/<session>/func/` with
-`desc-notebook...` descriptors. The table omits the common
+`desc-<Name>` descriptors; the report,
+`<subject>_<session>_task-<task>_report.html`, is at `<output_root>`. The table omits the common
 subject/session/task/spatial prefixes. All `stat-*` entries are `.dscalar.nii`
 files on the original CIFTI axis; undefined grayordinates are NaN.
 
@@ -503,14 +502,20 @@ files on the original CIFTI axis; undefined grayordinates are NaN.
 | `<model>_stat-rsquared` | Full, confounds-only, and task-added R² (GLMs and beta-series models) |
 | `GLMComparison_stat-deltarsquared` | Optimized minus canonical full R² |
 | `HRFAll`, `HRFOdd`, `HRFEven` `_stat-selection`, `_stat-hrfparameters` | Selected HRF IDs and CV scores; selected-HRF parameters including `peak_time` |
-| `HRFOddToEven`, `HRFEvenToOdd` `_stat-prediction` | Independent selected, canonical, and Δ test R² |
-| `HRFReliability_stat-curvecorrelation` | Odd/even and half/canonical full-curve correlations |
+| `HRFOddToEven`, `HRFEvenToOdd` `_stat-prediction` | Independent selected, canonical, and Δ test R² (reliability stage) |
+| `HRFReliability_stat-curvecorrelation` | Odd/even and half/canonical full-curve correlations (reliability stage) |
 | `HRF_library.tsv`, `HRF_library.npz`, `HRF_provenance.json` | Exact library parameters and curves; selection records |
 | `run-XX_..._<model>_betas` | One map per event, with trial IDs as map names |
 | `<model>_trials.tsv`, `<model>_stat-rtcorrelation`, `<model>_stat-activation` | Trial table; all/odd/even RT correlations; one-sample t maps |
 | `<model>_designs.npz`, `<model>_provenance.json` | Design matrices with column names and frame times, per run and HRF; fit records |
-| `_runs.tsv`, `run-XX_..._events.tsv`, `run-XX_..._confounds.tsv` | Run summary, expanded events, and retained confounds with original frame indices |
-| `_metadata.json`, `<figure>_plot.png` | Settings, model definitions, and figures |
+| `boldtailor_runs.tsv`, `run-XX_..._boldtailor_events.tsv`, `run-XX_..._boldtailor_confounds.tsv` | Run summary, expanded events, and retained confounds with original frame indices |
+| `boldtailor_metadata.json`, `<figure>_plot.png` | Settings, model definitions, skipped stages, and figures |
+
+Parameter maps contain eight named maps: response delay, undershoot delay,
+response dispersion, undershoot dispersion, response/undershoot ratio, onset
+delay, duration, and `peak_time`. Peak time uses the maximum of the full HRF on
+its saved 0.1-second grid, including the onset delay and undershoot. The
+numeric HRF IDs are categorical labels; use the library table to interpret them.
 
 Beta-series models are `CanonicalTrialOLS` and `OptimizedTrialOLS`, plus
 `...TrialRidge`, `...TrialRidgeCV`, or `...TrialFractionalCV` for the chosen
@@ -519,145 +524,21 @@ Beta-series models are `CanonicalTrialOLS` and `OptimizedTrialOLS`, plus
 and multi-session outputs are described in
 [HRF reliability across sessions](#hrf-reliability-across-sessions).
 
-## Command-line scripts
+## Command-line interface
 
-The scripts predate the notebooks and are retained because they export some
-results the notebooks do not: a stimulus-plus-RT-only conventional GLM,
-per-run RT correlation and count maps, beta-series optimized-minus-canonical
-R² (`hrfdeltarsquared`), selected-vertex RT tables and scatterplots, and
-selected-HRF curve plots. They keep the nonsteady-state indicator regressors
-and all scans, so their R² values need not agree with the notebooks'. They
-use the same discovery and loading helpers (`workflow_files.py`) and the
-package's diagnostics, CIFTI, and parallel helpers.
-
-For a stimulus-plus-RT model:
+The earlier NSD command-line scripts are retired. The same analysis as the
+workflow notebook runs from the shell with `boldtailor run`:
 
 ```bash
-uv run python examples/NSD/nsd_cifti.py \
-  --bids-root /path/to/NSD/BIDS \
-  --fmriprep-root /path/to/NSD/BIDS/derivatives/fmriprep-25.2.5 \
-  --output-root /path/to/NSD/BIDS/derivatives/boldtailor-conventional
+uv run boldtailor run --bids-dir /path/to/NSD/BIDS \
+  --subject sub-07 --session ses-nsd10 --task nsdcore
 ```
 
-For canonical-HRF beta series, with both OLS and fixed ridge:
-
-```bash
-uv run python examples/NSD/nsd_single_trial.py \
-  --bids-root /path/to/NSD/BIDS \
-  --ridge-alpha 0.1 \
-  --output-root /path/to/NSD/BIDS/derivatives/boldtailor-singletrial
-```
-
-For optimized-HRF beta series and the HRF diagnostics:
-
-```bash
-uv run python examples/NSD/nsd_single_trial.py \
-  --bids-root /path/to/NSD/BIDS \
-  --hrf-library expanded --ridge-alpha 0.1 --n-jobs 4 \
-  --output-root /path/to/NSD/BIDS/derivatives/boldtailor-expanded
-```
-
-Replace the example paths with your own. Omit `--bids-root` only when
-`NSD_BIDS_ROOT` is set; the other path flags default as below. Existing output files are protected: use a new output root
-when rerunning an analysis or comparing settings.
-
-| Option | Default | Use |
-| --- | --- | --- |
-| `--bids-root` | `NSD_BIDS_ROOT` | Raw BIDS directory (required) |
-| `--fmriprep-root` | `NSD_FMRIPREP_ROOT`, else `<bids-root>/derivatives/fmriprep-25.2.5` | Preprocessed inputs |
-| `--output-root` | `NSD_OUTPUT_ROOT`, else `<bids-root>/derivatives/boldtailor` | Results directory |
-| `--subject`, `--session` | `sub-07`, `ses-nsd10` | Select the session |
-| `--block-size` | `4096` | Grayordinates processed together |
-| `--hrf-library` | `canonical` | Single-trial script: choose `canonical` or `expanded` |
-| `--ridge-alpha` | Omitted | Single-trial script: add fixed ridge to the OLS fit; must be positive |
-| `--n-jobs` | `1` | Single-trial script: number of worker processes |
-
-The conventional model has a stimulus regressor and an RT amplitude modulator,
-centered within each run. Both use the SPM HRF with 50-fold oversampling. The
-RT column is not orthogonalized against the stimulus regressor. This model
-requires a valid response time for every event.
-
-Single-trial models instead fit one amplitude per event row. RT and image IDs
-are retained as metadata. Missing RT does not remove a trial from the model.
-OLS is always fitted; `--ridge-alpha` adds one fixed ridge fit. Nuisance
-coefficients are unpenalized and betas retain the input signal scale.
-
-### Script outputs
-
-Outputs are placed in `<output-root>/<subject>/<session>/func/`. The tables
-below omit the common subject/session/task/spatial prefixes.
-
-#### Conventional model
-
-| Suffix | Contents |
-| --- | --- |
-| `desc-full_stat-rsquared.dscalar.nii` | Pooled full-model R² |
-| `desc-confounds_stat-rsquared.dscalar.nii` | Pooled nuisance-only R² |
-| `desc-task_stat-deltarsquared.dscalar.nii` | Full minus nuisance R² |
-| `run-XX_desc-full_design.tsv` | Run design and frame times |
-| `desc-model_metadata.json`, `desc-blocks_provenance.json` | Model settings and analysis records |
-
-The conventional script exports fit diagnostics, not contrast or predicted
-time-series images. Use the array API for contrasts.
-
-#### Beta series and RT diagnostics
-
-Descriptors identify the model: `singletrialOLS` / `singletrialRidge` for the
-canonical HRF, or `hrfOptOLS` / `hrfOptRidge` for optimized HRFs.
-
-| Filename component or suffix | Contents |
-| --- | --- |
-| `run-XX_..._betas.dscalar.nii` | One scalar map per event, with trial IDs as map names |
-| `_trials.tsv` | Event metadata and the mapping from trial IDs to image rows |
-| `_stat-fullrsquared.dscalar.nii` | Pooled R² for that estimator |
-| `_stat-confoundsrsquared.dscalar.nii` | Pooled nuisance-only OLS R² |
-| `_stat-deltarsquared.dscalar.nii` | Full minus nuisance R² |
-| `_stat-hrfdeltarsquared.dscalar.nii` | Optimized minus canonical full R²; expanded mode only |
-| `_stat-rtcorrelation.dscalar.nii`, `_stat-rtcount.dscalar.nii` | RT correlations and counts: all, odd, even, then individual runs |
-| `_metadata.json`, `_provenance.json` | Settings, numerical diagnostics, and fit records |
-
-Canonical mode also saves `desc-singletrialOLS_selectedvertices.tsv` and
-`desc-singletrialOLS_scatter.png` for the odd-to-even RT check. With ridge
-enabled, the scatterplot compares OLS and ridge at the same selected vertices.
-
-Canonical models save a design TSV per run. Expanded models save grouped
-designs in `run-XX_desc-hrfSelection_designs.npz`, since different grayordinates
-use different HRFs. The [developer guide](../../docs/development.md#nsd-exports-and-parallel-execution)
-describes how to reconstruct those matrices.
-
-#### HRF maps
-
-These use `desc-hrfSelection`:
-
-| Statistic / suffix | Contents |
-| --- | --- |
-| `stat-hrfindex`, `stat-hrfparameters` | All-run selected IDs and parameters |
-| `stat-oddhrfindex`, `stat-oddhrfparameters` | Odd-run selected IDs and parameters |
-| `stat-evenhrfindex`, `stat-evenhrfparameters` | Even-run selected IDs and parameters |
-| `stat-selectioncvr2`, `stat-canonicalcvr2`, `stat-deltacvr2` | All-run HRF selection score, canonical score, and difference |
-| `stat-testr2`, `stat-canonicaltestr2`, `stat-deltatestr2` | Independent even-run prediction scores from odd-trained models |
-| `_library.tsv`, `_curves.npz`, `_library.png` | HRF parameters, sampled curves, and library plot |
-| `_folds.tsv`, `_eligibility.tsv` | Fold memberships and candidate design checks |
-| `_metadata.json`, `_provenance.json` | Selection and prediction records |
-| `_splitmetadata.json`, `_splitprovenance.json` | Odd/even selection settings and records |
-| `_selectedvertices.tsv`, `_scatter.png`, `_selectedhrfs.png`, `_rt_provenance.json` | Independent RT check and selected-vertex HRFs |
-
-All `stat-*` entries in this table are `.dscalar.nii` files. Parameter files
-contain eight named maps: response delay, undershoot delay, response dispersion,
-undershoot dispersion, response/undershoot ratio, onset delay, duration, and
-`peak_time`. Peak time uses the maximum of the full HRF on its saved 0.1-second
-grid, including the onset delay and undershoot. It differs from the response-delay
-parameter.
-
-Compare matching maps in the odd/even parameter images to assess reliability.
-The numeric HRF IDs are categorical labels; use the library table to interpret
-them. The standalone expanded-HRF script exports parameter maps for comparison.
-The full workflow notebook computes odd/even curve correlations, and the
-session-reliability notebook computes across-session curve correlations and
-parameter variability. None of these outputs is an ICC.
-Standalone all-run response-delay and time-to-peak files in the development
-dataset were additional exports; new runs include both quantities in the
-parameter images above.
+Each `WorkflowSettings` field has a flag (for example `--max-grayordinates`,
+`--ridge-mode`, `--hrf-library`, `--skip-stage`, `--existing-results`); see
+`boldtailor run --help`. `--dry-run` prints the runs, task model, library size,
+and output directory without fitting. The report records the command that
+reproduces each run.
 
 ## Interpreting the diagnostics
 

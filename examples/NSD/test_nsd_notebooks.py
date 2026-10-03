@@ -354,7 +354,7 @@ def test_workflow_notebook_runs_the_package_workflow_and_shows_its_outputs(
     assert (output / "sub-07_ses-nsd10_task-nsdcore_report.html").is_file()
     files = [p for p in output.rglob("*") if p.is_file()]
     scalars = [p for p in files if p.name.endswith(".dscalar.nii")]
-    assert scalars and not any("desc-notebook" in p.name for p in files)
+    assert scalars
     curves = _assert_glm_and_hrf_exports({p.name: p for p in scalars}, files)
     _assert_beta_exports(scalars, files)
     metadata = _assert_metadata(files, library_config, curves)
