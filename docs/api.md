@@ -90,6 +90,8 @@ use the default task-only model.
 
 A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
 
+For several runs, contrasts are combined as equal-weight fixed effects. This is not precision-weighted: each run contributes equally regardless of its length or noise level, and degrees of freedom are summed. For runs with very different noise, compare against nilearn's `compute_fixed_effects` with precision weighting.
+
 `boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
 `contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`
 and `design_provenance`, it exposes `group_designs` and

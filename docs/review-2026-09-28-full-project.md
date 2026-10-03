@@ -47,6 +47,8 @@ important.
 
 ### 2.1 What is solid
 
+> 2026-10-02: the constant-feature masking described in §2.1 was not present in the tree; fixed in Task 1.1 of the remediation plan.
+
 - **Conventional GLM**: nilearn's OLS/AR(1) with t contrasts; rank-deficient
   designs are refit in a full-rank estimable basis with `n - rank` degrees of
   freedom (red-team finding #10 is remediated); exactly constant features are

@@ -1,5 +1,9 @@
 # Documentation audit — 2026-09-28
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 This audit checks the documentation against the `refactor/scientific-readability`
 branch after the results/diagnostics implementation at `2b126fc`.
 It does not claim to rerun historical real-data experiments.
@@ -31,7 +35,7 @@ It does not claim to rerun historical real-data experiments.
 | HRF workflows | Distinguished standalone fixed-HRF commands, selected-HRF notebook GLMs, dedicated saved-map reuse, and absence of a general selection-object loader |
 | Libraries | Distinguished the 649-entry expanded grid from the notebooks' default 513-entry Sobol library |
 | Reliability | Identified which notebooks compute curve correlations/parameter variability; none claims ICC inference |
-| Logging | Removed the blanket sanitization guarantee: conventional/grouped error logs can contain raw exception text; prepared fits sanitize separately |
+| Logging | Removed the blanket sanitization guarantee: conventional/grouped error logs can contain raw exception text; the prepared-fit sanitizer was removed |
 | Publication | Clarified writer locking, individual file replacements, rollback, concurrent-reader limits, and preflight exception types |
 | Historical evidence | Marked the NSD fractional audit's older normalized basis/candidate targets and the missing historical simulation-design file |
 | Navigation | Added a documentation index and repaired a notebook relative link |

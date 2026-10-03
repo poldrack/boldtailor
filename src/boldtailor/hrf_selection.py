@@ -70,6 +70,7 @@ def _activity(runs, library, labels, signature, task_model, name, **extra):
         task_model_fingerprint=task_model.fingerprint,
         task_regressors=list(task_model.regressor_names),
         profiled_regressors=list(task_model.profiled_names),
+        profiled_columns="fit in-sample per run with the candidate kernel; see user guide",
         score="nuisance_adjusted_task_model_prediction_r2",
         beta_units="native_signal",
         hrf_normalization=HRF_NORMALIZATION,

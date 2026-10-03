@@ -1,5 +1,9 @@
 # Notebook simplification and final architecture review
 
+> **Dated validation record:** Results and test counts apply to the recorded
+> revision/settings, not necessarily this checkout. See the
+> [documentation index](../README.md) for current API and methods guidance.
+
 Date: 2026-09-28. Branch: `refactor/scientific-readability`.
 Notebook increment baseline: `5269e72`. Full branch baseline: `57acff5`.
 

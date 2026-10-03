@@ -307,6 +307,9 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
     assert activity["task_model_fingerprint"] == nsd_model().fingerprint
     assert activity["task_regressors"] == ["task", "response_time", "trial_type"]
     assert activity["profiled_regressors"] == ["missing_response_time"]
+    assert activity["profiled_columns"] == (
+        "fit in-sample per run with the candidate kernel; see user guide"
+    )
     assert activity["min_onset"] == -24.0
     assert activity["oversampling"] == 50
     assert activity["score"] == "nuisance_adjusted_task_model_prediction_r2"

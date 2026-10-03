@@ -100,7 +100,7 @@ the two packages has been run in this repository.
 
 ## The local GLMsingle checkout
 
-The development checkout at `/Users/poldrack/Dropbox/code/GLMsingle` has a
+A local GLMsingle checkout has a
 modular Python API that goes beyond the interface described in the 2022 paper
 and online documentation. This description is pinned to revision
 `1de98a92e80754ff549c87b5c5b815b1aab8148c` for this comparison.

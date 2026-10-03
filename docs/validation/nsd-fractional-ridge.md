@@ -83,9 +83,8 @@ Saved R² used absolute tolerance `1e-7`; fold losses used relative tolerance
 `2e-7` and absolute tolerance `1e-4`. Float32 beta/prediction exports used
 relative tolerance `2e-6` and absolute tolerance `1e-4` in native signal units.
 
-Temporary verification records are `/private/tmp/verify_fraction_nsd.py`,
-`/private/tmp/fraction-nsd-smoke.log`, and
-`/private/tmp/nsd-fractional-cv-smoke/audit.json`.
+The temporary verification scripts and logs were not kept; see
+`examples/validation/` for the retained fractional-ridge validation scripts.
 
 The objective predicts candidate-regularized responses, whose values change
 with the fraction. It is not a measure of recovery of a common, unobserved

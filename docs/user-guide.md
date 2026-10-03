@@ -79,7 +79,7 @@ bases can include temporal/dispersion derivatives or a callable kernel. A
 fixed custom design gives you control over any additional regressors.
 
 For several runs, Boldtailor fits each run independently and combines
-contrasts as equal-weight fixed effects. P-values are directional, one-sided,
+contrasts as equal-weight fixed effects. This is not precision-weighted: each run contributes equally regardless of its length or noise level, and degrees of freedom are summed. For runs with very different noise, compare against nilearn's `compute_fixed_effects` with precision weighting. P-values are directional, one-sided,
 and uncorrected for multiple comparisons. `result.run_r2` contains one R²
 array per run; `result.r2` pools residual and total sums of squares across runs.
 A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
@@ -467,6 +467,12 @@ like a confound, but with the candidate HRF. `missing="error"` rejects
 non-finite values. A candidate is eligible when its task, indicator, and
 confound columns are full rank with residual degrees of freedom in every run
 and the pooled training design is invertible in every fold.
+
+Because the indicator column is convolved with each candidate kernel and fitted
+within the held-out run, a small part of each candidate's score is in-sample.
+With few missing trials this is negligible; with many, compare
+`at_parameter_bound` and `delta_cv_r2` against a `missing="error"` run on
+complete trials.
 
 This method assumes that task-model amplitudes transfer across runs. It does
 not require repeated images. The response of each event, as sampled on
