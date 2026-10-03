@@ -20,34 +20,6 @@ from tests.oracles import (
 )
 
 
-@pytest.fixture
-def single_run_problem():
-    rng = np.random.default_rng(7)
-    events = pd.DataFrame(
-        {
-            "onset": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0],
-            "duration": np.ones(6),
-            "trial_type": ["face", "house", "face", "house", "face", "house"],
-        }
-    )
-    frame_times = np.arange(30) * 2.0
-    design = peak_design_matrix(
-        frame_times,
-        events=events,
-        hrf_model="glover",
-        drift_model=None,
-        min_onset=-24.0,
-    )
-    beta = np.array([[2.0, 1.0], [0.5, 1.5], [10.0, 12.0]])
-    signals = design.to_numpy() @ beta + rng.normal(0.0, 0.05, (30, 2))
-    model = ModelSpec(
-        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
-        drift_model=None,
-        noise_model="ols",
-    )
-    return signals, events, design, model
-
-
 def _delta_r2_sources(*, signal_byte_size=4096) -> tuple[RunSources, ...]:
     return (
         RunSources(

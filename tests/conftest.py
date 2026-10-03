@@ -8,7 +8,9 @@ from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
+from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import peak_design_matrix
 
 
 def pytest_addoption(parser):
@@ -257,3 +259,31 @@ def fail_glm(monkeypatch):
         pytest.fail("run_glm must not be called before contrast preflight")
 
     monkeypatch.setattr("boldtailor._conventional.run_glm", fail)
+
+
+@pytest.fixture
+def single_run_problem():
+    rng = np.random.default_rng(7)
+    events = pd.DataFrame(
+        {
+            "onset": [0.0, 8.0, 16.0, 24.0, 32.0, 40.0],
+            "duration": np.ones(6),
+            "trial_type": ["face", "house", "face", "house", "face", "house"],
+        }
+    )
+    frame_times = np.arange(30) * 2.0
+    design = peak_design_matrix(
+        frame_times,
+        events=events,
+        hrf_model="glover",
+        drift_model=None,
+        min_onset=-24.0,
+    )
+    beta = np.array([[2.0, 1.0], [0.5, 1.5], [10.0, 12.0]])
+    signals = design.to_numpy() @ beta + rng.normal(0.0, 0.05, (30, 2))
+    model = ModelSpec(
+        contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
+        drift_model=None,
+        noise_model="ols",
+    )
+    return signals, events, design, model
