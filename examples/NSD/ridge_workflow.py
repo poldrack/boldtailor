@@ -29,7 +29,7 @@ from boldtailor.trial_encoding import (
 from boldtailor.cifti import spatial_signature
 from boldtailor.parallel import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
-from .workflow_analysis import fit_beta_series
+from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.model import TaskModel
 from boldtailor.workflow.files import odd_even_parity
 from boldtailor.workflow.inputs import (

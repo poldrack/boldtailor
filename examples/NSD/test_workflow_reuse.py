@@ -133,7 +133,8 @@ MODE_EXPORTS = dict(
 def test_notebook_reuses_saved_results_without_fitting(
     six_run_dataset, tmp_path, monkeypatch, mode
 ):
-    from examples.NSD import workflow_analysis, ridge_workflow
+    from boldtailor.workflow import analysis as workflow_analysis
+    from examples.NSD import ridge_workflow
     from examples.NSD.ridge_outputs import tuning_table
 
     root, prep = six_run_dataset
@@ -275,7 +276,7 @@ def test_metadata_records_peak_hrf_normalization(four_runs):
 
 def test_metadata_pools_hrf_bound_flags_over_blocks(four_runs):
     from boldtailor.hrf_library import PARAMETER_NAMES
-    from examples.NSD import workflow_analysis
+    from boldtailor.workflow import analysis as workflow_analysis
     from boldtailor.workflow.inputs import make_blocks
 
     library = HrfLibrary.from_parameters(

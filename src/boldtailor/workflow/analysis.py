@@ -1,6 +1,7 @@
-"""Blockwise public-API calls used by the NSD tutorial."""
+"""Blockwise public-API calls: HRF selection, GLMs, and beta series."""
 
 from contextlib import redirect_stdout
+import logging
 import os
 
 import numpy as np
@@ -14,11 +15,9 @@ from boldtailor.cifti import spatial_signature
 from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
 from boldtailor.workflow.files import odd_even_parity, reaction_times
-from boldtailor.workflow.inputs import (
-    NSD_TASK_MODEL,
-    REGRESSORS,
-    load_block,
-)
+from boldtailor.workflow.inputs import load_block
+
+log = logging.getLogger("boldtailor.workflow")
 
 
 def _signature(runs, indices):
@@ -26,7 +25,7 @@ def _signature(runs, indices):
 
 
 def _select_block(indices, runs, root, library, task_model):
-    data = load_block(runs, root, indices)
+    data = load_block(runs, root, indices, task_model)
     options = dict(
         library=library,
         run_labels=[r.label for r in runs],
@@ -41,18 +40,18 @@ def _select_block(indices, runs, root, library, task_model):
     )
 
 
-def select_hrfs(runs, root, blocks, library, *, n_jobs=1, task_model=NSD_TASK_MODEL):
+def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1):
     """Select on all runs and on each half; retain objects for later fits.
 
-    The GLM keeps the full NSD task model; pass a subset (for example
-    selection_task_model(False)) to score HRFs without the RT regressor.
+    The GLM keeps the full task model; pass a subset (for example
+    selection_task_model(task_model, False)) to score HRFs without RT.
     """
     selections = {}
     for indices, result in map_blocks(
         _select_block, blocks, args=(runs, root, library, task_model), n_jobs=n_jobs
     ):
         selections[tuple(indices)] = result
-        print(f"HRF selection: {indices[0]}–{indices[-1]}", flush=True)
+        log.info("HRF selection: %s–%s", indices[0], indices[-1])
     return selections
 
 
@@ -79,7 +78,8 @@ def selection_maps(selections, n_features):
 
 def _glm_block(job, runs, root, model):
     indices, selection = job
-    data = load_block(runs, root, indices)
+    data = load_block(runs, root, indices, model.task_model)
+    names = model.task_model.regressor_names
     options = (
         {}
         if selection is None
@@ -99,10 +99,10 @@ def _glm_block(job, runs, root, model):
         }
     )
     return dict(
-        effects=np.stack([result.effect(c) for c in REGRESSORS]),
-        variances=np.stack([result.variance(c) for c in REGRESSORS]),
-        t=np.stack([result.stat(c) for c in REGRESSORS]),
-        z=np.stack([result.z_score(c) for c in REGRESSORS]),
+        effects=np.stack([result.effect(c) for c in names]),
+        variances=np.stack([result.variance(c) for c in names]),
+        t=np.stack([result.stat(c) for c in names]),
+        z=np.stack([result.z_score(c) for c in names]),
         r2=np.stack([comparison.full_r2, comparison.nuisance_r2, comparison.delta_r2]),
         designs=designs,
         provenance=comparison.provenance.to_dict(),
@@ -119,9 +119,11 @@ def _jobs(blocks, selections):
 def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
     """Fit the same three contrasts using SPM or the selected HRF per feature."""
     n = runs[0].image.shape[1]
+    rows = len(model.task_model.regressor_names)
     result = {
-        key: np.full((3, n), np.nan) for key in ("effects", "variances", "t", "z", "r2")
+        key: np.full((rows, n), np.nan) for key in ("effects", "variances", "t", "z")
     }
+    result["r2"] = np.full((3, n), np.nan)
     result.update(designs={}, provenance=[])
     for (indices, _), block in map_blocks(
         _glm_block, _jobs(blocks, selections), args=(runs, root, model), n_jobs=n_jobs
@@ -129,7 +131,7 @@ def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
         for key in ("effects", "variances", "t", "z", "r2"):
             result[key][:, indices] = block[key]
         _collect_metadata(result, block, indices)
-        print(f"GLM: {indices[0]}–{indices[-1]}", flush=True)
+        log.info("GLM: %s–%s", indices[0], indices[-1])
     return result
 
 
@@ -163,9 +165,9 @@ def _trial_designs(result, runs, selection):
     return designs
 
 
-def _beta_block(job, runs, root, alpha, fractions=None):
+def _beta_block(job, runs, root, alpha, task_model, fractions=None):
     indices, selection = job
-    data = load_block(runs, root, indices)
+    data = load_block(runs, root, indices, task_model)
     options = dict(ridge_alpha=alpha, run_labels=[r.label for r in runs])
     if fractions is not None:
         options["ridge_fraction"] = fractions[indices]
@@ -193,10 +195,11 @@ def fit_beta_series(
     root,
     blocks,
     *,
+    task_model,
     selections=None,
     ridge_alpha=0.0,
-    n_jobs=1,
     ridge_fraction=None,
+    n_jobs=1,
 ):
     """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
@@ -208,7 +211,7 @@ def fit_beta_series(
     label = f"Beta series ({hrf}, " + (
         f"alpha={alpha:g})" if fractions is None else "fractional ridge)"
     )
-    print(f"{label}: fitting {len(runs)} runs in {len(blocks)} blocks", flush=True)
+    log.info("%s: fitting %d runs in %d blocks", label, len(runs), len(blocks))
     n = runs[0].image.shape[1]
     result = dict(
         betas=[np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs],
@@ -224,7 +227,7 @@ def fit_beta_series(
     for (indices, _), block in map_blocks(
         _beta_block,
         _jobs(blocks, selections),
-        args=(runs, root, ridge_alpha, fractions),
+        args=(runs, root, ridge_alpha, task_model, fractions),
         n_jobs=n_jobs,
     ):
         for target, values in zip(result["betas"], block["betas"], strict=True):
@@ -236,10 +239,16 @@ def fit_beta_series(
             )
         result["trial_table"] = block["trial_table"]
         _collect_metadata(result, block, indices)
-    result["rt"] = correlate_rt(
+    result["rt"] = _rt_correlations(result, runs, task_model)
+    log.info("%s: complete", label)
+    return result
+
+
+def _rt_correlations(result, runs, task_model):
+    if "response_time" not in task_model.regressor_names:
+        return None
+    return correlate_rt(
         result["betas"],
         reaction_times(runs),
         run_numbers=[r.number for r in runs],
     )
-    print(f"{label}: complete", flush=True)
-    return result

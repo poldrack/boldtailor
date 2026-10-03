@@ -19,7 +19,7 @@ from .workflow_artifacts import (
     table_artifact,
 )
 from boldtailor.workflow.files import input_paths
-from .workflow_analysis import selection_maps
+from boldtailor.workflow.analysis import selection_maps
 from boldtailor.workflow.inputs import (
     NSD_TASK_MODEL,
     REGRESSORS,

@@ -141,7 +141,7 @@ def test_malformed_cache_manifest_is_recomputed(
 def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
     from boldtailor.workflow.inputs import load_session, make_blocks
-    from examples.NSD.workflow_analysis import select_hrfs
+    from boldtailor.workflow.analysis import select_hrfs
     from examples.NSD.workflow_outputs import (
         _hrf_artifacts,
         _input_artifacts,
