@@ -135,7 +135,9 @@ def kernel_task_columns(frame_times, events, kernel, model, run):
     callable's name, which must neither rename contrasts nor hit a confound.
     """
     try:
-        scaled = scale_event_amplitudes(events, kernel, frame_times, model.oversampling)
+        scaled = scale_event_amplitudes(
+            events, kernel, frame_times, model.oversampling, model.min_onset
+        )
         task = make_first_level_design_matrix(
             frame_times,
             events=scaled,

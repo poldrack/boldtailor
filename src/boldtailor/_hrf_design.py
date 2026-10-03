@@ -73,10 +73,10 @@ def hrf_metadata(candidate):
     )
 
 
-def event_response_peak(kernel, duration, dt):
-    """Peak of a boxcar of round(duration/dt) samples (at least one) * kernel."""
+def boxcar_response_peak(kernel, count):
+    """Exact peak of a ``count``-sample unit boxcar convolved with the kernel."""
     kernel = np.asarray(kernel, dtype=float)
-    n = max(1, int(round(float(duration) / dt)))
+    n = max(1, int(count))
     prefix = np.r_[0.0, np.cumsum(kernel)]
     j = np.arange(len(kernel) + n - 1)
     upper = np.minimum(j + 1, len(kernel))
@@ -87,16 +87,33 @@ def event_response_peak(kernel, duration, dt):
     return peak
 
 
-def _kernel_scales(kernel, durations, dt):
-    unique, inverse = np.unique(np.asarray(durations, dtype=float), return_inverse=True)
-    peaks = np.array([event_response_peak(kernel, d, dt) for d in unique])
+def _count_scales(kernel, counts):
+    unique, inverse = np.unique(np.maximum(1, counts), return_inverse=True)
+    peaks = np.array([boxcar_response_peak(kernel, n) for n in unique])
     return 1 / peaks[inverse.reshape(-1)]
 
 
-def event_response_scales(kernel_fn, durations, tr, oversampling=50):
-    """Per-event amplitude that gives each predicted response a peak of one."""
-    kernel = kernel_fn(tr, oversampling)
-    return _kernel_scales(kernel, durations, tr / oversampling)
+def _realized_counts(onsets, durations, frame_times, oversampling, min_onset):
+    """Samples Nilearn's boxcar occupies for each event on its oversampled grid."""
+    timing = np.column_stack(
+        [np.asarray(onsets, dtype="<f8"), np.asarray(durations, dtype="<f8")]
+    )
+    starts, stops, *_ = _boxcar_sampling(
+        timing.tobytes(),
+        np.asarray(frame_times, dtype="<f8").tobytes(),
+        int(oversampling),
+        float(min_onset),
+    )
+    return stops - starts
+
+
+def event_response_scales(
+    kernel_fn, onsets, durations, frame_times, oversampling=50, min_onset=-24.0
+):
+    """Amplitudes giving each event's realized oversampled response a unit peak."""
+    kernel = kernel_fn(frame_tr(frame_times), oversampling)
+    counts = _realized_counts(onsets, durations, frame_times, oversampling, min_onset)
+    return _count_scales(kernel, counts)
 
 
 def frame_tr(frame_times):
@@ -104,10 +121,10 @@ def frame_tr(frame_times):
     return float(np.min(np.diff(np.asarray(frame_times, dtype=float))))
 
 
-def scale_event_amplitudes(events, kernel_fn, frame_times, oversampling):
+def scale_event_amplitudes(events, kernel_fn, frame_times, oversampling, min_onset):
     """Events with modulation scaled so each response peaks at one."""
     scales = event_response_scales(
-        kernel_fn, events.duration, frame_tr(frame_times), oversampling
+        kernel_fn, events.onset, events.duration, frame_times, oversampling, min_onset
     )
     modulation = events["modulation"] if "modulation" in events else 1.0
     return events.assign(modulation=modulation * scales)
@@ -118,7 +135,7 @@ def convolve_events(onsets, durations, times, candidate, name="stimulus"):
     if np.any(onsets < times[0] - 24) or np.any(onsets >= times[-1]):
         raise ValueError(f"{name}: onset has no supported sampled response")
     kernel_fn = hrf_model(candidate)
-    scales = event_response_scales(kernel_fn, durations, frame_tr(times), 50)
+    scales = event_response_scales(kernel_fn, onsets, durations, times)
     column, _ = compute_regressor(
         np.array([onsets, durations, scales]),
         kernel_fn,
@@ -141,12 +158,12 @@ def stimulus_regressor(events, frame_times, candidate):
 
 
 @lru_cache(maxsize=64)
-def _boxcar_sampling(timing_bytes, times_bytes):
+def _boxcar_sampling(timing_bytes, times_bytes, oversampling=50, min_onset=-24.0):
     timing = np.frombuffer(timing_bytes, dtype="<f8").reshape(-1, 2)
     times = np.frombuffer(times_bytes, dtype="<f8")
     condition = np.vstack([timing.T, np.ones(len(timing))])
     # Pinned Nilearn 0.14: retain its precise event grid and impulse convention.
-    _, grid = _sample_condition(condition, times, oversampling=50)
+    _, grid = _sample_condition(condition, times, oversampling, min_onset)
     starts = np.minimum(np.searchsorted(grid, timing[:, 0]), len(grid) - 1)
     stops = np.minimum(np.searchsorted(grid, timing.sum(axis=1)), len(grid) - 1)
     stops = np.where((stops == starts) & (stops < len(grid) - 1), stops + 1, stops)
@@ -176,7 +193,7 @@ def trial_regressors(events, frame_times, candidate):
     )
     tr = frame_tr(times)
     kernel = hrf_kernel(candidate, tr, 50)
-    scales = _kernel_scales(kernel, events.duration, tr / 50)
+    scales = _count_scales(kernel, stops - starts)
     prefix = np.r_[0.0, np.cumsum(kernel)]
 
     def sampled(indices):

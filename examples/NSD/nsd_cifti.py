@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import compute_regressor
 
-from boldtailor._hrf_design import event_response_scales, frame_tr, hrf_model
+from boldtailor._hrf_design import event_response_scales, hrf_model
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.provenance import RunSources, SourceRef
@@ -150,7 +150,7 @@ def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFra
     rt = values.response_time.to_numpy()
     amplitudes = {"stimulus": np.ones(len(values)), "response_time": rt - rt.mean()}
     scales = event_response_scales(
-        hrf_model("spm"), values.duration, frame_tr(frame_times), 50
+        hrf_model("spm"), values.onset, values.duration, frame_times
     )
     columns = {}
     for name, amplitude in amplitudes.items():

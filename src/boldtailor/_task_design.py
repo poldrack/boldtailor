@@ -75,7 +75,7 @@ def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50
     times = np.asarray(frame_times, dtype=float)
     hrf = resolve_hrf(hrf)
     if callable(hrf):
-        expanded = scale_event_amplitudes(expanded, hrf, times, oversampling)
+        expanded = scale_event_amplitudes(expanded, hrf, times, oversampling, min_onset)
     with redirect_stdout(io.StringIO()):
         matrix = make_first_level_design_matrix(
             times,
