@@ -22,7 +22,8 @@ selection = select_ridge_fractions(scores)
 Selection results retain `RidgeSelection.alphas` and
 `FractionSelection.fractions`: their selection operations differ. Saved
 scientific artifacts and provenance retain their `alphas` and `fractions`
-keys. Numerical values, ordering, ownership, and scoring definitions are unchanged.
+keys. Ordering, ownership, and scoring definitions are unchanged; beta
+magnitudes are not (see "2026-10-02 beta scale and identities" below).
 
 
 Single-trial fits now return `SingleTrialResult` for both shared and
@@ -70,3 +71,35 @@ Every result dataclass is keyword-only: positional construction raises
 `trial_table` now has the same column order as the shared-HRF table:
 `trial_index`, `trial_id`, `run_label`, `event_index`, the event columns, then
 `run_index`.
+
+## 2026-10-02 beta scale and identities
+
+Every event response is now scaled to a peak of one on Nilearn's oversampled
+grid. This applies to plain `ModelSpec(hrf_model="spm")` and
+`ModelSpec(hrf_model="glover")` as well as to selected HRFs, so effect sizes
+and their variances differ from Nilearn `FirstLevelModel` on the same events
+and from earlier boldtailor releases. t, z, p, and R² are unchanged. The
+factor depends on event duration and kernel: for canonical SPM, 3 s events,
+and TR 1.6 s, an event's response under the earlier sum-to-one kernel peaked at
+87.3 / 148.2 (event peak against kernel sum) ≈ 0.59, so current betas are about
+0.59 times the earlier ones. Shorter events give smaller factors and longer
+events larger ones. Nilearn derivative and FIR bases and user-supplied kernels
+are not rescaled.
+
+Related changes to saved records:
+
+- Analysis IDs changed, because the recorded model and HRF normalization
+  changed; earlier saved IDs do not match new runs of the same analysis.
+- The `hrf` entry of single-trial provenance (`hrf_metadata("spm")`) is now a
+  dictionary (`id`, `kind`, `parameters`, `kernel_fingerprint`,
+  `normalization`) instead of the string `"spm"`.
+- BIDS provenance `Command` values name the public entry point, for example
+  `boldtailor.select_hrfs`, `boldtailor.fit`, `boldtailor.fit_single_trials`,
+  `boldtailor.fit_selected_hrfs`, `boldtailor.evaluate_hrf_split`,
+  `boldtailor.score_ridge_candidates`, and `boldtailor.score_fraction_candidates`.
+- Publication control data (lock, staging, backups, and `failures.jsonl`) moved
+  out of the dataset into the sibling `<destination>.boldtailor/` directory;
+  see [publication-migration.md](publication-migration.md).
+- The selected-HRF `trial_table` (and saved `trials.tsv`) column order is now
+  `trial_index`, `trial_id`, `run_label`, `event_index`, the event columns,
+  then `run_index`, matching the shared-HRF table.

@@ -496,6 +496,12 @@ stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
 duration, and comparable across grayordinates with different selected HRFs.
 This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given.
+Because each event's response is scaled to unit peak, a longer event no longer
+produces a larger regressor; variable-epoch models (for example duration = RT)
+therefore no longer encode duration-driven amplitude growth — put duration in
+a modulator if that is the intended effect. An event whose response is cut off
+by the end of the run is scaled by its realized sample count, so its column
+can exceed one; keep at least one HRF length of scans after the last event.
 
 The winning selection-CV score was used to choose the HRF. For independent
 evaluation, select within a training set and predict a separate test set:
