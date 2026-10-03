@@ -322,3 +322,57 @@ def test_every_operation_records_the_software_environment(name, run_entry_point)
     result = run_entry_point(name)
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["software"] == software_environment()
+
+
+@pytest.fixture
+def sourced_calls(selected_fixture, selected_glm_problem, complete_sources):
+    data, selection = selected_fixture
+    sourced = from_arrays(
+        data.signals,
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+        sources=complete_sources(data.n_runs),
+    )
+    library = selection.library
+    glm_data, model, kwargs, _ = selected_glm_problem
+    split = dict(library=library, train_runs=[0, 1], test_runs=[2])
+
+    def choose(target):
+        return select_hrf(target, library=library, feature_signature="ordered-axis")
+
+    def selected_fit():
+        return fit_selected_hrfs(
+            sourced, selection=choose(sourced), feature_signature="ordered-axis"
+        )
+
+    def glm_fit():
+        glm_kwargs = dict(kwargs, hrf_selection=choose(glm_data))
+        return fit(glm_data, model, **glm_kwargs)
+
+    return {
+        "hrf_independent_evaluation": lambda: evaluate_hrf_split(sourced, **split),
+        "selected_hrf_single_trial": selected_fit,
+        "selected_glm_fit": glm_fit,
+    }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["hrf_independent_evaluation", "selected_hrf_single_trial", "selected_glm_fit"],
+)
+def test_analysis_ids_do_not_depend_on_the_software_environment(
+    name, sourced_calls, monkeypatch
+):
+    first = sourced_calls[name]().provenance
+    assert first.analysis_fingerprint is not None
+    changed = {k: f"changed-{v}" for k, v in software_environment().items()}
+    for module in ("_fit_lifecycle", "data", "prepared"):
+        monkeypatch.setattr(
+            f"boldtailor.{module}.software_environment", lambda: changed
+        )
+    second = sourced_calls[name]().provenance
+    assert first.to_dict()["activities"][-1]["software"] != (
+        second.to_dict()["activities"][-1]["software"]
+    )
+    assert first.analysis_fingerprint == second.analysis_fingerprint
