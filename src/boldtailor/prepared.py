@@ -19,6 +19,7 @@ from boldtailor.data import (
     _prepare_timing,
     _validate_feature_counts,
 )
+from boldtailor._software import software_environment
 from boldtailor.logging import (
     _emit_record,
     _make_event,
@@ -247,6 +248,7 @@ def _normalization_activity(
         "run_design_fingerprints": list(run_fingerprints),
         "design_fingerprint": design_fingerprint,
         "run_metadata": [_thaw(metadata) for metadata in run_metadata],
+        "software": software_environment(),
     }
     if provenance_metadata is not None:
         activity["metadata"] = _thaw(provenance_metadata)

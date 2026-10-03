@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import readonly_array
+from boldtailor._software import software_environment
 from boldtailor.logging import (
     _emit_record,
     _make_event,
@@ -264,6 +265,7 @@ def _normalization_activity(
         "timing_source": timing_source,
         "run_count": n_runs,
         "feature_count": n_features,
+        "software": software_environment(),
     }
     if provenance_metadata is not None:
         activity["metadata"] = provenance_metadata
