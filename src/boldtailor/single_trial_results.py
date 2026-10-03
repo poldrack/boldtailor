@@ -7,26 +7,24 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import readonly_array
+from boldtailor._arrays import own_array_tuples, own_fields, readonly_array, rebind
 from boldtailor.data import _owned_table
 from boldtailor.provenance import ProvenanceRecord
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SharedTrialDesign:
     _matrices: tuple[pd.DataFrame, ...]
 
     def __post_init__(self):
-        object.__setattr__(
-            self, "_matrices", tuple(d.copy(deep=True) for d in self._matrices)
-        )
+        rebind(self, _matrices=tuple(d.copy(deep=True) for d in self._matrices))
 
     @property
     def matrices(self):
         return tuple(d.copy(deep=True) for d in self._matrices)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelectedTrialDesign:
     """Selected HRF IDs; each fitted (run, HRF) design is rebuilt on request."""
 
@@ -36,16 +34,14 @@ class SelectedTrialDesign:
     _rebuild: Callable[[int, int], np.ndarray] = field(compare=False, repr=False)
 
     def __post_init__(self):
-        object.__setattr__(
-            self, "hrf_indices", readonly_array(self.hrf_indices, dtype=np.int64)
-        )
+        own_fields(self, ("hrf_indices",), dtype=np.int64)
 
     def matrix(self, run: int, hrf_id: int) -> np.ndarray:
         """Trial columns then nuisance columns; KeyError for unfitted pairs."""
         return readonly_array(self._rebuild(run, hrf_id))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SingleTrialResult:
     run_betas: tuple[np.ndarray, ...]
     _trial_table: pd.DataFrame
@@ -63,22 +59,15 @@ class SingleTrialResult:
 
     def __post_init__(self):
         if self.ridge_fraction is not None:
-            object.__setattr__(
-                self, "ridge_fraction", readonly_array(self.ridge_fraction)
-            )
-            object.__setattr__(
-                self,
-                "run_ridge_alphas",
-                tuple(readonly_array(a) for a in self.run_ridge_alphas),
-            )
-        for name in ("run_betas", "run_full_r2", "run_nuisance_r2"):
-            object.__setattr__(
-                self, name, tuple(readonly_array(a) for a in getattr(self, name))
-            )
-        for name in ("full_r2", "nuisance_r2", "delta_r2"):
-            object.__setattr__(self, name, readonly_array(getattr(self, name)))
-        object.__setattr__(self, "_trial_table", _owned_table(self._trial_table))
-        object.__setattr__(self, "_diagnostics", deepcopy(self._diagnostics))
+            own_fields(self, ("ridge_fraction",))
+            own_array_tuples(self, ("run_ridge_alphas",))
+        own_array_tuples(self, ("run_betas", "run_full_r2", "run_nuisance_r2"))
+        own_fields(self, ("full_r2", "nuisance_r2", "delta_r2"))
+        rebind(
+            self,
+            _trial_table=_owned_table(self._trial_table),
+            _diagnostics=deepcopy(self._diagnostics),
+        )
 
     @property
     def trial_table(self):

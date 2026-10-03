@@ -2,19 +2,18 @@
 
 from collections.abc import Callable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass, field, fields
-from types import MappingProxyType
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import readonly_array
+from boldtailor._arrays import own_array_tuples, own_fields, rebind
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
-from boldtailor.results import _AnalysisAccessors, _ContrastResult
+from boldtailor.results import _AnalysisAccessors, _ContrastResult, owned_contrasts
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class HrfAnalysisResult(_AnalysisAccessors):
     """Contrast maps in input feature order; designs rebuilt per (run, HRF ID)."""
 
@@ -29,23 +28,13 @@ class HrfAnalysisResult(_AnalysisAccessors):
     )
 
     def __post_init__(self):
-        contrasts = {
-            name: _ContrastResult(
-                **{
-                    item.name: readonly_array(getattr(values, item.name))
-                    for item in fields(_ContrastResult)
-                }
-            )
-            for name, values in self._contrasts.items()
-        }
-        object.__setattr__(self, "_contrasts", MappingProxyType(contrasts))
-        object.__setattr__(self, "_r2", readonly_array(self._r2))
-        object.__setattr__(
-            self, "_run_r2", tuple(readonly_array(a) for a in self._run_r2)
+        rebind(
+            self,
+            _contrasts=owned_contrasts(self._contrasts),
+            _group_design_provenance=self.group_design_provenance,
         )
-        object.__setattr__(
-            self, "_group_design_provenance", self.group_design_provenance
-        )
+        own_fields(self, ("_r2",))
+        own_array_tuples(self, ("_run_r2",))
 
     @property
     def hrf_selection(self) -> HrfSelectionResult:

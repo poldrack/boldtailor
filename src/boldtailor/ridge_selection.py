@@ -50,7 +50,12 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     winner = np.flatnonzero(objectives >= objectives.max() - TIE_TOLERANCE)[0]
     at_boundary = winner in (0, len(alphas) - 1)
     return RidgeSelection(
-        alphas[winner], alphas, objectives, float(percentile), mask, at_boundary
+        ridge_alpha=alphas[winner],
+        alphas=alphas,
+        objective_scores=objectives,
+        percentile=float(percentile),
+        scoring_mask=mask,
+        at_boundary=at_boundary,
     )
 
 

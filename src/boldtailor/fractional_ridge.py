@@ -42,7 +42,14 @@ def select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None):
         best[mask] = values[winner, np.arange(mask.sum())]
         indices[mask] = winner
         at_boundary[mask] = np.isin(winner, [0, len(grid) - 1])
-    return FractionSelection(grid, selected, best, indices, mask, at_boundary)
+    return FractionSelection(
+        fractions=grid,
+        ridge_fraction=selected,
+        selected_r2=best,
+        fraction_indices=indices,
+        scoring_mask=mask,
+        at_boundary=at_boundary,
+    )
 
 
 def score_fraction_candidates(

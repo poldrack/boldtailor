@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
-from boldtailor._arrays import readonly_array
+from boldtailor._arrays import (
+    own_array_tuples,
+    own_fields,
+    readonly_array,
+    rebind,
+)
 from boldtailor._fit_diagnostics import validate_nested_ols_delta
 from boldtailor.provenance import ProvenanceRecord
 
@@ -28,13 +33,25 @@ class _NilearnContrast(Protocol):
     def p_value(self) -> np.ndarray: ...
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _ContrastResult:
     effect: np.ndarray
     variance: np.ndarray
     stat: np.ndarray
     z_score: np.ndarray
     one_sided_p_value: np.ndarray
+
+    def __post_init__(self):
+        own_fields(self, [item.name for item in fields(self)])
+
+
+def owned_contrasts(
+    contrasts: Mapping[str, _ContrastResult],
+) -> Mapping[str, _ContrastResult]:
+    """Read-only name-to-contrast mapping; each contrast owns its arrays."""
+    if any(not isinstance(value, _ContrastResult) for value in contrasts.values()):
+        raise ValueError("contrast values must be contrast results")
+    return MappingProxyType(dict(contrasts))
 
 
 class _AnalysisAccessors:
@@ -81,7 +98,7 @@ class _AnalysisAccessors:
             raise KeyError(f"unknown contrast {name!r}") from error
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AnalysisResult(_AnalysisAccessors):
     _contrasts: Mapping[str, _ContrastResult]
     _design_matrices: tuple[pd.DataFrame, ...]
@@ -89,6 +106,18 @@ class AnalysisResult(_AnalysisAccessors):
     _run_r2: tuple[np.ndarray, ...]
     _r2: np.ndarray
     _provenance: ProvenanceRecord
+
+    def __post_init__(self):
+        rebind(
+            self,
+            _contrasts=owned_contrasts(self._contrasts),
+            _design_matrices=tuple(f.copy(deep=True) for f in self._design_matrices),
+            _design_provenance=tuple(
+                MappingProxyType(dict(values)) for values in self._design_provenance
+            ),
+        )
+        own_array_tuples(self, ("_run_r2",))
+        own_fields(self, ("_r2",))
 
     @property
     def design_matrices(self) -> tuple[pd.DataFrame, ...]:
@@ -99,7 +128,7 @@ class AnalysisResult(_AnalysisAccessors):
         return self._design_provenance
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TaskDeltaR2Result:
     _full_r2: np.ndarray
     _nuisance_r2: np.ndarray
@@ -109,6 +138,19 @@ class TaskDeltaR2Result:
     _raw_min: float
     _nuisance_design_matrices: tuple[pd.DataFrame, ...]
     _provenance: ProvenanceRecord
+
+    def __post_init__(self):
+        own_fields(self, _DELTA_ARRAYS)
+        if len({getattr(self, name).shape for name in _DELTA_ARRAYS}) != 1:
+            raise ValueError("delta r-squared arrays must have equal shapes")
+        rebind(
+            self,
+            _negative_voxel_count=int(self._negative_voxel_count),
+            _raw_min=float(self._raw_min),
+            _nuisance_design_matrices=tuple(
+                frame.copy(deep=True) for frame in self._nuisance_design_matrices
+            ),
+        )
 
     @property
     def full_r2(self) -> np.ndarray:
@@ -143,6 +185,9 @@ class TaskDeltaR2Result:
         return self._provenance
 
 
+_DELTA_ARRAYS = ("_full_r2", "_nuisance_r2", "_raw_delta_r2", "_delta_r2")
+
+
 def make_result(
     contrasts: Mapping[str, _ContrastResult],
     designs: tuple[pd.DataFrame, ...],
@@ -152,13 +197,11 @@ def make_result(
     provenance: ProvenanceRecord,
 ) -> AnalysisResult:
     return AnalysisResult(
-        _contrasts=MappingProxyType(dict(contrasts)),
-        _design_matrices=tuple(frame.copy(deep=True) for frame in designs),
-        _design_provenance=tuple(
-            MappingProxyType(dict(values)) for values in design_provenance
-        ),
-        _run_r2=tuple(readonly_array(values) for values in run_r2),
-        _r2=readonly_array(r2),
+        _contrasts=contrasts,
+        _design_matrices=tuple(designs),
+        _design_provenance=tuple(design_provenance),
+        _run_r2=tuple(run_r2),
+        _r2=r2,
         _provenance=provenance,
     )
 
@@ -175,8 +218,8 @@ def make_task_delta_r2_result(
     raw, clipped = _delta_r2_arrays(full, nuisance, allow_undefined)
     defined = raw[np.isfinite(raw)]
     return TaskDeltaR2Result(
-        _full_r2=readonly_array(full),
-        _nuisance_r2=readonly_array(nuisance),
+        _full_r2=full,
+        _nuisance_r2=nuisance,
         _raw_delta_r2=raw,
         _delta_r2=clipped,
         _negative_voxel_count=int(np.count_nonzero(defined < 0.0)),
@@ -254,11 +297,11 @@ def _is_finite_numeric_design(frame: pd.DataFrame) -> bool:
 
 def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
     return _ContrastResult(
-        effect=readonly_array(contrast.effect_size()),
-        variance=readonly_array(contrast.effect_variance()),
-        stat=readonly_array(contrast.stat()),
-        z_score=readonly_array(contrast.z_score()),
-        one_sided_p_value=readonly_array(contrast.p_value()),
+        effect=contrast.effect_size(),
+        variance=contrast.effect_variance(),
+        stat=contrast.stat(),
+        z_score=contrast.z_score(),
+        one_sided_p_value=contrast.p_value(),
     )
 
 
@@ -268,7 +311,7 @@ def mask_contrast(result: _ContrastResult, undefined: np.ndarray) -> _ContrastRe
     def masked(values: np.ndarray) -> np.ndarray:
         out = np.array(values, dtype=float, copy=True)
         out[undefined] = np.nan
-        return readonly_array(out)
+        return out
 
     return _ContrastResult(
         **{f.name: masked(getattr(result, f.name)) for f in fields(_ContrastResult)}

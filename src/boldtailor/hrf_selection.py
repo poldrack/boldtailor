@@ -124,15 +124,15 @@ def _select(
     )
     provenance = _provenance(operation, data, activity)
     return HrfSelectionResult(
-        indices,
-        selected,
-        canonical,
-        selected - canonical,
-        library,
-        eligibility,
-        labels,
-        signature,
-        provenance,
+        hrf_indices=indices,
+        cv_r2=selected,
+        canonical_cv_r2=canonical,
+        delta_cv_r2=selected - canonical,
+        library=library,
+        _eligibility=eligibility,
+        run_labels=labels,
+        feature_signature=signature,
+        provenance=provenance,
         task_model=task_model,
         at_parameter_bound=_at_parameter_bound(library, indices),
     )
@@ -279,12 +279,16 @@ def _evaluate_split(
         frozen_task_amplitudes=True,
     )
     provenance = _provenance(operation, data, activity)
+    amplitudes, chosen, canonical, delta = scores
     return HrfEvaluationResult(
-        selection,
-        *scores,
-        train,
-        test,
-        provenance,
+        training_selection=selection,
+        training_amplitudes=amplitudes,
+        test_r2=chosen,
+        canonical_test_r2=canonical,
+        delta_test_r2=delta,
+        train_runs=train,
+        test_runs=test,
+        provenance=provenance,
         amplitude_names=task_model.regressor_names,
     )
 

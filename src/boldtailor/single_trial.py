@@ -110,7 +110,7 @@ def _assemble_result(compiled, trials, fits, alpha, provenance, fractions=None):
     return SingleTrialResult(
         run_betas=tuple(f.betas for f in fits),
         _trial_table=trials,
-        design=SharedTrialDesign(designs),
+        design=SharedTrialDesign(_matrices=designs),
         run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
         run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
         full_r2=full,

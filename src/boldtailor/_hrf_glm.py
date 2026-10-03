@@ -125,13 +125,13 @@ def _assemble(data, model, selection, context, fits, provenance):
         for run, fitted in enumerate(fits[cid].run_fits):
             run_r2[run][indices] = fitted.r2
     return HrfAnalysisResult(
-        contrasts,
-        run_r2,
-        r2,
-        provenance,
-        selection,
-        group_diagnostics(context.groups),
-        group_design_builder(
+        _contrasts=contrasts,
+        _run_r2=run_r2,
+        _r2=r2,
+        _provenance=provenance,
+        _selection=selection,
+        _group_design_provenance=group_diagnostics(context.groups),
+        _group_builder=group_design_builder(
             data, model, selection, context.nuisance, context.groups.keys()
         ),
     )
