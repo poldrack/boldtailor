@@ -9,7 +9,12 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from boldtailor.publication import Artifact, PublicationError, publish_artifact_set
+from boldtailor.publication import (
+    Artifact,
+    PublicationError,
+    is_control_directory,
+    publish_artifact_set,
+)
 
 
 def _publication_worker(destination, marker, start, results):
@@ -730,3 +735,17 @@ def test_recovery_directory_names_a_directory_that_exists(tmp_path, monkeypatch)
     assert caught.value.rollback_errors
     assert recovery is not None and recovery.is_dir()
     assert recovery.name.startswith("stage-")
+
+
+def test_control_sibling_shares_the_destination_prefix_and_is_identifiable(tmp_path):
+    # A "boldtailor-*" glob of the parent matches both the published directory
+    # and its control sibling, in filesystem order. Consumers that locate the
+    # destination by prefix must be able to tell the two apart.
+    destination = tmp_path / "boldtailor-abc123"
+    publish_artifact_set(destination, (Artifact("a.bin", b"a"),))
+
+    matches = sorted(tmp_path.glob("boldtailor-*"))
+
+    assert len(matches) == 2
+    assert [is_control_directory(path) for path in matches] == [False, True]
+    assert [path for path in matches if not is_control_directory(path)] == [destination]
