@@ -9,6 +9,7 @@ import pytest
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
+from boldtailor.hrf_selection import evaluate_hrf_split, select_hrf
 from boldtailor.logging import emit_event
 from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -25,6 +26,8 @@ ENTRY_POINTS = [
     "prepared_task_delta_r2",
     "selected_glm_fit",
     "selected_glm_task_delta_r2",
+    "hrf_selection",
+    "hrf_independent_evaluation",
 ]
 # Entry points whose lifecycle events are not named after the entry point.
 EVENT_PREFIX = {
@@ -151,6 +154,22 @@ def _single_trial_calls(selected_fixture):
     }
 
 
+def _selection_calls(selected_fixture):
+    data, selection = selected_fixture
+    library = selection.library
+    split = dict(library=library, train_runs=[0, 1], test_runs=[2])
+    return {
+        "hrf_selection": (
+            lambda: select_hrf(data, library=library),
+            lambda: select_hrf(data, library="not a library"),
+        ),
+        "hrf_independent_evaluation": (
+            lambda: evaluate_hrf_split(data, **split),
+            lambda: evaluate_hrf_split(data, **dict(split, test_runs=[1])),
+        ),
+    }
+
+
 def _prepared_calls(prepared_problem):
     prepared, kwargs, full = prepared_problem
     bad = dict(kwargs, model_metadata={"bad": object()})
@@ -188,6 +207,7 @@ def entry_calls(glm_problem, selected_fixture, prepared_problem, selected_glm_pr
     return {
         **_glm_calls(glm_problem),
         **_single_trial_calls(selected_fixture),
+        **_selection_calls(selected_fixture),
         **_prepared_calls(prepared_problem),
         **_selected_glm_calls(selected_glm_problem),
     }
