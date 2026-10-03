@@ -298,7 +298,9 @@ betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
 ```
 
 Each grayordinate chooses its own fraction by maximizing pooled held-out
-encoding R². Ties within `1e-12` favor the largest fraction. Fractions must
+encoding R². Ties within `1e-12` favor the largest fraction. `at_boundary`
+marks features whose winner sits at an end of the candidate grid; a high
+proportion means the grid should be extended. Fractions must
 have finite scores across all candidates at that location; undefined locations
 receive NaN. A zero OLS task-coefficient norm has undefined fractional
 shrinkage and is excluded. Negative scores remain valid.
@@ -422,6 +424,9 @@ ranges as the original grid: response delay 3–6 s, undershoot delay 10–16 s,
 response dispersion 0.5–1.5, undershoot dispersion 0.5–2.5,
 response/undershoot ratio 2–8, and onset delay 0–2 s. Custom curves span 36 s.
 The sample count must be a power of two; the seed controls reproducibility.
+`at_parameter_bound` marks features whose selected kernel lies within 2 % of
+the sampled parameter box; the default box implies peak times of roughly
+1.5–7.5 s, so late-peaking responses will saturate at the box edge.
 This balances coverage in parameter space, though similar waveforms can still
 arise from different parameter combinations.
 

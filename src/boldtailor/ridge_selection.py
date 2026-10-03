@@ -20,6 +20,8 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
 
     Only features finite for every candidate enter the common mask. Negative
     scores are valid. Objective ties within 1e-12 prefer the smaller penalty.
+    ``at_boundary`` is True when the winner is the smallest or largest alpha
+    (always True for a one-point grid).
     """
     grid = _alpha_grid(alphas)
     scores = np.asarray(candidate_r2, dtype=float)
@@ -46,7 +48,10 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
         scores[order][:, mask], percentile, axis=1, method="linear"
     )
     winner = np.flatnonzero(objectives >= objectives.max() - 1e-12)[0]
-    return RidgeSelection(alphas[winner], alphas, objectives, float(percentile), mask)
+    at_boundary = winner in (0, len(alphas) - 1)
+    return RidgeSelection(
+        alphas[winner], alphas, objectives, float(percentile), mask, at_boundary
+    )
 
 
 def score_ridge_candidates(

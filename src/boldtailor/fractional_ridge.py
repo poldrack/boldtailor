@@ -11,6 +11,8 @@ def select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None):
 
     A feature must have finite scores at every candidate. Ineligible features
     return NaN fractions/scores and index -1, including entirely invalid blocks.
+    ``at_boundary`` is True for scored features whose winner is the largest or
+    smallest fraction; with a one-point grid every scored feature is flagged.
     """
     grid = fraction_grid(fractions)
     scores = np.asarray(candidate_r2, dtype=float)
@@ -28,12 +30,14 @@ def select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None):
     selected = np.full(scores.shape[1], np.nan)
     best = selected.copy()
     indices = np.full(scores.shape[1], -1, dtype=int)
+    at_boundary = np.zeros(scores.shape[1], dtype=bool)
     if mask.any():
         winner = np.argmax(values >= values.max(axis=0) - 1e-12, axis=0)
         selected[mask] = np.asarray(grid)[winner]
         best[mask] = values[winner, np.arange(mask.sum())]
         indices[mask] = winner
-    return FractionSelection(grid, selected, best, indices, mask)
+        at_boundary[mask] = np.isin(winner, [0, len(grid) - 1])
+    return FractionSelection(grid, selected, best, indices, mask, at_boundary)
 
 
 def score_fraction_candidates(

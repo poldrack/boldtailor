@@ -146,6 +146,20 @@ class HrfLibrary:
         return cls((canonical, *custom), origin=origin)
 
     @property
+    def parameter_bounds(self):
+        """Per-parameter ``low``/``high`` over the six sampled box parameters.
+
+        Computed over custom candidates; canonical SPM is used only when there
+        are none. A parameter shared by all candidates has zero width.
+        """
+        rows = [c.parameters[:6] for c in self.candidates if c.kind != "spm"]
+        rows = np.array(rows or [CANONICAL_PARAMETERS[:6]], dtype=float)
+        return pd.DataFrame(
+            {"low": rows.min(axis=0), "high": rows.max(axis=0)},
+            index=list(PARAMETER_NAMES[:6]),
+        )
+
+    @property
     def parameter_table(self):
         rows = []
         for candidate, curve in zip(self.candidates, self.curves, strict=True):

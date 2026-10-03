@@ -59,8 +59,10 @@ class RidgeSelection:
     objective_scores: np.ndarray
     percentile: float
     scoring_mask: np.ndarray
+    at_boundary: bool = False
 
     def __post_init__(self):
+        object.__setattr__(self, "at_boundary", bool(self.at_boundary))
         object.__setattr__(self, "alphas", tuple(self.alphas))
         object.__setattr__(
             self, "objective_scores", readonly_array(self.objective_scores)
@@ -108,9 +110,15 @@ class FractionSelection:
     selected_r2: np.ndarray
     fraction_indices: np.ndarray
     scoring_mask: np.ndarray
+    at_boundary: np.ndarray | None = None
 
     def __post_init__(self):
         object.__setattr__(self, "fractions", tuple(self.fractions))
+        if self.at_boundary is None:
+            object.__setattr__(self, "at_boundary", np.zeros_like(self.scoring_mask))
+        object.__setattr__(
+            self, "at_boundary", readonly_array(self.at_boundary, dtype=bool)
+        )
         for name in ("ridge_fraction", "selected_r2"):
             object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(

@@ -182,7 +182,9 @@ are the same; targets are fixed OLS betas under the training-selected HRF.
 Targets do not depend on the fraction grid.
 
 `FractionSelection` has the candidate `fractions`, per-feature
-`ridge_fraction`, `selected_r2`, `fraction_indices`, and `scoring_mask`.
+`ridge_fraction`, `selected_r2`, `fraction_indices`, `scoring_mask`, and
+`at_boundary` (boolean per feature: the winner is the largest or smallest
+fraction; a high proportion means the grid should be extended).
 Every candidate must have a finite score for an eligible feature. Ties within
 `1e-12` choose the largest fraction; excluded features have NaN values and
 index -1. An entirely invalid block returns undefined maps.
@@ -225,7 +227,8 @@ Scores pool SSE and within-run SST; they are penalty-selection statistics.
 at every alpha; an empty common mask raises `ValueError`. Percentiles use linear
 interpolation. Ties within `1e-12` choose the smaller alpha, including zero.
 `RidgeSelection` exposes `ridge_alpha`, sorted `alphas`, `objective_scores`,
-`percentile`, and `scoring_mask`. Merge spatial blocks before this call.
+`percentile`, `scoring_mask`, and `at_boundary` (the chosen alpha is an end of
+the grid; extend the grid if so). Merge spatial blocks before this call.
 
 From `boldtailor.trial_encoding`:
 
@@ -290,7 +293,8 @@ Parameter order is `response_delay`, `undershoot_delay`, `response_dispersion`,
 SPM candidates require the exact canonical parameter tuple
 `(6, 16, 1, 1, 6, 0, 32)`.
 
-`HrfLibrary` exposes `candidates`, `parameter_table`, `curves`, `times`, and
+`HrfLibrary` exposes `candidates`, `parameter_table`, `parameter_bounds`
+(`low`/`high` of the six sampled parameters over custom candidates), `curves`, `times`, and
 `fingerprint`. Every curve peaks at one. Every event's predicted response is scaled to a peak of one (kernels are
 also stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
@@ -328,7 +332,10 @@ evaluate_hrf_split(data, *, library, train_runs, test_runs,
 
 `select_hrf` returns `HrfSelectionResult`: `hrf_indices`, `cv_r2`,
 `canonical_cv_r2`, `delta_cv_r2`, `library`, `eligibility`, `run_labels`,
-`feature_signature`, and `provenance`. Eligibility records are checked lazily;
+`feature_signature`, `provenance`, and `at_parameter_bound` (boolean per
+feature: the selected custom kernel is within 2 % of the parameter box width
+of an edge; the default box implies peak times of roughly 1.5–7.5 s, so
+late-peaking responses saturate there). Eligibility records are checked lazily;
 an unchecked candidate is not an excluded candidate.
 
 `evaluate_hrf_split` uses disjoint, zero-based run indices. Its

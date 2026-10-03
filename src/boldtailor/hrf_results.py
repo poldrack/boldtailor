@@ -23,6 +23,7 @@ class HrfSelectionResult:
     feature_signature: str | None
     provenance: ProvenanceRecord
     task_model: TaskModel = TaskModel()
+    at_parameter_bound: np.ndarray | None = None
 
     def __post_init__(self):
         if not isinstance(self.task_model, TaskModel):
@@ -34,6 +35,11 @@ class HrfSelectionResult:
             object.__setattr__(self, name, readonly_array(getattr(self, name)))
         object.__setattr__(self, "_eligibility", _owned_table(self._eligibility))
         object.__setattr__(self, "run_labels", tuple(self.run_labels))
+        flags = self.at_parameter_bound
+        flags = np.zeros(self.hrf_indices.shape, bool) if flags is None else flags
+        object.__setattr__(
+            self, "at_parameter_bound", readonly_array(flags, dtype=bool)
+        )
 
     @property
     def eligibility(self):
