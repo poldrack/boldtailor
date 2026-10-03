@@ -147,3 +147,17 @@ def test_conflicting_settings_stop_before_the_workflow_runs(
         multisession_workflow.ensure_session_outputs(
             config, [*sessions, "ses-nsd99"], estimators=["OLS"]
         )
+
+
+def test_paths_resolve_from_the_configuration_and_default_the_output_root(dataset):
+    root, prep, *_ = dataset
+    paths = multisession_workflow.resolve_paths(
+        dict(bids_root=str(root), hrf_n_samples=4), ["ses-nsd10"]
+    )
+    assert paths["bids_root"] == str(root)
+    expected = root / "derivatives" / "boldtailor_hrf-default4s0_ridge-fractionalcv"
+    assert paths["output_root"] == str(expected)
+    explicit = multisession_workflow.resolve_paths(
+        dict(bids_root=str(root), output_root="/elsewhere"), ["ses-nsd10"]
+    )
+    assert explicit["output_root"] == "/elsewhere"
