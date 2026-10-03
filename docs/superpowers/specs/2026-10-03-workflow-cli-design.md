@@ -196,7 +196,9 @@ The spec's settings file is `<stem>_desc-boldtailor_metadata.json`, which carrie
 Descriptors (multisession readers key on these): `CanonicalGLM`,
 `OptimizedGLM`, `GLMComparison`, `HRF`, `HRFAll`, `HRFOdd`, `HRFEven`,
 `HRFOddToEven`, `HRFEvenToOdd`, `HRFReliability`, `CanonicalTrialOLS`,
-`OptimizedTrialOLS`, and tuning descriptors
+`OptimizedTrialOLS`, `CanonicalTrialRidge`, `OptimizedTrialRidge`,
+`CanonicalTrialRidgeCV`, `OptimizedTrialRidgeCV`, `CanonicalTrialFractionalCV`,
+`OptimizedTrialFractionalCV`, and tuning descriptors
 `{Canonical|Optimized}{RidgeCV|FractionalCV}{All|Odd|Even|OddToEven|EvenToOdd}`
 for each ridge mode. No `notebook` prefix.
 
