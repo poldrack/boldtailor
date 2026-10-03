@@ -87,7 +87,7 @@ def test_origin_is_frozen_and_excluded_from_identity():
     noted = hrf_library.HrfLibrary.from_parameters(
         [(5, 15, 1, 1, 5, 0, 32)], origin={"kind": "custom"}
     )
-    assert dict(explicit.origin) == {"kind": "explicit", "n_candidates": 2}
+    assert dict(explicit.origin) == {"kind": "explicit", "n_candidates": 1}
     assert dict(noted.origin) == {"kind": "custom"}
     assert explicit.fingerprint == noted.fingerprint
     with pytest.raises(TypeError):

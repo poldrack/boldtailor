@@ -59,6 +59,7 @@ def _validate(library, signature, batch, task_model):
 def _provenance(data, runs, library, labels, signature, task_model, name, **extra):
     activity = dict(
         name=name,
+        library=dict(library.origin),
         library_fingerprint=library.fingerprint,
         design_fingerprint=sha256(
             "|".join(r.fingerprint for r in runs).encode()

@@ -1,10 +1,12 @@
 """Deterministic, peak-normalized HRFs; candidate 0 is Nilearn's SPM shape."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from hashlib import sha256
 from itertools import product
 import json
 from numbers import Integral
+from types import MappingProxyType
 
 import numpy as np
 import pandas as pd
@@ -100,6 +102,7 @@ class HrfLibrary:
     curves: np.ndarray = field(init=False, repr=False, compare=False)
     times: np.ndarray = field(init=False, repr=False, compare=False)
     fingerprint: str = field(init=False)
+    origin: Mapping[str, object] = field(default_factory=dict, compare=False)
 
     def __post_init__(self):
         candidates = tuple(self.candidates)
@@ -123,9 +126,10 @@ class HrfLibrary:
             self, "times", readonly_array(np.arange(curves.shape[1]) * 0.1)
         )
         object.__setattr__(self, "fingerprint", digest)
+        object.__setattr__(self, "origin", MappingProxyType(dict(self.origin)))
 
     @classmethod
-    def from_parameters(cls, parameters):
+    def from_parameters(cls, parameters, origin=None):
         rows = [_parameters(row) for row in parameters]
         if len(rows) != len(set(rows)):
             raise ValueError("duplicate HRF parameter rows")
@@ -134,7 +138,8 @@ class HrfLibrary:
             HrfCandidate(i, "double_gamma", row)
             for i, row in enumerate(sorted(rows), 1)
         )
-        return cls((canonical, *custom))
+        origin = origin or {"kind": "explicit", "n_candidates": len(rows)}
+        return cls((canonical, *custom), origin=origin)
 
     @property
     def parameter_table(self):
@@ -162,7 +167,8 @@ def expanded_hrf_library():
             (2, 4, 6, 8),
             (0, 1, 2),
             (36,),
-        )
+        ),
+        origin={"kind": "expanded_grid"},
     )
 
 
@@ -189,4 +195,5 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
     )
     parameters = qmc.scale(points, [3, 10, 0.5, 0.5, 2, 0], [6, 16, 1.5, 2.5, 8, 2])
     rows = np.column_stack([parameters, np.full(int(n_samples), 36.0)])
-    return HrfLibrary.from_parameters(rows)
+    origin = {"kind": "sobol", "n_samples": int(n_samples), "seed": int(seed)}
+    return HrfLibrary.from_parameters(rows, origin={**origin, "duration": 36.0})
