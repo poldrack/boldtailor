@@ -2,7 +2,11 @@
 
 import numpy as np
 from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
-from nilearn.glm.first_level.hemodynamic_models import glover_hrf, spm_hrf
+from nilearn.glm.first_level.hemodynamic_models import (
+    _sample_condition,
+    glover_hrf,
+    spm_hrf,
+)
 from scipy.linalg import block_diag
 from scipy.optimize import brentq
 
@@ -23,22 +27,40 @@ def peak_kernel(name):
     return kernel
 
 
-def oracle_event_scales(kernel_fn, durations, times, oversampling=50):
-    """Brute-force unit-peak amplitude per event: 1 / max(boxcar * kernel)."""
-    tr = float(np.min(np.diff(times)))
-    kernel = np.asarray(kernel_fn(tr, oversampling))
-    dt = tr / oversampling
+def realized_event_response(
+    kernel, onset, duration, times, oversampling=50, min_onset=-24.0
+):
+    """One event's response on Nilearn's own oversampled boxcar and grid."""
+    boxcar, grid = _sample_condition(
+        np.array([[onset], [duration], [1.0]]), times, oversampling, min_onset
+    )
+    return np.convolve(boxcar, np.asarray(kernel))[: len(grid)], grid
+
+
+def oracle_event_scales(
+    kernel_fn, onsets, durations, times, oversampling=50, min_onset=-24.0
+):
+    """1 / peak of each event's realized oversampled response (brute force)."""
+    kernel = kernel_fn(float(np.min(np.diff(times))), oversampling)
     return np.array(
         [
-            1 / np.convolve(np.ones(max(1, int(round(d / dt)))), kernel).max()
-            for d in np.asarray(durations, dtype=float)
+            1
+            / realized_event_response(kernel, o, d, times, oversampling, min_onset)[
+                0
+            ].max()
+            for o, d in zip(onsets, durations, strict=True)
         ]
     )
 
 
-def scaled_condition(onsets, durations, amplitudes, kernel_fn, times, oversampling=50):
+def scaled_condition(
+    onsets, durations, amplitudes, kernel_fn, times, oversampling=50, min_onset=-24.0
+):
     """Nilearn condition rows with amplitudes scaled to unit event peaks."""
-    scales = oracle_event_scales(kernel_fn, durations, times, oversampling)
+    onsets = np.asarray(onsets, dtype=float)
+    scales = oracle_event_scales(
+        kernel_fn, onsets, durations, times, oversampling, min_onset
+    )
     amplitudes = np.broadcast_to(np.asarray(amplitudes, dtype=float), scales.shape)
     return np.array([onsets, durations, amplitudes * scales], dtype=float)
 
@@ -53,7 +75,12 @@ def peak_design_matrix(frame_times, *, hrf_model="glover", events=None, **kwargs
     kernel = peak_kernel(hrf_model)
     if events is not None:
         scales = oracle_event_scales(
-            kernel, events.duration, frame_times, kwargs.get("oversampling", 50)
+            kernel,
+            events.onset,
+            events.duration,
+            frame_times,
+            kwargs.get("oversampling", 50),
+            kwargs.get("min_onset", -24.0),
         )
         events = events.assign(modulation=events.get("modulation", 1.0) * scales)
     matrix = make_first_level_design_matrix(

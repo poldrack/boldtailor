@@ -60,7 +60,7 @@ def test_custom_convolution_matches_independent_sampled_boxcars(
             start = np.searchsorted(grid, onset)
             stop = max(start + 1, np.searchsorted(grid, onset + dur))
             train[start:stop] = 1
-            samples = max(1, round(dur / (1.6 / 50)))
+            samples = stop - start  # the realized boxcar length
             scale = 1 / np.convolve(np.ones(samples), kernel).max()
             expected_trials.append(
                 scale * np.interp(times, grid, np.convolve(train, kernel)[:count])
@@ -224,28 +224,57 @@ def test_single_trial_provenance_records_peak_normalization(timing_fixture):
     assert activity["hrf_normalization"] == "peak_one_event_response"
 
 
-@pytest.mark.parametrize("duration", [0.0, 0.05, 3.0, 40.0])
-def test_event_response_peak_matches_brute_force_convolution(candidates, duration):
-    from boldtailor._hrf_design import event_response_peak
+@pytest.mark.parametrize("count", [1, 2, 3, 94, 1200])
+def test_boxcar_response_peak_matches_brute_force_convolution(candidates, count):
+    from boldtailor._hrf_design import boxcar_response_peak
 
-    dt = 1.6 / 50
     for candidate in candidates:
         kernel = candidate.kernel(1.6, 50)
-        n = max(1, int(round(duration / dt)))
-        expected = np.convolve(np.ones(n), kernel).max()
-        assert event_response_peak(kernel, duration, dt) == pytest.approx(
-            expected, rel=1e-12
-        )
+        expected = np.convolve(np.ones(count), kernel).max()
+        assert boxcar_response_peak(kernel, count) == pytest.approx(expected, rel=1e-12)
 
 
-def test_event_response_scales_invert_the_peak_per_duration(candidates):
-    from boldtailor._hrf_design import event_response_peak, event_response_scales
+def _realized(kernel, onset, duration, times, oversampling):
+    """Nilearn's own oversampled boxcar convolved with the kernel."""
+    from nilearn.glm.first_level.hemodynamic_models import _sample_condition
 
-    kernel_fn = candidates[1].kernel
-    scales = event_response_scales(kernel_fn, [0.0, 3.0, 0.0], 1.6, 50)
-    kernel = kernel_fn(1.6, 50)
-    expected = [1 / event_response_peak(kernel, d, 1.6 / 50) for d in (0, 3, 0)]
-    np.testing.assert_allclose(scales, expected, rtol=1e-12)
+    boxcar, grid = _sample_condition(
+        np.array([[onset], [duration], [1.0]]), times, oversampling, -24.0
+    )
+    return np.convolve(boxcar, kernel)[: len(grid)], grid
+
+
+@pytest.mark.parametrize("onset", [5.0, 5.01])
+@pytest.mark.parametrize("duration", [0.0, 0.1, 0.25, 0.5, 3.0])
+@pytest.mark.parametrize("oversampling", [20, 50])
+def test_scaled_realized_event_responses_peak_at_exactly_one(
+    candidates, onset, duration, oversampling
+):
+    from boldtailor._hrf_design import event_response_scales, hrf_model
+
+    times = np.arange(0, 60, 2.0)
+    for model in [*candidates, "spm", "glover"]:
+        kernel_fn = hrf_model(model)
+        kernel = kernel_fn(2.0, oversampling)
+        response, _ = _realized(kernel, onset, duration, times, oversampling)
+        scale = event_response_scales(
+            kernel_fn, [onset], [duration], times, oversampling
+        )[0]
+        assert (scale * response).max() == pytest.approx(1.0, abs=1e-9)
+
+
+def test_short_trial_columns_follow_their_own_unit_peak_responses(candidates):
+    from boldtailor._hrf_design import trial_regressors
+
+    times = np.arange(0, 60, 2.0)
+    events = pd.DataFrame(dict(onset=[5.0, 5.01], duration=[0.1, 0.1]))
+    for candidate in candidates:
+        fast = trial_regressors(events, times, candidate)
+        kernel = candidate.kernel(2.0, 50)
+        for j, onset in enumerate(events.onset):
+            response, grid = _realized(kernel, onset, 0.1, times, 50)
+            expected = np.interp(times, grid, response / response.max())
+            np.testing.assert_allclose(fast[:, j], expected, atol=1e-9)
 
 
 def _peak_models(library):
@@ -257,13 +286,11 @@ def test_single_event_responses_peak_at_one(two_candidate_library):
 
     times = np.arange(0, 40, 0.1)
     for model in _peak_models(two_candidate_library):
-        # A 3 s boxcar's peak may fall between 0.1 s frames, and Nilearn may
-        # sample one more or fewer boxcar points than round(duration / dt):
-        # allow 5 %. Impulses are bounded only by frame sampling of the
-        # smooth peak (observed < 7e-5).
+        # The oversampled response peaks at exactly one; the remaining slack
+        # is only 0.1 s frame sampling of the peak (observed < 2e-4).
         long = pd.DataFrame(dict(onset=[0.0], duration=[3.0]))
         assert trial_regressors(long, times, model).max() == pytest.approx(
-            1.0, rel=0.05
+            1.0, abs=5e-4
         )
         impulse = pd.DataFrame(dict(onset=[0.0], duration=[0.0]))
         assert trial_regressors(impulse, times, model).max() == pytest.approx(
@@ -279,4 +306,4 @@ def test_stimulus_regressor_scales_each_event_to_unit_peak(candidates):
     for candidate in candidates:
         x = stimulus_regressor(events, times, candidate)
         assert x[times < 38].max() == pytest.approx(1.0, abs=1e-4)
-        assert x[times >= 40].max() == pytest.approx(1.0, rel=0.05)
+        assert x[times >= 40].max() == pytest.approx(1.0, abs=5e-4)

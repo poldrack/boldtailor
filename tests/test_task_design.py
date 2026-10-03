@@ -169,6 +169,7 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
                 peak_kernel(name),
                 times,
                 oversampling=20,
+                min_onset=-10.0,
             ),
             peak_kernel(name),
             times,
@@ -205,5 +206,6 @@ def test_task_column_peaks_do_not_depend_on_oversampling(hrf):
         task_columns(expanded, times, hrf, oversampling=o)["task"].max()
         for o in (20, 50)
     ]
-    assert peaks[0] == pytest.approx(peaks[1], rel=0.02)
-    assert peaks[1] == pytest.approx(1.0, rel=0.05)
+    # Unit oversampled peaks; slack is 0.1 s frame sampling of the peak only.
+    assert peaks[0] == pytest.approx(peaks[1], abs=1e-3)
+    assert peaks[1] == pytest.approx(1.0, abs=5e-4)

@@ -47,6 +47,7 @@ def _oracle_design(events, times, confounds, candidate, model):
                 candidate.kernel,
                 times,
                 model.oversampling,
+                model.min_onset,
             ),
             candidate.kernel,
             times,

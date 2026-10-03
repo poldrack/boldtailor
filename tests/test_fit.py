@@ -781,7 +781,7 @@ def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name)
     design = fit(data, model).design_matrices[0]
     assert list(design.columns) == ["face", "house", "constant"]
     scales = oracle_event_scales(
-        peak_kernel(hrf_name), events.duration, np.arange(30) * 2.0
+        peak_kernel(hrf_name), events.onset, events.duration, np.arange(30) * 2.0
     )
     expected = make_first_level_design_matrix(
         np.arange(30) * 2.0,
