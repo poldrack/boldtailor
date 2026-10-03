@@ -714,6 +714,12 @@ def hrf_boundary_summary(selections):
     return rows
 
 
+def hrf_boundary_table(selections):
+    """``hrf_boundary_summary`` as a DataFrame, or None without selections."""
+    rows = hrf_boundary_summary(selections)
+    return None if rows is None else pd.DataFrame(rows)
+
+
 def activation_artifacts(settings, brain, activation):
     return [
         _map(
@@ -901,10 +907,21 @@ def _design_metadata(runs):
     )
 
 
+def _json_bound_rows(selections):
+    """Bound rows with an undefined fraction (no custom picks) as null."""
+    rows = hrf_boundary_summary(selections)
+    if rows is None:
+        return None
+    return [
+        {**row, "fraction_flagged": None} if np.isnan(row["fraction_flagged"]) else row
+        for row in rows
+    ]
+
+
 def _library_metadata(library, selections):
     return dict(
-        hrf_boundary_summary=hrf_boundary_summary(selections),
-        hrf_boundary="Fraction of custom picks (ID > 0) within 2% of the library box width of each parameter edge; see HrfSelectionResult.parameter_bound_table",
+        hrf_boundary_summary=_json_bound_rows(selections),
+        hrf_boundary="Fraction of custom picks (ID > 0) within 2% of the library box width of each parameter edge (null without custom picks); see HrfSelectionResult.parameter_bound_table",
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",
@@ -947,7 +964,8 @@ def metadata(
     )
 
 
-def _report_path(settings):
+def report_name(settings):
+    """The report's path relative to the derivative root."""
     return f"{settings.subject}_{settings.session}_task-{settings.task}_report.html"
 
 
@@ -980,16 +998,7 @@ def _figure_artifacts(settings, figures):
     ]
 
 
-def _root_artifacts(settings, report, report_html):
-    """The report, plus the dataset description unless another session wrote it."""
-    artifacts = [] if report is None else [Artifact(report, report_html)]
-    description = settings.output_dir / "dataset_description.json"
-    if settings.existing_results == "overwrite" or not description.exists():
-        artifacts.append(dataset_description("boldtailor"))
-    return artifacts
-
-
-def save_workflow(
+def workflow_artifacts(
     settings,
     runs,
     task_model,
@@ -1001,15 +1010,14 @@ def save_workflow(
     figures,
     activation,
     skipped,
-    report_html,
+    report,
     include_hrf_splits=True,
 ):
-    """Publish every stage, the settings file, figures, and the report at once.
+    """Everything ``save_workflow`` writes except the report and dataset description.
 
-    ``include_hrf_splits`` writes the odd/even HRF artifacts; pass whether the
-    reliability stage ran.
+    ``report`` is the report name recorded in the settings file (or None);
+    ``include_hrf_splits`` adds the odd/even HRF artifacts. Figures stay intact.
     """
-    report = None if report_html is None else _report_path(settings)
     artifacts = _stage_artifacts(
         settings,
         runs,
@@ -1037,15 +1045,66 @@ def save_workflow(
             ),
         )
     )
-    artifacts.extend(_figure_artifacts(settings, figures))
-    artifacts.extend(_root_artifacts(settings, report, report_html))
+    return artifacts + _figure_artifacts(settings, figures)
+
+
+def _root_artifacts(settings, report_html):
+    """The report, plus the dataset description unless another session wrote it."""
+    artifacts = (
+        [] if report_html is None else [Artifact(report_name(settings), report_html)]
+    )
+    description = settings.output_dir / "dataset_description.json"
+    if settings.existing_results == "overwrite" or not description.exists():
+        artifacts.append(dataset_description("boldtailor"))
+    return artifacts
+
+
+def publish_workflow(settings, runs, artifacts, report_html):
+    """Publish ``workflow_artifacts`` with the report and dataset description at once."""
     overwrite = settings.existing_results == "overwrite"
     paths = publish_artifact_set(
         settings.output_dir,
-        artifacts,
+        [*artifacts, *_root_artifacts(settings, report_html)],
         source_paths=[p for r in runs for p in input_paths(r.inputs)],
         overwrite=overwrite,
     )
     if overwrite:
         _remove_stale(settings, paths)
     return paths
+
+
+def save_workflow(
+    settings,
+    runs,
+    task_model,
+    library,
+    selections,
+    glms,
+    beta_models,
+    *,
+    figures,
+    activation,
+    skipped,
+    report_html,
+    include_hrf_splits=True,
+):
+    """Publish every stage, the settings file, figures, and the report at once.
+
+    ``include_hrf_splits`` writes the odd/even HRF artifacts; pass whether the
+    reliability stage ran.
+    """
+    artifacts = workflow_artifacts(
+        settings,
+        runs,
+        task_model,
+        library,
+        selections,
+        glms,
+        beta_models,
+        figures=figures,
+        activation=activation,
+        skipped=skipped,
+        report=None if report_html is None else report_name(settings),
+        include_hrf_splits=include_hrf_splits,
+    )
+    return publish_workflow(settings, runs, artifacts, report_html)

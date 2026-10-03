@@ -24,7 +24,15 @@ def _signature(runs, indices):
     return spatial_signature(runs[0].image.header.get_axis(1), indices)
 
 
-def _select_block(indices, runs, root, library, task_model):
+def _split_selections(data, runs, options):
+    odd, even = odd_even_parity(runs).values()
+    return dict(
+        odd=evaluate_hrf_split(data, train_runs=odd, test_runs=even, **options),
+        even=evaluate_hrf_split(data, train_runs=even, test_runs=odd, **options),
+    )
+
+
+def _select_block(indices, runs, root, library, task_model, splits):
     data = load_block(runs, root, indices, task_model)
     options = dict(
         library=library,
@@ -32,23 +40,25 @@ def _select_block(indices, runs, root, library, task_model):
         feature_signature=_signature(runs, indices),
         task_model=task_model,
     )
-    odd, even = odd_even_parity(runs).values()
-    return dict(
-        all=selection_api.select_hrfs(data, **options),
-        odd=evaluate_hrf_split(data, train_runs=odd, test_runs=even, **options),
-        even=evaluate_hrf_split(data, train_runs=even, test_runs=odd, **options),
-    )
+    bundle = dict(all=selection_api.select_hrfs(data, **options))
+    if splits:
+        bundle.update(_split_selections(data, runs, options))
+    return bundle
 
 
-def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1):
-    """Select on all runs and on each half; retain objects for later fits.
+def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1, splits=True):
+    """Select on all runs and, with ``splits``, on each half; retain the objects.
 
     The GLM keeps the full task model; pass a subset (for example
-    selection_task_model(task_model, False)) to score HRFs without RT.
+    selection_task_model(task_model, False)) to score HRFs without RT. Without
+    ``splits`` each bundle holds only ``all``, which needs just two runs.
     """
     selections = {}
     for indices, result in map_blocks(
-        _select_block, blocks, args=(runs, root, library, task_model), n_jobs=n_jobs
+        _select_block,
+        blocks,
+        args=(runs, root, library, task_model, splits),
+        n_jobs=n_jobs,
     ):
         selections[tuple(indices)] = result
         log.info("HRF selection: %s–%s", indices[0], indices[-1])

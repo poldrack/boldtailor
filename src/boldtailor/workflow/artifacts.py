@@ -31,13 +31,10 @@ def npz_artifact(path, **arrays):
 
 
 def figure_artifact(path, figure):
-    """PNG at 130 dpi; the figure is cleared afterwards."""
-    try:
-        with BytesIO() as stream:
-            figure.savefig(stream, format="png", dpi=130)
-            return Artifact(path, stream.getvalue())
-    finally:
-        figure.clear()
+    """PNG at 130 dpi; the figure is left intact (the report embeds it later)."""
+    with BytesIO() as stream:
+        figure.savefig(stream, format="png", dpi=130)
+        return Artifact(path, stream.getvalue())
 
 
 def dataset_description(name):
