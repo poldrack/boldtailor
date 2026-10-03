@@ -1,9 +1,11 @@
 import json
 import multiprocessing
+import os
 from pathlib import Path
+import shutil
 import stat
 import time
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -68,15 +70,20 @@ def artifact_set():
     )
 
 
+def _control(destination):
+    return destination.with_name(destination.name + ".boldtailor")
+
+
 def _assert_no_transaction_debris(destination):
-    transactions = destination / ".boldtailor" / "transactions"
-    assert not transactions.exists() or not tuple(transactions.iterdir())
+    control = _control(destination)
+    names = [path.name for path in control.iterdir()] if control.exists() else []
+    assert not [name for name in names if name.startswith(("stage-", "backup-"))]
+    assert not (destination / ".boldtailor").exists()
 
 
 def _failure_records(destination):
-    logs = tuple((destination / ".boldtailor").glob("*.jsonl"))
-    assert len(logs) == 1
-    return [json.loads(line) for line in logs[0].read_text().splitlines()]
+    log = _control(destination) / "failures.jsonl"
+    return [json.loads(line) for line in log.read_text().splitlines()]
 
 
 def _join_process_or_fail(process, timeout=10):
@@ -128,17 +135,10 @@ def _artifacts(*paths):
     (
         ((), {}, "at least one artifact"),
         (_artifacts("result.json", "result.json"), {}, "duplicate artifact path"),
-        (
-            _artifacts("Sub-01/result.json", "sub-01/RESULT.JSON"),
-            {},
-            "duplicate artifact path",
-        ),
+        (_artifacts("sub-01", "sub-01/result.json"), {}, "duplicate artifact path"),
         (_artifacts("a.bin"), {"lock_timeout": float("nan")}, "lock_timeout"),
         (_artifacts("a.bin"), {"lock_timeout": float("inf")}, "lock_timeout"),
         (_artifacts("a.bin"), {"lock_timeout": -float("inf")}, "lock_timeout"),
-        (_artifacts(".boldtailor/publication.lock"), {}, "reserved"),
-        (_artifacts(".BOLDTAILOR/publication.lock"), {}, "reserved"),
-        (_artifacts(".BoldTailor/publication.lock"), {}, "reserved"),
     ),
 )
 def test_preflight_rejects_invalid_requests_before_writing(
@@ -152,24 +152,66 @@ def test_preflight_rejects_invalid_requests_before_writing(
     assert not destination.exists()
 
 
-@pytest.mark.parametrize(
-    ("path", "payload"),
-    (
-        ("broken.json", b'{"missing":'),
-        ("broken.json", b"\xff"),
-        ("broken.jsonl", b'{"valid":true}\nnot-json\n'),
-        ("broken.tsv", b"name\tvalue\na\n"),
-        ("broken.tsv", b"name\tvalue\na\t\xff\n"),
-    ),
-)
-def test_preflight_rejects_invalid_metadata_before_writing(tmp_path, path, payload):
+def test_publication_does_not_parse_payloads(tmp_path):
+    publish_artifact_set(
+        tmp_path / "out",
+        [Artifact("broken.json", b"{not json"), Artifact("t.tsv", b"a\tb\n1\n")],
+    )
+    assert (tmp_path / "out" / "broken.json").read_bytes() == b"{not json"
+    assert (tmp_path / "out" / "t.tsv").read_bytes() == b"a\tb\n1\n"
+
+
+def test_control_data_lives_in_a_sibling_directory(tmp_path):
     destination = tmp_path / "derivatives"
 
-    with pytest.raises(ValueError, match="metadata"):
-        publish_artifact_set(destination, (Artifact(path, payload),))
+    publish_artifact_set(destination, [Artifact(".boldtailor/note.json", b"{}")])
 
-    assert not (destination / path).exists()
-    _assert_no_transaction_debris(destination)
+    assert sorted(path.name for path in destination.iterdir()) == [".boldtailor"]
+    assert (destination / ".boldtailor" / "note.json").read_bytes() == b"{}"
+    assert (tmp_path / "derivatives.boldtailor" / "lock").exists()
+
+
+def test_publication_accepts_destination_under_symlinked_tmp():
+    destination = Path("/tmp") / f"boldtailor-{uuid4()}"
+    try:
+        publish_artifact_set(destination, [Artifact("a.json", b"{}")])
+        assert (destination / "a.json").exists()
+    finally:
+        shutil.rmtree(destination, ignore_errors=True)
+        shutil.rmtree(str(destination) + ".boldtailor", ignore_errors=True)
+
+
+def test_publication_accepts_destination_under_symlinked_ancestor(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    (tmp_path / "alias").symlink_to(real, target_is_directory=True)
+
+    publish_artifact_set(tmp_path / "alias" / "out", [Artifact("a.bin", b"a")])
+
+    assert (real / "out" / "a.bin").read_bytes() == b"a"
+
+
+def test_publication_fsyncs_only_regular_files(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    modes = []
+    real_fsync = publication.os.fsync
+
+    def record_fsync(descriptor):
+        modes.append(os.fstat(descriptor).st_mode)
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(publication.os, "fsync", record_fsync)
+    destination = tmp_path / "out"
+    destination.mkdir()
+    (destination / "a.bin").write_bytes(b"old")
+    publish_artifact_set(
+        destination,
+        [Artifact("a.bin", b"a"), Artifact("n/b.bin", b"b")],
+        overwrite=True,
+    )
+
+    assert modes and all(stat.S_ISREG(mode) for mode in modes)
 
 
 def test_publication_writes_real_files_and_returns_only_artifact_paths(
@@ -187,6 +229,10 @@ def test_publication_writes_real_files_and_returns_only_artifact_paths(
         for path in published
     } == {artifact.path: artifact.payload for artifact in artifact_set}
     assert all(".boldtailor" not in path.parts for path in published)
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "derivatives",
+        "derivatives.boldtailor",
+    ]
     _assert_no_transaction_debris(destination)
 
 
@@ -489,15 +535,15 @@ def test_failed_restore_retains_original_and_reports_recovery(
 
     def fail_promotion_and_restore(source, target):
         source, target = Path(source), Path(target)
-        if "backups" in source.parts:
+        if source.parent.name.startswith("backup-"):
             raise restore_error
-        if "stage" in source.parts and target.name == "new.bin":
+        if source.parent.name.startswith("stage-") and target.name == "new.bin":
             raise promotion_error
         return real_replace(source, target)
 
     monkeypatch.setattr(publication.os, "replace", fail_promotion_and_restore)
     if block_diagnostics:
-        (destination / ".boldtailor" / "publication_failures.jsonl").mkdir(parents=True)
+        (_control(destination) / "failures.jsonl").mkdir(parents=True)
     with pytest.raises(PublicationError) as caught:
         publish_artifact_set(
             destination,
@@ -510,13 +556,12 @@ def test_failed_restore_retains_original_and_reports_recovery(
     recovery = error.recovery_directory
     assert recovery is not None and recovery.is_dir()
     assert str(recovery) in str(error)
-    assert (recovery / "backups" / "old.bin").read_bytes() == b"only-original"
+    assert recovery.parent == _control(destination)
+    assert (recovery / "old.bin").read_bytes() == b"only-original"
     if not block_diagnostics:
         record = _failure_records(destination)[0]
         assert record["rollback_failed"] is True
-        assert (
-            record["recovery_directory"] == recovery.relative_to(destination).as_posix()
-        )
+        assert record["recovery_directory"] == recovery.name
         assert not Path(record["recovery_directory"]).is_absolute()
         assert str(tmp_path) not in json.dumps(record)
 
@@ -534,7 +579,7 @@ def test_staging_failure_preserves_original_and_cause(tmp_path, monkeypatch, bou
     real_method = getattr(Path, method)
 
     def fail_stage(path, *args, **kwargs):
-        if "transactions" in path.parts and "stage" in path.parts:
+        if any(part.startswith("stage-") for part in path.parts):
             raise failure
         return real_method(path, *args, **kwargs)
 
@@ -583,7 +628,7 @@ def test_existing_transaction_is_never_removed_on_identifier_collision(
 
     identifier = UUID("123e4567-e89b-12d3-a456-426614174000")
     destination = tmp_path / "output"
-    orphan = destination / ".boldtailor" / "transactions" / str(identifier)
+    orphan = _control(destination) / f"stage-{identifier}"
     orphan.mkdir(parents=True)
     backup = orphan / "only-original.bin"
     backup.write_bytes(b"preserve-me")
@@ -622,16 +667,14 @@ def test_publication_failure_ledger_omits_exception_names_and_text(
     assert "PrivatePatientError" not in json.dumps(records)
 
 
-@pytest.mark.parametrize(
-    "source_name", ["publication.lock", "publication_failures.jsonl"]
-)
+@pytest.mark.parametrize("source_name", ["lock", "failures.jsonl"])
 def test_control_files_cannot_overwrite_protected_sources(
     tmp_path, monkeypatch, source_name
 ):
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
-    control = destination / ".boldtailor"
+    control = _control(destination)
     control.mkdir(parents=True)
     source = control / source_name
     source.write_bytes(b"irreplaceable-input")
@@ -647,4 +690,4 @@ def test_control_files_cannot_overwrite_protected_sources(
         )
     assert source.read_bytes() == b"irreplaceable-input"
     assert not (destination / "result.bin").exists()
-    assert not (control / "transactions").exists()
+    assert sorted(path.name for path in control.iterdir()) == [source_name]
