@@ -201,57 +201,18 @@ Nilearn 0.14 divides the OLS/AR(1) dispersion by `n - columns` (`regression.py:1
 
 ## Source identity and provenance
 
-Every operation records `software` (interpreter, platform, package versions) in its activity; `analysis_id` is computed before this key is added, so identities do not change across environments.
+Threat model: cooperating writers on one host, no adversary, no power-loss
+guarantee. Records are scientific metadata, not a privacy or security boundary.
 
-`SourceRef` accepts dataset-relative POSIX URIs or BIDS URIs, an optional media
-type, byte size, UTC modification time, and annotations. `RunSources` groups
-signal, events, and optional confound references for a run. Supply complete
-references for all actual sources; array construction does not inspect files.
-
-For example, a caller that has loaded these files can attach their metadata:
-
-```python
-from pathlib import Path
-from datetime import datetime, timezone
-from boldtailor.provenance import RunSources, SourceRef
-
-def source_ref(path, root, role):
-    path, root = Path(path), Path(root)
-    info = path.stat()
-    return SourceRef(
-        role=role,
-        uri=path.relative_to(root).as_posix(),
-        byte_size=info.st_size,
-        modified_at=datetime.fromtimestamp(info.st_mtime, timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
-    )
-
-# root and the two paths refer to the files used to construct the arrays.
-sources = (RunSources(
-    signal=source_ref(signal_path, root, "signal"),
-    events=source_ref(events_path, root, "events"),
-),)
-```
-
-`metadata_fingerprint` hashes canonical source metadata, not file contents.
-It is unavailable for missing or incomplete source descriptions. Anonymous
-arrays still work, with reduced provenance quality recorded in the result.
-Conventional fits combine source identity with model settings for an analysis
-fingerprint; prepared and trial workflows also record labeled design identities.
-Importable custom HRFs can be identified; local functions and lambdas may leave
-a deterministic conventional model identity unavailable.
-
-Execution IDs are fresh UUIDs for individual attempts. They are distinct from
-source and analysis fingerprints. `analysis_fingerprint()` and
-`extend_provenance()` in `boldtailor.provenance` support this bookkeeping when
-adding a workflow. `ProvenanceRecord.from_dict()` reconstructs records while
-retaining supported extension fields.
-
-For spatially varying HRFs, selection provenance identifies the library and
-feature-to-HRF assignment. Grouped-fit provenance identifies each used design.
-The NSD feature signature hashes the ordered CIFTI BrainModel axis and feature
-indices. Feature count alone cannot establish spatial correspondence.
+`SourceRef` holds a role, a dataset-relative or `bids:<dataset>:<path>` URI,
+media type, byte size, UTC `modified_at` (`Z` or `+00:00`), optional `sha256`,
+and JSON annotations; `RunSources` groups signal, events, and confounds. One
+rule, `provenance.validate_relative_path`, governs URIs and BIDS projection
+paths: POSIX, no traversal or empty parts, components `[A-Za-z0-9+_.-]+`.
+Annotation, metadata, and model-key text is stored as given, even if it looks
+like a path. `metadata_fingerprint` hashes source metadata (not file contents)
+and is absent for incomplete sources. Each activity records `software`, which
+analysis identities exclude. Execution IDs are fresh UUIDs per attempt.
 
 ## Logging
 
@@ -286,56 +247,29 @@ preserved; source fingerprints describe metadata, not BOLD contents.
 
 ## BIDS metadata projection
 
-`project_bids_provenance()` converts a record into a mapping of relative paths
-to file bytes. The implementation currently writes stable BIDS 1.11.1 metadata.
-Optional draft provenance output is pinned to
-`BEP028@02172700aac8d1bdd67b45191f43533f426848dc`.
-
-The draft subset covers Activities, Files, Environments, Software, the
-provenance label table, and file `GeneratedBy`/`Sources` relationships.
-It does not claim conformance to a final BIDS provenance standard.
-`export_bids_prov=False` omits those draft files while retaining dataset
-metadata, canonical provenance, and event logs. Projection performs no I/O.
+`project_bids_provenance()` returns relative paths mapped to bytes without I/O:
+BIDS 1.11.1 metadata plus an optional (`export_bids_prov`) draft subset pinned
+to `BEP028@02172700aac8d1bdd67b45191f43533f426848dc`. The logs equal the record
+(`logs/boldtailor_provenance.json` is its canonical JSON); no keys are dropped.
+Each Activity's `Command` names the entry point (`boldtailor.fit`,
+`boldtailor.select_hrf`, ...); the last carries `StartedAtTime`/`EndedAtTime`
+from its lifecycle events; `Environments[0]` has `Python`, `Platform`, and a
+`Software` list taken from the last activity's `software`.
 
 ## Writing result files
 
-An imaging workflow first creates its images, tables, sidecars, and provenance
-files in memory as `Artifact` objects, then passes them to
-`publish_artifact_set()`. Keeping the files in one publication operation lets
-the writer restore the previous output set if a later write fails. New adapters
-should use this path rather than writing their final files piecemeal.
-
-The publisher validates paths, protects supplied source paths, locks the output
-directory, stages and fsyncs files, and rolls back failed promotion. Each file
-replacement is atomic, but the collection is not one atomic operation: readers
-that do not share the writer lock can observe partial promotion. Existing
-files are protected unless `overwrite=True`. Preflight known output collisions
-before expensive fitting, and still let the publisher perform its own checks.
-
-The writer uses ordinary `Path` operations and `os.replace` under one
-`FileLock`. Descriptor anchoring, platform capability probing, and secondary
-recovery copying have been removed. Preflight rejects existing symlinks, source
-aliases, unsafe paths, and case-folded collisions. This is a local workflow
-contract for cooperating writers, not protection against a process actively
-swapping directories during publication. There is no crash-recovery protocol.
-
-On failure, the normal diagnostic is
-`.boldtailor/publication_failures.jsonl`. New records contain fixed `error_code`
-categories and `rollback_failed`, with a destination-relative recovery path
-when applicable. They omit exception text and class names. If rollback cannot
-restore an original or remove a new output, the transaction is retained under
-`.boldtailor/transactions/<execution-id>/`. The raised `PublicationError`
-reports that directory in its message and `recovery_directory` attribute;
-`rollback_errors` holds individual errors, and `__cause__` is the original
-publication failure. Unrestored originals remain under `backups/` within the
-transaction. Inspect and recover them manually after resolving the underlying
-failure; a partial new output may still exist at the destination.
-
-`retain_incomplete` has been removed. Successful rollback discards new staged
-artifacts. Failed rollback retains the transaction automatically without
-regenerating artifacts or rewriting provenance. Cleanup is best effort;
-subsequent publications never delete orphan transaction directories. See the
-[publication migration](publication-migration.md) and `tests/test_publication.py`.
+Workflows build `Artifact` objects in memory and pass them to
+`publish_artifact_set()`. Under a `FileLock`, it checks targets, stages files in
+`<destination>.boldtailor/stage-<uuid>/`, moves overwritten files to
+`backup-<uuid>/`, `os.replace`s each file into place, and fsyncs files (not
+directories). Failure restores the backups. Writers serialize; readers can see a
+partial set. Payloads are not parsed. Ancestor symlinks such as macOS `/tmp` are
+resolved; a symlinked destination or a symlink inside it is refused, as are
+unrequested overwrites and outputs overlapping `source_paths`.
+`<destination>.boldtailor/` is a sibling, not part of the dataset (so no
+`.bidsignore`); it holds `lock` and `failures.jsonl`, whose fixed-field records
+omit exception text. If rollback fails, `PublicationError.recovery_directory`
+names the retained `backup-<uuid>/`; `rollback_errors` lists the failures.
 
 ## NSD exports and parallel execution
 

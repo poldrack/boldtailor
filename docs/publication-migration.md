@@ -1,5 +1,10 @@
 # Local publication migration
 
+> **Superseded 2026-10-02.** Control data now lives in the sibling
+> `<destination>.boldtailor/` directory (`lock`, `stage-<uuid>/`,
+> `backup-<uuid>/`, `failures.jsonl`); payloads are not parsed and case-folded
+> names are not scanned. See "Writing result files" in `development.md`.
+
 Publication uses a local destination shared by cooperating writers. Artifact
 paths are relative POSIX paths; existing symlinks and case-folded collisions
 are rejected. The `.boldtailor` control directory is reserved regardless of

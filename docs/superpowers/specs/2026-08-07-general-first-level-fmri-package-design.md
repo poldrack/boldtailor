@@ -138,6 +138,11 @@ requirement, such as a custom HRF function or denoising function.
 
 ## Provenance, identity, logging, and privacy
 
+> **Superseded 2026-10-02.** The provenance-privacy and publication rules in
+> this section were right-sized (review findings V2-V7). The current contract
+> is in `docs/development.md` ("Source identity and provenance", "BIDS
+> metadata projection", "Writing result files"). Text kept for history.
+
 The versioned `boldtailor.provenance/1` record is the canonical provenance
 source. BIDS metadata and the pinned BEP028 files are projections of that
 record, not parallel sources of truth. `AnalysisData` owns the normalization
@@ -393,6 +398,11 @@ derivative files directly. This keeps every future write path behind the same
 collision, locking, staging, rollback, and failure-record boundary.
 
 ## Errors and publication safety
+
+> **Superseded 2026-10-02.** The provenance-privacy and publication rules in
+> this section were right-sized (review findings V2-V7). The current contract
+> is in `docs/development.md` ("Source identity and provenance", "BIDS
+> metadata projection", "Writing result files"). Text kept for history.
 
 Validation happens before expensive fitting and again at each boundary. Errors
 name the subject/session/run, source path, model term, or contrast that failed.
