@@ -206,3 +206,33 @@ def test_surfaces_are_looked_up_only_when_requested(
     )
     result = workflow_run.run_workflow(settings)
     assert not any("Surface" in p.name for p in result.paths)
+
+
+def test_task_only_session_runs_without_rt_or_trial_type(
+    four_runs, settings_for, tmp_path
+):
+    import pandas as pd
+
+    root, _ = four_runs
+    for path in (root / "sub-07" / "ses-nsd10" / "func").glob("*_events.tsv"):
+        frame = pd.read_csv(path, sep="\t")
+        frame.drop(columns=["response_time", "trial_type"]).to_csv(
+            path, sep="\t", index=False
+        )
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    result = workflow_run.run_workflow(settings)
+    names = {p.name for p in result.paths}
+    assert not any("rtcorrelation" in n or "RTCheck" in n for n in names)
+    text = result.report_path.read_text()
+    assert "Task regressors: task" in text and "No reaction-time column" in text
+    metadata = json.loads(
+        (
+            _func(settings)
+            / "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json"
+        ).read_text()
+    )
+    absent = {"rt_check", "response_time", "missing_response_time"}
+    assert not absent & set(metadata)
+    assert metadata["task_model"]["regressors"] == ["task"]
