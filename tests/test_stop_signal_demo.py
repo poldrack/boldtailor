@@ -18,7 +18,11 @@ from nbclient.exceptions import CellExecutionError
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
-from boldtailor.publication import Artifact, publish_artifact_set
+from boldtailor.publication import (
+    Artifact,
+    is_control_directory,
+    publish_artifact_set,
+)
 from boldtailor.results import make_task_delta_r2_result
 from examples.stop_signal_demo import (
     common_brain_mask,
@@ -704,7 +708,11 @@ def _execute_notebook(
         for cell in executed.cells
         for output in cell.get("outputs", ())
     )
-    published = next(temporary_root.glob("boldtailor-*"))
+    published = next(
+        path
+        for path in sorted(temporary_root.glob("boldtailor-*"))
+        if not is_control_directory(path)
+    )
     return executed, rendered, published
 
 

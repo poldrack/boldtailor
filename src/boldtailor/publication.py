@@ -17,6 +17,11 @@ _CONTROL_SUFFIX = ".boldtailor"
 _FAILURE_LOG = "failures.jsonl"
 
 
+def is_control_directory(path: str | os.PathLike[str]) -> bool:
+    """True for the ``<destination>.boldtailor`` sibling holding lock and staging."""
+    return Path(path).name.endswith(_CONTROL_SUFFIX)
+
+
 class PublicationError(RuntimeError):
     """Publication failed; inspect the cause and any retained rollback backups."""
 
