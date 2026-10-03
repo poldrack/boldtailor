@@ -477,7 +477,8 @@ def test_expanded_grid_does_not_flag_every_custom_pick(selected_fixture):
         replace(selection, library=library), [interior, edge, interior, 0, -1]
     )
     custom = picked.hrf_indices > 0
-    assert picked.parameter_bound_flags[custom][:, 1].all()  # two-level delay
+    # the two-level undershoot_delay grid puts every custom pick at an edge
+    assert picked.parameter_bound_flags[custom][:, 1].any(axis=-1).all()
     np.testing.assert_array_equal(
         picked.at_parameter_bound, [False, True, False, False, False]
     )
