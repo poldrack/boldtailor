@@ -133,10 +133,11 @@ def test_hrf_selection_recovers_the_generating_kernel_under_ar1_noise():
         [
             [3, 10, 0.5, 0.5, 2, 0, 36],
             [4, 12, 0.8, 1.0, 4, 0.5, 36],
-            [5, 14, 1.0, 1.5, 6, 1.0, 36],
+            [4, 10, 0.6, 0.8, 3, 0.3, 36],
             [6, 16, 1.5, 2.5, 8, 2, 36],
         ]
     )
+    # Library ids; canonical is id 0.
     true_ids = np.array([0, 1, 2, 3, 2, 1, 0, 3])
     kernels = [library.candidates[int(i)] for i in true_ids]
 
@@ -153,7 +154,11 @@ def test_hrf_selection_recovers_the_generating_kernel_under_ar1_noise():
 def test_hrf_selection_keeps_canonical_when_truth_is_canonical():
     rng = np.random.default_rng(22)
     library = HrfLibrary.from_parameters(
-        [[4, 12, 0.8, 1.0, 4, 0.5, 36], [6, 16, 1.5, 2.5, 8, 2, 36]]
+        [
+            [4, 12, 0.8, 1.0, 4, 0.5, 36],
+            [5, 14, 1.0, 1.5, 6, 1.0, 36],
+            [6, 16, 1.5, 2.5, 8, 2, 36],
+        ]
     )
 
     def motion(s, r):

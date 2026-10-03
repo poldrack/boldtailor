@@ -49,3 +49,4 @@ the current branch verbatim.
 - [Fractional-default adoption record](validation/fractional-defaults-2026-09-28.md)
 - [Historical fractional ablation](validation/fractional-ridge-ablation-2026-09-28.md)
 - [Historical NSD measurements](validation/nsd-session.md)
+- [Method recovery validation, 2026-10](validation/recovery-2026-10.md)
