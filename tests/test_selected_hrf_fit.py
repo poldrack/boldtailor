@@ -10,7 +10,7 @@ from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_single_trials
-from tests.oracles import scaled_condition
+from tests.oracles import replace_indices, scaled_condition
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
@@ -206,7 +206,6 @@ def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
 )
 def test_selected_design_rejects_pairs_that_were_not_fitted(selected_fixture, key):
     from boldtailor.single_trial import fit_selected_hrfs
-    from tests.test_fit import replace_indices
 
     data, selection = selected_fixture
     narrow = replace_indices(selection, [1, 1, 1, 1, -1])
@@ -238,7 +237,6 @@ def _design_bytes(design):
 
 def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
     from boldtailor.single_trial import fit_selected_hrfs
-    from tests.test_fit import replace_indices
 
     data, selection = selected_fixture
     narrow = replace_indices(selection, [1, 1, 1, 1, -1])

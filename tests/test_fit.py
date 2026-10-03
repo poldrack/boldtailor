@@ -13,7 +13,7 @@ from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
-from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
+from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS, replace_indices
 from tests.oracles import (
     peak_design_matrix,
     nilearn_original_space_r2,
@@ -726,22 +726,6 @@ def test_rounding_level_constants_are_undefined(
     result = fit(data, model)
     _assert_constant_feature_undefined(result, "face_gt_house", 1)
     assert np.isfinite(result.stat("face_gt_house")[0])
-
-
-def replace_indices(selection, indices):
-    """Rebuild a selection with new HRF IDs and a matching assignment identity."""
-    from dataclasses import replace
-    from hashlib import sha256
-
-    from boldtailor.provenance import ProvenanceRecord
-
-    indices = np.asarray(indices, dtype=np.int64)
-    record = selection.provenance.to_dict()
-    record["activities"][-1]["hrf_assignment_fingerprint"] = sha256(
-        indices.astype("<i8").tobytes()
-    ).hexdigest()
-    provenance = ProvenanceRecord.from_dict(record)
-    return replace(selection, hrf_indices=indices, provenance=provenance)
 
 
 @pytest.mark.parametrize("hrf_name", ["spm", "glover"])

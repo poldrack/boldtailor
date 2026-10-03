@@ -10,7 +10,11 @@ from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
-from tests.oracles import peak_design_matrix
+from tests.oracles import (
+    glm_run_sources,
+    hrf_glm_oracle_design,
+    peak_design_matrix,
+)
 
 
 def pytest_addoption(parser):
@@ -287,3 +291,77 @@ def single_run_problem():
         noise_model="ols",
     )
     return signals, events, design, model
+
+
+@pytest.fixture(scope="module")
+def hrf_glm_problem(two_candidate_library):
+    library = two_candidate_library
+    ids = [1, 0, 1, 2]
+    model = ModelSpec(
+        contrasts={"stimulus": {"stimulus": 1}, "rt_effect": "rt"},
+        confounds=("motion",),
+        high_pass=0.01,
+        oversampling=20,
+        min_onset=-10,
+        noise_model="ols",
+    )
+    events, times, confounds, training, signals, designs = [], [], [], [], [], {}
+    rng = np.random.default_rng(734)
+    for run in range(3):
+        t = 0.775 + 1.6 * np.arange(85 + 5 * run)
+        stimulus = pd.DataFrame(
+            dict(
+                onset=np.array([5.3, 21.1, 42.2, 64.4, 88.5, 110.2]) + run,
+                duration=[1.2, 2.0, 0.7, 1.5, 1.1, 2.3],
+                trial_type="stimulus",
+                modulation=1.0,
+            )
+        )
+        rt = stimulus.assign(
+            trial_type="rt", modulation=[-0.3, 0.1, 0.5, -0.4, 0.3, -0.2]
+        )
+        e = pd.concat([stimulus, rt], ignore_index=True)
+        n = pd.DataFrame(
+            dict(motion=np.linspace(-1, 1, len(t)), unused=rng.normal(size=len(t)))
+        )
+        mean_columns, target_columns = [], []
+        for feature, cid in enumerate(ids):
+            candidate = library.candidates[cid]
+            mean = compute_regressor(
+                stimulus[["onset", "duration", "modulation"]].to_numpy().T,
+                "spm" if cid == 0 else candidate.kernel,
+                t,
+            )[0][:, 0]
+            mean_columns.append(3 * mean + 100 + n.motion)
+            design = hrf_glm_oracle_design(e, t, n, candidate, model)
+            designs[run, cid] = design
+            coefficients = np.zeros(design.shape[1])
+            coefficients[design.columns.get_loc("stimulus")] = 2 + feature + run
+            coefficients[design.columns.get_loc("rt")] = 0.4 - feature / 4
+            coefficients[design.columns.get_loc("motion")] = 1.3
+            coefficients[design.columns.get_loc("constant")] = 100 + run
+            noise = rng.normal(0, 0.03, len(t))
+            for scan in range(1, len(t)):
+                noise[scan] += 0.5 * noise[scan - 1]
+            target_columns.append(design.to_numpy() @ coefficients + noise)
+        events.append(e)
+        times.append(t)
+        confounds.append(n)
+        training.append(np.column_stack([*mean_columns, np.full(len(t), 100.0)]))
+        signals.append(np.column_stack([*target_columns, rng.normal(100, 1, len(t))]))
+    training_data = from_arrays(
+        training,
+        [e.iloc[:6] for e in events],
+        frame_times=times,
+        confounds=[n[["motion"]] for n in confounds],
+    )
+    selection = select_hrfs(training_data, library=library, feature_signature="axis-v1")
+    np.testing.assert_array_equal(selection.hrf_indices, [*ids, -1])
+    data = from_arrays(
+        signals,
+        events,
+        frame_times=times,
+        confounds=confounds,
+        sources=[glm_run_sources(r) for r in range(3)],
+    )
+    return data, model, selection, designs

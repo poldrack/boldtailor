@@ -1,7 +1,15 @@
 """Independent numerical references and run subsets for scientific tests."""
 
+from dataclasses import replace
+from hashlib import sha256
+
 import numpy as np
-from nilearn.glm.first_level import make_first_level_design_matrix, run_glm
+import pandas as pd
+from nilearn.glm.first_level import (
+    compute_regressor,
+    make_first_level_design_matrix,
+    run_glm,
+)
 from nilearn.glm.first_level.hemodynamic_models import (
     _sample_condition,
     glover_hrf,
@@ -14,6 +22,7 @@ from boldtailor._fractional_ridge import fraction_grid, prepare_fraction_betas
 from boldtailor._hrf_design import stimulus_regressor
 from boldtailor._single_trial_fit import prepare_trial_betas, validate_alpha
 from boldtailor.data import from_arrays
+from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
 
 _NILEARN_SHAPES = {"spm": spm_hrf, "glover": glover_hrf}
 
@@ -283,3 +292,61 @@ def fraction_beta_path(x, nuisance, signals, *, fractions):
     for fraction in grid:
         betas, alphas = prepared.solve(fraction)
         yield fraction, betas, alphas
+
+
+def glm_run_sources(run):
+    """Complete source references for one run of the selected-HRF problem."""
+    return RunSources(
+        **{
+            role: SourceRef(
+                role,
+                uri=f"run-{run}_{role}.tsv",
+                byte_size=1024,
+                modified_at="2026-09-27T12:00:00Z",
+            )
+            for role in ("signal", "events", "confounds")
+        }
+    )
+
+
+def hrf_glm_oracle_design(events, times, confounds, candidate, model):
+    """One run's design built from Nilearn regressors with a fixed kernel."""
+    columns = {}
+    for condition in sorted(events.trial_type.unique()):
+        selected = events.loc[events.trial_type == condition]
+        values, _ = compute_regressor(
+            scaled_condition(
+                selected.onset,
+                selected.duration,
+                selected.modulation,
+                candidate.kernel,
+                times,
+                model.oversampling,
+                model.min_onset,
+            ),
+            candidate.kernel,
+            times,
+            oversampling=model.oversampling,
+            min_onset=model.min_onset,
+        )
+        columns[condition] = values[:, 0]
+    nuisance = make_first_level_design_matrix(
+        times,
+        events=None,
+        drift_model=model.drift_model,
+        high_pass=model.high_pass,
+        drift_order=model.drift_order,
+        add_regs=confounds.loc[:, list(model.confounds)],
+    )
+    return pd.DataFrame(columns, index=times).join(nuisance)
+
+
+def replace_indices(selection, indices):
+    """Rebuild a selection with new HRF IDs and a matching assignment identity."""
+    indices = np.asarray(indices, dtype=np.int64)
+    record = selection.provenance.to_dict()
+    record["activities"][-1]["hrf_assignment_fingerprint"] = sha256(
+        indices.astype("<i8").tobytes()
+    ).hexdigest()
+    provenance = ProvenanceRecord.from_dict(record)
+    return replace(selection, hrf_indices=indices, provenance=provenance)

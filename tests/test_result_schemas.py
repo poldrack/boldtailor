@@ -6,7 +6,6 @@ import pytest
 
 from boldtailor.fractional_ridge import score_fraction_candidates
 from boldtailor.ridge_selection import score_ridge_candidates
-from tests.test_hrf_glm import hrf_glm_problem  # noqa: F401  (fixture)
 
 
 @pytest.mark.parametrize("fractional", [False, True])

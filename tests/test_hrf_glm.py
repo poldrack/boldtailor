@@ -6,139 +6,15 @@ import numpy as np
 import pandas as pd
 import pytest
 from nilearn.glm import compute_contrast
-from nilearn.glm.first_level import (
-    compute_regressor,
-    make_first_level_design_matrix,
-    run_glm,
-)
+from nilearn.glm.first_level import run_glm
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import ModelSpec, Modulator, TaskModel
-from boldtailor.provenance import RunSources, SourceRef
 from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
-from tests.oracles import scaled_condition
-
-
-def _sources(run):
-    return RunSources(
-        **{
-            role: SourceRef(
-                role,
-                uri=f"run-{run}_{role}.tsv",
-                byte_size=1024,
-                modified_at="2026-09-27T12:00:00Z",
-            )
-            for role in ("signal", "events", "confounds")
-        }
-    )
-
-
-def _oracle_design(events, times, confounds, candidate, model):
-    columns = {}
-    for condition in sorted(events.trial_type.unique()):
-        selected = events.loc[events.trial_type == condition]
-        values, _ = compute_regressor(
-            scaled_condition(
-                selected.onset,
-                selected.duration,
-                selected.modulation,
-                candidate.kernel,
-                times,
-                model.oversampling,
-                model.min_onset,
-            ),
-            candidate.kernel,
-            times,
-            oversampling=model.oversampling,
-            min_onset=model.min_onset,
-        )
-        columns[condition] = values[:, 0]
-    nuisance = make_first_level_design_matrix(
-        times,
-        events=None,
-        drift_model=model.drift_model,
-        high_pass=model.high_pass,
-        drift_order=model.drift_order,
-        add_regs=confounds.loc[:, list(model.confounds)],
-    )
-    return pd.DataFrame(columns, index=times).join(nuisance)
-
-
-@pytest.fixture(scope="module")
-def hrf_glm_problem(two_candidate_library):
-    library = two_candidate_library
-    ids = [1, 0, 1, 2]
-    model = ModelSpec(
-        contrasts={"stimulus": {"stimulus": 1}, "rt_effect": "rt"},
-        confounds=("motion",),
-        high_pass=0.01,
-        oversampling=20,
-        min_onset=-10,
-        noise_model="ols",
-    )
-    events, times, confounds, training, signals, designs = [], [], [], [], [], {}
-    rng = np.random.default_rng(734)
-    for run in range(3):
-        t = 0.775 + 1.6 * np.arange(85 + 5 * run)
-        stimulus = pd.DataFrame(
-            dict(
-                onset=np.array([5.3, 21.1, 42.2, 64.4, 88.5, 110.2]) + run,
-                duration=[1.2, 2.0, 0.7, 1.5, 1.1, 2.3],
-                trial_type="stimulus",
-                modulation=1.0,
-            )
-        )
-        rt = stimulus.assign(
-            trial_type="rt", modulation=[-0.3, 0.1, 0.5, -0.4, 0.3, -0.2]
-        )
-        e = pd.concat([stimulus, rt], ignore_index=True)
-        n = pd.DataFrame(
-            dict(motion=np.linspace(-1, 1, len(t)), unused=rng.normal(size=len(t)))
-        )
-        mean_columns, target_columns = [], []
-        for feature, cid in enumerate(ids):
-            candidate = library.candidates[cid]
-            mean = compute_regressor(
-                stimulus[["onset", "duration", "modulation"]].to_numpy().T,
-                "spm" if cid == 0 else candidate.kernel,
-                t,
-            )[0][:, 0]
-            mean_columns.append(3 * mean + 100 + n.motion)
-            design = _oracle_design(e, t, n, candidate, model)
-            designs[run, cid] = design
-            coefficients = np.zeros(design.shape[1])
-            coefficients[design.columns.get_loc("stimulus")] = 2 + feature + run
-            coefficients[design.columns.get_loc("rt")] = 0.4 - feature / 4
-            coefficients[design.columns.get_loc("motion")] = 1.3
-            coefficients[design.columns.get_loc("constant")] = 100 + run
-            noise = rng.normal(0, 0.03, len(t))
-            for scan in range(1, len(t)):
-                noise[scan] += 0.5 * noise[scan - 1]
-            target_columns.append(design.to_numpy() @ coefficients + noise)
-        events.append(e)
-        times.append(t)
-        confounds.append(n)
-        training.append(np.column_stack([*mean_columns, np.full(len(t), 100.0)]))
-        signals.append(np.column_stack([*target_columns, rng.normal(100, 1, len(t))]))
-    training_data = from_arrays(
-        training,
-        [e.iloc[:6] for e in events],
-        frame_times=times,
-        confounds=[n[["motion"]] for n in confounds],
-    )
-    selection = select_hrfs(training_data, library=library, feature_signature="axis-v1")
-    np.testing.assert_array_equal(selection.hrf_indices, [*ids, -1])
-    data = from_arrays(
-        signals,
-        events,
-        frame_times=times,
-        confounds=confounds,
-        sources=[_sources(r) for r in range(3)],
-    )
-    return data, model, selection, designs
+from tests.oracles import glm_run_sources, hrf_glm_oracle_design, replace_indices
 
 
 def _selected_fit(data, model, selection):
@@ -343,13 +219,13 @@ def test_delta_rejects_a_different_analysis(hrf_glm_problem, change):
         model = replace(model, noise_model="ar1")
     else:
         events, confounds = data.events, data.confounds
-        sources = [_sources(r) for r in range(3)]
+        sources = [glm_run_sources(r) for r in range(3)]
         if change == "events":
             events[0].loc[6, "modulation"] += 0.2
         elif change == "confounds":
             confounds[0].loc[3, "motion"] += 0.2
         else:
-            sources = [_sources(r + 10) for r in range(3)]
+            sources = [glm_run_sources(r + 10) for r in range(3)]
         data = from_arrays(
             data.signals,
             events,
@@ -392,7 +268,7 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
     result = _selected_fit(data, model, selection)
     for run, cid in result.group_design_provenance:
         actual = result.group_design(run, cid)
-        expected = _oracle_design(
+        expected = hrf_glm_oracle_design(
             data.events[run],
             data.frame_times[run],
             confounds[run],
@@ -402,7 +278,7 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
         pd.testing.assert_frame_equal(actual, expected)
 
 
-def test_selected_delta_requires_complete_sources(hrf_glm_problem):
+def test_selected_delta_requires_completeglm_run_sources(hrf_glm_problem):
     data, model, selection, _ = hrf_glm_problem
     anonymous = from_arrays(
         data.signals,
@@ -425,7 +301,7 @@ def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_probl
         data.events,
         frame_times=data.frame_times,
         confounds=data.confounds,
-        sources=[_sources(r) for r in range(3)],
+        sources=[glm_run_sources(r) for r in range(3)],
     )
     result = _selected_fit(target, model, selection)
     assert np.isnan(result.r2[0])
@@ -446,7 +322,7 @@ def test_selected_glm_masks_constant_feature_contrasts(hrf_glm_problem):
         data.events,
         frame_times=data.frame_times,
         confounds=data.confounds,
-        sources=[_sources(r) for r in range(3)],
+        sources=[glm_run_sources(r) for r in range(3)],
     )
     result = _selected_fit(target, model, selection)
     for name in model.contrasts:
@@ -524,7 +400,7 @@ def task_model_problem(two_candidate_library):
         events,
         frame_times=times,
         confounds=confounds,
-        sources=[_sources(r) for r in range(3)],
+        sources=[glm_run_sources(r) for r in range(3)],
     )
     model = ModelSpec(
         contrasts={name: {name: 1} for name in ("task", "response_time", "trial_type")},
@@ -842,8 +718,6 @@ def test_selected_glm_rebuilds_group_designs_on_demand(hrf_glm_problem):
 def test_selected_glm_group_design_rejects_pairs_that_were_not_fitted(
     hrf_glm_problem, key
 ):
-    from tests.test_fit import replace_indices
-
     data, model, selection, _ = hrf_glm_problem
     narrow = replace_indices(selection, np.where(selection.hrf_indices >= 0, 1, -1))
     result = _selected_fit(data, model, narrow)
