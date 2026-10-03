@@ -29,3 +29,31 @@ def test_public_module_reexports_the_implementation(public, name, origin):
     module = importlib.import_module(f"boldtailor.{public}")
     implementation = importlib.import_module(f"boldtailor.{origin}")
     assert getattr(module, name) is getattr(implementation, name)
+
+
+ANNOTATED = ["hrf_selection", "_hrf_glm", "_selected_hrf_fit", "ridge_selection"]
+ANNOTATED += ["fractional_ridge"]
+
+
+@pytest.mark.parametrize("module_name", ANNOTATED)
+def test_public_functions_are_annotated(module_name):
+    import inspect
+
+    module = importlib.import_module(f"boldtailor.{module_name}")
+    functions = [
+        value
+        for name, value in vars(module).items()
+        if inspect.isfunction(value)
+        and not name.startswith("_")
+        and value.__module__ == module.__name__
+    ]
+    assert functions
+    for function in functions:
+        signature = inspect.signature(function)
+        assert signature.return_annotation is not inspect.Signature.empty, function
+        for parameter in signature.parameters.values():
+            if parameter.kind is not inspect.Parameter.VAR_KEYWORD:
+                assert parameter.annotation is not inspect.Parameter.empty, (
+                    function,
+                    parameter.name,
+                )
