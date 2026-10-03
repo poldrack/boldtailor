@@ -140,6 +140,7 @@ def _compatible(first, other, estimators):
         "high_pass",
         "hrf_selection",
         "task_model_fingerprint",
+        "hrf_normalization",
     )
     for key in keys:
         if other["metadata"].get(key) != first["metadata"].get(key):

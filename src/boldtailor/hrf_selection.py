@@ -17,6 +17,7 @@ from boldtailor._hrf_cv import (
     pooled_amplitude,
     prediction_loss,
 )
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
@@ -70,6 +71,7 @@ def _provenance(data, runs, library, labels, signature, task_model, name, **extr
         profiled_regressors=list(task_model.profiled_names),
         score="nuisance_adjusted_task_model_prediction_r2",
         beta_units="native_signal",
+        hrf_normalization=HRF_NORMALIZATION,
         oversampling=OVERSAMPLING,
         min_onset=MIN_ONSET,
         nuisance="conditional_projection_of_confounds_and_profiled_task_columns_per_run",

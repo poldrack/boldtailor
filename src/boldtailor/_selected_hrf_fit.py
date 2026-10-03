@@ -8,6 +8,7 @@ import pandas as pd
 
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._single_trial_design import _validate_events
 from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
@@ -99,7 +100,7 @@ def _fit_activity(data, selection, labels, alpha, assignment, designs, fractions
         ridge_alpha=alpha,
         beta_units="native_signal",
         normalization="unit_l2_after_nuisance_projection",
-        hrf_normalization="discrete_sum_one",
+        hrf_normalization=HRF_NORMALIZATION,
         noise_model="ols",
         oversampling=50,
         selection=selection.provenance.to_dict()["activities"][-1],

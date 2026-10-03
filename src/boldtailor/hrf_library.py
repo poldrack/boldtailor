@@ -1,4 +1,4 @@
-"""Deterministic, sum-normalized HRFs with an exact Nilearn SPM anchor."""
+"""Deterministic, peak-normalized HRFs; candidate 0 is Nilearn's SPM shape."""
 
 from dataclasses import dataclass, field
 from hashlib import sha256
@@ -49,9 +49,19 @@ def _sampling(tr, oversampling):
     return float(tr) / int(oversampling)
 
 
+def _peak_normalized(values):
+    """Scale a sampled kernel to unit peak so betas are peak BOLD responses."""
+    if not np.isfinite(values).all() or np.max(values) <= 0:
+        raise ValueError("HRF kernel must be finite with a positive peak")
+    return readonly_array(values / np.max(values))
+
+
 @dataclass(frozen=True)
 class HrfCandidate:
-    """Stable library index and identified kernel, sampled at TR/oversampling."""
+    """Stable library index and identified kernel, sampled at TR/oversampling.
+
+    Every kernel is scaled to a peak of one, including canonical SPM.
+    """
 
     id: int
     kind: str
@@ -67,7 +77,7 @@ class HrfCandidate:
     def kernel(self, tr, oversampling=50):
         dt = _sampling(tr, oversampling)
         if self.kind == "spm":
-            return readonly_array(spm_hrf(tr, oversampling))
+            return _peak_normalized(spm_hrf(tr, oversampling))
         a, b, c, d, ratio, onset, duration = self.parameters
         # TR inferred from frame differences carries roundoff; do not add an
         # extra tail sample when duration/dt is numerically an integer.
@@ -79,13 +89,7 @@ class HrfCandidate:
         values = (
             gamma.pdf(times, a / c, scale=c) - gamma.pdf(times, b / d, scale=d) / ratio
         )
-        total = values.sum()
-        if (
-            not np.isfinite(values).all()
-            or abs(total) <= np.finfo(float).eps * np.abs(values).sum()
-        ):
-            raise ValueError("HRF kernel must be finite with nonzero sum")
-        return readonly_array(values / total)
+        return _peak_normalized(values)
 
 
 @dataclass(frozen=True)
@@ -148,7 +152,7 @@ class HrfLibrary:
 
 
 def expanded_hrf_library():
-    """The original grid of 648 double-gamma kernels plus exact canonical SPM."""
+    """The original 648 double-gamma grid plus peak-scaled canonical SPM."""
     return HrfLibrary.from_parameters(
         product(
             (3, 4.5, 6),
@@ -163,7 +167,7 @@ def expanded_hrf_library():
 
 
 def sobol_hrf_library(n_samples=512, *, seed=0):
-    """Sample continuous HRF parameters, plus exact canonical SPM at ID zero.
+    """Sample continuous HRF parameters, plus peak-scaled canonical SPM at ID zero.
 
     ``n_samples`` must be a positive power of two; ``seed`` must be a
     nonnegative integer. Scrambled Sobol points cover the six-dimensional

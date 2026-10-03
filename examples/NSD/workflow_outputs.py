@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._task_design import expand_events
 from boldtailor.publication import publish_artifact_set
 from .beta_activation import MAP_NAMES as ACTIVATION_MAP_NAMES
@@ -294,6 +295,7 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
             task_delta_r2="Includes the missing-RT indicator among task predictors",
         ),
         task_model_fingerprint=NSD_TASK_MODEL.fingerprint,
+        hrf_normalization=HRF_NORMALIZATION,
         trial_type="Binary codes 0/1, uncentered; the task coefficient is the response on trial_type 0 trials at the run-mean RT",
         task="One unit per presentation; observed RT at its run mean, trial type 0, missing-RT indicator zero",
         orthogonalization=False,

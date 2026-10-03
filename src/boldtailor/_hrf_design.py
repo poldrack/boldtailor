@@ -1,26 +1,65 @@
-"""One identified HRF per convolution; candidate bases are never orthogonalized."""
+"""One identified, peak-one HRF per convolution; bases are never orthogonalized.
+
+Every kernel built here has a maximum of one, so a beta is the peak BOLD
+response to a unit-amplitude event in signal units.
+"""
 
 import hashlib
 from functools import lru_cache
 import numpy as np
 from nilearn.glm.first_level import compute_regressor
-from nilearn.glm.first_level.hemodynamic_models import _sample_condition
+from nilearn.glm.first_level.hemodynamic_models import _sample_condition, glover_hrf
 
-from boldtailor.hrf_library import HrfCandidate
+from boldtailor._arrays import readonly_array
+from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate
+
+HRF_NORMALIZATION = "peak_one"
+_CANONICAL = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
+_UNIDENTIFIED = "hrf must be 'spm', 'glover', or an identified HrfCandidate"
+
+
+def _glover_kernel(tr, oversampling=50):
+    values = glover_hrf(tr, oversampling)
+    return readonly_array(values / values.max())
+
+
+# Nilearn names columns after the callable; every package kernel is "kernel".
+_glover_kernel.__name__ = "kernel"
 
 
 def hrf_model(candidate):
+    """Peak-one kernel callable for 'spm', 'glover', or an HrfCandidate."""
+    if isinstance(candidate, str):
+        named = {"spm": _CANONICAL.kernel, "glover": _glover_kernel}
+        if candidate not in named:
+            raise ValueError(_UNIDENTIFIED)
+        return named[candidate]
+    if not isinstance(candidate, HrfCandidate):
+        raise ValueError(_UNIDENTIFIED)
+    return candidate.kernel
+
+
+def hrf_kernel(model, tr, oversampling=50):
+    """Read-only peak-one kernel for a basis name or candidate."""
+    return hrf_model(model)(tr, oversampling)
+
+
+def resolve_hrf(model):
+    """Peak-one callable for plain 'spm'/'glover'; other bases pass to Nilearn."""
+    return hrf_model(model) if model in ("spm", "glover") else model
+
+
+def identified_candidate(candidate):
+    """The identified candidate for 'spm' or an HrfCandidate; others are rejected."""
     if isinstance(candidate, str) and candidate == "spm":
-        return "spm"
+        return _CANONICAL
     if not isinstance(candidate, HrfCandidate):
         raise ValueError("hrf must be 'spm' or an identified HrfCandidate")
-    return "spm" if candidate.kind == "spm" else candidate.kernel
+    return candidate
 
 
 def hrf_metadata(candidate):
-    hrf_model(candidate)
-    if isinstance(candidate, str) or candidate.kind == "spm":
-        return "spm"
+    candidate = identified_candidate(candidate)
     return dict(
         id=candidate.id,
         kind=candidate.kind,
@@ -28,6 +67,7 @@ def hrf_metadata(candidate):
         kernel_fingerprint=hashlib.sha256(
             candidate.kernel(0.1, 1).tobytes()
         ).hexdigest(),
+        normalization=HRF_NORMALIZATION,
     )
 
 
@@ -77,26 +117,20 @@ def trial_regressors(events, frame_times, candidate):
 
     A sampled boxcar [a,b) convolved with h equals H[j-a]-H[j-b], where H
     is the cumulative kernel. Evaluate only the two samples needed for each
-    acquisition's linear interpolation. Candidate 0 retains direct Nilearn.
+    acquisition's linear interpolation. Every candidate, including canonical
+    SPM, takes this path; it is pinned to Nilearn's compute_regressor.
     """
     from boldtailor._single_trial_design import _validate_events
 
     times = np.asarray(frame_times, dtype=float)
     _validate_events(events, times, "trials")
-    if hrf_model(candidate) == "spm":
-        return np.column_stack(
-            [
-                convolve_events([o], [d], times, candidate)
-                for o, d in zip(events.onset, events.duration, strict=True)
-            ]
-        )
     if np.any(events.onset < times[0] - 24) or np.any(events.onset >= times[-1]):
         raise ValueError("trial onset has no supported sampled response")
     timing = np.asarray(events[["onset", "duration"]], dtype="<f8").tobytes()
     starts, stops, lower, upper, fraction = _boxcar_sampling(
         timing, np.asarray(times, dtype="<f8").tobytes()
     )
-    kernel = candidate.kernel(float(np.min(np.diff(times))), 50)
+    kernel = hrf_kernel(candidate, float(np.min(np.diff(times))), 50)
     prefix = np.r_[0.0, np.cumsum(kernel)]
 
     def sampled(indices):

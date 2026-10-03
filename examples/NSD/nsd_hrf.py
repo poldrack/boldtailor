@@ -440,7 +440,7 @@ def run_expanded_analysis(
     for name, result in results.items():
         meta = _model_metadata(runs, root, models[name], result)
         meta.update(
-            HRF="per-grayordinate all-run CV selection; sum-normalized",
+            HRF="per-grayordinate all-run CV selection; peak-normalized",
             RT="descriptive production correlations; all-run selected HRFs",
             LibraryFingerprint=library.fingerprint,
             Selection="Independent diagnostic vertices use canonical odd-run OLS; see hrfSelection metadata",

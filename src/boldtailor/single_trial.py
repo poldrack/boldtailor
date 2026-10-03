@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._single_trial_design import compile_trial_run
-from boldtailor._hrf_design import hrf_metadata
+from boldtailor._hrf_design import HRF_NORMALIZATION, hrf_metadata
 from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
     regularization,
@@ -93,6 +93,7 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
     return dict(
         name="single_trial",
         hrf=hrf_metadata(hrf),
+        hrf_normalization=HRF_NORMALIZATION,
         oversampling=50,
         run_labels=list(labels),
         ridge_alpha=alpha,
@@ -152,7 +153,7 @@ def fit_selected_hrfs(
     The selection may come from different runs. A supplied spatial signature
     must match; for anonymous arrays, the caller must preserve feature order.
     OLS, fixed-alpha ridge, and fractional ridge use the identical selection
-    and sum-normalized HRFs. ridge_fraction follows fit_single_trials semantics;
+    and peak-normalized HRFs. ridge_fraction follows fit_single_trials semantics;
     its implied alpha is computed separately for each run and feature.
     """
     from boldtailor._selected_hrf_fit import fit_groups

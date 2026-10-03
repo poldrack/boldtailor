@@ -76,9 +76,9 @@ including HRF choice, noise PCs, and ridge fractions.
 Both packages can analyze surface data supplied as arrays; Boldtailor's NSD
 example additionally handles CIFTI loading and spatially matched exports.
 
-Raw beta magnitudes need care when comparing packages. Boldtailor normalizes
-HRF kernels to sum to one, whereas GLMsingle's library selector normalizes
-each HRF's peak to one.
+Raw beta magnitudes need care when comparing packages. Both packages scale
+kernels to unit peak, so a beta is the peak response to a unit event; remaining
+scale differences come from signal units and nuisance handling.
 [GLMsingle normalization FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#if-the-hrf-changes-from-voxel-to-voxel-doesn-t-that-pose-some-interpretation-difficulties-or-confounding-issues).
 
 Boldtailor's `ridge_alpha` is a numerical penalty;

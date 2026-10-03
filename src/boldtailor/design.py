@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
+from boldtailor._hrf_design import resolve_hrf
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import AnalysisData
 from boldtailor.model import ModelSpec
@@ -105,11 +106,16 @@ def _make_design_matrix(
     model: ModelSpec,
     run: int,
 ) -> pd.DataFrame:
+    hrf = resolve_hrf(model.hrf_model)
+    if hrf is not model.hrf_model:
+        task = kernel_task_columns(frame_times, events, hrf, model, run)
+        nuisance = _make_nuisance_matrix(frame_times, confounds, model, run)
+        return pd.concat([task, nuisance], axis=1)
     try:
         return make_first_level_design_matrix(
             frame_times,
             events=events,
-            hrf_model=model.hrf_model,
+            hrf_model=hrf,
             drift_model=model.drift_model,
             high_pass=model.high_pass,
             drift_order=model.drift_order,
@@ -119,6 +125,27 @@ def _make_design_matrix(
         )
     except (NotImplementedError, ValueError) as error:
         raise ValueError(f"run {run} design compilation failed: {error}") from error
+
+
+def kernel_task_columns(frame_times, events, kernel, model, run):
+    """Nilearn condition columns for one peak-one kernel, in Nilearn's order.
+
+    Task columns are built apart from nuisance columns: Nilearn appends the
+    callable's name, which must neither rename contrasts nor hit a confound.
+    """
+    try:
+        task = make_first_level_design_matrix(
+            frame_times,
+            events=events,
+            hrf_model=kernel,
+            drift_model=None,
+            min_onset=model.min_onset,
+            oversampling=model.oversampling,
+        ).drop(columns="constant")
+    except (NotImplementedError, ValueError) as error:
+        raise ValueError(f"run {run} design compilation failed: {error}") from error
+    task.columns = [name.removesuffix("_kernel") for name in task.columns]
+    return task
 
 
 def _make_nuisance_matrix(

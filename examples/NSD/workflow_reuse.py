@@ -7,6 +7,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from .workflow_inputs import NSD_TASK_MODEL
 from .workflow_outputs import _stem
 
@@ -40,11 +41,16 @@ def validate_saved_settings(metadata, settings):
             + ", ".join(changed)
             + "; use existing_results='overwrite' to refit"
         )
-    if metadata.get("task_model_fingerprint") != NSD_TASK_MODEL.fingerprint:
-        raise ValueError(
-            "Saved analysis settings differ: task_model_fingerprint; "
-            "use existing_results='overwrite' to refit"
-        )
+    identities = {
+        "task_model_fingerprint": NSD_TASK_MODEL.fingerprint,
+        "hrf_normalization": HRF_NORMALIZATION,
+    }
+    for key, expected in identities.items():
+        if metadata.get(key) != expected:
+            raise ValueError(
+                f"Saved analysis settings differ: {key}; "
+                "use existing_results='overwrite' to refit"
+            )
 
 
 def read_json(path):

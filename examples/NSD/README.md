@@ -484,7 +484,8 @@ coefficients are unpenalized and betas retain the input signal scale.
 
 The expanded library has 649 candidates: canonical SPM plus 648 double-gamma
 HRFs varying in delay, dispersion, undershoot, and onset. Each kernel is
-normalized to sum to one. Selection predicts each held-out run's task-model response
+scaled to a peak of one, so betas are peak responses in native signal units
+and canonical and optimized betas share a scale. Selection predicts each held-out run's task-model response
 (task, centered RT, uncentered trial type) from the other runs; final beta estimation allows every trial its own amplitude.
 
 Three selections serve different purposes:

@@ -6,6 +6,7 @@ import numpy as np
 
 from boldtailor._conventional import fit_designs, fit_r2_designs
 from boldtailor._hrf_assignment import validate_selection
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._hrf_glm_design import (
     compile_group_designs,
     design_identity,
@@ -64,7 +65,7 @@ def _prepare(data, model, selection, signature, model_settings):
         feature_signature=signature,
         n_features=data.n_features,
         n_runs=data.n_runs,
-        hrf_normalization="discrete_sum_one",
+        hrf_normalization=HRF_NORMALIZATION,
         selection=selection.provenance.to_dict()["activities"][-1],
         selection_analysis_id=selection.provenance.analysis_fingerprint,
         inference="conditional_on_selected_hrfs",

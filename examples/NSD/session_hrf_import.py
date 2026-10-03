@@ -7,6 +7,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
 from .nsd_hrf import spatial_signature
 from .session_hrf_cache import read_selection
@@ -61,6 +62,7 @@ def _matching_provenance(records, runs, root, library, maps, limit, task_model):
             or activity["oversampling"] != 50
             or activity["feature_signature"] != spatial_signature(brain, indices)
             or activity.get("task_model_fingerprint") != task_model.fingerprint
+            or activity.get("hrf_normalization") != HRF_NORMALIZATION
         ):
             return False
         ids = np.asarray(selection["hrf_indices"])

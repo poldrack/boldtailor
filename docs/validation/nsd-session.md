@@ -4,6 +4,13 @@
 > revision/settings, not necessarily this checkout. See the
 > [documentation index](../README.md) for current API and methods guidance.
 
+> **Note (2026-10-02):** Recorded beta magnitudes below predate peak
+> normalization of HRF kernels. They were fitted with sum-to-one kernels;
+> current betas are smaller by each kernel's sum-to-peak ratio (about 148 for
+> canonical SPM at NSD's 1.6 s TR with oversampling 50; the ratio differs
+> between selected kernels). HRF selections, R², and fractions are
+> scale-invariant and unaffected.
+
 These measurements describe the September 2026 analyses of `sub-07/ses-nsd10`.
 For running an analysis, see the [NSD guide](../../examples/NSD/README.md).
 

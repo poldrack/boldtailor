@@ -6,7 +6,11 @@ import re
 
 import numpy as np
 import pandas as pd
-from boldtailor._hrf_design import convolve_events, hrf_model, trial_regressors
+from boldtailor._hrf_design import (
+    convolve_events,
+    identified_candidate,
+    trial_regressors,
+)
 
 RESERVED_COLUMNS = frozenset(
     {"trial_id", "trial_index", "run_index", "run_label", "event_index"}
@@ -16,7 +20,7 @@ RESERVED_COLUMNS = frozenset(
 def compile_trial_run(events, frame_times, confounds, run_label, *, hrf="spm"):
     """Return task and nuisance matrices plus a row-aligned trial table."""
     times = np.asarray(frame_times, dtype=float)
-    hrf_model(hrf)
+    identified_candidate(hrf)
     _validate_events(events, times, run_label)
     nuisance = _nuisance_matrix(confounds, len(times))
     table = events.copy(deep=True).reset_index(drop=True)

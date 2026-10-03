@@ -15,6 +15,7 @@ from boldtailor._fit_diagnostics import (
     validate_result_dimensions,
 )
 from boldtailor.data import AnalysisData
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import ModelSpec, contrast_metadata
@@ -199,6 +200,8 @@ def _model_provenance(model: ModelSpec) -> _ModelProvenance:
         "min_onset": model.min_onset,
         "noise_model": model.noise_model,
     }
+    if model.hrf_model in ("spm", "glover"):
+        activity["hrf_normalization"] = HRF_NORMALIZATION
     if model.task_model is not None:
         activity["task_model"] = model.task_model.to_dict()
         activity["task_model_fingerprint"] = model.task_model.fingerprint

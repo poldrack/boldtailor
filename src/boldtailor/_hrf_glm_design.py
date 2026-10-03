@@ -6,7 +6,6 @@ import json
 
 import numpy as np
 import pandas as pd
-from nilearn.glm.first_level import make_first_level_design_matrix
 
 from boldtailor._hrf_design import hrf_model
 from boldtailor._task_design import run_task_columns
@@ -15,6 +14,7 @@ from boldtailor.design import (
     CompiledDesign,
     compile_designs,
     compile_nuisance_designs,
+    kernel_task_columns,
     _select_modeled_events,
     _validate_design_matrix,
 )
@@ -40,8 +40,6 @@ def compile_group_designs(data, model, selection):
                     zip(events, data.frame_times, nuisance, strict=True)
                 )
             )
-        elif candidate.kind == "spm":
-            designs = compile_designs(data, replace(model, hrf_model="spm"))
         else:
             designs = tuple(
                 _custom_design(e, t, n, candidate, model, run)
@@ -75,17 +73,7 @@ def _custom_design(events, times, nuisance, candidate, model, run):
     modeled, excluded, cutoff = _select_modeled_events(
         events, times, model.min_onset, run
     )
-    # Build task columns separately: Nilearn appends the callable's name, which
-    # must neither rename the user's contrasts nor collide with a confound.
-    task = make_first_level_design_matrix(
-        times,
-        events=modeled,
-        hrf_model=candidate.kernel,
-        drift_model=None,
-        min_onset=model.min_onset,
-        oversampling=model.oversampling,
-    ).drop(columns="constant")
-    task.columns = [name.removesuffix("_kernel") for name in task.columns]
+    task = kernel_task_columns(times, modeled, hrf_model(candidate), model, run)
     matrix = pd.concat([task, nuisance.matrix], axis=1)
     _validate_design_matrix(matrix, run)
     return CompiledDesign(matrix, excluded, cutoff)

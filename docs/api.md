@@ -283,7 +283,7 @@ From `boldtailor.hrf_library`:
 | `expanded_hrf_library()` | Return the original 649-candidate grid library |
 | `HrfLibrary.from_parameters(parameters)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 |
 | `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"` or `"double_gamma"` |
-| `candidate.kernel(tr, oversampling=50)` | Sample a discrete-sum-normalized kernel at TR/oversampling |
+| `candidate.kernel(tr, oversampling=50)` | Sample a read-only kernel scaled to a peak of one at TR/oversampling; canonical SPM is Nilearn's `spm_hrf` divided by its maximum |
 
 Parameter order is `response_delay`, `undershoot_delay`, `response_dispersion`,
 `undershoot_dispersion`, `response_undershoot_ratio`, `onset_delay`, `duration`.
@@ -291,7 +291,10 @@ SPM candidates require the exact canonical parameter tuple
 `(6, 16, 1, 1, 6, 0, 32)`.
 
 `HrfLibrary` exposes `candidates`, `parameter_table`, `curves`, `times`, and
-`fingerprint`. Table rows and curve rows follow stable candidate IDs. The
+`fingerprint`. Every curve peaks at one. Plain `hrf_model="spm"` or
+`"glover"` in `ModelSpec` uses the same peak-one scaling, so canonical and
+selected-HRF betas share a scale; provenance records
+`hrf_normalization="peak_one"`. Table rows and curve rows follow stable candidate IDs. The
 table's `peak_time` is the full-curve maximum on the 0.1-second export grid.
 Custom rows are sorted deterministically; duplicate rows are rejected.
 

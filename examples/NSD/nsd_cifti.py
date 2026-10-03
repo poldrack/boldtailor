@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import compute_regressor
 
+from boldtailor._hrf_design import hrf_model
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.provenance import RunSources, SourceRef
@@ -32,6 +33,7 @@ MOTION = tuple(
 CONTRASTS = {"stimulus": {"stimulus": 1.0}, "response_time": {"response_time": 1.0}}
 MODEL = {
     "hrf": "spm",
+    "hrf_normalization": "peak_one",
     "oversampling": 50,
     "response_time": "within-run mean-centered seconds; no orthogonalization",
     "duration": "recorded stimulus duration",
@@ -137,7 +139,7 @@ def select_confounds(table: pd.DataFrame, metadata: dict) -> pd.DataFrame:
 
 
 def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFrame:
-    """Convolve presentation and centered RT amplitudes separately with the SPM HRF."""
+    """Convolve presentation and centered RT with the peak-one SPM HRF."""
     values = events.loc[:, ["onset", "duration", "response_time"]].apply(pd.to_numeric)
     if values.empty or not np.isfinite(values.to_numpy()).all():
         raise ValueError(
@@ -152,7 +154,7 @@ def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFra
         condition = np.vstack([values.onset, values.duration, amplitude])
         regressor, _ = compute_regressor(
             condition,
-            "spm",
+            hrf_model("spm"),
             frame_times,
             con_id=name,
             oversampling=50,

@@ -8,6 +8,7 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
+from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
 from .hrf_artifacts import npz_artifact, parameter_artifact
 from .hrf_reliability import _indices
@@ -43,6 +44,7 @@ def request_metadata(runs, root, library, limit, task_model=NSD_TASK_MODEL):
         runs=records,
         model="task_model_leave_one_run_out",
         task_model=task_model.to_dict(),
+        hrf_normalization=HRF_NORMALIZATION,
         oversampling=50,
         nuisance="motion24_top6_combined_acompcor_fmriprep_cosines_intercept",
         trimming="leading_nonsteady_volumes_original_acquisition_times",
