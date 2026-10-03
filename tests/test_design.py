@@ -217,7 +217,7 @@ def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance(
     task_model = TaskModel(
         (
             Modulator("response_time", missing="indicator"),
-            Modulator("trial_type", center=False),
+            Modulator("trial_type"),
         )
     )
     model = ModelSpec(

@@ -11,8 +11,8 @@ from tests.oracles import scaled_condition, peak_kernel
 
 NSD = TaskModel(
     (
-        Modulator("response_time", center=True, missing="indicator"),
-        Modulator("trial_type", center=False),
+        Modulator("response_time", missing="indicator"),
+        Modulator("trial_type"),
     )
 )
 
@@ -37,7 +37,7 @@ def test_expansion_orders_regressors_and_computes_amplitudes(events):
     result = expand_events(events, NSD)
     expected = {
         "task": [1, 1, 1, 1, 1, 1],
-        "response_time": [-2, 0, 0, -1, 1, 2],
+        "response_time": [1, 0, 3, 2, 4, 5],
         "trial_type": [0, 1, 0, 1, 1, 0],
         "missing_response_time": [0, 1, 0, 0, 0, 0],
     }
@@ -60,9 +60,7 @@ def test_indicator_absent_when_nothing_is_missing(events):
     result = expand_events(complete, NSD)
     assert set(result.trial_type) == {"task", "response_time", "trial_type"}
     rt = result.loc[result.trial_type == "response_time", "modulation"]
-    np.testing.assert_allclose(
-        rt, complete.response_time - complete.response_time.mean()
-    )
+    np.testing.assert_allclose(rt, complete.response_time)
 
 
 def test_task_only_model_expands_to_unit_task_rows(events):
@@ -73,13 +71,13 @@ def test_task_only_model_expands_to_unit_task_rows(events):
     np.testing.assert_array_equal(result.modulation, 1.0)
 
 
-def test_uncentered_modulator_keeps_raw_values(events):
-    from boldtailor._task_design import expand_events
-
-    result = expand_events(events, TaskModel((Modulator("trial_type", center=False),)))
-    np.testing.assert_array_equal(
-        result.loc[result.trial_type == "trial_type", "modulation"], events.trial_type
-    )
+def test_modulator_has_no_center_option():
+    with pytest.raises(TypeError):
+        Modulator("response_time", center=False)
+    assert Modulator("response_time").to_dict() == {
+        "column": "response_time",
+        "missing": "error",
+    }
 
 
 def test_error_policy_rejects_missing_values(events):
@@ -183,7 +181,7 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
 def test_string_hrf_keeps_kernel_suffix_in_regressor_names(events):
     from boldtailor._task_design import expand_events, task_columns
 
-    model = TaskModel((Modulator("foo_kernel", center=False),))
+    model = TaskModel((Modulator("foo_kernel"),))
     frame = events.assign(foo_kernel=[1, 0, 1, 0, 1, 0])
     times = 0.775 + 1.6 * np.arange(90)
     result = task_columns(expand_events(frame, model), times, "spm")

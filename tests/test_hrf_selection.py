@@ -274,8 +274,8 @@ def nsd_model():
 
     return TaskModel(
         (
-            Modulator("response_time", center=True, missing="indicator"),
-            Modulator("trial_type", center=False),
+            Modulator("response_time", missing="indicator"),
+            Modulator("trial_type"),
         )
     )
 

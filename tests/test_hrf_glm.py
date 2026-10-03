@@ -365,8 +365,8 @@ def _nsd_model():
 
     return TaskModel(
         (
-            Modulator("response_time", center=True, missing="indicator"),
-            Modulator("trial_type", center=False),
+            Modulator("response_time", missing="indicator"),
+            Modulator("trial_type"),
         )
     )
 
@@ -503,7 +503,7 @@ def test_selected_glm_setting_mismatch_names_the_required_values(
         ({"task_model": TaskModel((_RT_INDICATOR,))}, None, "task_model"),
         (
             {},
-            TaskModel((_RT_INDICATOR, Modulator("trial_type", center=True))),
+            TaskModel((_RT_INDICATOR, Modulator("trial_type", missing="indicator"))),
             "task_model",
         ),
         ({"oversampling": 20}, None, "oversampling|min_onset"),
@@ -536,7 +536,7 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
     from boldtailor.model import Modulator, TaskModel
 
     data, model, selection, library = task_model_problem
-    subset = TaskModel((Modulator("trial_type", center=False),))
+    subset = TaskModel((Modulator("trial_type"),))
     narrow = select_hrfs(
         data, library=library, feature_signature="axis-tm", task_model=subset
     )

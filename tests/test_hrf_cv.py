@@ -10,8 +10,8 @@ from tests.oracles import columns_for, loro_oracle, oracle_cv
 
 NSD = TaskModel(
     (
-        Modulator("response_time", center=True, missing="indicator"),
-        Modulator("trial_type", center=False),
+        Modulator("response_time", missing="indicator"),
+        Modulator("trial_type"),
     )
 )
 

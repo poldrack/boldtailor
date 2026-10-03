@@ -19,8 +19,8 @@ def test_default_task_model_is_task_only():
 def test_nsd_task_model_names_and_dict():
     model = TaskModel(
         (
-            Modulator("response_time", center=True, missing="indicator"),
-            Modulator("trial_type", center=False),
+            Modulator("response_time", missing="indicator"),
+            Modulator("trial_type"),
         )
     )
     assert model.regressor_names == ("task", "response_time", "trial_type")
@@ -28,8 +28,8 @@ def test_nsd_task_model_names_and_dict():
     assert model.to_dict() == {
         "regressors": ["task", "response_time", "trial_type"],
         "modulators": [
-            {"column": "response_time", "center": True, "missing": "indicator"},
-            {"column": "trial_type", "center": False, "missing": "error"},
+            {"column": "response_time", "missing": "indicator"},
+            {"column": "trial_type", "missing": "error"},
         ],
     }
 
@@ -41,10 +41,6 @@ def test_fingerprint_is_sha256_of_canonical_dict_and_changes_with_settings():
     json.dumps(model.to_dict(), sort_keys=True)  # must be JSON serializable
     assert model.fingerprint == TaskModel((Modulator("response_time"),)).fingerprint
     assert model.fingerprint != TaskModel().fingerprint
-    assert (
-        model.fingerprint
-        != TaskModel((Modulator("response_time", center=False),)).fingerprint
-    )
     assert (
         model.fingerprint
         != TaskModel((Modulator("response_time", missing="indicator"),)).fingerprint
@@ -66,11 +62,8 @@ def test_fingerprint_is_sha256_of_canonical_dict_and_changes_with_settings():
         (lambda: Modulator("response_time", missing=""), "missing policy"),
         (lambda: Modulator("response_time", missing=None), "missing policy"),
         (lambda: Modulator("response_time", missing=True), "missing policy"),
-        (lambda: Modulator("response_time", center=1), "center must"),
-        (lambda: Modulator("response_time", center="yes"), "center must"),
-        (lambda: Modulator("response_time", center=None), "center must"),
         (
-            lambda: TaskModel((Modulator("rt"), Modulator("rt", center=False))),
+            lambda: TaskModel((Modulator("rt"), Modulator("rt", missing="indicator"))),
             "unique",
         ),
         (lambda: TaskModel(("rt",)), "Modulator"),
@@ -91,14 +84,16 @@ def test_task_model_is_immutable_and_owns_its_tuple():
 
 
 def test_subset_requires_identical_shared_modulators():
-    rt = Modulator("response_time", center=True, missing="indicator")
-    trial = Modulator("trial_type", center=False)
+    rt = Modulator("response_time", missing="indicator")
+    trial = Modulator("trial_type")
     full = TaskModel((rt, trial))
     assert TaskModel().is_subset_of(full)
     assert TaskModel((trial,)).is_subset_of(full)
     assert full.is_subset_of(full)
     assert not full.is_subset_of(TaskModel((trial,)))
-    assert not TaskModel((Modulator("trial_type", center=True),)).is_subset_of(full)
+    assert not TaskModel((Modulator("trial_type", missing="indicator"),)).is_subset_of(
+        full
+    )
     assert not TaskModel((Modulator("response_time"),)).is_subset_of(full)
     assert not TaskModel((Modulator("image"),)).is_subset_of(full)
     with pytest.raises(ValueError, match="TaskModel"):
