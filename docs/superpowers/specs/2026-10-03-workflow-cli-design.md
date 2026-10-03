@@ -156,17 +156,16 @@ function of the runs, the settings, and earlier results.
    continues.
 3. `betas`: canonical-HRF and optimized-HRF single-trial betas under
    `ridge_mode`, returning one `BetaModel` per HRF choice.
-
-`BetaModel` fields are `name` (descriptor such as `OptimizedTrialFractionalCV`), `hrf` (`canonical` or `optimized`), `estimator` (`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`), `fit` (the beta-series result: per-run betas, trial tables, R², designs, provenance, RT correlations or `None`), `tuning` and `evaluation` (cross-validated tuning and held-out encoding results, or `None` for `off` and `fixed`), `cv_provenance`, and `predictors`.
-
 4. `summaries`: RT correlation maps, mean-beta activation maps, comparison
    figures.
 
-`BetaModel` (frozen dataclass): `name`, `hrf` (`canonical` or `optimized`),
-`mode`, per-run betas and trial tables, `tuning` (selected fraction or alpha
-map and tuning curve, or `None` for `fixed` and `off`), `encoding_scores`
-(held-out task ΔR² where cross-validated, else `None`), boundary flags, and
-provenance. One writer in `outputs.py` serialises it for every mode.
+`BetaModel` (frozen dataclass) fields are `name` (descriptor such as
+`OptimizedTrialFractionalCV`), `hrf` (`canonical` or `optimized`), `estimator`
+(`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`), `fit` (the beta-series result:
+per-run betas, trial tables, R², designs, provenance, RT correlations or
+`None`), `tuning` and `evaluation` (cross-validated tuning and held-out
+encoding results, or `None` for `off` and `fixed`), `cv_provenance`, and
+`predictors`. One writer in `outputs.py` serialises it for every mode.
 
 ## HTML report
 
@@ -194,8 +193,12 @@ Layout: `<output_dir>/dataset_description.json`;
 maps, design and table TSVs, PNG figures, and per-activity provenance JSON.
 The spec's settings file is `<stem>_desc-boldtailor_metadata.json`, which carries the analysis metadata the multisession readers already consume plus `settings`, `runs`, `task_model`, `library_fingerprint`, `skipped`, and `report`.
 
-Descriptors: `canonicalGLM`, `optimizedGLM`, `HRF`, `HRFOdd`, `HRFEven`,
-`canonicalBetas`, `optimizedBetas`, `RT`, `activation`. No `notebook` prefix.
+Descriptors (multisession readers key on these): `CanonicalGLM`,
+`OptimizedGLM`, `GLMComparison`, `HRF`, `HRFAll`, `HRFOdd`, `HRFEven`,
+`HRFOddToEven`, `HRFEvenToOdd`, `HRFReliability`, `CanonicalTrialOLS`,
+`OptimizedTrialOLS`, and tuning descriptors
+`{Canonical|Optimized}{RidgeCV|FractionalCV}{All|Odd|Even|OddToEven|EvenToOdd}`
+for each ridge mode. No `notebook` prefix.
 
 `existing_results="error"` stops before loading data if the subject/session
 output directory contains any boldtailor file; `overwrite` replaces the
