@@ -390,3 +390,64 @@ def test_sha256_must_be_64_lowercase_hex_characters(bad):
 def test_record_round_trips_a_digest_key_in_extra_fields_without_rejection():
     record = ProvenanceRecord.from_dict(_record_payload(digest="abc123"))
     assert record.to_dict()["digest"] == "abc123"
+
+
+def test_annotations_may_contain_path_like_text():
+    ref = SourceRef(
+        role="signal", annotations={"note": "~5 mm smoothing", "see": "./README.md"}
+    )
+    assert ref.annotations["note"] == "~5 mm smoothing"
+    assert ref.annotations["see"] == "./README.md"
+
+
+def test_annotation_and_activity_keys_may_look_like_paths():
+    ref = SourceRef(role="signal", annotations={"/abs/key": 1, "bids:raw:x": 2})
+    record = ProvenanceRecord.from_dict(
+        _record_payload(activities=[{"name": "fit", "./key": "../value"}])
+    )
+    assert ref.annotations["/abs/key"] == 1
+    assert record.activities[0]["./key"] == "../value"
+
+
+def test_frozen_sequences_are_plain_tuples():
+    ref = SourceRef(role="signal", annotations={"labels": ["a", "b"]})
+    assert type(ref.annotations["labels"]) is tuple
+
+
+@pytest.mark.parametrize("stamp", ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00+00:00"])
+def test_modified_at_accepts_utc_forms(stamp):
+    assert SourceRef(role="signal", modified_at=stamp).modified_at == stamp
+
+
+@pytest.mark.parametrize(
+    "stamp", ["2026-01-01T00:00:00+01:00", "2026-01-01T00:00:00", "yesterday"]
+)
+def test_modified_at_rejects_non_utc_forms(stamp):
+    with pytest.raises(ValueError, match="UTC"):
+        SourceRef(role="signal", modified_at=stamp)
+
+
+def test_relative_path_rule_is_shared(complete_sources):
+    with pytest.raises(ValueError, match="relative path"):
+        SourceRef(role="signal", uri="sub-01/func/my file.tsv")
+    with pytest.raises(ValueError, match="relative path"):
+        SourceRef(role="signal", uri="bids:raw:sub-01/func/my file.tsv")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "/abs.tsv", "../up.tsv", "a/./b.tsv", "a//b.tsv", "a\\b.tsv", "a b.tsv"],
+)
+def test_validate_relative_path_rejects_unsafe_text(text):
+    from boldtailor.provenance import validate_relative_path
+
+    with pytest.raises(ValueError, match="relative path"):
+        validate_relative_path(text)
+
+
+def test_validate_relative_path_returns_valid_text():
+    from boldtailor.provenance import validate_relative_path
+
+    assert validate_relative_path("sub-01/func/a+b_c.d-e.tsv") == (
+        "sub-01/func/a+b_c.d-e.tsv"
+    )

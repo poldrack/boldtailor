@@ -138,7 +138,6 @@ def _two_runs(features=(2, 2)):
             {"signals": _two_runs(), "events": "two", "sources": 1},
             "sources must contain one value per signal run",
         ),
-        ({"provenance_metadata": {"cwd": "./secret"}}, "path-like"),
     ],
 )
 def test_from_arrays_rejects_invalid_arguments(
@@ -154,6 +153,14 @@ def test_from_arrays_rejects_invalid_arguments(
 
     with pytest.raises(ValueError, match=message):
         from_arrays(**kwargs)
+
+
+def test_from_arrays_keeps_path_like_provenance_metadata(events):
+    data = from_arrays(
+        np.ones((10, 2)), events, tr=2.0, provenance_metadata={"cwd": "./notes"}
+    )
+
+    assert data.provenance.activities[-1]["metadata"]["cwd"] == "./notes"
 
 
 @pytest.mark.parametrize("tr", [2, 2.5, np.int64(3), np.float64(1.5)])

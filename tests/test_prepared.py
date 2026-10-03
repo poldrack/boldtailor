@@ -191,11 +191,6 @@ def _nested_path_metadata(kind):
             "invalid column role",
         ),
         (
-            lambda case: case[3][0].__setitem__("path", "/private/data"),
-            "path-like",
-        ),
-        (_absolute_path_column, "path-like"),
-        (
             _set_design(0, pd.DataFrame(columns=["face", "motion", "constant"])),
             "nonzero dimensions",
         ),
@@ -217,8 +212,6 @@ def _nested_path_metadata(kind):
             lambda case: {"frame_times": [np.arange(8.0), np.arange(10.0)]},
             "exactly one of tr or frame_times",
         ),
-        (_nested_path_metadata("run"), "path-like"),
-        (_nested_path_metadata("provenance"), "path-like"),
     ],
 )
 def test_prepared_analysis_rejects_invalid_arguments(prepared_inputs, mutator, message):
@@ -227,6 +220,24 @@ def test_prepared_analysis_rejects_invalid_arguments(prepared_inputs, mutator, m
 
     with pytest.raises(ValueError, match=message):
         _make_prepared(case, **extra)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda case: case[3][0].__setitem__("path", "/private/data"),
+        _absolute_path_column,
+        _nested_path_metadata("run"),
+        _nested_path_metadata("provenance"),
+    ],
+)
+def test_prepared_analysis_accepts_path_like_names_and_metadata(
+    prepared_inputs, mutator
+):
+    case = deepcopy(prepared_inputs)
+    extra = mutator(case) or {}
+
+    assert _make_prepared(case, **extra).n_runs == 2
 
 
 def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inputs):

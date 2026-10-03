@@ -548,93 +548,23 @@ def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
     ("contrasts", "model_metadata"),
     [
         ({"face": {"face": 1.0}}, {"/private/task-5-metadata-key": "safe"}),
+        ({"face": {"face": 1.0}}, {"safe": [{"/private/task-5-sequence-key": 1}]}),
         ({"/private/task-5-contrast-key": {"face": 1.0}}, None),
     ],
 )
-def test_fit_prepared_rejects_path_like_model_keys_without_logging_them(
-    caplog,
-    prepared_problem,
-    contrasts,
-    model_metadata,
+def test_fit_prepared_accepts_path_like_model_keys(
+    prepared_problem, contrasts, model_metadata
 ):
-    caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, _, _ = prepared_problem
-    absolute_path = next(
-        value
-        for value in (
-            "/private/task-5-metadata-key",
-            "/private/task-5-contrast-key",
-        )
-        if value in str(contrasts) or value in str(model_metadata)
+
+    result = fit_prepared(
+        prepared,
+        contrasts=contrasts,
+        noise_model="ols",
+        model_metadata=model_metadata,
     )
 
-    with pytest.raises(ValueError, match="path-like"):
-        fit_prepared(
-            prepared,
-            contrasts=contrasts,
-            noise_model="ols",
-            model_metadata=model_metadata,
-        )
-    from boldtailor.logging import emit_event
-
-    emit_event("after_path_key_failure", stage="test")
-    records = _structured_records(caplog)
-    fit_records = [record for record in records if record["stage"] == "fit"]
-
-    assert [record["event"] for record in fit_records] == [
-        "fit_started",
-        "fit_failed",
-    ]
-    assert absolute_path not in "\n".join(
-        record.getMessage() for record in caplog.records
-    )
-    assert records[-1].get("execution_id") is None
-
-
-@pytest.mark.parametrize(
-    "model_metadata",
-    [
-        {"safe": [{"/private/task-5-sequence-key": "safe"}]},
-        {"safe": ({"nested": [{"/private/task-5-deep-key": "safe"}]},)},
-    ],
-)
-def test_fit_prepared_rejects_path_like_mapping_keys_inside_metadata_sequences(
-    caplog,
-    prepared_problem,
-    model_metadata,
-):
-    caplog.set_level(logging.INFO, logger="boldtailor")
-    prepared, _, _ = prepared_problem
-    absolute_path = next(
-        value
-        for value in (
-            "/private/task-5-sequence-key",
-            "/private/task-5-deep-key",
-        )
-        if value in str(model_metadata)
-    )
-
-    with pytest.raises(ValueError, match="path-like"):
-        fit_prepared(
-            prepared,
-            contrasts={"face": {"face": 1.0}},
-            noise_model="ols",
-            model_metadata=model_metadata,
-        )
-    from boldtailor.logging import emit_event
-
-    emit_event("after_nested_metadata_failure", stage="test")
-    records = _structured_records(caplog)
-    fit_records = [record for record in records if record["stage"] == "fit"]
-
-    assert [record["event"] for record in fit_records] == [
-        "fit_started",
-        "fit_failed",
-    ]
-    assert absolute_path not in "\n".join(
-        record.getMessage() for record in caplog.records
-    )
-    assert records[-1].get("execution_id") is None
+    assert result.provenance.analysis_fingerprint is not None
 
 
 def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
@@ -1085,12 +1015,12 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
     prepared, contrasts, _, full_result = prepared_delta_problem
     private_key = "/private/secret/prepared-comparison.json"
 
-    with pytest.raises(ValueError, match="path-like"):
+    with pytest.raises(ValueError, match="noise_model"):
         task_delta_r2_prepared(
             prepared,
             full_result,
             contrasts=contrasts,
-            noise_model="ar1",
+            noise_model="private-noise-model",
             model_metadata={private_key: "redacted"},
         )
     from boldtailor.logging import emit_event
