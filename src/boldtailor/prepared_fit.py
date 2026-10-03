@@ -9,11 +9,11 @@ import pandas as pd
 
 from boldtailor._conventional import fit_designs
 from boldtailor._fit_diagnostics import (
-    TASK_DELTA_R2_DEFINITION,
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
     rank_warnings,
     delta_r2_activity,
+    delta_r2_identity,
     nested_ols_delta,
     validate_result_dimensions,
 )
@@ -134,16 +134,12 @@ def _prepared_comparison_id(
     parent_id: str | None,
     fit_spec: _PreparedFitSpec,
 ) -> str | None:
-    return analysis_fingerprint(
-        data_id,
-        {
-            "name": "task_delta_r2_prepared",
-            "parent_analysis_id": parent_id,
-            "definition": TASK_DELTA_R2_DEFINITION,
-            "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
-            "inferential_noise_model": fit_spec.noise_model,
-        },
+    identity = delta_r2_identity(
+        name="task_delta_r2_prepared",
+        inferential_noise_model=fit_spec.noise_model,
+        nuisance_model=_PREPARED_NUISANCE_MODEL,
     )
+    return analysis_fingerprint(parent_id, identity)
 
 
 def _validate_prepared_parent(
@@ -202,7 +198,7 @@ def _prepared_delta_activity(
             name="task_delta_r2_prepared",
             parent_id=parent_id,
             inferential_noise_model=fit_spec.noise_model,
-            nuisance_model=_PREPARED_NUISANCE_MODEL,
+            nuisance_model=dict(_PREPARED_NUISANCE_MODEL),
             undefined_features=0,
         ),
         "roundoff_tolerance": NESTED_OLS_TOLERANCE,

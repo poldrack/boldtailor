@@ -5,7 +5,11 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 
 from boldtailor._conventional import fit_designs
-from boldtailor._fit_diagnostics import delta_r2_activity, nested_ols_delta
+from boldtailor._fit_diagnostics import (
+    delta_r2_activity,
+    delta_r2_identity,
+    nested_ols_delta,
+)
 from boldtailor._hrf_assignment import validate_selection
 from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._hrf_glm_design import (
@@ -191,7 +195,10 @@ def selected_task_delta_r2(data, model, result):
         )
         activity = _comparison_activity(model, comparison, context)
         provenance = operation.provenance(
-            activity, analysis_id=analysis_fingerprint(context.analysis_id, activity)
+            activity,
+            analysis_id=analysis_fingerprint(
+                context.analysis_id, _comparison_identity(model)
+            ),
         )
         return replace(comparison, _provenance=provenance)
 
@@ -205,4 +212,14 @@ def _comparison_activity(model, comparison, context):
         inferential_noise_model=model.noise_model,
         nuisance_model=_nuisance_model_settings(model),
         undefined_features=int(np.count_nonzero(~np.isfinite(comparison.delta_r2))),
+    )
+
+
+def _comparison_identity(model):
+    from boldtailor.fit import _nuisance_model_settings
+
+    return delta_r2_identity(
+        name="task_delta_r2",
+        inferential_noise_model=model.noise_model,
+        nuisance_model=_nuisance_model_settings(model),
     )

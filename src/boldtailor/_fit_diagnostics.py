@@ -43,6 +43,7 @@ def validate_result_dimensions(data, result, *, input_label):
 
 def nested_ols_delta(signals, full_designs, nuisance_designs, *, allow_undefined):
     """Return (full R2, nuisance R2) from nested OLS fits; guard monotonicity."""
+    # Local import: _conventional imports results, which imports this module.
     from boldtailor._conventional import fit_r2_designs
 
     full = fit_r2_designs(signals, full_designs, DIAGNOSTIC_NOISE_MODEL)
@@ -71,3 +72,17 @@ def delta_r2_activity(
         "nuisance_model": nuisance_model,
         "undefined_features": undefined_features,
     }
+
+
+def delta_r2_identity(*, name, inferential_noise_model, nuisance_model):
+    """Hashed identity of a delta-R2 comparison (activity minus run-specific keys)."""
+    activity = delta_r2_activity(
+        name=name,
+        parent_id=None,
+        inferential_noise_model=inferential_noise_model,
+        nuisance_model=nuisance_model,
+        undefined_features=0,
+    )
+    for key in ("stage", "parent_analysis_id", "undefined_features"):
+        del activity[key]
+    return activity

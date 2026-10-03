@@ -8,10 +8,10 @@ import numpy as np
 
 from boldtailor._conventional import ConventionalFit, fit_designs
 from boldtailor._fit_diagnostics import (
-    TASK_DELTA_R2_DEFINITION,
     DIAGNOSTIC_NOISE_MODEL,
     rank_warnings,
     delta_r2_activity,
+    delta_r2_identity,
     nested_ols_delta,
     validate_result_dimensions,
 )
@@ -148,19 +148,12 @@ def _validate_parent_analysis(
 
 
 def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
-    return _analysis_id(parent_id, _task_delta_r2_settings(model))
-
-
-def _task_delta_r2_settings(model: ModelSpec) -> dict[str, object]:
-    return {
-        "name": "task_delta_r2",
-        "definition": TASK_DELTA_R2_DEFINITION,
-        "clip_below_zero": True,
-        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
-        "inferential_noise_model": model.noise_model,
-        "clip_policy": "numerical_roundoff_guard",
-        "nuisance_model": _nuisance_model_settings(model),
-    }
+    identity = delta_r2_identity(
+        name="task_delta_r2",
+        inferential_noise_model=model.noise_model,
+        nuisance_model=_nuisance_model_settings(model),
+    )
+    return _analysis_id(parent_id, identity)
 
 
 def _nuisance_model_settings(model: ModelSpec) -> dict[str, object]:
