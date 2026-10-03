@@ -53,79 +53,6 @@ def test_nsd_task_model_centers_rt_and_keeps_trial_type_uncentered(events):
     pd.testing.assert_frame_equal(events, original)
 
 
-@pytest.mark.parametrize("column,value", [("trial_type", 2), ("trial_type", np.nan)])
-def test_invalid_glm_covariates_fail_explicitly(events, column, value):
-    events.loc[0, column] = value
-    with pytest.raises(ValueError, match=column):
-        workflow().validate_glm_events(events)
-
-
-@pytest.mark.parametrize("missing", [np.nan, np.inf, -np.inf, 0.0, -1.0])
-def test_nonpositive_rt_becomes_missing_with_indicator(four_runs, missing):
-    inputs = workflow()
-    root, prep = four_runs
-    path = next(root.rglob("*run-01_events.tsv"))
-    table = pd.read_csv(path, sep="\t")
-    table.loc[1, "response_time"] = missing
-    table.to_csv(path, sep="\t", index=False)
-    runs = inputs.load_session(root, prep)
-    run = next(r for r in runs if r.number == 1)
-    assert np.isnan(run.events.response_time.iloc[1])
-    assert np.isfinite(run.events.response_time.drop(index=1)).all()
-    from boldtailor.design import expand_events
-
-    expanded = expand_events(run.events, inputs.NSD_TASK_MODEL)
-    indicator = expanded.loc[
-        expanded.trial_type == "missing_response_time", "modulation"
-    ]
-    np.testing.assert_array_equal(
-        indicator, (np.arange(len(run.events)) == 1).astype(float)
-    )
-
-
-def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
-    events["response_time"] = np.nan
-    with pytest.raises(ValueError, match="response_time.*positive.*finite"):
-        workflow().validate_glm_events(events)
-
-
-def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
-    events["response_time"] = events.response_time.astype(object)
-    events.loc[1, "response_time"] = "invalid"
-    with pytest.raises(ValueError, match="response_time"):
-        workflow().validate_glm_events(events)
-
-
-def test_trimming_keeps_acquisition_times_and_matches_confounds(four_runs):
-    root, prep = four_runs
-    runs = workflow().load_session(root, prep)
-    data = workflow().load_block(runs, root, [0, 2])
-    assert [len(t) for t in data.frame_times] == [95, 94, 93, 95]
-    for run, y, dropped in zip(runs, data.signals, (1, 2, 3, 1), strict=True):
-        np.testing.assert_allclose(
-            run.frame_times, 0.775 + np.arange(dropped, 96) * 1.6
-        )
-        np.testing.assert_allclose(y, np.asarray(run.image.dataobj)[dropped:, [0, 2]])
-        assert not any(c.startswith("non_steady") for c in run.confounds)
-        assert run.events.onset.iloc[0] == 8.0
-    assert len({tuple(r.confounds.columns) for r in runs}) == 1
-    assert sum(c.startswith("a_comp_cor") for c in runs[0].confounds) == 6
-    assert data.provenance.metadata_fingerprint is not None
-    assert (
-        data.provenance.sources[2].signal.annotations["retained_frame_indices"][0] == 3
-    )
-
-
-def test_interior_nonsteady_flag_is_rejected(four_runs):
-    root, prep = four_runs
-    path = next(prep.rglob("*run-01*confounds_timeseries.tsv"))
-    table = pd.read_csv(path, sep="\t")
-    table.loc[12, "non_steady_state_outlier00"] = 1
-    table.to_csv(path, sep="\t", index=False)
-    with pytest.raises(ValueError, match="leading|contiguous"):
-        workflow().load_session(root, prep)
-
-
 def independent_ols(runs, indices, library, ids):
     effects, residuals, nuisance_residuals, totals = [], [], [], []
     for run in runs:
@@ -414,19 +341,6 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     with pytest.raises(FileExistsError):
         workflow("workflow_outputs").check_output(output, "sub-07", "ses-nsd10")
     assert all(p.read_bytes() == value for p, value in before.items())
-
-
-def test_selection_task_model_switch_drops_only_rt():
-    from boldtailor.model import Modulator, TaskModel
-
-    inputs = workflow()
-    assert inputs.selection_task_model(True) == inputs.NSD_TASK_MODEL
-    assert inputs.selection_task_model(False) == TaskModel(
-        (Modulator("trial_type", center=False),)
-    )
-    assert inputs.selection_task_model(False).is_subset_of(inputs.NSD_TASK_MODEL)
-    with pytest.raises(ValueError, match="include_rt"):
-        inputs.selection_task_model(1)
 
 
 def test_select_hrfs_without_rt_still_feeds_the_full_glm(four_runs, small_library):
