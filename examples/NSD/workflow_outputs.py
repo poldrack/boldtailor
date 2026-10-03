@@ -219,7 +219,61 @@ def _ridge_metadata(settings, results):
         task="Pooled training beta mean, used as the prediction reference level",
         outer_splits="odd_to_even_and_even_to_odd",
         final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",
+        at_boundary_fraction=ridge_boundary_summary(results),
+        at_boundary="Winner at the shrinkage end (smallest fraction / largest alpha): extend the grid; winner at fraction 1.0 or alpha 0: no regularization preferred",
     )
+
+
+def _boundary_fraction(selection):
+    flags = np.asarray(selection.at_boundary, dtype=bool)
+    if flags.ndim == 0:
+        return float(flags)
+    scored = flags[selection.scoring_mask]
+    return float(scored.mean()) if scored.size else float("nan")
+
+
+def ridge_boundary_summary(results):
+    """Fraction of scored grayordinates whose ridge winner is a grid endpoint."""
+    return [
+        dict(mode=mode, scope=scope, fraction=_boundary_fraction(tuned["selection"]))
+        for mode, result in results.items()
+        for scope, tuned in result["tuning"].items()
+    ]
+
+
+def _scope_selection(bundle, scope):
+    return bundle[scope] if scope == "all" else bundle[scope].training_selection
+
+
+def _pooled_bound_rows(picked, scope):
+    counts = [int((p.hrf_indices > 0).sum()) for p in picked]
+    tables = [p.parameter_bound_table() for p in picked]
+    total = sum(counts)
+    rows = []
+    for i, row in tables[0].iterrows():
+        flagged = sum(t.fraction_flagged[i] * n for t, n in zip(tables, counts) if n)
+        fraction = flagged / total if total else float("nan")
+        rows.append(
+            dict(
+                scope=scope,
+                parameter=row.parameter,
+                edge=row.edge,
+                fraction_flagged=float(fraction),
+                n_custom=total,
+            )
+        )
+    return rows
+
+
+def hrf_boundary_summary(selections):
+    """``parameter_bound_table`` rows pooled over grayordinate blocks per scope."""
+    if not selections:
+        return None
+    rows = []
+    for scope in ("all", "odd", "even"):
+        picked = [_scope_selection(b, scope) for b in selections.values()]
+        rows.extend(_pooled_bound_rows(picked, scope))
+    return rows
 
 
 def _activation_artifacts(stem, brain, activation):
@@ -282,7 +336,9 @@ def _rt_check_description(include_rt, ridge_cv):
     )
 
 
-def _metadata(runs, library, settings, ridge_cv=None, activation=None):
+def _metadata(
+    runs, library, settings, ridge_cv=None, activation=None, *, selections=None
+):
     include_rt = bool(settings.get("hrf_selection_rt", True))
     return dict(
         regressors=list(REGRESSORS),
@@ -315,6 +371,8 @@ def _metadata(runs, library, settings, ridge_cv=None, activation=None):
         rt_check=_rt_check_description(include_rt, ridge_cv),
         ridge_cv=_ridge_metadata(settings, ridge_cv),
         beta_activation=_activation_metadata() if activation else None,
+        hrf_boundary_summary=hrf_boundary_summary(selections),
+        hrf_boundary="Fraction of custom picks (ID > 0) within 2% of the library box width of each parameter edge; see HrfSelectionResult.parameter_bound_table",
         library_candidates=len(library.candidates),
         library_fingerprint=library.fingerprint,
         peak_time="Argmax of each full HRF curve on a 0.1-second grid",
@@ -369,7 +427,9 @@ def save_workflow(
     artifacts.append(
         json_artifact(
             f"{stem}_desc-notebook_metadata.json",
-            _metadata(runs, library, settings, ridge_cv, activation),
+            _metadata(
+                runs, library, settings, ridge_cv, activation, selections=selections
+            ),
         )
     )
     for name, figure in (figures or {}).items():
