@@ -502,7 +502,7 @@ Run them from the repository checkout:
 | `examples.NSD.settings.resolve_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
 | `examples.NSD.workflow_inputs.load_session`, `make_blocks`, `load_block` | Load, trim, and block an NSD session's CIFTI runs |
 | `examples.NSD.workflow_analysis.select_hrfs`, `fit_glms`, `fit_beta_series` | All/odd/even HRF selection, matched GLMs, and beta series over feature blocks |
-| `examples.NSD.ridge_workflow.fit_cv_beta_series` | Tune per-grayordinate fractions (`fractions=...`) or one global alpha (`alphas=...`), evaluate both odd/even outer splits, and fit final all-run betas |
+| `boldtailor.workflow.beta_series.fit_cv_beta_series` | Tune per-grayordinate fractions (`fractions=...`) or one global alpha (`alphas=...`), evaluate both odd/even outer splits, and fit final all-run betas |
 | `examples.NSD.workflow_outputs.save_workflow` | Publish the notebook's maps, designs, tables, and provenance together |
 | `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
 | `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |

@@ -1,5 +1,8 @@
-"""NSD fraction or shared-alpha tuning with independent odd/even evaluation."""
+"""Fraction or shared-alpha tuning with independent odd/even evaluation."""
 
+from collections.abc import Mapping
+from dataclasses import dataclass
+from hashlib import sha256
 from numbers import Integral, Real
 from uuid import uuid4
 
@@ -7,8 +10,12 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.hrf_selection import select_hrfs, subset_runs
-from boldtailor.provenance import ProvenanceRecord
-from boldtailor.ridge_results import CandidateScores
+from boldtailor.provenance import (
+    ProvenanceRecord,
+    analysis_fingerprint,
+    extend_provenance,
+)
+from boldtailor.ridge_results import CandidateScores, FractionSelection
 from boldtailor.fractional_ridge import (
     NORM_BASIS,
     fraction_grid,
@@ -28,35 +35,39 @@ from boldtailor.trial_encoding import (
 )
 from boldtailor.cifti import spatial_signature
 from boldtailor.parallel import map_blocks, validate_n_jobs
-from .ridge_provenance import tuning_provenance, link_final_provenance
-from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.model import TaskModel
+from boldtailor.workflow import inputs
+from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.workflow.files import odd_even_parity
-from boldtailor.workflow.inputs import (
-    NSD_TASK_MODEL,
-    _trimmed_sources,
-    load_block,
-)
+from boldtailor.workflow.inputs import _trimmed_sources, load_block
 
 
-def trial_predictors(runs):
-    """Preserve events; unavailable behavior excludes only encoding rows."""
+def _numeric_predictors(run, columns):
+    missing = [c for c in columns if c not in run.events]
+    if missing:
+        raise ValueError(f"{run.label}: encoding needs event column(s) {missing}")
+    return run.events[columns].apply(pd.to_numeric, errors="raise")
+
+
+def _check_trial_type(table, label):
+    if "trial_type" in table and not table.trial_type.dropna().isin([0, 1]).all():
+        raise ValueError(f"{label}: nonmissing trial_type must be 0 or 1")
+
+
+def _censor_response_time(table):
+    if "response_time" in table:
+        rt = table.response_time
+        table.loc[~np.isfinite(rt) | (rt <= 0), "response_time"] = np.nan
+
+
+def trial_predictors(runs, task_model):
+    """Modulator columns per run; unavailable behavior excludes only encoding rows."""
+    columns = [m.column for m in task_model.modulators]
     tables = []
     for run in runs:
-        if not {"trial_type", "response_time"}.issubset(run.events):
-            raise ValueError(
-                f"{run.label}: encoding needs trial_type and response_time"
-            )
-        table = run.events[["trial_type", "response_time"]].apply(
-            pd.to_numeric, errors="raise"
-        )
-        present = table.trial_type.dropna()
-        if not present.isin([0, 1]).all():
-            raise ValueError(f"{run.label}: nonmissing trial_type must be 0 or 1")
-        table.loc[
-            ~np.isfinite(table.response_time) | (table.response_time <= 0),
-            "response_time",
-        ] = np.nan
+        table = _numeric_predictors(run, columns)
+        _check_trial_type(table, run.label)
+        _censor_response_time(table)
         tables.append(table)
     return tables
 
@@ -112,12 +123,13 @@ def _score_block(
     predictors,
     library,
     alphas,
-    fractional=False,
-    encoding_mode="within_run",
+    fractional,
+    encoding_mode,
+    task_model,
 ):
     scorer = score_fraction_candidates if fractional else score_ridge_candidates
     return scorer(
-        load_block(runs, root, indices),
+        load_block(runs, root, indices, task_model),
         predictors,
         **({"fractions": alphas} if fractional else {"alphas": alphas}),
         library=library,
@@ -135,8 +147,9 @@ def _global_scores(
     library,
     alphas,
     n_jobs,
-    fractional=False,
-    encoding_mode="within_run",
+    fractional,
+    encoding_mode,
+    task_model,
 ):
     n_features = runs[0].image.shape[1]
     shape = (len(runs), len(alphas), n_features)
@@ -147,7 +160,16 @@ def _global_scores(
     for indices, result in map_blocks(
         _score_block,
         blocks,
-        args=(runs, root, predictors, library, alphas, fractional, encoding_mode),
+        args=(
+            runs,
+            root,
+            predictors,
+            library,
+            alphas,
+            fractional,
+            encoding_mode,
+            task_model,
+        ),
         n_jobs=n_jobs,
     ):
         sse[:, :, indices], sst[:, :, indices] = result.fold_sse, result.fold_sst
@@ -167,7 +189,7 @@ def _global_scores(
         sources=[_trimmed_sources(r, root, indices) for r in runs],
         activities=(
             dict(
-                name="nsd_global_encoding_ridge_cv",
+                name="global_encoding_ridge_cv",
                 **encoding_metadata(encoding_mode),
                 **(
                     {"fractions": list(alphas)}
@@ -201,8 +223,9 @@ def _tune(
     alphas,
     percentile,
     n_jobs,
-    fractional=False,
-    encoding_mode="within_run",
+    fractional,
+    encoding_mode,
+    task_model,
 ):
     scores = _global_scores(
         runs,
@@ -214,6 +237,7 @@ def _tune(
         n_jobs,
         fractional,
         encoding_mode,
+        task_model,
     )
     selection = (
         select_ridge_fractions(scores)
@@ -250,11 +274,12 @@ def _outer_block(
     alpha,
     train,
     test,
-    fractional=False,
-    encoding_mode="within_run",
-    task_model=NSD_TASK_MODEL,
+    fractional,
+    encoding_mode,
+    task_model,
+    selection_model,
 ):
-    data = load_block(runs, root, indices)
+    data = load_block(runs, root, indices, task_model)
     labels, signature = [r.label for r in runs], _signature(runs, indices)
     selection = (
         None
@@ -264,7 +289,7 @@ def _outer_block(
             library=library,
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
-            task_model=task_model,
+            task_model=selection_model,
         )
     )
     options = (
@@ -325,18 +350,20 @@ def _evaluate(
     train,
     test,
     n_jobs,
-    fractional=False,
-    encoding_mode="within_run",
-    task_model=NSD_TASK_MODEL,
+    fractional,
+    encoding_mode,
+    task_model,
+    selection_model,
 ):
     n = runs[0].image.shape[1]
     result = dict(
         encoding_mode=encoding_mode,
-        selection_task_model=task_model.to_dict(),
+        selection_task_model=selection_model.to_dict(),
+        coefficient_names=["task", *predictors[0].columns],
         train_run_intercepts=np.full((len(train), n), np.nan),
         scoring_offsets=np.full((len(test), n), np.nan),
         encoding_r2=np.full(n, np.nan),
-        coefficients=np.full((3, n), np.nan),
+        coefficients=np.full((1 + len(predictors[0].columns), n), np.nan),
         run_sse=np.full((len(test), n), np.nan),
         run_sst=np.full((len(test), n), np.nan),
         hrf_indices=np.full(n, -1, dtype=int),
@@ -365,6 +392,7 @@ def _evaluate(
         fractional,
         encoding_mode,
         task_model,
+        selection_model,
     )
     for indices, block in map_blocks(_outer_block, blocks, args=args, n_jobs=n_jobs):
         for key in (
@@ -399,14 +427,14 @@ def _evaluate(
     return result
 
 
-def _final_selection(indices, runs, root, library, task_model):
+def _final_selection(indices, runs, root, library, task_model, selection_model):
     return dict(
         all=select_hrfs(
-            load_block(runs, root, indices),
+            load_block(runs, root, indices, task_model),
             library=library,
             run_labels=[r.label for r in runs],
             feature_signature=_signature(runs, indices),
-            task_model=task_model,
+            task_model=selection_model,
         )
     )
 
@@ -418,8 +446,9 @@ def _final_fit(
     library,
     alpha,
     n_jobs,
-    fractional=False,
-    task_model=NSD_TASK_MODEL,
+    fractional,
+    task_model,
+    selection_model,
 ):
     selections = None
     if library is not None:
@@ -428,13 +457,19 @@ def _final_fit(
             for indices, selected in map_blocks(
                 _final_selection,
                 blocks,
-                args=(runs, root, library, task_model),
+                args=(runs, root, library, task_model, selection_model),
                 n_jobs=n_jobs,
             )
         }
     options = {"ridge_fraction": alpha} if fractional else {"ridge_alpha": alpha}
     result = fit_beta_series(
-        runs, root, blocks, selections=selections, **options, n_jobs=n_jobs
+        runs,
+        root,
+        blocks,
+        task_model=task_model,
+        selections=selections,
+        **options,
+        n_jobs=n_jobs,
     )
     result["hrf_selections"] = selections
     return result
@@ -444,6 +479,7 @@ def fit_cv_beta_series(
     runs,
     root,
     *,
+    task_model,
     library,
     alphas=None,
     fractions=None,
@@ -452,7 +488,7 @@ def fit_cv_beta_series(
     max_grayordinates=None,
     n_jobs=1,
     encoding_mode="within_run",
-    task_model=NSD_TASK_MODEL,
+    selection_model=None,
 ):
     """Tune per-feature fractions or one shared alpha, then evaluate and refit.
 
@@ -461,10 +497,15 @@ def fit_cv_beta_series(
     targets and predictions contain test runs only, in test_run_labels order.
     Betas retain the selected regularization. Fractional targets are OLS fits
     under training-selected HRFs; shared-alpha targets equal the fitted betas.
+    The task model drives fits and encoding predictors; selection_model (default
+    the task model) scores HRFs, for example without RT.
     """
     validate_encoding_mode(encoding_mode)
     if not isinstance(task_model, TaskModel):
         raise ValueError("task_model must be a TaskModel")
+    selection_model = task_model if selection_model is None else selection_model
+    if not isinstance(selection_model, TaskModel):
+        raise ValueError("selection_model must be a TaskModel")
     if (alphas is None) == (fractions is None):
         raise ValueError("provide exactly one of alphas or fractions")
     fractional = fractions is not None
@@ -474,12 +515,12 @@ def fit_cv_beta_series(
     )
     if fractional:
         alphas = tuple(reversed(alphas))
-    predictors = trial_predictors(runs)
+    predictors = trial_predictors(runs, task_model)
     result = dict(
         tuning={},
         evaluation={},
         predictors=predictors,
-        selection_task_model=task_model.to_dict(),
+        selection_task_model=selection_model.to_dict(),
     )
     mode = "canonical" if library is None else "optimized"
     for scope, train in (*halves.items(), ("all", list(range(len(runs))))):
@@ -495,6 +536,7 @@ def fit_cv_beta_series(
             n_jobs,
             fractional,
             encoding_mode,
+            task_model,
         )
         result["tuning"][scope] = selected
         alpha = (
@@ -517,6 +559,7 @@ def fit_cv_beta_series(
                 fractional,
                 encoding_mode,
                 task_model,
+                selection_model,
             )
             result["evaluation"][f"{scope}_to_{target}"][
                 "tuning_analysis_fingerprint"
@@ -528,7 +571,15 @@ def fit_cv_beta_series(
         )
         print(f"Ridge CV ({mode}, {scope}): {description}", flush=True)
     result["final"] = _final_fit(
-        runs, root, blocks, library, alpha, n_jobs, fractional, task_model
+        runs,
+        root,
+        blocks,
+        library,
+        alpha,
+        n_jobs,
+        fractional,
+        task_model,
+        selection_model,
     )
     link_final_provenance(result["final"], result["tuning"]["all"]["provenance"])
     result["provenance"] = dict(
@@ -551,3 +602,189 @@ def fit_cv_beta_series(
             fraction_norm_basis=NORM_BASIS,
         )
     return result
+
+
+def tuning_provenance(scores, selection):
+    if isinstance(selection, FractionSelection):
+        activity = dict(
+            name="voxelwise_encoding_fraction_selection",
+            fractions=list(selection.fractions),
+            objective="maximum_encoding_r2_per_grayordinate",
+            validation_target="fixed_ols_betas",
+            fraction_norm_basis=NORM_BASIS,
+            selected_fraction_fingerprint=sha256(
+                np.asarray(selection.ridge_fraction, dtype="<f8").tobytes()
+            ).hexdigest(),
+            tie_rule="largest fraction within 1e-12 of the maximum score",
+        )
+    else:
+        activity = _alpha_activity(selection)
+    mode = scores.provenance.to_dict()["activities"][-1]["encoding_mode"]
+    activity.update(encoding_metadata(mode))
+    if not isinstance(selection, FractionSelection):
+        activity["objective"] = "percentile_of_" + activity["score"]
+    activity.update(
+        run_labels=list(scores.run_labels),
+        scoring_mask_fingerprint=sha256(selection.scoring_mask.tobytes()).hexdigest(),
+        candidate_score_fingerprint=sha256(
+            np.asarray(scores.cv_r2, dtype="<f8").tobytes()
+        ).hexdigest(),
+    )
+    record = scores.provenance
+    identity = dict(scoring=_identity_activities(record), selection=activity)
+    return extend_provenance(
+        record,
+        execution_id=str(uuid4()),
+        activity=activity,
+        events=record.events,
+        warnings=(),
+        analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
+    )
+
+
+def _identity_activities(record):
+    """Embedded scoring activities without environment-only software keys."""
+    return [
+        {key: value for key, value in activity.items() if key != "software"}
+        for activity in record.to_dict()["activities"]
+    ]
+
+
+def _alpha_activity(selection):
+    return dict(
+        name="global_encoding_ridge_selection",
+        alphas=list(selection.alphas),
+        percentile=selection.percentile,
+        objective="percentile_of_pooled_within_run_trial_encoding_r2",
+        validation_target="candidate_regularized_betas",
+        tie_rule="smallest alpha within 1e-12 of the maximum objective",
+        objective_scores=selection.objective_scores.tolist(),
+        selected_alpha=selection.ridge_alpha,
+    )
+
+
+def link_final_provenance(result, decision):
+    """Keep block fitting records, adding a reference to the saved decision."""
+    for block in result["provenance"]:
+        record = ProvenanceRecord.from_dict(block["record"])
+        identity = dict(
+            fitting_analysis_fingerprint=record.analysis_fingerprint,
+            tuning_analysis_fingerprint=decision.analysis_fingerprint,
+        )
+        activity = dict(
+            name="encoding_guided_ridge_refit",
+            **encoding_metadata(decision.to_dict()["activities"][-1]["encoding_mode"]),
+            tuning_scope="all",
+            selected_alpha=result["ridge_alpha"],
+            tuning_execution_id=decision.execution_id,
+            **identity,
+        )
+        if "ridge_fraction" in result:
+            activity.update(
+                regularization="fractional_ridge", fraction_norm_basis=NORM_BASIS
+            )
+        block["record"] = extend_provenance(
+            record,
+            execution_id=str(uuid4()),
+            activity=activity,
+            events=record.events,
+            warnings=(),
+            analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
+        ).to_dict()
+
+
+@dataclass(frozen=True, kw_only=True)
+class BetaModel:
+    """One trial-wise beta model and, for tuned ridge, how it was chosen."""
+
+    name: str
+    hrf: str
+    estimator: str
+    fit: Mapping[str, object]
+    tuning: Mapping[str, object] | None = None
+    evaluation: Mapping[str, object] | None = None
+    cv_provenance: Mapping[str, object] | None = None
+    predictors: tuple | None = None
+
+    @property
+    def fractional(self):
+        return "ridge_fraction" in self.fit
+
+
+_ESTIMATOR = {"fixed": "Ridge", "cv": "RidgeCV", "fractional_cv": "FractionalCV"}
+
+
+def _fixed_models(runs, root, blocks, settings, task_model, hrf, selected):
+    prefix = hrf.capitalize() + "Trial"
+    fits = {"OLS": 0.0}
+    if settings.ridge_mode == "fixed":
+        fits["Ridge"] = settings.ridge_alpha
+    return {
+        prefix
+        + kind: BetaModel(
+            name=prefix + kind,
+            hrf=hrf,
+            estimator=kind,
+            fit=fit_beta_series(
+                runs,
+                root,
+                blocks,
+                task_model=task_model,
+                selections=selected,
+                ridge_alpha=alpha,
+                n_jobs=settings.n_jobs,
+            ),
+        )
+        for kind, alpha in fits.items()
+    }
+
+
+def _cv_model(runs, root, settings, library, task_model, hrf):
+    fractional = settings.ridge_mode == "fractional_cv"
+    grid = (
+        dict(fractions=settings.ridge_fractions)
+        if fractional
+        else dict(alphas=settings.ridge_alphas)
+    )
+    result = fit_cv_beta_series(
+        runs,
+        root,
+        task_model=task_model,
+        selection_model=inputs.selection_task_model(
+            task_model, settings.hrf_selection_rt
+        ),
+        library=library,
+        **grid,
+        encoding_mode=settings.encoding_mode,
+        percentile=settings.ridge_percentile,
+        block_size=settings.block_size,
+        max_grayordinates=settings.max_grayordinates,
+        n_jobs=settings.n_jobs,
+    )
+    estimator = _ESTIMATOR[settings.ridge_mode]
+    return BetaModel(
+        name=f"{hrf.capitalize()}Trial{estimator}",
+        hrf=hrf,
+        estimator=estimator,
+        fit=result["final"],
+        tuning=result["tuning"],
+        evaluation=result["evaluation"],
+        cv_provenance=result["provenance"],
+        predictors=tuple(result["predictors"]),
+    )
+
+
+def fit_beta_models(runs, root, blocks, settings, library, selections, task_model):
+    """OLS for both HRFs, plus the ridge variant the settings request."""
+    models = {}
+    for hrf, selected, candidates in (
+        ("canonical", None, None),
+        ("optimized", selections, library),
+    ):
+        models.update(
+            _fixed_models(runs, root, blocks, settings, task_model, hrf, selected)
+        )
+        if settings.ridge_mode in ("cv", "fractional_cv"):
+            model = _cv_model(runs, root, settings, candidates, task_model, hrf)
+            models[model.name] = model
+    return models

@@ -134,7 +134,7 @@ def test_notebook_reuses_saved_results_without_fitting(
     six_run_dataset, tmp_path, monkeypatch, mode
 ):
     from boldtailor.workflow import analysis as workflow_analysis
-    from examples.NSD import ridge_workflow
+    from boldtailor.workflow import beta_series as ridge_workflow
     from examples.NSD.ridge_outputs import tuning_table
 
     root, prep = six_run_dataset

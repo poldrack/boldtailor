@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.publication import publish_artifact_set
-from examples.NSD.ridge_workflow import fit_cv_beta_series
+from boldtailor.workflow.beta_series import fit_cv_beta_series
 from boldtailor.workflow.inputs import load_session
 
 

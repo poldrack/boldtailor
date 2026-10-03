@@ -8,7 +8,7 @@ import pytest
 
 from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials
-from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
+from boldtailor.workflow.beta_series import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts
 from boldtailor.workflow.inputs import load_session, load_block
 
@@ -136,15 +136,3 @@ def test_outer_oracle_blocks_and_export(
             np.testing.assert_allclose(
                 np.sum(residual**2, axis=0), saved["sse"][j], rtol=1e-5, atol=1e-6
             )
-
-
-def test_workflow_rejects_unknown_encoding_mode(six_run_dataset):
-    root, prep = six_run_dataset
-    with pytest.raises(ValueError, match="encoding_mode"):
-        fit_cv_beta_series(
-            load_session(root, prep),
-            root,
-            library=None,
-            alphas=[0],
-            encoding_mode="bad",
-        )

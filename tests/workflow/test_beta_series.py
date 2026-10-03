@@ -347,13 +347,13 @@ def test_rt_switch_reaches_every_ridge_selection(session, cv_library):
         assert evaluation["selection_task_model"] == narrow.to_dict()
 
 
-def test_fit_task_model_keeps_full_predictors_when_selection_drops_rt(
+def test_selection_model_leaves_predictors_and_fits_on_the_full_model(
     session, cv_library
 ):
     root, runs, model = session
     narrow = inputs.selection_task_model(model, False)
     result = beta_series.fit_cv_beta_series(
-        runs, root, **options(cv_library), task_model=narrow, fit_task_model=model
+        runs, root, **options(cv_library), task_model=model, selection_model=narrow
     )
     assert all(list(p.columns) == ORDER for p in result["predictors"])
     assert result["final"]["rt"] is not None

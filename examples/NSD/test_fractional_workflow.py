@@ -1,6 +1,5 @@
 """The NSD adapter preserves featurewise decisions through fitting and export."""
 
-from dataclasses import replace
 import json
 
 import nibabel as nib
@@ -15,7 +14,7 @@ from boldtailor.hrf_selection import select_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
-from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
+from boldtailor.workflow.beta_series import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts, tuning_table, tuning_figure
 from examples.NSD.workflow_outputs import _beta_artifacts
 from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
@@ -161,72 +160,3 @@ def test_fraction_workflow_matches_whole_array_and_exports(
     assert table.groupby("scope").selected_grayordinates.sum().tolist() == [3, 3, 3]
     assert "alpha" not in table
     assert tuning_figure({mode: result}).axes[0].get_xlabel() == "Ridge fraction"
-
-
-def test_fraction_blocks_workers_and_missing_rt_preserve_results(
-    six_run_dataset, cv_library
-):
-    root, prep = six_run_dataset
-    runs = load_session(root, prep)
-    runs = [
-        replace(
-            r,
-            events=r.events.assign(
-                response_time=r.events.response_time.mask(r.events.index == 0)
-            ),
-        )
-        for r in runs
-    ]
-    serial = fit(runs, root, cv_library, block_size=1)
-    parallel = fit(runs, root, cv_library, block_size=3, n_jobs=2)
-    for scope in ("odd", "even", "all"):
-        np.testing.assert_allclose(
-            serial["tuning"][scope]["selection"].ridge_fraction,
-            parallel["tuning"][scope]["selection"].ridge_fraction,
-        )
-    for a, b in zip(serial["final"]["betas"], parallel["final"]["betas"]):
-        assert a.shape == (6, 4)
-        np.testing.assert_allclose(a, b, atol=1e-6)
-    assert all(not mask[0] for mask in serial["tuning"]["all"]["scores"].trial_masks)
-
-
-@pytest.mark.parametrize("parity,scope", [(0, "odd_to_even"), (1, "even_to_odd")])
-def test_outer_fraction_choices_and_training_coefficients_are_isolated(
-    six_run_dataset, cv_library, parity, scope
-):
-    root, prep = six_run_dataset
-    runs = load_session(root, prep)
-    initial = fit(runs, root, cv_library, block_size=2)
-    changed = []
-    for run in runs:
-        if run.number % 2 == parity:
-            y = np.random.default_rng(run.number).normal(size=run.image.shape)
-            changed.append(
-                replace(
-                    run,
-                    image=nib.Cifti2Image(y, header=run.image.header),
-                    events=run.events.assign(
-                        response_time=run.events.response_time + 100
-                    ),
-                )
-            )
-        else:
-            changed.append(run)
-    altered = fit(changed, root, cv_library, block_size=2)
-    for key in ("ridge_fraction", "hrf_indices", "coefficients", "predictor_means"):
-        np.testing.assert_allclose(
-            initial["evaluation"][scope][key],
-            altered["evaluation"][scope][key],
-            atol=1e-10,
-        )
-    assert not np.allclose(
-        initial["evaluation"][scope]["encoding_r2"],
-        altered["evaluation"][scope]["encoding_r2"],
-        equal_nan=True,
-    )
-
-
-def test_fraction_and_alpha_grids_are_mutually_exclusive(six_run_dataset):
-    root, prep = six_run_dataset
-    with pytest.raises(ValueError):
-        fit(load_session(root, prep), root, alphas=[0, 1])
