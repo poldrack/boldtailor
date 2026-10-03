@@ -173,6 +173,11 @@ def _inputs_body(runs, task_model, library):
             f"<li>HRF library: {len(library.candidates)} candidates, "
             f"fingerprint {library.fingerprint[:12]}</li>"
         )
+    if "response_time" not in task_model.regressor_names:
+        items.append(
+            '<li class="note">No reaction-time column; '
+            "RT correlations were not computed.</li>"
+        )
     return "<ul>" + "".join(items) + "</ul>"
 
 
