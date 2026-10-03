@@ -18,7 +18,7 @@ from boldtailor._fractional_ridge import (
 )
 from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
 from boldtailor.hrf_selection import run_labels_for
-from boldtailor.provenance import analysis_fingerprint
+from boldtailor.provenance import analysis_fingerprint, identity_activity
 from boldtailor._fit_lifecycle import fit_operation
 
 
@@ -103,7 +103,7 @@ def _fit_activity(data, selection, labels, alpha, assignment, designs, fractions
         hrf_normalization=HRF_NORMALIZATION,
         noise_model="ols",
         oversampling=50,
-        selection=selection.provenance.to_dict()["activities"][-1],
+        selection=identity_activity(selection.provenance),
     )
     if fractions is not None:
         activity.update(fraction_metadata(fractions))

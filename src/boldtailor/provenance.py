@@ -227,6 +227,13 @@ def analysis_fingerprint(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def identity_activity(record: ProvenanceRecord) -> dict[str, object]:
+    """The record's last activity without environment-only keys, for embedding in identities."""
+    activity = dict(record.to_dict()["activities"][-1])
+    activity.pop("software", None)
+    return activity
+
+
 def extend_provenance(
     record: ProvenanceRecord,
     *,

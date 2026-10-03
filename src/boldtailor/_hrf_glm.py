@@ -15,7 +15,7 @@ from boldtailor._hrf_glm_design import (
 from boldtailor.hrf_glm_results import HrfAnalysisResult, _masked_delta_result
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import TaskModel
-from boldtailor.provenance import analysis_fingerprint
+from boldtailor.provenance import analysis_fingerprint, identity_activity
 from boldtailor.results import _ContrastResult
 
 
@@ -66,7 +66,7 @@ def _prepare(data, model, selection, signature, model_settings):
         n_features=data.n_features,
         n_runs=data.n_runs,
         hrf_normalization=HRF_NORMALIZATION,
-        selection=selection.provenance.to_dict()["activities"][-1],
+        selection=identity_activity(selection.provenance),
         selection_analysis_id=selection.provenance.analysis_fingerprint,
         inference="conditional_on_selected_hrfs",
     )

@@ -14,7 +14,11 @@ from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import run_labels_for, select_hrf
-from boldtailor.provenance import analysis_fingerprint, extend_provenance
+from boldtailor.provenance import (
+    analysis_fingerprint,
+    extend_provenance,
+    identity_activity,
+)
 from boldtailor.ridge_results import CandidateScores
 from boldtailor.trial_encoding import (
     _predictor_arrays,
@@ -99,7 +103,7 @@ def _fold_selection(data, library, labels, signature, train):
         run_labels=[labels[r] for r in train],
         feature_signature=signature,
     )
-    return selected.hrf_indices, selected.provenance.to_dict()["activities"][-1]
+    return selected.hrf_indices, identity_activity(selected.provenance)
 
 
 def _score_fold(

@@ -138,7 +138,11 @@ class HrfLibrary:
             HrfCandidate(i, "double_gamma", row)
             for i, row in enumerate(sorted(rows), 1)
         )
-        origin = origin or {"kind": "explicit", "n_candidates": len(rows)}
+        origin = (
+            origin
+            if origin is not None
+            else {"kind": "explicit", "n_candidates": len(rows)}
+        )
         return cls((canonical, *custom), origin=origin)
 
     @property

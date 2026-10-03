@@ -21,7 +21,7 @@ from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
-from boldtailor.provenance import analysis_fingerprint
+from boldtailor.provenance import analysis_fingerprint, identity_activity
 
 
 def run_labels_for(data, run_labels):
@@ -285,7 +285,7 @@ def _evaluate_split(
         "hrf_independent_evaluation",
         train_runs=list(train),
         test_runs=list(test),
-        training_selection=selection.provenance.to_dict()["activities"][-1],
+        training_selection=identity_activity(selection.provenance),
         frozen_task_amplitudes=True,
     )
     provenance = _provenance(operation, data, activity)
