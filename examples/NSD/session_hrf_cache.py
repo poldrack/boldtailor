@@ -8,13 +8,13 @@ from pathlib import Path
 import nibabel as nib
 import numpy as np
 
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor.cifti import scalar_artifact, spatial_signature
+from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
 from .hrf_artifacts import npz_artifact, parameter_artifact
-from .hrf_reliability import _indices
 from .nsd_cifti import _input_paths
-from .nsd_hrf import spatial_signature
-from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
+from boldtailor.reliability import library_indices
+from .single_trial_artifacts import json_artifact, table_artifact
 from .workflow_inputs import NSD_TASK_MODEL, _trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
@@ -90,7 +90,7 @@ def read_selection(path, brain, library, limit):
             "Cached selection has incompatible grayordinate axis or map names"
         )
     maps = image.get_fdata()
-    _indices(maps[0], len(library.candidates))
+    library_indices(maps[0], len(library.candidates))
     if np.isfinite(maps[:, limit:]).any():
         raise ValueError("Cached selection exceeds its requested grayordinate coverage")
     return maps

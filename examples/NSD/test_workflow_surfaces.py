@@ -65,19 +65,6 @@ def surface_files(tmp_path):
     return tmp_path / "fmriprep", paths
 
 
-def test_surface_values_use_vertex_ids_and_exclude_volume(cortical_axis):
-    values = np.array([0.1, -0.2, np.nan, 99, 0.7, 0, -0.6, 0.3])
-    original = values.copy()
-    projected = surfaces().cortical_values(values, cortical_axis)
-    np.testing.assert_allclose(projected["left"], [0.3, 0, np.nan, -0.6, 0.7, np.nan])
-    np.testing.assert_allclose(
-        projected["right"], [-0.2, np.nan, np.nan, np.nan, np.nan, 0.1]
-    )
-    np.testing.assert_allclose(values, original)
-    with pytest.raises(ValueError, match="grayordinate"):
-        surfaces().cortical_values(values[:-1], cortical_axis)
-
-
 def test_multisession_hrf_surface_shows_matched_delta(cortical_axis, surface_files):
     import nbformat
     from pathlib import Path

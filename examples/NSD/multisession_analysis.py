@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .session_hrf_reliability import compare_hrfs
+from boldtailor.reliability import compare_hrfs
 
 
 def paired_summary(canonical, optimized):

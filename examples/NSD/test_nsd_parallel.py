@@ -18,39 +18,6 @@ from examples.NSD.test_nsd_hrf_selection import hrf_nsd  # noqa: F401
 from examples.NSD.test_nsd_single_trial import mini_nsd  # noqa: F401
 
 
-def _process_probe(block, directory):
-    (directory / str(block)).write_text(str(os.getpid()))
-    if block < 2:
-        deadline = time.monotonic() + 15
-        while not all((directory / str(i)).exists() for i in range(2)):
-            if time.monotonic() > deadline:
-                raise RuntimeError("two blocks did not execute concurrently")
-            time.sleep(0.01)
-    if block == 0:
-        time.sleep(0.1)
-    return dict(
-        pid=os.getpid(),
-        openmp=os.environ.get("OMP_NUM_THREADS"),
-        accelerate=os.environ.get("VECLIB_MAXIMUM_THREADS"),
-    )
-
-
-def test_process_batches_are_bounded_ordered_and_thread_limited(tmp_path):
-    from examples.NSD.parallel_blocks import map_blocks
-
-    results = map_blocks(_process_probe, range(4), args=(tmp_path,), n_jobs=2)
-    first = next(results)
-    assert first[0] == 0
-    assert {p.name for p in tmp_path.iterdir()} == {"0", "1"}
-    all_results = [first, *results]
-    assert [block for block, _ in all_results] == [0, 1, 2, 3]
-    assert all(result["pid"] != os.getpid() for _, result in all_results)
-    assert len({result["pid"] for _, result in all_results[:2]}) == 2
-    assert all(
-        result["openmp"] == result["accelerate"] == "1" for _, result in all_results
-    )
-
-
 def _assert_same_artifacts(serial, parallel):
     other = {p.name: p for p in parallel}
     assert {p.name for p in serial} == set(other)

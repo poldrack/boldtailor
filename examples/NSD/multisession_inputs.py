@@ -9,8 +9,9 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
-from .beta_activation import MAP_NAMES as ACTIVATION_NAMES
-from .hrf_reliability import _indices
+from boldtailor.cifti import read_scalar
+from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
+from boldtailor.reliability import library_indices
 from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 from .workflow_outputs import R2_NAMES, _stem
 from .workflow_inputs import REGRESSORS
@@ -78,19 +79,10 @@ def _library(paths, metadata):
     return library
 
 
-def _map(path, brain, names):
-    image = nib.load(path)
-    if image.header.get_axis(1) != brain:
-        raise ValueError(f"Saved grayordinate axis differs: {path}")
-    if list(image.header.get_axis(0).name) != list(names):
-        raise ValueError(f"Unexpected map names in {path}")
-    return image.get_fdata()
-
-
 def _beta(paths, brain, descriptor):
-    activation = _map(paths[descriptor, "activation"], brain, ACTIVATION_NAMES)
-    r2 = _map(paths[descriptor, "rsquared"], brain, R2_NAMES)
-    rt = _map(
+    activation = read_scalar(paths[descriptor, "activation"], brain, ACTIVATION_NAMES)
+    r2 = read_scalar(paths[descriptor, "rsquared"], brain, R2_NAMES)
+    rt = read_scalar(
         paths[descriptor, "rtcorrelation"], brain, ["all_runs", "odd_runs", "even_runs"]
     )
     return np.stack([activation[0], activation[1], r2[2], rt[0], np.abs(rt[0])])
@@ -104,8 +96,8 @@ def load_one_session(output, subject, session, estimators):
     metadata = json.loads(paths["metadata"].read_text())
     library = _library(paths, metadata)
     brain = nib.load(paths["HRFAll", "selection"]).header.get_axis(1)
-    ids = _map(paths["HRFAll", "selection"], brain, HRF_NAMES)[0]
-    _indices(ids, len(library.curves))
+    ids = read_scalar(paths["HRFAll", "selection"], brain, HRF_NAMES)[0]
+    library_indices(ids, len(library.curves))
     return dict(
         session=session,
         brain=brain,
@@ -114,7 +106,7 @@ def load_one_session(output, subject, session, estimators):
         hrf_indices=ids,
         sources=list(paths.values()),
         glm={
-            prefix: _map(paths[prefix + "GLM", "effects"], brain, REGRESSORS)[
+            prefix: read_scalar(paths[prefix + "GLM", "effects"], brain, REGRESSORS)[
                 [REGRESSORS.index(name) for name in GLM_METRICS]
             ]
             for prefix in ("Canonical", "Optimized")

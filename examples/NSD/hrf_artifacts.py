@@ -6,7 +6,7 @@ from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_cv import prepare_runs
+from boldtailor.hrf_selection import prepare_runs
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import PARAMETER_NAMES
 from boldtailor.publication import Artifact

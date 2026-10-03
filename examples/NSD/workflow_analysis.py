@@ -9,9 +9,9 @@ import pandas as pd
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_selection import select_hrf, evaluate_hrf_split
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
-from .nsd_hrf import spatial_signature
-from .parallel_blocks import map_blocks
-from .rt_diagnostics import correlate_rt
+from boldtailor.cifti import spatial_signature
+from boldtailor.diagnostics import correlate_rt
+from boldtailor.parallel import map_blocks
 from .workflow_inputs import NSD_TASK_MODEL, load_block, REGRESSORS
 
 
@@ -195,7 +195,7 @@ def fit_beta_series(
 ):
     """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
-    from boldtailor._fractional_ridge import regularization
+    from boldtailor.fractional_ridge import regularization
 
     alpha, fractions = regularization(
         ridge_alpha, ridge_fraction, runs[0].image.shape[1]

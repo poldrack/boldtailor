@@ -8,7 +8,7 @@ import pandas as pd
 
 from boldtailor.publication import publish_artifact_set
 from .hrf_artifacts import figure_artifact
-from .session_hrf_reliability import SUMMARY_NAMES, finite_mean
+from boldtailor.reliability import SUMMARY_NAMES, finite_mean
 from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
 
 

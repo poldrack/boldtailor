@@ -7,7 +7,7 @@ from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 from boldtailor.ridge_results import FractionSelection
-from boldtailor._fractional_ridge import NORM_BASIS
+from boldtailor.fractional_ridge import NORM_BASIS
 from .fractional_outputs import (
     tuning_rows,
     plot_tuning,

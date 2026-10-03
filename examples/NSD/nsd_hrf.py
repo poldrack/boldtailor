@@ -1,6 +1,5 @@
 """Expanded HRF workflow with independent odd/even selection and evaluation."""
 
-from hashlib import sha256
 from importlib.metadata import version
 
 import nibabel as nib
@@ -9,7 +8,8 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor import hrf_library, hrf_selection
-from boldtailor._hrf_cv import prepare_runs
+from boldtailor.cifti import spatial_signature
+from boldtailor.hrf_selection import prepare_runs
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.publication import publish_artifact_set
 
@@ -71,15 +71,6 @@ SELECTION_STATS = (
     "deltatestr2",
     "evenhrfindex",
 )
-
-
-def spatial_signature(brain, indices):
-    header = nib.Cifti2Header.from_axes(
-        (nib.cifti2.ScalarAxis(["spatial_identity"]), brain)
-    )
-    return sha256(
-        header.to_xml() + np.asarray(indices, dtype="<i8").tobytes()
-    ).hexdigest()
 
 
 def block_data(runs, root, indices):

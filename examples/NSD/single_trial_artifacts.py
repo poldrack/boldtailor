@@ -6,6 +6,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
+from boldtailor.cifti import scalar_artifact  # noqa: F401
 from boldtailor.publication import Artifact
 
 STATISTICS = (
@@ -62,15 +63,6 @@ def json_artifact(path, value):
 
 def table_artifact(path, frame):
     return Artifact(path, frame.to_csv(sep="\t", index=False, na_rep="n/a").encode())
-
-
-def scalar_artifact(path, brain, values, names):
-    axes = (nib.cifti2.ScalarAxis(names), brain)
-    image = nib.Cifti2Image(
-        np.asarray(values, dtype=np.float32), nib.Cifti2Header.from_axes(axes)
-    )
-    image.nifti_header.set_intent("ConnDenseScalar")
-    return Artifact(path, image.to_bytes())
 
 
 def single_trial_artifacts(runs, brain, result, rt, paths, metadata):

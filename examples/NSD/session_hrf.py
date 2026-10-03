@@ -8,8 +8,8 @@ import re
 import numpy as np
 
 from boldtailor.hrf_selection import select_hrf
-from .nsd_hrf import spatial_signature
-from .parallel_blocks import map_blocks, validate_n_jobs
+from boldtailor.cifti import spatial_signature
+from boldtailor.parallel import map_blocks, validate_n_jobs
 from .session_hrf_cache import (
     cache_paths,
     load_cache,

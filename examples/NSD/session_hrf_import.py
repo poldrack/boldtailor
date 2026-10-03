@@ -7,9 +7,9 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor.cifti import spatial_signature
+from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
-from .nsd_hrf import spatial_signature
 from .session_hrf_cache import read_selection
 from .workflow_outputs import _input_artifacts, _metadata, _stem
 from .workflow_inputs import _trimmed_sources, make_blocks, selection_task_model

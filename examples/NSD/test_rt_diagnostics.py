@@ -11,43 +11,6 @@ def diagnostics():
         pytest.fail("RT diagnostics are not implemented")
 
 
-def test_correlation_removes_run_mean_confounding():
-    beta = [np.array([[3.0], [2.0], [1.0]]), np.array([[13.0], [12.0], [11.0]])]
-    rt = [np.array([1.0, 2.0, 3.0]), np.array([11.0, 12.0, 13.0])]
-    result = diagnostics().correlate_rt(beta, rt, run_numbers=[1, 2])
-    for split in ("all", "odd", "even"):
-        np.testing.assert_allclose(result[split], [-1.0])
-    np.testing.assert_array_equal(result["counts"]["all"], [6])
-    np.testing.assert_allclose(result["per_run"], [[-1.0], [-1.0]])
-
-
-def test_matched_feature_masks_exclude_only_invalid_rt_or_beta():
-    beta = np.array(
-        [
-            [1.0, 1.0],
-            [2.0, np.nan],
-            [4.0, 4.0],
-            [999.0, 5.0],
-            [999.0, 6.0],
-            [999.0, 7.0],
-        ]
-    )
-    rt = np.array([1.0, 2.0, 4.0, np.nan, 0.0, -1.0])
-    result = diagnostics().correlate_rt([beta], [rt], run_numbers=[11])
-    np.testing.assert_allclose(result["all"], [1.0, np.nan], equal_nan=True)
-    np.testing.assert_array_equal(result["counts"]["all"], [3, 2])
-    assert np.isnan(result["even"]).all()
-    np.testing.assert_array_equal(result["counts"]["even"], [0, 0])
-
-
-def test_constant_rt_and_constant_beta_are_undefined():
-    beta = np.column_stack([np.ones(4), np.arange(4)])
-    result = diagnostics().correlate_rt([beta], [np.ones(4)], run_numbers=[2])
-    assert np.isnan(result["all"]).all()
-    result = diagnostics().correlate_rt([beta], [np.arange(1, 5)], run_numbers=[2])
-    np.testing.assert_allclose(result["all"], [np.nan, 1.0], equal_nan=True)
-
-
 def test_select_cortex_stable_ties_and_no_even_run_leakage():
     rt = [np.arange(1, 5.0), np.arange(1, 5.0)]
     beta = [np.column_stack([rt[0], -rt[0], rt[0], np.ones(4)]), np.zeros((4, 4))]
@@ -78,13 +41,3 @@ def test_scatter_points_are_even_only_and_centered_with_matching_mask():
     assert artifact.payload.startswith(b"\x89PNG\r\n\x1a\n")
     empty = api.scatter_artifact({"OLS": beta}, rt, [1, 2], [], "empty.png")
     assert empty.payload.startswith(b"\x89PNG")
-
-
-def test_mismatched_trials_and_ambiguous_run_numbers_fail():
-    for beta, rt, numbers in [
-        ([np.ones((4, 2))], [np.ones(3)], [1]),
-        ([np.ones((4, 2))] * 2, [np.ones(4)] * 2, [1, 1]),
-        ([np.ones((4, 2))], [np.ones(4)], ["01"]),
-    ]:
-        with pytest.raises(ValueError):
-            diagnostics().correlate_rt(beta, rt, run_numbers=numbers)

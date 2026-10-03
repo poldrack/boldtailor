@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import numpy as np
 from boldtailor.ridge_results import FractionSelection
-from boldtailor._fractional_ridge import NORM_BASIS
+from boldtailor.fractional_ridge import NORM_BASIS
 from boldtailor.trial_encoding import encoding_metadata
 
 from boldtailor.provenance import (

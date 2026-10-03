@@ -10,32 +10,14 @@ import numpy as np
 from nilearn.plotting import plot_surf
 from nilearn.surface import load_surf_mesh
 
-STRUCTURES = dict(
-    left="CIFTI_STRUCTURE_CORTEX_LEFT", right="CIFTI_STRUCTURE_CORTEX_RIGHT"
-)
+from boldtailor.cifti import CORTEX_STRUCTURES, cortical_values
+
 VIEWS = (
     ("left", "lateral"),
     ("left", "medial"),
     ("right", "medial"),
     ("right", "lateral"),
 )
-
-
-def cortical_values(values, brain):
-    """Scatter a grayordinate vector onto each cortex, leaving absent vertices NaN."""
-    values = np.asarray(values, dtype=float)
-    if values.shape != (len(brain),):
-        raise ValueError("values must contain one value per CIFTI grayordinate")
-    result = {}
-    for hemi, name in STRUCTURES.items():
-        if name not in brain.nvertices:
-            continue
-        selected = brain.name == name
-        cortex = np.full(brain.nvertices[name], np.nan)
-        cortex[brain.vertex[selected]] = values[selected]
-        cortex[~np.isfinite(cortex)] = np.nan
-        result[hemi] = cortex
-    return result
 
 
 def find_surface_meshes(fmriprep_root, subject, *, paths=None):
@@ -73,7 +55,7 @@ def _load_meshes(paths, brain):
         raise ValueError("meshes must contain left and right surfaces")
     meshes = {hemi: load_surf_mesh(path) for hemi, path in paths.items()}
     for hemi, mesh in meshes.items():
-        expected = brain.nvertices.get(STRUCTURES[hemi])
+        expected = brain.nvertices.get(CORTEX_STRUCTURES[hemi])
         if expected is not None and len(mesh.coordinates) != expected:
             raise ValueError(
                 f"{hemi} mesh has {len(mesh.coordinates)} vertices; CIFTI expects {expected}"

@@ -9,7 +9,7 @@ from matplotlib.collections import LineCollection
 import numpy as np
 import pandas as pd
 
-from .hrf_reliability import _indices
+from boldtailor.reliability import library_indices
 
 
 def design_figure(frame_times, design, regressors):
@@ -86,7 +86,7 @@ def glm_comparison(glms):
 
 
 def _selected_parameters(library, ids, names):
-    indices = _indices(ids, len(library.candidates))
+    indices = library_indices(ids, len(library.candidates))
     values = library.parameter_table[names].to_numpy()[np.maximum(indices, 0)].copy()
     values[indices < 0] = np.nan
     return values

@@ -6,12 +6,12 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from boldtailor._ridge_cv import subset_runs
-from boldtailor.hrf_selection import select_hrf
+from boldtailor.hrf_selection import select_hrf, subset_runs
 from boldtailor.provenance import ProvenanceRecord
 from boldtailor.ridge_results import CandidateScores
-from boldtailor._fractional_ridge import fraction_grid, NORM_BASIS
 from boldtailor.fractional_ridge import (
+    NORM_BASIS,
+    fraction_grid,
     score_fraction_candidates,
     select_ridge_fractions,
 )
@@ -26,8 +26,8 @@ from boldtailor.trial_encoding import (
     encoding_metadata,
     validate_encoding_mode,
 )
-from .nsd_hrf import spatial_signature
-from .parallel_blocks import map_blocks, validate_n_jobs
+from boldtailor.cifti import spatial_signature
+from boldtailor.parallel import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
 from boldtailor.model import TaskModel

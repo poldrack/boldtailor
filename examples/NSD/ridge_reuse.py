@@ -6,7 +6,7 @@ from boldtailor.fractional_ridge import select_ridge_fractions
 from boldtailor.ridge_selection import select_ridge_penalty
 from boldtailor.ridge_results import CandidateScores
 from boldtailor.provenance import ProvenanceRecord
-from boldtailor._single_trial_fit import r_squared
+from boldtailor.single_trial import r_squared
 from .workflow_reuse import read_json, read_map
 
 

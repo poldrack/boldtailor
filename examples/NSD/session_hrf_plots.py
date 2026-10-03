@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .session_hrf_reliability import finite_mean
+from boldtailor.reliability import finite_mean
 
 
 def _correlation_matrix(comparison):

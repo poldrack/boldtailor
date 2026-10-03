@@ -3,11 +3,11 @@
 import json
 from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor.cifti import read_scalar
+from boldtailor.model import HRF_NORMALIZATION
 from .workflow_inputs import NSD_TASK_MODEL
 from .workflow_outputs import _stem
 
@@ -59,14 +59,7 @@ def read_json(path):
 
 def read_map(base, descriptor, statistic, brain):
     path = f"{base}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{statistic}.dscalar.nii"
-    return read_image(path, brain)
-
-
-def read_image(path, brain):
-    image = nib.load(path)
-    if image.header.get_axis(1) != brain:
-        raise ValueError(f"Saved CIFTI axis differs from current inputs: {path}")
-    return image.get_fdata()
+    return read_scalar(path, brain)
 
 
 def _designs(base, descriptor, runs):
@@ -105,7 +98,7 @@ def _glm(base, descriptor, runs, brain):
 def _beta(base, descriptor, runs, brain):
     table = pd.read_csv(f"{base}_desc-notebook{descriptor}_trials.tsv", sep="\t")
     betas = [
-        read_image(
+        read_scalar(
             base.parent
             / f"{run.inputs.stem}_space-fsLR_den-91k_desc-notebook{descriptor}_betas.dscalar.nii",
             brain,

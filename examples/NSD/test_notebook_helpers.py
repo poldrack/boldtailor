@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import HrfLibrary
-from examples.NSD.session_hrf_reliability import compare_hrfs
+from boldtailor.reliability import compare_hrfs
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

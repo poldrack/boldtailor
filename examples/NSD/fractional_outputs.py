@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from boldtailor._fractional_ridge import NORM_BASIS
+from boldtailor.fractional_ridge import NORM_BASIS
 from .hrf_artifacts import npz_artifact
 from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
 

@@ -4,14 +4,15 @@ from pathlib import Path
 
 import numpy as np
 
-from boldtailor._hrf_design import HRF_NORMALIZATION
-from boldtailor._task_design import expand_events
+from boldtailor.cifti import scalar_artifact
+from boldtailor.design import expand_events
+from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_MAP_NAMES
+from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
-from .beta_activation import MAP_NAMES as ACTIVATION_MAP_NAMES
 from .hrf_artifacts import npz_artifact, parameter_artifact, figure_artifact
-from .hrf_reliability import CORRELATION_NAMES, hrf_curve_correlations
+from boldtailor.reliability import CORRELATION_NAMES, curve_correlations
 from .nsd_cifti import _input_paths
-from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
+from .single_trial_artifacts import json_artifact, table_artifact
 from .workflow_analysis import selection_maps
 from .workflow_inputs import (
     NSD_TASK_MODEL,
@@ -112,7 +113,7 @@ def _hrf_artifacts(stem, brain, selections, library):
             brain,
             "HRFReliability",
             "curvecorrelation",
-            hrf_curve_correlations(library, maps["odd"][0], maps["even"][0]),
+            curve_correlations(library, maps["odd"][0], maps["even"][0]),
             list(CORRELATION_NAMES),
         ),
     ]

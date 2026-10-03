@@ -54,7 +54,7 @@ def small_library():
 
 
 def test_nsd_task_model_centers_rt_and_keeps_trial_type_uncentered(events):
-    from boldtailor._task_design import expand_events
+    from boldtailor.design import expand_events
     from boldtailor.model import Modulator, TaskModel
 
     inputs = workflow()
@@ -100,7 +100,7 @@ def test_nonpositive_rt_becomes_missing_with_indicator(four_runs, missing):
     run = next(r for r in runs if r.number == 1)
     assert np.isnan(run.events.response_time.iloc[1])
     assert np.isfinite(run.events.response_time.drop(index=1)).all()
-    from boldtailor._task_design import expand_events
+    from boldtailor.design import expand_events
 
     expanded = expand_events(run.events, inputs.NSD_TASK_MODEL)
     indicator = expanded.loc[
@@ -245,8 +245,7 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
 
 
 def test_glm_model_and_selection_share_the_nsd_task_model(four_runs, small_library):
-    from boldtailor._hrf_design import hrf_model
-    from boldtailor._task_design import expand_events, task_columns
+    from boldtailor.design import expand_events, task_columns
 
     inputs, analysis = workflow(), workflow("workflow_analysis")
     root, prep = four_runs
@@ -263,7 +262,7 @@ def test_glm_model_and_selection_share_the_nsd_task_model(four_runs, small_libra
         expected = task_columns(
             expand_events(runs[run].events, inputs.NSD_TASK_MODEL, run),
             runs[run].frame_times,
-            hrf_model(small_library.candidates[cid]),
+            small_library.candidates[cid].kernel,
         )
         np.testing.assert_array_equal(
             design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy()

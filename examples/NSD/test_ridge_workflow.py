@@ -13,7 +13,7 @@ from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_pena
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
-from examples.NSD.nsd_hrf import spatial_signature
+from boldtailor.cifti import spatial_signature
 from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 
