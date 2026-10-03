@@ -5,7 +5,7 @@ import json
 import matplotlib.pyplot as plt
 import pytest
 
-from boldtailor.workflow import run as workflow_run
+from boldtailor.workflow import inputs, run as workflow_run
 
 
 def _func(settings):
@@ -89,6 +89,54 @@ def test_reliability_is_skipped_with_a_reason_when_a_parity_is_short(
     result = workflow_run.run_workflow(settings)
     assert result.skipped == (("reliability", "fewer than two odd or two even runs"),)
     assert "fewer than two odd" in result.report_path.read_text()
+    split_descriptors = (
+        "HRFOdd",
+        "HRFEven",
+        "HRFOddToEven",
+        "HRFEvenToOdd",
+        "HRFReliability",
+    )
+    names = {p.name for p in result.paths}
+    assert not any(f"_desc-{d}_" in n for d in split_descriptors for n in names)
+
+
+def test_ridge_cv_with_a_short_parity_stops_before_any_fitting(
+    dataset, settings_for, tmp_path, monkeypatch
+):
+    root, *_ = dataset  # two runs: one odd, one even
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("HRF selection ran before the ridge CV check")
+
+    monkeypatch.setattr(workflow_run.analysis, "select_hrfs", refuse)
+    settings = settings_for(root, output_dir=tmp_path / "out", hrf_library="canonical")
+    assert settings.ridge_mode == "fractional_cv"
+    with pytest.raises(inputs.InputError) as raised:
+        workflow_run.run_workflow(settings)
+    message = str(raised.value)
+    assert "ridge cross-validation needs at least two odd and two even runs" in message
+    assert "--ridge-mode off" in message and "--skip-stage betas" in message
+    out = tmp_path / "out"
+    assert not out.exists() or not any(out.iterdir())
+
+
+def test_a_failed_stage_leaves_no_report(
+    four_runs, settings_for, tmp_path, monkeypatch
+):
+    root, _ = four_runs
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("beta stage failed")
+
+    monkeypatch.setattr(workflow_run.beta_series, "fit_beta_models", fail)
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    with pytest.raises(RuntimeError, match="beta stage failed"):
+        workflow_run.run_workflow(settings)
+    assert not (
+        settings.output_dir / "sub-07_ses-nsd10_task-nsdcore_report.html"
+    ).exists()
 
 
 def test_second_run_into_the_same_output_stops_before_loading(
