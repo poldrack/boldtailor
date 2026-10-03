@@ -42,7 +42,7 @@ def tuning_provenance(scores, selection):
         ).hexdigest(),
     )
     record = scores.provenance
-    identity = dict(scoring=record.to_dict()["activities"], selection=activity)
+    identity = dict(scoring=_identity_activities(record), selection=activity)
     return extend_provenance(
         record,
         execution_id=str(uuid4()),
@@ -51,6 +51,14 @@ def tuning_provenance(scores, selection):
         warnings=(),
         analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
     )
+
+
+def _identity_activities(record):
+    """Embedded scoring activities without environment-only software keys."""
+    return [
+        {key: value for key, value in activity.items() if key != "software"}
+        for activity in record.to_dict()["activities"]
+    ]
 
 
 def _alpha_activity(selection):
