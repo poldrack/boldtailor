@@ -272,3 +272,48 @@ def test_plain_string_hrf_keeps_confound_names_ending_in_kernel(inputs):
     )
     columns = list(compile_designs(data, model)[0].matrix.columns)
     assert columns == ["face", "house", "face_kernel", "constant"]
+
+
+@pytest.fixture
+def access_counts(monkeypatch):
+    """Count copies of per-run tables made through AnalysisData accessors."""
+    from boldtailor.data import AnalysisData
+
+    counts = {"events": 0, "confounds": 0}
+    for name in counts:
+        original = getattr(AnalysisData, name)
+
+        def counted(self, _name=name, _original=original):
+            counts[_name] += 1
+            return _original.fget(self)
+
+        monkeypatch.setattr(AnalysisData, name, property(counted))
+    return counts
+
+
+def _three_runs(inputs):
+    events, _ = inputs
+    confounds = pd.DataFrame({"trans_x": np.linspace(-1.0, 1.0, 80)})
+    return from_arrays(
+        [np.random.default_rng(r).normal(size=(80, 2)) for r in range(3)],
+        [events] * 3,
+        tr=2.0,
+        confounds=[confounds] * 3,
+    )
+
+
+def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
+    from boldtailor import _ridge_cv as cv
+
+    data = _three_runs(inputs)
+    model = ModelSpec(contrasts={"face": "face"}, confounds=("trans_x",))
+    calls = [
+        lambda: compile_nuisance_designs(data, model),
+        lambda: cv.subset_runs(data, [0, 2]),
+        lambda: cv.prepare_run_beta_path(data, 1, None, np.zeros(2, int), "r"),
+    ]
+    for call in calls:
+        access_counts.update(events=0, confounds=0)
+        call()
+        assert access_counts["events"] <= 1
+        assert access_counts["confounds"] <= 1

@@ -57,10 +57,10 @@ def test_trial_results_share_science_and_name_their_design(
     if selected:
         np.testing.assert_array_equal(result.design.hrf_indices, selection.hrf_indices)
         assert result.design.selection_provenance == selection.provenance
-        matrices = result.design.matrices
-        assert (0, 1) in matrices
-        matrices.clear()
-        assert (0, 1) in result.design.matrices
+        exposed = result.design.matrix(0, 1).copy()
+        expected = exposed.copy()
+        exposed[:] = 0
+        np.testing.assert_array_equal(result.design.matrix(0, 1), expected)
     else:
         exposed = result.design.matrices[0]
         expected = exposed.copy(deep=True)
@@ -78,22 +78,24 @@ def test_shared_trial_design_owns_its_input_table():
     pd.testing.assert_frame_equal(design.matrices[0], expected)
 
 
-def test_selected_trial_design_owns_arrays_and_mapping(selected_fixture):
+def test_selected_trial_design_owns_arrays_and_rebuilt_matrices(selected_fixture):
     from boldtailor.single_trial_results import SelectedTrialDesign
 
     _, selection = selected_fixture
     matrix = np.arange(6.0).reshape(3, 2)
     expected = matrix.copy()
     ids = np.array([1, -1])
-    mapping = {(0, 1): matrix}
-    design = SelectedTrialDesign(ids, mapping, selection.provenance)
+    design = SelectedTrialDesign(
+        ids, "0" * 64, selection.provenance, _rebuild=lambda run, hrf_id: matrix
+    )
+    returned = design.matrix(0, 1)
     matrix[:] = 99
     ids[:] = 0
-    mapping.clear()
-    np.testing.assert_array_equal(design.matrices[0, 1], expected)
+    np.testing.assert_array_equal(returned, expected)
     np.testing.assert_array_equal(design.hrf_indices, [1, -1])
-    assert not design.matrices[0, 1].flags.writeable
+    assert not design.matrix(0, 1).flags.writeable
     assert not design.hrf_indices.flags.writeable
+    assert design.design_fingerprint == "0" * 64
 
 
 def test_custom_hrf_has_a_shared_trial_design(selected_fixture):

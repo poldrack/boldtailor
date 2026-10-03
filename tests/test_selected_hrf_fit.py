@@ -1,6 +1,7 @@
 """Spatial grouping must preserve trial/feature order and normalized estimates."""
 
 from dataclasses import replace
+import sys
 import numpy as np
 import pytest
 from nilearn.glm.first_level import compute_regressor
@@ -58,7 +59,7 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
             # Custom convolution may use equivalent floating-point summation;
             # exact canonical compatibility is tested separately.
             np.testing.assert_allclose(
-                result.design.matrices[r, int(cid)], matrix, rtol=1e-11, atol=3e-12
+                result.design.matrix(r, int(cid)), matrix, rtol=1e-11, atol=3e-12
             )
             sse.append(np.sum((y[:, v] - matrix @ expected) ** 2))
             null.append(
@@ -155,15 +156,16 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
     for values in (
         *result.run_betas,
         result.design.hrf_indices,
-        *result.design.matrices.values(),
+        *(result.design.matrix(r, c) for r in range(data.n_runs) for c in (0, 1, 2)),
     ):
         assert type(values) is np.ndarray
         assert not values.flags.writeable
         with pytest.raises(ValueError):
             values.flat[0] = 0
-    groups = result.design.matrices
-    groups.pop((0, 1))
-    assert (0, 1) in result.design.matrices
+    edited = result.design.matrix(0, 1).copy()
+    expected = edited.copy()
+    edited[:] = 0
+    np.testing.assert_array_equal(result.design.matrix(0, 1), expected)
     table = result.trial_table
     table.loc[0, "details"]["tags"].append(999)
     assert result.trial_table.loc[0, "details"] == {"tags": [0]}
@@ -173,3 +175,77 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
     assert info["design_fingerprint"]
     assert info["hrf_assignment_fingerprint"]
     assert info["hrf_normalization"] == "peak_one_event_response"
+
+
+def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
+    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor.single_trial import fit_selected_hrfs
+
+    data, selection = selected_fixture
+    result = fit_selected_hrfs(
+        data, selection=selection, feature_signature="ordered-axis"
+    )
+    run = prepare_runs(data, selection.library)[0]
+    expected = np.column_stack([run.trial_matrix(1), run.nuisance])
+    np.testing.assert_array_equal(result.design.matrix(0, 1), expected)
+    assert not hasattr(result.design, "matrices")
+    assert len(result.design.design_fingerprint) == 64
+    info = result.provenance.to_dict()["activities"][-1]
+    assert result.design.design_fingerprint == info["design_fingerprint"]
+
+
+@pytest.mark.parametrize("key", [(0, 0), (0, 2), (0, 3), (3, 1), (-1, 1), (0, -1)])
+def test_selected_design_rejects_pairs_that_were_not_fitted(selected_fixture, key):
+    from boldtailor.single_trial import fit_selected_hrfs
+    from tests.test_fit import replace_indices
+
+    data, selection = selected_fixture
+    narrow = replace_indices(selection, [1, 1, 1, 1, -1])
+    result = fit_selected_hrfs(data, selection=narrow, feature_signature="ordered-axis")
+    assert result.design.matrix(0, 1).shape[0] == len(data.frame_times[0])
+    with pytest.raises(KeyError):
+        result.design.matrix(*key)
+
+
+def _retained_bytes(value):
+    if isinstance(value, np.ndarray):
+        return value.nbytes
+    if isinstance(value, dict):
+        return sum(_retained_bytes(v) for v in value.values())
+    if isinstance(value, (tuple, list)):
+        return sum(_retained_bytes(v) for v in value)
+    return sys.getsizeof(value)
+
+
+def _design_bytes(design):
+    return sum(
+        _retained_bytes(value)
+        for name, value in vars(design).items()
+        if name != "_rebuild"
+    )
+
+
+def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
+    from boldtailor.single_trial import fit_selected_hrfs
+    from tests.test_fit import replace_indices
+
+    data, selection = selected_fixture
+    narrow = replace_indices(selection, [1, 1, 1, 1, -1])
+    results = [
+        fit_selected_hrfs(data, selection=s, feature_signature="ordered-axis")
+        for s in (narrow, selection)
+    ]
+    counts = [
+        len(set(r.design.hrf_indices[r.design.hrf_indices >= 0])) for r in results
+    ]
+    assert counts == [1, 3]
+    assert _design_bytes(results[0].design) == _design_bytes(results[1].design)
+    for result in results:
+        betas = sum(a.nbytes for a in result.run_betas)
+        assert _design_bytes(result.design) < 10 * betas
+        arrays = [
+            value
+            for name, value in vars(result.design).items()
+            if isinstance(value, np.ndarray) and name != "hrf_indices"
+        ]
+        assert all(a.size <= data.n_features for a in arrays)
