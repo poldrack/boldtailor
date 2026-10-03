@@ -455,7 +455,9 @@ with onset fixed. Each sample is converted to SPM parameters by
 until the measured curve matches within 0.01 s (times), 0.02 s (widths) and
 0.1 % (depth). The default box (`TIMING_BOUNDS`) spans peak times of 2.5-8.5 s,
 response widths of 2-6.5 s, trough times of 8-19 s, undershoot widths of
-4-10 s, and depths of 0.01-0.4 of the peak. The five quantities are not
+4-10 s, and depths of 0.01-0.4 of the peak. Depth is sampled log-uniformly
+(`LOG_SCALED_TIMING`), so shallow undershoots like those of most empirical HRFs
+are as common as deep ones; the other four are uniform. The five quantities are not
 independent for a double gamma, so roughly 40 % of points in that box are
 unrealizable (for example a wide response cannot be followed by an early
 trough). The sampler keeps drawing Sobol points in power-of-two batches until

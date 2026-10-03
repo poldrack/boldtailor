@@ -55,6 +55,7 @@ TIMING_BOUNDS = MappingProxyType(
         "trough_depth": (0.01, 0.4),
     }
 )
+LOG_SCALED_TIMING = ("trough_depth",)  # sampled log-uniformly over their bounds
 _REALIZED_DT = 0.01
 _MIN_TROUGH = 1e-6  # relative to the unit peak; smaller dips are round-off
 _MAX_DRAW_FACTOR = 64  # give up when this many Sobol points per sample are drawn
@@ -553,17 +554,29 @@ def _timing_bounds(bounds):
         low, high = (float(v) for v in values)
         if not np.isfinite((low, high)).all() or low >= high:
             raise ValueError(f"bounds for {name!r} must be finite with low < high")
+        if name in LOG_SCALED_TIMING and low <= 0:
+            raise ValueError(f"bounds for {name!r} must be positive (log scale)")
         merged[name] = (low, high)
     return merged
 
 
+def _scaled_timing(unit_points, limits):
+    """Map unit-cube Sobol points onto the timing box, log-uniformly where listed."""
+    columns = []
+    for name, column in zip(REALIZED_NAMES[:5], unit_points.T, strict=True):
+        low, high = limits[name]
+        if name in LOG_SCALED_TIMING:
+            columns.append(low * (high / low) ** column)
+        else:
+            columns.append(low + (high - low) * column)
+    return np.column_stack(columns)
+
+
 def _feasible_timing_rows(n_samples, seed, limits, onset, duration):
     """Accept the first ``n_samples`` realizable Sobol points; count the rest."""
-    names = REALIZED_NAMES[:5]
-    low, high = [limits[n][0] for n in names], [limits[n][1] for n in names]
     rows, rejected = [], 0
     for batch in _sobol_batches(n_samples, seed, dimensions=5):
-        for row in qmc.scale(batch, low, high):
+        for row in _scaled_timing(batch, limits):
             try:
                 rows.append(spm_parameters_from_realized((*row, onset, duration)))
             except ValueError:
@@ -586,8 +599,11 @@ def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duratio
     count skipped is recorded in ``origin["rejected"]``. ``onset`` is fixed
     because onset and response delay trade off into the same peak time, which
     is what makes the gamma-parameter box oversample near-identical waveforms.
-    ``bounds`` overrides entries of :data:`TIMING_BOUNDS`. Candidates are stored
-    with their SPM parameters, so downstream modeling is unchanged.
+    ``bounds`` overrides entries of :data:`TIMING_BOUNDS`. Quantities listed in
+    :data:`LOG_SCALED_TIMING` (trough depth) are sampled log-uniformly over
+    their bounds, the rest uniformly; ``origin["scales"]`` records which.
+    Candidates are stored with their SPM parameters, so downstream modeling is
+    unchanged.
     """
     limits = _timing_bounds(bounds)
     names = REALIZED_NAMES[:5]
@@ -599,6 +615,7 @@ def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duratio
         onset=float(onset),
         duration=float(duration),
         bounds={name: list(limits[name]) for name in names},
+        scales={name: "log" for name in names if name in LOG_SCALED_TIMING},
         rejected=rejected,
     )
     return HrfLibrary.from_parameters(rows, origin=origin)
