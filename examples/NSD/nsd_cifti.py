@@ -17,6 +17,7 @@ import pandas as pd
 from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.design import event_response_scales, hrf_model
+from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.cifti import scalar_artifact
@@ -47,7 +48,7 @@ BIDS_ROOT = None  # Use --bids-root or NSD_BIDS_ROOT; no personal default.
 CONTRASTS = {"stimulus": {"stimulus": 1.0}, "response_time": {"response_time": 1.0}}
 MODEL = {
     "hrf": "spm",
-    "hrf_normalization": "peak_one_event_response",
+    "hrf_normalization": HRF_NORMALIZATION,
     "oversampling": 50,
     "response_time": "within-run mean-centered seconds; no orthogonalization",
     "duration": "recorded stimulus duration",
