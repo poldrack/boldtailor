@@ -12,7 +12,13 @@ from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.cifti import spatial_signature
 from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
-from .workflow_inputs import NSD_TASK_MODEL, load_block, REGRESSORS
+from .workflow_inputs import (
+    NSD_TASK_MODEL,
+    REGRESSORS,
+    load_block,
+    odd_even_parity,
+    reaction_times,
+)
 
 
 def _signature(runs, indices):
@@ -27,8 +33,7 @@ def _select_block(indices, runs, root, library, task_model):
         feature_signature=_signature(runs, indices),
         task_model=task_model,
     )
-    odd = [i for i, r in enumerate(runs) if r.number % 2]
-    even = [i for i, r in enumerate(runs) if not r.number % 2]
+    odd, even = odd_even_parity(runs).values()
     return dict(
         all=select_hrf(data, **options),
         odd=evaluate_hrf_split(data, train_runs=odd, test_runs=even, **options),
@@ -233,7 +238,7 @@ def fit_beta_series(
         _collect_metadata(result, block, indices)
     result["rt"] = correlate_rt(
         result["betas"],
-        [r.events.response_time.to_numpy() for r in runs],
+        reaction_times(runs),
         run_numbers=[r.number for r in runs],
     )
     print(f"{label}: complete", flush=True)

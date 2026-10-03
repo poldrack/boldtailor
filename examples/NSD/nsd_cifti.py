@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from importlib.metadata import version
 import json
 from pathlib import Path
@@ -21,15 +20,30 @@ from nilearn.glm.first_level import compute_regressor
 from boldtailor._hrf_design import event_response_scales, hrf_model
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
-from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.publication import Artifact, publish_artifact_set
 
+if __package__:
+    from .workflow_files import (
+        MOTION,
+        RunInputs,
+        discover_runs,
+        input_paths as _input_paths,
+        load_inputs,
+        run_sources as _sources,
+        select_confounds,
+    )
+else:
+    from workflow_files import (
+        MOTION,
+        RunInputs,
+        discover_runs,
+        input_paths as _input_paths,
+        load_inputs,
+        run_sources as _sources,
+        select_confounds,
+    )
+
 BIDS_ROOT = Path("/Volumes/extdata1/NSD/BIDS")
-MOTION = tuple(
-    axis + suffix
-    for axis in ("trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z")
-    for suffix in ("", "_derivative1", "_power2", "_derivative1_power2")
-)
 CONTRASTS = {"stimulus": {"stimulus": 1.0}, "response_time": {"response_time": 1.0}}
 MODEL = {
     "hrf": "spm",
@@ -47,95 +61,11 @@ MODEL = {
 
 
 @dataclass(frozen=True)
-class RunInputs:
-    stem: str
-    bold: Path
-    events: Path
-    confounds: Path
-    confounds_json: Path
-    bold_json: Path
-
-
-@dataclass(frozen=True)
 class PreparedRun:
     inputs: RunInputs
     image: nib.Cifti2Image
     design: pd.DataFrame
     frame_times: np.ndarray
-
-
-def discover_runs(bids_root, fmriprep_root, *, subject="sub-07", session="ses-nsd10"):
-    """Require a unique fsLR 91k CIFTI and complete metadata for every raw run."""
-    raw = Path(bids_root) / subject / session / "func"
-    derivative = Path(fmriprep_root) / subject / session / "func"
-    events = sorted(raw.glob(f"{subject}_{session}_task-nsdcore_run-*_events.tsv"))
-    if not events:
-        raise FileNotFoundError(f"No NSD events found in {raw}")
-    runs = []
-    for event in events:
-        stem = event.name.removesuffix("_events.tsv")
-        bold = derivative / f"{stem}_space-fsLR_den-91k_bold.dtseries.nii"
-        item = RunInputs(
-            stem,
-            bold,
-            event,
-            derivative / f"{stem}_desc-confounds_timeseries.tsv",
-            derivative / f"{stem}_desc-confounds_timeseries.json",
-            bold.with_name(bold.name.replace(".dtseries.nii", ".json")),
-        )
-        for path in _input_paths(item):
-            if not path.is_file():
-                raise FileNotFoundError(f"Missing input for {stem}: {path}")
-        runs.append(item)
-    found = set(
-        derivative.glob(
-            f"{subject}_{session}_task-nsdcore_run-*_space-fsLR_den-91k_bold.dtseries.nii"
-        )
-    )
-    if found != {run.bold for run in runs}:
-        raise ValueError("CIFTI runs and events runs do not match")
-    return tuple(runs)
-
-
-def _input_paths(run):
-    return run.bold, run.events, run.confounds, run.confounds_json, run.bold_json
-
-
-def select_confounds(table: pd.DataFrame, metadata: dict) -> pd.DataFrame:
-    """Select motion24, top six combined-mask aCompCor, cosines, and NSS spikes."""
-    components = [
-        name
-        for name, info in metadata.items()
-        if name.startswith("a_comp_cor_")
-        and info.get("Retained") is True
-        and info.get("Mask") == "combined"
-        and name in table
-    ]
-    components.sort(
-        key=lambda name: (-float(metadata[name]["VarianceExplained"]), name)
-    )
-    if len(components) < 6:
-        raise ValueError("Require six retained combined-mask aCompCor components")
-    cosine = sorted(name for name in table if name.startswith("cosine"))
-    if not cosine:
-        raise ValueError("Missing fMRIPrep cosine high-pass regressors")
-    spikes = sorted(
-        name for name in table if name.startswith("non_steady_state_outlier")
-    )
-    names = list(MOTION) + components[:6] + cosine + spikes
-    missing = set(names) - set(table)
-    if missing:
-        raise ValueError(f"Missing confounds: {sorted(missing)}")
-    selected = table.loc[:, names].apply(pd.to_numeric, errors="raise").copy()
-    if selected.empty:
-        raise ValueError("Confounds must have rows")
-    # Only temporal derivatives are undefined at the first acquired volume.
-    for name in MOTION:
-        if "derivative1" in name and pd.isna(selected.iloc[0][name]):
-            selected.loc[selected.index[0], name] = 0.0
-    if not np.isfinite(selected.to_numpy()).all():
-        raise ValueError("Selected confounds must be finite beyond initial derivatives")
-    return selected
 
 
 def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFrame:
@@ -166,32 +96,6 @@ def task_regressors(events: pd.DataFrame, frame_times: np.ndarray) -> pd.DataFra
     return pd.DataFrame(columns)
 
 
-def load_inputs(inputs: RunInputs):
-    """Load image, raw events, selected nuisances, and corrected frame times."""
-    image = nib.load(inputs.bold)
-    if not isinstance(image, nib.Cifti2Image):
-        raise ValueError(f"{inputs.stem}: expected CIFTI image")
-    series, brain = (image.header.get_axis(i) for i in (0, 1))
-    if not isinstance(series, nib.cifti2.SeriesAxis) or series.unit != "SECOND":
-        raise ValueError("CIFTI time axis must be a SeriesAxis in seconds")
-    if not isinstance(brain, nib.cifti2.BrainModelAxis):
-        raise ValueError("CIFTI spatial axis must be a BrainModelAxis")
-    timing = json.loads(inputs.bold_json.read_text())
-    if not np.isclose(timing["RepetitionTime"], series.step):
-        raise ValueError(f"{inputs.stem}: inconsistent repetition time")
-    if timing.get("SliceTimingCorrected") and "StartTime" not in timing:
-        raise ValueError(f"{inputs.stem}: slice-timing correction needs StartTime")
-    offset = float(timing.get("StartTime", series.start))
-    times = offset + np.arange(image.shape[0]) * series.step
-    confounds = select_confounds(
-        pd.read_csv(inputs.confounds, sep="\t"),
-        json.loads(inputs.confounds_json.read_text()),
-    )
-    if len(confounds) != len(times):
-        raise ValueError(f"{inputs.stem}: confound rows must match CIFTI volumes")
-    return image, pd.read_csv(inputs.events, sep="\t"), confounds, times
-
-
 def _load_run(inputs: RunInputs) -> PreparedRun:
     image, events, confounds, times = load_inputs(inputs)
     task = task_regressors(events, times)
@@ -205,39 +109,6 @@ def _load_run(inputs: RunInputs) -> PreparedRun:
             f"{inputs.stem}: design requires full rank and residual degrees of freedom"
         )
     return PreparedRun(inputs, image, design, times)
-
-
-def _source_ref(path, root, role, **annotations):
-    stat = path.stat()
-    return SourceRef(
-        role=role,
-        uri=path.relative_to(root).as_posix(),
-        byte_size=stat.st_size,
-        modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z"),
-        annotations=annotations,
-    )
-
-
-def _sources(run, root, indices):
-    inputs = run.inputs
-    return RunSources(
-        signal=_source_ref(
-            inputs.bold,
-            root,
-            "signal",
-            grayordinate_indices=indices.tolist(),
-            sidecar=_source_ref(inputs.bold_json, root, "signal").to_dict(),
-        ),
-        events=_source_ref(inputs.events, root, "events"),
-        confounds=_source_ref(
-            inputs.confounds,
-            root,
-            "confounds",
-            sidecar=_source_ref(inputs.confounds_json, root, "confounds").to_dict(),
-        ),
-    )
 
 
 def _fit_block(runs, signals, root, indices):

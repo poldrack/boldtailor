@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.publication import publish_artifact_set
-from .hrf_artifacts import figure_artifact
 from boldtailor.reliability import SUMMARY_NAMES, finite_mean
-from .single_trial_artifacts import scalar_artifact, json_artifact, table_artifact
+from boldtailor.cifti import scalar_artifact
+from .workflow_artifacts import figure_artifact, json_artifact, table_artifact
 
 SUMMARY_STATS = (
     "canonical_mean",

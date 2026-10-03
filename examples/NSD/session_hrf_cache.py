@@ -11,10 +11,14 @@ import numpy as np
 from boldtailor.cifti import scalar_artifact, spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
-from .hrf_artifacts import npz_artifact, parameter_artifact
-from .nsd_cifti import _input_paths
 from boldtailor.reliability import library_indices
-from .single_trial_artifacts import json_artifact, table_artifact
+from .workflow_artifacts import (
+    json_artifact,
+    npz_artifact,
+    parameter_artifact,
+    table_artifact,
+)
+from .workflow_files import input_paths
 from .workflow_inputs import NSD_TASK_MODEL, _trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
@@ -152,6 +156,6 @@ def save_cache(
     publish_artifact_set(
         root,
         artifacts,
-        source_paths=[p for r in runs for p in _input_paths(r.inputs)],
+        source_paths=[p for r in runs for p in input_paths(r.inputs)],
         overwrite=True,
     )

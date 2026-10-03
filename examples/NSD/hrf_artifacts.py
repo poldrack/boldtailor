@@ -9,12 +9,13 @@ import pandas as pd
 from boldtailor.hrf_selection import prepare_runs
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import PARAMETER_NAMES
-from boldtailor.publication import Artifact
 
 if __package__:
+    from .workflow_artifacts import figure_artifact, npz_artifact, parameter_artifact
     from .single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
     from .rt_diagnostics import correlate_rt, scatter_artifact
 else:
+    from workflow_artifacts import figure_artifact, npz_artifact, parameter_artifact
     from single_trial_artifacts import json_artifact, table_artifact, scalar_artifact
     from rt_diagnostics import correlate_rt, scatter_artifact
 
@@ -97,21 +98,6 @@ def comparison_artifacts(brain, optimized, canonical, paths, metadata):
     )
 
 
-def npz_artifact(path, **arrays):
-    with BytesIO() as stream:
-        np.savez_compressed(stream, **arrays)
-        return Artifact(path, stream.getvalue())
-
-
-def figure_artifact(path, figure):
-    try:
-        with BytesIO() as stream:
-            figure.savefig(stream, format="png", dpi=130)
-            return Artifact(path, stream.getvalue())
-    finally:
-        figure.clear()
-
-
 def _library_plot(library, path):
     figure = Figure(figsize=(10, 5), layout="constrained")
     axis = figure.subplots()
@@ -190,17 +176,6 @@ def _grouped_design_artifacts(runs, library, state, paths):
             library_fingerprint=np.array(library.fingerprint),
         )
         yield npz_artifact(paths[index], **arrays)
-
-
-def parameter_artifact(brain, library, ids, path):
-    """Look up the exact selected library entry, preserving undefined features."""
-    names = [*PARAMETER_NAMES, "peak_time"]
-    parameters = np.full((len(names), len(brain)), np.nan)
-    valid = np.isfinite(ids)
-    parameters[:, valid] = (
-        library.parameter_table[names].to_numpy()[ids[valid].astype(int)].T
-    )
-    return scalar_artifact(path, brain, parameters, names)
 
 
 def split_selection_artifacts(runs, brain, library, state, paths, train, test):

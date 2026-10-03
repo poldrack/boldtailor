@@ -9,10 +9,16 @@ from boldtailor.design import expand_events
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_MAP_NAMES
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
-from .hrf_artifacts import npz_artifact, parameter_artifact, figure_artifact
 from boldtailor.reliability import CORRELATION_NAMES, curve_correlations
-from .nsd_cifti import _input_paths
-from .single_trial_artifacts import json_artifact, table_artifact
+from .workflow_artifacts import (
+    figure_artifact,
+    json_artifact,
+    notebook_map,
+    npz_artifact,
+    parameter_artifact,
+    table_artifact,
+)
+from .workflow_files import input_paths
 from .workflow_analysis import selection_maps
 from .workflow_inputs import (
     NSD_TASK_MODEL,
@@ -52,11 +58,6 @@ def check_output(
     return False
 
 
-def _map(stem, brain, descriptor, statistic, values, names):
-    path = f"{stem}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{statistic}.dscalar.nii"
-    return scalar_artifact(path, brain, values, names)
-
-
 def _design_artifact(stem, descriptor, result, runs):
     arrays = {}
     for (i, hrf), frame in sorted(result["designs"].items()):
@@ -69,7 +70,7 @@ def _design_artifact(stem, descriptor, result, runs):
 
 def _fit_artifacts(stem, brain, descriptor, result, runs):
     return [
-        _map(stem, brain, descriptor, "rsquared", result["r2"], R2_NAMES),
+        notebook_map(stem, brain, descriptor, "rsquared", result["r2"], R2_NAMES),
         _design_artifact(stem, descriptor, result, runs),
         json_artifact(
             f"{stem}_desc-notebook{descriptor}_provenance.json", result["provenance"]
@@ -83,11 +84,13 @@ def _glm_artifacts(stem, brain, glms, runs):
         artifacts.extend(_fit_artifacts(stem, brain, descriptor, result, runs))
         for stat in ("effects", "variances", "t", "z"):
             artifacts.append(
-                _map(stem, brain, descriptor, stat, result[stat], list(REGRESSORS))
+                notebook_map(
+                    stem, brain, descriptor, stat, result[stat], list(REGRESSORS)
+                )
             )
     difference = glms["OptimizedGLM"]["r2"][0] - glms["CanonicalGLM"]["r2"][0]
     artifacts.append(
-        _map(
+        notebook_map(
             stem,
             brain,
             "GLMComparison",
@@ -108,7 +111,7 @@ def _hrf_artifacts(stem, brain, selections, library):
             times=library.times,
             curves=library.curves,
         ),
-        _map(
+        notebook_map(
             stem,
             brain,
             "HRFReliability",
@@ -120,7 +123,7 @@ def _hrf_artifacts(stem, brain, selections, library):
     for name in ("all", "odd", "even"):
         descriptor = "HRF" + name.title()
         artifacts.append(
-            _map(
+            notebook_map(
                 stem,
                 brain,
                 descriptor,
@@ -134,7 +137,7 @@ def _hrf_artifacts(stem, brain, selections, library):
     for name in ("odd_to_even", "even_to_odd"):
         descriptor = "HRF" + "".join(part.title() for part in name.split("_"))
         artifacts.append(
-            _map(
+            notebook_map(
                 stem,
                 brain,
                 descriptor,
@@ -187,7 +190,7 @@ def _beta_artifacts(stem, brain, betas, runs):
             artifacts.append(scalar_artifact(path, brain, result["betas"][i], ids))
         rt = np.stack([result["rt"][scope] for scope in ("all", "odd", "even")])
         artifacts.append(
-            _map(
+            notebook_map(
                 stem,
                 brain,
                 descriptor,
@@ -221,7 +224,7 @@ def _ridge_metadata(settings, results):
 
 def _activation_artifacts(stem, brain, activation):
     return [
-        _map(
+        notebook_map(
             stem,
             brain,
             descriptor,
@@ -376,7 +379,7 @@ def save_workflow(
     return publish_artifact_set(
         output,
         artifacts,
-        source_paths=[p for r in runs for p in _input_paths(r.inputs)],
+        source_paths=[p for r in runs for p in input_paths(r.inputs)],
         overwrite=policy == "overwrite",
     )
 

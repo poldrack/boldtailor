@@ -150,7 +150,7 @@ def workflow_export(session_data, library, tmp_path):
         _metadata,
         _stem,
     )
-    from examples.NSD.single_trial_artifacts import json_artifact
+    from examples.NSD.workflow_artifacts import json_artifact
 
     root, prep = session_data
     runs = load_session(root, prep)

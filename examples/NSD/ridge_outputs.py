@@ -15,13 +15,15 @@ from .fractional_outputs import (
     fraction_fit_artifacts,
 )
 
-from .hrf_artifacts import figure_artifact, npz_artifact, parameter_artifact
-from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
-
-
-def _map(stem, descriptor, statistic, brain, values, names):
-    path = f"{stem}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{statistic}.dscalar.nii"
-    return scalar_artifact(path, brain, values, names)
+from boldtailor.cifti import scalar_artifact
+from .workflow_artifacts import (
+    figure_artifact,
+    json_artifact,
+    notebook_map,
+    npz_artifact,
+    parameter_artifact,
+    table_artifact,
+)
 
 
 def tuning_table(results):
@@ -85,27 +87,27 @@ def _tuning_artifacts(stem, brain, mode, scope, result, table):
     scores, selected = result["scores"], result["selection"]
     ids = np.where(scores.fold_hrf_indices >= 0, scores.fold_hrf_indices, np.nan)
     return [
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "encodingcvr2",
-            brain,
             scores.cv_r2,
             [f"encoding_inner_cv_r2_alpha-{a:g}" for a in scores.grid],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "scoringmask",
-            brain,
             selected.scoring_mask[None],
             ["common_scoring_mask"],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "foldhrfindex",
-            brain,
             ids,
             [f"validation_{label}_training_hrf" for label in scores.run_labels],
         ),
@@ -156,23 +158,25 @@ def _outer_artifacts(stem, brain, runs, mode, scope, outer, library):
     base = f"{stem}_desc-notebook{descriptor}"
     ids = np.where(outer["hrf_indices"] >= 0, outer["hrf_indices"], np.nan)
     artifacts = [
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "encodingpredictionr2",
-            brain,
             outer["encoding_r2"][None],
             [f"encoding_outer_r2_{scope}"],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "coefficients",
-            brain,
             outer["coefficients"],
             ["task", "trial_type", "response_time"],
         ),
-        _map(stem, descriptor, "hrfindex", brain, ids[None], ["training_hrf_id"]),
+        notebook_map(
+            stem, brain, descriptor, "hrfindex", ids[None], ["training_hrf_id"]
+        ),
         npz_artifact(
             base + "_loss.npz",
             sse=outer["run_sse"],

@@ -9,12 +9,8 @@ import pytest
 
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.publication import publish_artifact_set
-from examples.NSD.hrf_artifacts import npz_artifact
-from examples.NSD.single_trial_artifacts import (
-    json_artifact,
-    scalar_artifact,
-    table_artifact,
-)
+from boldtailor.cifti import scalar_artifact
+from examples.NSD.workflow_artifacts import json_artifact, npz_artifact, table_artifact
 
 
 def api(module):

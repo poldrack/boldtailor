@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.cifti import scalar_artifact  # noqa: F401
-from boldtailor.publication import Artifact
+
+if __package__:
+    from .workflow_artifacts import json_artifact, table_artifact
+else:
+    from workflow_artifacts import json_artifact, table_artifact
 
 STATISTICS = (
     "fullrsquared",
@@ -53,16 +57,6 @@ def diagnostic_paths(subject, session):
 def all_model_paths(paths):
     for value in paths.values():
         yield from value if isinstance(value, list) else [value]
-
-
-def json_artifact(path, value):
-    return Artifact(
-        path, (json.dumps(value, indent=2, allow_nan=False) + "\n").encode()
-    )
-
-
-def table_artifact(path, frame):
-    return Artifact(path, frame.to_csv(sep="\t", index=False, na_rep="n/a").encode())
 
 
 def single_trial_artifacts(runs, brain, result, rt, paths, metadata):

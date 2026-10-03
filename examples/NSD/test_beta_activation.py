@@ -4,7 +4,6 @@ import importlib
 
 import numpy as np
 import pytest
-from scipy.stats import ttest_1samp
 
 
 def activation():

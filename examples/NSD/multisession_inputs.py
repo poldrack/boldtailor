@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-import re
 
 import nibabel as nib
 import numpy as np
@@ -14,6 +13,7 @@ from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
 from boldtailor.reliability import library_indices
 from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 from .workflow_outputs import R2_NAMES, _stem
+from .workflow_files import bids_label
 from .workflow_inputs import REGRESSORS
 
 METRICS = ("mean_beta", "task_t", "task_delta_r2", "rt_r", "rt_abs_r")
@@ -22,12 +22,12 @@ ESTIMATORS = ("OLS", "FractionalCV", "RidgeCV", "Ridge")
 
 
 def validate_sessions(subject, sessions, estimators):
-    if not re.fullmatch(r"sub-[A-Za-z0-9]+", subject):
+    if not bids_label(subject, "sub"):
         raise ValueError("subject must be a BIDS subject label")
     if (
         len(sessions) < 2
         or len(set(sessions)) != len(sessions)
-        or any(not re.fullmatch(r"ses-[A-Za-z0-9]+", s) for s in sessions)
+        or any(not bids_label(s, "ses") for s in sessions)
     ):
         raise ValueError("Provide at least two unique BIDS sessions")
     if (

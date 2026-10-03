@@ -31,7 +31,12 @@ from boldtailor.parallel import map_blocks, validate_n_jobs
 from .ridge_provenance import tuning_provenance, link_final_provenance
 from .workflow_analysis import fit_beta_series
 from boldtailor.model import TaskModel
-from .workflow_inputs import NSD_TASK_MODEL, load_block, _trimmed_sources
+from .workflow_inputs import (
+    NSD_TASK_MODEL,
+    _trimmed_sources,
+    load_block,
+    odd_even_parity,
+)
 
 
 def trial_predictors(runs):
@@ -84,10 +89,7 @@ def _settings(runs, library, alphas, percentile, block_size, maximum, n_jobs):
     brain = runs[0].image.header.get_axis(1)
     if any(r.image.header.get_axis(1) != brain for r in runs):
         raise ValueError("runs must have identical CIFTI BrainModel axes")
-    halves = {
-        "odd": [i for i, r in enumerate(runs) if r.number % 2],
-        "even": [i for i, r in enumerate(runs) if not r.number % 2],
-    }
+    halves = odd_even_parity(runs)
     minimum = 2 if library is None else 3
     if any(len(indices) < minimum for indices in halves.values()):
         raise ValueError(f"Ridge CV needs at least {minimum} odd and even runs")

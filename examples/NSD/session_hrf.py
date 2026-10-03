@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from numbers import Integral
 from pathlib import Path
-import re
 
 import numpy as np
 
@@ -18,6 +17,7 @@ from .session_hrf_cache import (
     save_cache,
 )
 from .session_hrf_import import find_workflow_estimate
+from .workflow_files import bids_label
 from .workflow_inputs import (
     NSD_TASK_MODEL,
     load_session,
@@ -83,12 +83,12 @@ def fit_session(
 
 
 def _validate_settings(subject, sessions, block_size, max_grayordinates, n_jobs):
-    if not re.fullmatch(r"sub-[A-Za-z0-9]+", subject):
+    if not bids_label(subject, "sub"):
         raise ValueError("subject must be a BIDS subject label")
     if (
         not sessions
         or len(sessions) != len(set(sessions))
-        or any(not re.fullmatch(r"ses-[A-Za-z0-9]+", s) for s in sessions)
+        or any(not bids_label(s, "ses") for s in sessions)
     ):
         raise ValueError("sessions must be nonempty, unique BIDS session labels")
     for name, value in (

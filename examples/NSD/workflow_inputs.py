@@ -9,10 +9,22 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.model import ModelSpec, Modulator, TaskModel
-from .nsd_cifti import discover_runs, _sources
-from .nsd_single_trial import _load_runs
+from .workflow_files import discover_runs, load_runs, run_sources
 
 REGRESSORS = ("task", "response_time", "trial_type")
+
+
+def odd_even_parity(runs):
+    """Run positions with odd and even BIDS run numbers, in input order."""
+    return dict(
+        odd=[i for i, r in enumerate(runs) if r.number % 2],
+        even=[i for i, r in enumerate(runs) if not r.number % 2],
+    )
+
+
+def reaction_times(runs):
+    """Per-run RT arrays; unavailable (nonpositive or missing) RTs are NaN."""
+    return [r.events.response_time.to_numpy() for r in runs]
 
 
 def selection_task_model(include_rt=True):
@@ -99,15 +111,13 @@ def _trim(run):
 def load_session(root, prep, *, subject="sub-07", session="ses-nsd10", hrf_only=False):
     """Keep original event onsets and acquisition times when dropping NSS scans."""
     inputs = discover_runs(Path(root), Path(prep), subject=subject, session=session)
-    raw_runs, _ = _load_runs(inputs)
+    raw_runs, _ = load_runs(inputs)
     runs = [_trim(run) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise ValueError("Retained confound names must match across runs")
     if len(runs) < 2:
         raise ValueError("HRF selection needs at least two runs")
-    if not hrf_only and any(
-        sum(r.number % 2 == parity for r in runs) < 2 for parity in (0, 1)
-    ):
+    if not hrf_only and any(len(half) < 2 for half in odd_even_parity(runs).values()):
         raise ValueError("The full notebook needs at least two odd and two even runs")
     return runs
 
@@ -124,7 +134,7 @@ def block_signals(runs, indices):
 
 
 def _trimmed_sources(run, root, indices):
-    sources = _sources(run, Path(root), np.asarray(indices))
+    sources = run_sources(run, Path(root), np.asarray(indices))
     return replace(
         sources,
         signal=replace(

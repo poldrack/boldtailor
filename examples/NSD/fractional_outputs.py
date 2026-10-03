@@ -3,8 +3,13 @@
 import numpy as np
 
 from boldtailor.fractional_ridge import NORM_BASIS
-from .hrf_artifacts import npz_artifact
-from .single_trial_artifacts import json_artifact, scalar_artifact, table_artifact
+from boldtailor.cifti import scalar_artifact
+from .workflow_artifacts import (
+    json_artifact,
+    notebook_map,
+    npz_artifact,
+    table_artifact,
+)
 
 
 def tuning_rows(mode, scope, tuned):
@@ -66,8 +71,6 @@ def fraction_fit_artifacts(stem, brain, descriptor, result, runs):
 
 
 def tuning_artifacts(stem, brain, mode, scope, tuned, table):
-    from .ridge_outputs import _map
-
     descriptor = f"{mode}FractionalCV{scope.title()}"
     base = f"{stem}_desc-notebook{descriptor}"
     scores, selected = tuned["scores"], tuned["selection"]
@@ -88,43 +91,43 @@ def tuning_artifacts(stem, brain, mode, scope, tuned, table):
         selection_statistic=True,
     )
     return [
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "encodingcvr2",
-            brain,
             scores.cv_r2,
             [f"encoding_inner_cv_r2_fraction-{f:g}" for f in scores.grid],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "ridgefraction",
-            brain,
             selected.ridge_fraction[None],
             ["selected_ridge_fraction"],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "selectedencodingr2",
-            brain,
             selected.selected_r2[None],
             ["selected_inner_cv_r2"],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "scoringmask",
-            brain,
             selected.scoring_mask[None],
             ["common_scoring_mask"],
         ),
-        _map(
+        notebook_map(
             stem,
+            brain,
             descriptor,
             "foldhrfindex",
-            brain,
             ids,
             [f"validation_{label}_training_hrf" for label in scores.run_labels],
         ),

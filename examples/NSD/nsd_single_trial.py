@@ -5,7 +5,6 @@ from the repository root. RT is used only for descriptive checks after fitting.
 """
 
 import argparse
-from dataclasses import dataclass
 from importlib.metadata import version
 from numbers import Integral
 from pathlib import Path
@@ -32,6 +31,7 @@ if __package__:
         load_inputs,
     )
     from .rt_diagnostics import correlate_rt, scatter_artifact, select_vertices
+    from .workflow_files import load_runs as _load_runs
     from .single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
@@ -53,6 +53,7 @@ else:
         load_inputs,
     )
     from rt_diagnostics import correlate_rt, scatter_artifact, select_vertices
+    from workflow_files import load_runs as _load_runs
     from single_trial_artifacts import (
         all_model_paths,
         diagnostic_paths,
@@ -62,42 +63,6 @@ else:
         single_trial_artifacts,
         table_artifact,
     )
-
-
-@dataclass(frozen=True)
-class TrialRun:
-    inputs: RunInputs
-    image: nib.Cifti2Image
-    events: pd.DataFrame
-    confounds: pd.DataFrame
-    frame_times: np.ndarray
-    label: str
-    number: int
-
-
-def _load_runs(inputs):
-    runs = []
-    for item in inputs:
-        image, events, confounds, times = load_inputs(item)
-        label = item.stem.rsplit("_", 1)[-1]
-        runs.append(
-            TrialRun(
-                item,
-                image,
-                events,
-                confounds,
-                times,
-                label,
-                int(label.removeprefix("run-")),
-            )
-        )
-    runs.sort(key=lambda run: run.number)
-    if len({r.number for r in runs}) != len(runs):
-        raise ValueError("NSD run numbers must be unique")
-    brain = runs[0].image.header.get_axis(1)
-    if any(r.image.header.get_axis(1) != brain for r in runs):
-        raise ValueError("All runs must have identical grayordinate BrainModel axes")
-    return tuple(runs), brain
 
 
 def _preflight(output, paths):
