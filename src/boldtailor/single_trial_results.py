@@ -1,7 +1,8 @@
 """Owned, read-only single-trial numerical results."""
 
+from collections.abc import Callable
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -27,21 +28,21 @@ class SharedTrialDesign:
 
 @dataclass(frozen=True)
 class SelectedTrialDesign:
+    """Selected HRF IDs; each fitted (run, HRF) design is rebuilt on request."""
+
     hrf_indices: np.ndarray
-    _matrices: dict[tuple[int, int], np.ndarray]
+    design_fingerprint: str
     selection_provenance: ProvenanceRecord
+    _rebuild: Callable[[int, int], np.ndarray] = field(compare=False, repr=False)
 
     def __post_init__(self):
         object.__setattr__(
             self, "hrf_indices", readonly_array(self.hrf_indices, dtype=np.int64)
         )
-        object.__setattr__(
-            self, "_matrices", {k: readonly_array(v) for k, v in self._matrices.items()}
-        )
 
-    @property
-    def matrices(self):
-        return dict(self._matrices)
+    def matrix(self, run: int, hrf_id: int) -> np.ndarray:
+        """Trial columns then nuisance columns; KeyError for unfitted pairs."""
+        return readonly_array(self._rebuild(run, hrf_id))
 
 
 @dataclass(frozen=True)

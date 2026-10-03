@@ -32,8 +32,9 @@ def compile_designs(data: AnalysisData, model: ModelSpec) -> tuple[CompiledDesig
 def compile_nuisance_designs(
     data: AnalysisData, model: ModelSpec
 ) -> tuple[CompiledDesign, ...]:
+    times, confounds = data.frame_times, data.confounds
     return tuple(
-        _compile_nuisance_run(data.frame_times[run], data.confounds[run], model, run)
+        _compile_nuisance_run(times[run], confounds[run], model, run)
         for run in range(data.n_runs)
     )
 

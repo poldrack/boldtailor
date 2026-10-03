@@ -128,9 +128,10 @@ model, which scored only the mean stimulus response.
 
 Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
 usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
-`group_designs[(run_index, hrf_id)]`, `group_design_provenance`, `hrf_indices`,
-`hrf_selection`, and `selection_provenance`. It uses `group_designs` in place of
-`design_matrices`, since one matrix no longer describes a whole run. Run indices
+`group_design(run_index, hrf_id)`, `group_design_provenance`, `hrf_indices`,
+`hrf_selection`, and `selection_provenance`. It uses `group_design` in place of
+`design_matrices`, since one matrix no longer describes a whole run; designs are
+recompiled on request rather than retained. Run indices
 are zero-based and result arrays preserve the input feature order.
 
 This option is available through the array API. The standalone NSD conventional
@@ -255,7 +256,8 @@ trials = ridge.trial_table
 ```
 
 Both trial entry points return `SingleTrialResult`. Access fitted matrices
-through `result.design.matrices`; selected-HRF assignments and selection
+through `result.design.matrices` (shared HRF) or
+`result.design.matrix(run_index, hrf_id)` (selected HRFs); selected-HRF assignments and selection
 provenance are also on `result.design`. See [result migration](result-migration.md).
 
 Each beta array is **trials × features**. The trial table retains your event

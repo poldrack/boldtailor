@@ -31,14 +31,17 @@ feature-specific HRFs. Common numerical fields stay directly on the result.
 | Before | After |
 | --- | --- |
 | shared trial result `.design_matrices` | `.design.matrices` (tuple of DataFrames) |
-| selected trial result `.group_designs` | `.design.matrices` (same `(run, hrf)` keys) |
+| selected trial result `.group_designs` | `.design.matrix(run, hrf)` (rebuilt on request) |
+| selected trial `.design.matrices` | `.design.matrix(run, hrf)` (rebuilt on request) |
+| `HrfAnalysisResult.group_designs` | `.group_design(run, hrf)` (rebuilt on request) |
 | selected trial result `.hrf_indices` | `.design.hrf_indices` |
 | selected trial result `.selection_provenance` | `.design.selection_provenance` |
 | `HrfSingleTrialResult` | `SingleTrialResult` with `SelectedTrialDesign` |
 
 `SharedTrialDesign` describes a design shared across features, including a
-shared custom HRF. `SelectedTrialDesign` holds the feature assignments,
-grouped matrices, and selection provenance. Both live in
+shared custom HRF. `SelectedTrialDesign` holds the feature assignments, the
+design fingerprint, and selection provenance, and rebuilds grouped matrices on
+request. Both live in
 `boldtailor.single_trial_results`.
 
 `run_betas`, `trial_table`, R² arrays, `diagnostics`, penalty fields, and

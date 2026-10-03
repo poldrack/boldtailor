@@ -293,7 +293,8 @@ IDs and excluded rows. `desc-notebookFractionalCV_tuning.png` saves the descript
 score curves. The complete HRF library is saved with the notebook outputs.
 In Python,
 candidate scores expose `grid` and `regularization`; beta results expose
-designs through `design.matrices`. Saved artifact keys remain unchanged; see
+designs through `design.matrices` (canonical) or `design.matrix(run, hrf)`
+(selected HRFs). Saved artifact keys remain unchanged; see
 the [result migration guide](../../docs/result-migration.md).
 
 RT and trial type help choose shrinkage, so final all-run RT correlations are

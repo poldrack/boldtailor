@@ -94,7 +94,8 @@ For several runs, contrasts are combined as equal-weight fixed effects. This is 
 
 `boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
 `contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`
-and `design_provenance`, it exposes `group_designs` and
+and `design_provenance`, it exposes `group_design(run, hrf_id)`, which
+recompiles one fitted design on request (`KeyError` for an unfitted pair), and
 `group_design_provenance`, keyed by `(zero_based_run_index, hrf_id)`.
 The latter records excluded-event counts, onset cutoffs, design ranks, and
 residual degrees of freedom. Additional members are `hrf_indices`,
@@ -159,9 +160,11 @@ Both fitting functions return `SingleTrialResult`, which exposes:
 
 The `design` field contains a `SharedTrialDesign` for a fixed HRF (SPM or a
 custom candidate), or a `SelectedTrialDesign` for feature-specific HRFs.
-`design.matrices` returns a tuple of DataFrames for a shared design, or a
-dictionary keyed by `(run_index, hrf_id)` for selected designs. The selected
-container also exposes `design.hrf_indices` and `design.selection_provenance`.
+`design.matrices` returns a tuple of DataFrames for a shared design. A selected
+design does not retain its matrices: `design.matrix(run_index, hrf_id)` rebuilds
+one fitted design on request (`KeyError` for an unfitted pair). The selected
+container also exposes `design.hrf_indices`, `design.design_fingerprint`, and
+`design.selection_provenance`.
 Matrices include trial columns followed by nuisance columns. See the
 [result migration guide](result-migration.md) for the previous access paths.
 

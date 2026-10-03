@@ -40,7 +40,8 @@ def fit(
 
     A supplied selection replaces model.hrf_model. Its spatial signature must
     match feature_signature; all other model settings retain their meaning.
-    Selected-HRF results expose group_designs instead of design_matrices.
+    Selected-HRF results expose group_design(run, hrf_id), recompiled on
+    request, instead of design_matrices.
     """
     if hrf_selection is not None:
         return fit_selected_glm(data, model, hrf_selection, feature_signature)

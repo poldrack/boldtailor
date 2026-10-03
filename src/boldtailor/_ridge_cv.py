@@ -32,12 +32,14 @@ from boldtailor.trial_encoding import (
 
 def subset_runs(data, indices):
     """Subset run data and source records together without relabeling features."""
+    signals, events, times = data.signals, data.events, data.frame_times
+    confounds, sources = data.confounds, data.provenance.sources
     return from_arrays(
-        [data.signals[i] for i in indices],
-        [data.events[i] for i in indices],
-        frame_times=[data.frame_times[i] for i in indices],
-        confounds=[data.confounds[i] for i in indices],
-        sources=[data.provenance.sources[i] for i in indices],
+        [signals[i] for i in indices],
+        [events[i] for i in indices],
+        frame_times=[times[i] for i in indices],
+        confounds=[confounds[i] for i in indices],
+        sources=[sources[i] for i in indices],
     )
 
 
@@ -81,18 +83,19 @@ class RunBetaPath:
 def prepare_run_beta_path(data, run_index, prepared, ids, label, *, fractional=False):
     """Prepare each selected HRF group once for this run and fold."""
     r = run_index
+    events, y = data.events[r], data.signals[r]
     groups = []
     prepare = prepare_fraction_betas if fractional else prepare_trial_betas
     if prepared is None:
         x, n, _ = compile_trial_run(
-            data.events[r], data.frame_times[r], data.confounds[r], label
+            events, data.frame_times[r], data.confounds[r], label
         )
     for cid in np.unique(ids[ids >= 0]):
         features = np.flatnonzero(ids == cid)
         if prepared is not None:
             x, n = prepared[r].trial_matrix(int(cid)), prepared[r].nuisance
-        groups.append((features, prepare(x, n, data.signals[r][:, features])))
-    return RunBetaPath((len(data.events[r]), data.n_features), tuple(groups))
+        groups.append((features, prepare(x, n, y[:, features])))
+    return RunBetaPath((len(events), data.n_features), tuple(groups))
 
 
 def _fold_selection(data, library, labels, signature, train):

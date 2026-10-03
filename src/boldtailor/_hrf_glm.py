@@ -15,6 +15,7 @@ from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._hrf_glm_design import (
     compile_group_designs,
     design_identity,
+    group_design_builder,
     group_diagnostics,
 )
 from boldtailor.hrf_glm_results import HrfAnalysisResult
@@ -129,8 +130,10 @@ def _assemble(data, model, selection, context, fits, provenance):
         r2,
         provenance,
         selection,
-        {key: compiled.matrix for key, compiled in context.groups.items()},
         group_diagnostics(context.groups),
+        group_design_builder(
+            data, model, selection, context.nuisance, context.groups.keys()
+        ),
     )
 
 

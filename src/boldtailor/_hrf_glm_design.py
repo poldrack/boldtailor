@@ -33,22 +33,34 @@ def compile_group_designs(data, model, selection):
         _validate_designs(matrices)
     for cid in ids:
         candidate = selection.library.candidates[cid]
-        if model.task_model is not None:
-            designs = tuple(
-                _task_model_design(e, t, n, candidate, model, run)
-                for run, (e, t, n) in enumerate(
-                    zip(events, data.frame_times, nuisance, strict=True)
-                )
-            )
-        else:
-            designs = tuple(
-                _custom_design(e, t, n, candidate, model, run)
-                for run, (e, t, n) in enumerate(
-                    zip(events, data.frame_times, nuisance, strict=True)
-                )
-            )
-        groups.update({(run, int(cid)): design for run, design in enumerate(designs)})
+        for run, (e, t, n) in enumerate(
+            zip(events, data.frame_times, nuisance, strict=True)
+        ):
+            groups[run, int(cid)] = compile_group_design(e, t, n, candidate, model, run)
     return groups, nuisance
+
+
+def compile_group_design(events, times, nuisance, candidate, model, run):
+    """One run's design for one candidate HRF, with semantic column names."""
+    if model.task_model is not None:
+        return _task_model_design(events, times, nuisance, candidate, model, run)
+    return _custom_design(events, times, nuisance, candidate, model, run)
+
+
+def group_design_builder(data, model, selection, nuisance, keys):
+    """Recompile any fitted (run, HRF) design on request; KeyError otherwise."""
+    events, times = data.events, data.frame_times
+    candidates, fitted = selection.library.candidates, frozenset(keys)
+
+    def build(run, hrf_id):
+        if (run, hrf_id) not in fitted:
+            raise KeyError(f"no fitted design for run {run!r}, HRF {hrf_id!r}")
+        compiled = compile_group_design(
+            events[run], times[run], nuisance[run], candidates[hrf_id], model, run
+        )
+        return compiled.matrix
+
+    return build
 
 
 def _task_model_design(events, times, nuisance, candidate, model, run):

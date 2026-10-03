@@ -88,7 +88,10 @@ def _glm_block(job, runs, root, model):
     designs = (
         {(i, 0): x for i, x in enumerate(result.design_matrices)}
         if selection is None
-        else result.group_designs
+        else {
+            (i, hrf): result.group_design(i, hrf)
+            for i, hrf in _fitted_pairs(result.hrf_indices, len(runs))
+        }
     )
     return dict(
         effects=np.stack([result.effect(c) for c in REGRESSORS]),
@@ -135,11 +138,18 @@ def _collect_metadata(result, block, indices):
     )
 
 
+def _fitted_pairs(hrf_indices, n_runs):
+    """Every (run, HRF) pair a selected fit used, run-major, HRF ascending."""
+    ids = np.unique(hrf_indices[hrf_indices >= 0])
+    return [(i, int(hrf)) for i in range(n_runs) for hrf in ids]
+
+
 def _trial_designs(result, runs, selection):
     if selection is None:
         return {(i, 0): x for i, x in enumerate(result.design.matrices)}
     designs = {}
-    for (i, hrf), values in result.design.matrices.items():
+    for i, hrf in _fitted_pairs(result.design.hrf_indices, len(runs)):
+        values = result.design.matrix(i, hrf)
         trials = result.trial_table.query("run_index == @i").trial_id.tolist()
         columns = trials + list(runs[i].confounds.columns) + ["constant"]
         designs[i, hrf] = pd.DataFrame(

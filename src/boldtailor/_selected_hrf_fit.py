@@ -43,31 +43,37 @@ def _tables(data, labels):
     return trials
 
 
-def _fit_run(run, y, ids, alpha, run_index, fractions=None):
+def _hash_design(digest, run_index, cid, x, nuisance):
+    """Feed one (run, HRF) design into the digest without retaining it."""
+    values = np.column_stack([x, nuisance])
+    digest.update(json.dumps([run_index, cid]).encode())
+    digest.update(str(values.shape).encode())
+    digest.update(np.asarray(values, dtype="<f8").tobytes())
+
+
+def _fit_group(run, x, y, alpha, fractions):
+    if fractions is None:
+        return fit_trial_run(x, run.nuisance, y, alpha=alpha)
+    return fit_fraction_run(x, run.nuisance, y, fractions=fractions)
+
+
+def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None):
     betas = np.full((len(run.events), y.shape[1]), np.nan)
-    full = np.zeros(y.shape[1])
-    null = full.copy()
-    total = full.copy()
-    designs = {}
+    full, null, total = (np.zeros(y.shape[1]) for _ in range(3))
     diagnostics = []
     alphas = np.full(y.shape[1], np.nan)
     for cid in np.unique(ids[ids >= 0]):
         features = np.flatnonzero(ids == cid)
         x = run.trial_matrix(int(cid))
-        fit = (
-            fit_trial_run(x, run.nuisance, y[:, features], alpha=alpha)
-            if fractions is None
-            else fit_fraction_run(
-                x, run.nuisance, y[:, features], fractions=fractions[features]
-            )
-        )
+        part = None if fractions is None else fractions[features]
+        fit = _fit_group(run, x, y[:, features], alpha, part)
         if fractions is not None:
             alphas[features] = fit.diagnostics["ridge_alphas"]
         betas[:, features] = fit.betas
         full[features] = fit.full_sse
         null[features] = fit.nuisance_sse
         total[features] = fit.total_ss
-        designs[run_index, int(cid)] = np.column_stack([x, run.nuisance])
+        _hash_design(digest, run_index, int(cid), x, run.nuisance)
         diagnostics.append(
             dict(
                 run_index=run_index,
@@ -76,15 +82,11 @@ def _fit_run(run, y, ids, alpha, run_index, fractions=None):
                 **fit.diagnostics,
             )
         )
-    return betas, full, null, total, designs, diagnostics, alphas
+    return betas, full, null, total, diagnostics, alphas
 
 
-def _fit_activity(data, selection, labels, alpha, assignment, designs, fractions=None):
-    digest = sha256()
-    for key, values in sorted(designs.items()):
-        digest.update(json.dumps(key).encode())
-        digest.update(str(values.shape).encode())
-        digest.update(np.asarray(values, dtype="<f8").tobytes())
+def _fit_activity(data, selection, labels, alpha, assignment, digest, fractions=None):
+    """Finish the design digest (fed run-major, HRF-ascending) and describe the fit."""
     for times, confounds, label in zip(
         data.frame_times, data.confounds, labels, strict=True
     ):
@@ -110,6 +112,19 @@ def _fit_activity(data, selection, labels, alpha, assignment, designs, fractions
     return activity
 
 
+def _rebuilder(runs, ids):
+    """Rebuild fitted designs from the prepared runs' cached trial matrices."""
+    fitted = frozenset(int(cid) for cid in np.unique(ids[ids >= 0]))
+
+    def rebuild(run, hrf_id):
+        if run not in range(len(runs)) or hrf_id not in fitted:
+            raise KeyError(f"no fitted design for run {run!r}, HRF {hrf_id!r}")
+        design = runs[run]
+        return np.column_stack([design.trial_matrix(int(hrf_id)), design.nuisance])
+
+    return rebuild
+
+
 def fit_groups(
     data, selection, ridge_alpha, run_labels, feature_signature, *, ridge_fraction=None
 ):
@@ -119,16 +134,16 @@ def fit_groups(
         labels = run_labels_for(data, run_labels)
         trials = _tables(data, labels)
         runs = prepare_runs(data, selection.library)
+        digest = sha256()
         fits = [
-            _fit_run(run, y, selection.hrf_indices, alpha, r, fractions)
+            _fit_run(run, y, selection.hrf_indices, alpha, r, digest, fractions)
             for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
         ]
-        designs = {k: v for f in fits for k, v in f[4].items()}
         total = sum(f[3] for f in fits)
         full = r_squared(sum(f[1] for f in fits), total)
         null = r_squared(sum(f[2] for f in fits), total)
         activity = _fit_activity(
-            data, selection, labels, alpha, assignment, designs, fractions
+            data, selection, labels, alpha, assignment, digest, fractions
         )
         provenance = operation.provenance(
             activity,
@@ -140,16 +155,19 @@ def fit_groups(
             run_betas=tuple(f[0] for f in fits),
             _trial_table=trials,
             design=SelectedTrialDesign(
-                selection.hrf_indices, designs, selection.provenance
+                selection.hrf_indices,
+                activity["design_fingerprint"],
+                selection.provenance,
+                _rebuilder(runs, selection.hrf_indices),
             ),
             run_full_r2=tuple(r_squared(f[1], f[3]) for f in fits),
             run_nuisance_r2=tuple(r_squared(f[2], f[3]) for f in fits),
             full_r2=full,
             nuisance_r2=null,
             delta_r2=full - null,
-            _diagnostics=tuple(d for f in fits for d in f[5]),
+            _diagnostics=tuple(d for f in fits for d in f[4]),
             ridge_alpha=alpha,
             provenance=provenance,
             ridge_fraction=fractions,
-            run_ridge_alphas=None if fractions is None else tuple(f[6] for f in fits),
+            run_ridge_alphas=None if fractions is None else tuple(f[5] for f in fits),
         )
