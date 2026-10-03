@@ -119,3 +119,13 @@ def test_mismatched_trials_and_ambiguous_run_numbers_fail():
 def test_map_names_follow_the_returned_statistics():
     result = diagnostics.one_sample_t([np.ones((3, 2))])
     assert tuple(result) == diagnostics.ONE_SAMPLE_T_NAMES
+
+
+def test_pearson_correlation_needs_three_observations_and_variance():
+    r = diagnostics.pearson_correlation(
+        np.array([2.0, 2.0, 0.0, 5.0]),
+        np.array([4.0, 4.0, 0.0, 1.0]),
+        np.array([1.0, 1.0, 1.0, 1.0]),
+        np.array([3, 2, 5, 3]),
+    )
+    np.testing.assert_allclose(r, [1.0, np.nan, np.nan, 1.0], equal_nan=True)
