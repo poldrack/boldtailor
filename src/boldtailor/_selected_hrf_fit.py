@@ -17,7 +17,7 @@ from boldtailor._fractional_ridge import (
     fraction_metadata,
 )
 from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
-from boldtailor.hrf_selection import run_labels_for
+from boldtailor.data import run_labels_for
 from boldtailor.provenance import analysis_fingerprint, identity_activity
 from boldtailor._fit_lifecycle import fit_operation
 

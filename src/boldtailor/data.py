@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 import logging
 from numbers import Real
+import re
 from uuid import uuid4
 
 import numpy as np
@@ -171,6 +172,28 @@ def _validate_run_count(
 ) -> None:
     if len(signals) != len(values):
         raise ValueError(f"{name} must contain one value per signal run")
+
+
+def run_labels_for(
+    data: AnalysisData, run_labels: Sequence[str] | None
+) -> tuple[str, ...]:
+    """Return validated run labels, defaulting to ``run-01``, ``run-02``, ..."""
+    labels = (
+        tuple(run_labels)
+        if run_labels is not None
+        else tuple(f"run-{i + 1:02d}" for i in range(data.n_runs))
+    )
+    if (
+        len(labels) != data.n_runs
+        or len(set(labels)) != len(labels)
+        or not all(
+            isinstance(x, str) and re.fullmatch(r"[A-Za-z0-9_-]+", x) for x in labels
+        )
+    ):
+        raise ValueError(
+            "run labels must be unique [A-Za-z0-9_-]+ strings, one per run"
+        )
+    return labels
 
 
 def _prepare_signal(values: np.ndarray, run: int) -> np.ndarray:

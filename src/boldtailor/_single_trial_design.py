@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 
 import numpy as np
 import pandas as pd
@@ -35,8 +34,8 @@ def compile_trial_run(events, frame_times, confounds, run_label, *, hrf="spm"):
 
 
 def _validate_events(events, times, run_label):
-    if not isinstance(run_label, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", run_label):
-        raise ValueError("run labels must be nonempty alphanumeric labels")
+    if not isinstance(run_label, str):
+        raise ValueError("run labels must be strings")
     if times.ndim != 1 or len(times) < 2 or not np.isfinite(times).all():
         raise ValueError("frame times require at least two finite samples")
     if np.any(np.diff(times) <= 0):

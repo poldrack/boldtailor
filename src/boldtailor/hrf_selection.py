@@ -2,7 +2,6 @@
 
 from hashlib import sha256
 from numbers import Integral
-import re
 
 import numpy as np
 
@@ -18,27 +17,11 @@ from boldtailor._hrf_cv import (
     prediction_loss,
 )
 from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor.data import run_labels_for
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint, identity_activity
-
-
-def run_labels_for(data, run_labels):
-    labels = (
-        tuple(run_labels)
-        if run_labels is not None
-        else tuple(f"run-{i+1:02d}" for i in range(data.n_runs))
-    )
-    if (
-        len(labels) != data.n_runs
-        or len(set(labels)) != len(labels)
-        or not all(
-            isinstance(x, str) and re.fullmatch(r"[A-Za-z0-9_-]+", x) for x in labels
-        )
-    ):
-        raise ValueError("run labels must be unique valid labels matching the runs")
-    return labels
 
 
 def _validate(library, signature, batch, task_model):

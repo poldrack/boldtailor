@@ -13,7 +13,8 @@ from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
 from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.hrf_selection import run_labels_for, select_hrf
+from boldtailor.data import run_labels_for
+from boldtailor.hrf_selection import select_hrf
 from boldtailor.provenance import (
     analysis_fingerprint,
     extend_provenance,

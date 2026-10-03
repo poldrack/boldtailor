@@ -15,7 +15,7 @@ from boldtailor._fractional_ridge import (
     fit_fraction_run,
     fraction_metadata,
 )
-from boldtailor.data import AnalysisData
+from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.provenance import analysis_fingerprint
 from boldtailor.single_trial_results import SingleTrialResult, SharedTrialDesign
@@ -44,17 +44,7 @@ def fit_single_trials(
     """
     with fit_operation("single_trial", data.provenance) as operation:
         alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
-        labels = (
-            tuple(run_labels)
-            if run_labels is not None
-            else tuple(f"run-{i + 1:02d}" for i in range(data.n_runs))
-        )
-        if (
-            len(labels) != data.n_runs
-            or not all(isinstance(x, str) for x in labels)
-            or len(set(labels)) != len(labels)
-        ):
-            raise ValueError("run labels must be unique and match the number of runs")
+        labels = run_labels_for(data, run_labels)
         compiled = tuple(
             compile_trial_run(*args, hrf=hrf)
             for args in zip(
