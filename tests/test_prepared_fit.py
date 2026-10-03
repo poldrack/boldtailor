@@ -15,6 +15,7 @@ from nilearn.glm.first_level import run_glm
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
 from tests.oracles import nilearn_pooled_ols_r2
 
 
@@ -943,7 +944,7 @@ def test_task_delta_r2_prepared_rejects_materially_negative_nested_ols_differenc
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     calls = iter((np.array([0.1, 0.1]), np.array([0.2, 0.2])))
     monkeypatch.setattr(
-        "boldtailor.prepared_fit.fit_r2_designs",
+        "boldtailor._conventional.fit_r2_designs",
         lambda *args: next(calls),
     )
 
@@ -976,6 +977,9 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
     emit_event("after_prepared_comparison", stage="test")
 
     activity = comparison.provenance.activities[-1]
+    assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
+    assert activity["undefined_features"] == 0
+    assert activity["clip_below_zero"] is True
     assert activity["name"] == "task_delta_r2_prepared"
     assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
     assert activity["definition"] == "full_r2 - nuisance_r2"
@@ -1037,7 +1041,7 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
         raise ValueError("downstream diagnostic failure")
 
     monkeypatch.setattr(
-        "boldtailor.prepared_fit._fit_prepared_r2",
+        "boldtailor.prepared_fit.nested_ols_delta",
         fail_diagnostic,
     )
 

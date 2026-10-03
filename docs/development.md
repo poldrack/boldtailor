@@ -137,6 +137,9 @@ Task-versus-nuisance diagnostics use nested OLS fits. Small negative differences
 from floating-point roundoff are clipped in `TaskDeltaR2Result.delta_r2`;
 `raw_delta_r2` retains the original values. Single-trial ridge comparisons use
 the actual penalized fit and preserve signed differences.
+All ΔR² entry points record one shared activity schema built by
+`delta_r2_activity`, and compute R² pairs through `nested_ols_delta`; the
+result constructor rejects differences below `-NESTED_OLS_TOLERANCE`.
 
 Single-trial ridge projects task columns and signals off the nuisance span,
 normalizes projected trial columns to unit L2 norm, applies a fixed penalty,

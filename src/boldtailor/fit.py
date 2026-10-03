@@ -6,12 +6,13 @@ import sys
 
 import numpy as np
 
-from boldtailor._conventional import ConventionalFit, fit_designs, fit_r2_designs
+from boldtailor._conventional import ConventionalFit, fit_designs
 from boldtailor._fit_diagnostics import (
     TASK_DELTA_R2_DEFINITION,
     DIAGNOSTIC_NOISE_MODEL,
     rank_warnings,
-    validate_nested_ols_delta,
+    delta_r2_activity,
+    nested_ols_delta,
     validate_result_dimensions,
 )
 from boldtailor.data import AnalysisData
@@ -95,13 +96,12 @@ def task_delta_r2(
         validate_result_dimensions(data, full_result, input_label="data")
         full_designs = compile_designs(data, model)
         nuisance_designs = compile_nuisance_designs(data, model)
-        full_r2 = _fit_r2_analysis(data, full_designs, DIAGNOSTIC_NOISE_MODEL)
-        nuisance_r2 = _fit_r2_analysis(
-            data,
-            nuisance_designs,
-            DIAGNOSTIC_NOISE_MODEL,
+        full_r2, nuisance_r2 = nested_ols_delta(
+            data.signals,
+            tuple(d.matrix for d in full_designs),
+            tuple(d.matrix for d in nuisance_designs),
+            allow_undefined=False,
         )
-        validate_nested_ols_delta(full_r2 - nuisance_r2)
         comparison = make_task_delta_r2_result(
             full_r2=full_r2,
             nuisance_r2=nuisance_r2,
@@ -131,21 +131,6 @@ def _fit_analysis(
         model.noise_model,
     )
     return compiled, numerical
-
-
-def _fit_r2_analysis(
-    data: AnalysisData,
-    compiled: tuple[CompiledDesign, ...],
-    noise_model: str,
-) -> np.ndarray:
-    r2 = fit_r2_designs(
-        data.signals,
-        tuple(item.matrix for item in compiled),
-        noise_model,
-    )
-    if not np.isfinite(r2).all():
-        raise ValueError("diagnostic fit produced nonfinite r-squared values")
-    return r2
 
 
 def _validate_parent_analysis(
@@ -279,15 +264,13 @@ def _task_delta_r2_activity(
         _run_diagnostic(data, design, run) for run, design in enumerate(compiled)
     )
     return {
-        "name": "task_delta_r2",
-        "stage": "fit",
-        "parent_analysis_id": parent_id,
-        "definition": TASK_DELTA_R2_DEFINITION,
-        "clip_below_zero": True,
-        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
-        "inferential_noise_model": model.noise_model,
-        "clip_policy": "numerical_roundoff_guard",
-        "nuisance_model": _nuisance_model_settings(model),
+        **delta_r2_activity(
+            name="task_delta_r2",
+            parent_id=parent_id,
+            inferential_noise_model=model.noise_model,
+            nuisance_model=_nuisance_model_settings(model),
+            undefined_features=0,
+        ),
         "runs": runs,
         "diagnostics": {
             "raw_min": comparison.raw_min,

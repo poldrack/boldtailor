@@ -10,6 +10,7 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from boldtailor._arrays import readonly_array
+from boldtailor._fit_diagnostics import validate_nested_ols_delta
 from boldtailor.provenance import ProvenanceRecord
 
 DesignProvenance = Mapping[str, int | float | str]
@@ -168,16 +169,18 @@ def make_task_delta_r2_result(
     nuisance_r2: np.ndarray,
     nuisance_designs: tuple[pd.DataFrame, ...],
     provenance: ProvenanceRecord,
+    allow_undefined: bool = False,
 ) -> TaskDeltaR2Result:
-    full, nuisance = _validate_r2_pair(full_r2, nuisance_r2)
-    raw, clipped = _delta_r2_arrays(full, nuisance)
+    full, nuisance = _validate_r2_pair(full_r2, nuisance_r2, allow_undefined)
+    raw, clipped = _delta_r2_arrays(full, nuisance, allow_undefined)
+    defined = raw[np.isfinite(raw)]
     return TaskDeltaR2Result(
         _full_r2=readonly_array(full),
         _nuisance_r2=readonly_array(nuisance),
         _raw_delta_r2=raw,
         _delta_r2=clipped,
-        _negative_voxel_count=int(np.count_nonzero(raw < 0.0)),
-        _raw_min=float(raw.min()),
+        _negative_voxel_count=int(np.count_nonzero(defined < 0.0)),
+        _raw_min=float(defined.min()) if defined.size else float("nan"),
         _nuisance_design_matrices=_copy_nuisance_designs(nuisance_designs),
         _provenance=provenance,
     )
@@ -186,20 +189,24 @@ def make_task_delta_r2_result(
 def _validate_r2_pair(
     full_r2: object,
     nuisance_r2: object,
+    allow_undefined: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
-    full = _validate_r2_array(full_r2, "full_r2")
-    nuisance = _validate_r2_array(nuisance_r2, "nuisance_r2")
+    full = _validate_r2_array(full_r2, "full_r2", allow_undefined)
+    nuisance = _validate_r2_array(nuisance_r2, "nuisance_r2", allow_undefined)
     if full.shape != nuisance.shape:
         raise ValueError("full_r2 and nuisance_r2 must have equal shapes")
     return full, nuisance
 
 
-def _validate_r2_array(values: object, name: str) -> np.ndarray:
+def _validate_r2_array(
+    values: object, name: str, allow_undefined: bool = False
+) -> np.ndarray:
     try:
         array = np.asarray(values, dtype=float)
     except (TypeError, ValueError) as error:
         raise ValueError(f"{name} must be a finite nonempty 1-D array") from error
-    if array.ndim != 1 or array.size == 0 or not np.isfinite(array).all():
+    unusable = np.isinf(array).any() or (not allow_undefined and np.isnan(array).any())
+    if array.ndim != 1 or array.size == 0 or unusable:
         raise ValueError(f"{name} must be a finite nonempty 1-D array")
     return array
 
@@ -207,12 +214,16 @@ def _validate_r2_array(values: object, name: str) -> np.ndarray:
 def _delta_r2_arrays(
     full: np.ndarray,
     nuisance: np.ndarray,
+    allow_undefined: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     with np.errstate(over="ignore", invalid="ignore"):
         raw_values = full - nuisance
         clipped_values = np.maximum(raw_values, 0.0)
-    if not np.isfinite(raw_values).all() or not np.isfinite(clipped_values).all():
+    if np.isinf(raw_values).any() or (
+        not allow_undefined and np.isnan(raw_values).any()
+    ):
         raise ValueError("derived delta r-squared values must be finite")
+    validate_nested_ols_delta(raw_values)
     return readonly_array(raw_values), readonly_array(clipped_values)
 
 

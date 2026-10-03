@@ -13,6 +13,7 @@ from boldtailor.fit import fit, task_delta_r2
 from boldtailor.model import ModelSpec
 from boldtailor.provenance import RunSources, SourceRef
 from boldtailor.results import make_task_delta_r2_result
+from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
 from tests.oracles import (
     peak_design_matrix,
     nilearn_original_space_r2,
@@ -678,6 +679,8 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
     comparison = task_delta_r2(data, model, full_result)
     activity = comparison.provenance.activities[-1]
 
+    assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
+    assert activity["undefined_features"] == 0
     assert activity["name"] == "task_delta_r2"
     assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
     assert activity["definition"] == "full_r2 - nuisance_r2"

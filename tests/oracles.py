@@ -250,3 +250,17 @@ def nilearn_pooled_ols_r2(signals, designs):
         for y, d in zip(signals, designs, strict=True)
     ]
     return 1.0 - sum(s[0] for s in sums) / sum(s[1] for s in sums)
+
+
+SHARED_DELTA_ACTIVITY_KEYS = {
+    "name",
+    "stage",
+    "parent_analysis_id",
+    "definition",
+    "clip_below_zero",
+    "clip_policy",
+    "diagnostic_noise_model",
+    "inferential_noise_model",
+    "nuisance_model",
+    "undefined_features",
+}

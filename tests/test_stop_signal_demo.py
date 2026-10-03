@@ -1229,7 +1229,7 @@ def test_result_artifacts_are_deterministic_valid_metadata(
 def test_result_artifacts_serializes_clipped_task_delta_values(example_result):
     _, mask_image, masker, result, comparison = example_result
     nuisance_r2 = comparison.nuisance_r2.copy()
-    nuisance_r2[0] = comparison.full_r2[0] + 0.25
+    nuisance_r2[0] = comparison.full_r2[0] + 5e-13
     negative_comparison = make_task_delta_r2_result(
         full_r2=comparison.full_r2,
         nuisance_r2=nuisance_r2,
@@ -1260,7 +1260,7 @@ def test_result_artifacts_serializes_clipped_task_delta_values(example_result):
         )
     )
     serialized = np.asarray(image.dataobj)[np.asarray(mask_image.dataobj, dtype=bool)]
-    assert negative_comparison.raw_delta_r2[0] == pytest.approx(-0.25)
+    assert negative_comparison.raw_delta_r2[0] == pytest.approx(-5e-13, abs=1e-15)
     assert serialized[0] == 0.0
     assert np.all(serialized >= 0.0)
     np.testing.assert_allclose(serialized, negative_comparison.delta_r2)

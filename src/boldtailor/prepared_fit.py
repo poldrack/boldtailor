@@ -7,13 +7,14 @@ from types import MappingProxyType
 import numpy as np
 import pandas as pd
 
-from boldtailor._conventional import fit_designs, fit_r2_designs
+from boldtailor._conventional import fit_designs
 from boldtailor._fit_diagnostics import (
     TASK_DELTA_R2_DEFINITION,
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
     rank_warnings,
-    validate_nested_ols_delta,
+    delta_r2_activity,
+    nested_ols_delta,
     validate_result_dimensions,
 )
 from boldtailor._fit_lifecycle import fit_operation
@@ -92,9 +93,12 @@ def task_delta_r2_prepared(
         operation.analysis_id = comparison_id
         _validate_prepared_parent(prepared, full_result, parent_id)
         nuisance_designs = _nuisance_designs(prepared)
-        full_r2 = _fit_prepared_r2(prepared, prepared._design_matrices)
-        nuisance_r2 = _fit_prepared_r2(prepared, nuisance_designs)
-        validate_nested_ols_delta(full_r2 - nuisance_r2)
+        full_r2, nuisance_r2 = nested_ols_delta(
+            prepared.signals,
+            prepared._design_matrices,
+            nuisance_designs,
+            allow_undefined=False,
+        )
         comparison = make_task_delta_r2_result(
             full_r2=full_r2,
             nuisance_r2=nuisance_r2,
@@ -179,14 +183,11 @@ def _nuisance_designs(
     return tuple(designs)
 
 
-def _fit_prepared_r2(
-    prepared: PreparedDesignAnalysis,
-    designs: tuple[pd.DataFrame, ...],
-) -> np.ndarray:
-    r2 = fit_r2_designs(prepared.signals, designs, DIAGNOSTIC_NOISE_MODEL)
-    if not np.isfinite(r2).all():
-        raise ValueError("diagnostic fit produced nonfinite r-squared values")
-    return r2
+_PREPARED_NUISANCE_MODEL = {
+    "events": False,
+    "column_roles": ["nuisance", "intercept"],
+    "noise_model": DIAGNOSTIC_NOISE_MODEL,
+}
 
 
 def _prepared_delta_activity(
@@ -197,13 +198,13 @@ def _prepared_delta_activity(
     parent_id: str,
 ) -> dict[str, object]:
     return {
-        "name": "task_delta_r2_prepared",
-        "stage": "fit",
-        "parent_analysis_id": parent_id,
-        "definition": TASK_DELTA_R2_DEFINITION,
-        "diagnostic_noise_model": DIAGNOSTIC_NOISE_MODEL,
-        "inferential_noise_model": fit_spec.noise_model,
-        "clip_policy": "numerical_roundoff_guard",
+        **delta_r2_activity(
+            name="task_delta_r2_prepared",
+            parent_id=parent_id,
+            inferential_noise_model=fit_spec.noise_model,
+            nuisance_model=_PREPARED_NUISANCE_MODEL,
+            undefined_features=0,
+        ),
         "roundoff_tolerance": NESTED_OLS_TOLERANCE,
         "nuisance_rule": "column roles nuisance or intercept",
         "runs": tuple(

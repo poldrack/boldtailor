@@ -4,7 +4,8 @@ from dataclasses import dataclass, fields, replace
 
 import numpy as np
 
-from boldtailor._conventional import fit_designs, fit_r2_designs
+from boldtailor._conventional import fit_designs
+from boldtailor._fit_diagnostics import delta_r2_activity, nested_ols_delta
 from boldtailor._hrf_assignment import validate_selection
 from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._hrf_glm_design import (
@@ -12,11 +13,11 @@ from boldtailor._hrf_glm_design import (
     design_identity,
     group_diagnostics,
 )
-from boldtailor.hrf_glm_results import HrfAnalysisResult, _masked_delta_result
+from boldtailor.hrf_glm_results import HrfAnalysisResult
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint, identity_activity
-from boldtailor.results import _ContrastResult
+from boldtailor.results import _ContrastResult, make_task_delta_r2_result
 
 
 @dataclass(frozen=True)
@@ -162,8 +163,9 @@ def _ols_comparison(data, selection, context):
     for cid, indices in _feature_groups(selection):
         signals = tuple(y[:, indices] for y in data.signals)
         designs = tuple(context.groups[run, cid].matrix for run in range(data.n_runs))
-        full[indices] = fit_r2_designs(signals, designs, "ols")
-        nuisance[indices] = fit_r2_designs(signals, nuisance_designs, "ols")
+        full[indices], nuisance[indices] = nested_ols_delta(
+            signals, designs, nuisance_designs, allow_undefined=True
+        )
     return full, nuisance, nuisance_designs
 
 
@@ -180,7 +182,13 @@ def selected_task_delta_r2(data, model, result):
         )
         _validate_parent(data, result, context)
         full, nuisance, designs = _ols_comparison(data, selection, context)
-        comparison = _masked_delta_result(full, nuisance, designs, result.provenance)
+        comparison = make_task_delta_r2_result(
+            full_r2=full,
+            nuisance_r2=nuisance,
+            nuisance_designs=designs,
+            provenance=result.provenance,
+            allow_undefined=True,
+        )
         activity = _comparison_activity(model, comparison, context)
         provenance = operation.provenance(
             activity, analysis_id=analysis_fingerprint(context.analysis_id, activity)
@@ -189,14 +197,12 @@ def selected_task_delta_r2(data, model, result):
 
 
 def _comparison_activity(model, comparison, context):
-    return dict(
+    from boldtailor.fit import _nuisance_model_settings
+
+    return delta_r2_activity(
         name="task_delta_r2",
-        stage="fit",
-        parent_analysis_id=context.analysis_id,
-        definition="full_r2 - nuisance_r2",
-        diagnostic_noise_model="ols",
+        parent_id=context.analysis_id,
         inferential_noise_model=model.noise_model,
-        clip_below_zero=True,
-        clip_policy="numerical_roundoff_guard",
+        nuisance_model=_nuisance_model_settings(model),
         undefined_features=int(np.count_nonzero(~np.isfinite(comparison.delta_r2))),
     )

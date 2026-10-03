@@ -18,6 +18,7 @@ from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.model import ModelSpec, Modulator, TaskModel
 from boldtailor.provenance import RunSources, SourceRef
+from tests.oracles import SHARED_DELTA_ACTIVITY_KEYS
 from tests.oracles import scaled_condition
 
 
@@ -249,9 +250,10 @@ def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
         np.testing.assert_allclose(delta.nuisance_r2[feature], nuisance, atol=1e-12)
         np.testing.assert_allclose(delta.delta_r2[feature], full - nuisance, atol=1e-12)
     assert np.isnan(delta.delta_r2[-1])
-    assert (
-        delta.provenance.to_dict()["activities"][-1]["diagnostic_noise_model"] == "ols"
-    )
+    activity = delta.provenance.to_dict()["activities"][-1]
+    assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
+    assert activity["diagnostic_noise_model"] == "ols"
+    assert activity["undefined_features"] == 1
 
 
 @pytest.mark.parametrize(

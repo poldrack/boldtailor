@@ -11,7 +11,7 @@ import pandas as pd
 from boldtailor._arrays import readonly_array
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
-from boldtailor.results import _AnalysisAccessors, _ContrastResult, TaskDeltaR2Result
+from boldtailor.results import _AnalysisAccessors, _ContrastResult
 
 
 @dataclass(frozen=True)
@@ -67,21 +67,3 @@ class HrfAnalysisResult(_AnalysisAccessors):
     @property
     def group_design_provenance(self) -> dict:
         return deepcopy(dict(self._group_design_provenance))
-
-
-def _masked_delta_result(full, nuisance, designs, provenance):
-    """Retain undefined features while applying the usual nested-OLS guard."""
-    raw = full - nuisance
-    defined = np.isfinite(raw)
-    if np.any(raw[defined] < -1e-12):
-        raise ValueError("nested OLS monotonicity violated")
-    return TaskDeltaR2Result(
-        readonly_array(full),
-        readonly_array(nuisance),
-        readonly_array(raw),
-        readonly_array(np.maximum(raw, 0)),
-        int(np.count_nonzero(raw[defined] < 0)),
-        float(raw[defined].min()) if defined.any() else float("nan"),
-        tuple(design.copy(deep=True) for design in designs),
-        provenance,
-    )
