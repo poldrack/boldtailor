@@ -8,7 +8,7 @@ import pandas as pd
 from boldtailor.publication import publish_artifact_set
 from boldtailor.reliability import SUMMARY_NAMES, finite_mean
 from boldtailor.cifti import scalar_artifact
-from .workflow_artifacts import figure_artifact, json_artifact, table_artifact
+from boldtailor.workflow.artifacts import figure_artifact, json_artifact, table_artifact
 
 SUMMARY_STATS = (
     "canonical_mean",

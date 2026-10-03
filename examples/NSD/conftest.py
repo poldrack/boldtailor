@@ -19,7 +19,7 @@ from nilearn.glm.first_level import compute_regressor  # noqa: E402
 from boldtailor.cifti import scalar_artifact  # noqa: E402
 from boldtailor.hrf_library import HrfLibrary  # noqa: E402
 from boldtailor.publication import publish_artifact_set  # noqa: E402
-from examples.NSD.workflow_artifacts import (  # noqa: E402
+from boldtailor.workflow.artifacts import (  # noqa: E402
     json_artifact,
     npz_artifact,
     table_artifact,

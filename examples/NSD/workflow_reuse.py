@@ -9,7 +9,7 @@ import pandas as pd
 from boldtailor.cifti import read_scalar
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.workflow.inputs import NSD_TASK_MODEL
-from .workflow_outputs import _stem
+from boldtailor.workflow.outputs import _stem
 
 ANALYSIS_SETTINGS = (
     "bids_root",

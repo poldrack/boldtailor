@@ -1,4 +1,4 @@
-"""In-memory JSON, TSV, NPZ, PNG, and CIFTI artifacts for the NSD notebooks."""
+"""In-memory JSON, TSV, NPZ, PNG, and CIFTI artifacts for workflow outputs."""
 
 from importlib.metadata import version
 from io import BytesIO
@@ -64,7 +64,7 @@ def parameter_artifact(brain, library, ids, path):
     return scalar_artifact(path, brain, parameters, names)
 
 
-def notebook_map(stem, brain, descriptor, statistic, values, names):
-    """A ``desc-notebook<descriptor>_stat-<statistic>`` dense scalar map."""
-    path = f"{stem}_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{statistic}.dscalar.nii"
+def scalar_map(stem, space_entity, brain, descriptor, statistic, values, names):
+    """A ``<space>_desc-<descriptor>_stat-<statistic>`` dense scalar map."""
+    path = f"{stem}_{space_entity}_desc-{descriptor}_stat-{statistic}.dscalar.nii"
     return scalar_artifact(path, brain, values, names)

@@ -11,7 +11,7 @@ from boldtailor.diagnostics import correlate_rt
 from boldtailor.hrf_library import PARAMETER_NAMES
 
 if __package__:
-    from .workflow_artifacts import (
+    from boldtailor.workflow.artifacts import (
         figure_artifact,
         json_artifact,
         npz_artifact,
@@ -21,7 +21,7 @@ if __package__:
     from .rt_diagnostics import scatter_artifact
     from boldtailor.workflow.files import reaction_times
 else:
-    from workflow_artifacts import (
+    from boldtailor.workflow.artifacts import (
         figure_artifact,
         json_artifact,
         npz_artifact,

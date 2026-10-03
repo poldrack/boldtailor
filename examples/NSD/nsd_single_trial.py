@@ -27,7 +27,7 @@ if __package__:
         script_roots,
     )
     from .rt_diagnostics import scatter_artifact, select_vertices
-    from .workflow_artifacts import dataset_description, table_artifact
+    from boldtailor.workflow.artifacts import dataset_description, table_artifact
     from boldtailor.workflow.files import (
         bids_label,
         input_paths,
@@ -51,7 +51,7 @@ else:
         script_roots,
     )
     from rt_diagnostics import scatter_artifact, select_vertices
-    from workflow_artifacts import dataset_description, table_artifact
+    from boldtailor.workflow.artifacts import dataset_description, table_artifact
     from boldtailor.workflow.files import (
         bids_label,
         input_paths,

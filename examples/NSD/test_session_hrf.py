@@ -142,13 +142,13 @@ def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
     from boldtailor.workflow.inputs import load_session, make_blocks
     from boldtailor.workflow.analysis import select_hrfs
-    from examples.NSD.workflow_outputs import (
+    from boldtailor.workflow.outputs import (
         _hrf_artifacts,
         _input_artifacts,
         _metadata,
         _stem,
     )
-    from examples.NSD.workflow_artifacts import json_artifact
+    from boldtailor.workflow.artifacts import json_artifact
 
     root, prep = session_data
     runs = load_session(root, prep)

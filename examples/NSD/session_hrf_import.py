@@ -11,7 +11,7 @@ from boldtailor.cifti import spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
 from .session_hrf_cache import read_selection
-from .workflow_outputs import _input_artifacts, _metadata, _stem
+from boldtailor.workflow.outputs import _input_artifacts, _metadata, _stem
 from boldtailor.workflow.inputs import (
     _trimmed_sources,
     make_blocks,

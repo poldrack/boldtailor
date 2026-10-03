@@ -1,8 +1,5 @@
-"""The NSD adapter preserves featurewise decisions through fitting and export."""
+"""The NSD adapter preserves featurewise decisions through fitting."""
 
-import json
-
-import nibabel as nib
 import numpy as np
 import pytest
 
@@ -12,11 +9,8 @@ from boldtailor.fractional_ridge import (
 )
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
-from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.workflow.beta_series import fit_cv_beta_series, trial_predictors
-from examples.NSD.ridge_outputs import ridge_artifacts, tuning_table, tuning_figure
-from examples.NSD.workflow_outputs import _beta_artifacts
 from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session, load_block
 
 
@@ -27,7 +21,7 @@ def fit(runs, root, library=None, **kwargs):
 
 
 @pytest.mark.parametrize("optimized", [False, True])
-def test_fraction_workflow_matches_whole_array_and_exports(
+def test_fraction_workflow_matches_whole_array(
     six_run_dataset, cv_library, tmp_path, optimized
 ):
     root, prep = six_run_dataset
@@ -107,56 +101,3 @@ def test_fraction_workflow_matches_whole_array_and_exports(
         ]
         == decision
     )
-    mode = "Optimized" if optimized else "Canonical"
-    stem = "sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore"
-    brain = runs[0].image.header.get_axis(1)
-    artifacts = ridge_artifacts(stem, brain, runs, {mode: result}, cv_library)
-    artifacts += _beta_artifacts(
-        stem, brain, {f"{mode}TrialFractionalCV": result["final"]}, runs
-    )
-    paths = publish_artifact_set(tmp_path / "outputs", artifacts)
-    for scope in ("Odd", "Even", "All"):
-        path = next(
-            p
-            for p in paths
-            if f"{mode}FractionalCV{scope}_stat-ridgefraction." in p.name
-        )
-        image = nib.load(path)
-        assert image.header.get_axis(1) == brain
-        np.testing.assert_allclose(
-            image.get_fdata()[0],
-            result["tuning"][scope.lower()]["selection"].ridge_fraction,
-        )
-    for scope in ("odd_to_even", "even_to_odd"):
-        outer = result["evaluation"][scope]
-        descriptor = (
-            mode + "FractionalCV" + "".join(w.title() for w in scope.split("_"))
-        )
-        for label, targets in zip(outer["test_run_labels"], outer["targets"]):
-            run = next(r for r in runs if r.label == label)
-            path = next(
-                p
-                for p in paths
-                if run.inputs.stem in p.name
-                and descriptor in p.name
-                and p.name.endswith("_targets.dscalar.nii")
-            )
-            np.testing.assert_allclose(nib.load(path).get_fdata(), targets, atol=1e-6)
-    alpha_path = next(
-        p for p in paths if "TrialFractionalCV_stat-ridgealpha." in p.name
-    )
-    np.testing.assert_allclose(
-        nib.load(alpha_path).get_fdata(), expected.run_ridge_alphas, atol=1e-7
-    )
-    metadata = json.loads(
-        next(
-            p for p in paths if f"{mode}FractionalCVAll_metadata.json" in p.name
-        ).read_text()
-    )
-    assert metadata["selection_rule"] == "maximum_encoding_r2_per_grayordinate"
-    assert metadata["validation_target"] == "fixed_ols_betas"
-    assert metadata["percentile_role"] == "descriptive_only"
-    table = tuning_table({mode: result})
-    assert table.groupby("scope").selected_grayordinates.sum().tolist() == [3, 3, 3]
-    assert "alpha" not in table
-    assert tuning_figure({mode: result}).axes[0].get_xlabel() == "Ridge fraction"

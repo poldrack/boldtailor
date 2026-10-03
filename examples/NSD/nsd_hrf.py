@@ -21,7 +21,7 @@ if __package__:
         _merge_block_arrays,
     )
     from .parallel_blocks import execution_settings
-    from .workflow_artifacts import dataset_description
+    from boldtailor.workflow.artifacts import dataset_description
     from boldtailor.workflow.files import input_paths, run_sources
     from boldtailor.workflow.files import odd_even_parity, reaction_times
     from .rt_diagnostics import select_vertices
@@ -45,7 +45,7 @@ else:
         _merge_block_arrays,
     )
     from parallel_blocks import execution_settings
-    from workflow_artifacts import dataset_description
+    from boldtailor.workflow.artifacts import dataset_description
     from boldtailor.workflow.files import input_paths, run_sources
     from boldtailor.workflow.files import odd_even_parity, reaction_times
     from rt_diagnostics import select_vertices

@@ -6,9 +6,9 @@ import pandas as pd
 from boldtailor.cifti import scalar_artifact
 
 if __package__:
-    from .workflow_artifacts import json_artifact, table_artifact
+    from boldtailor.workflow.artifacts import json_artifact, table_artifact
 else:
-    from workflow_artifacts import json_artifact, table_artifact
+    from boldtailor.workflow.artifacts import json_artifact, table_artifact
 
 STATISTICS = (
     "fullrsquared",

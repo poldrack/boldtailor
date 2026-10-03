@@ -9,7 +9,7 @@ import pytest
 from boldtailor.publication import publish_artifact_set
 from boldtailor.single_trial import fit_single_trials
 from boldtailor.workflow.beta_series import fit_cv_beta_series, trial_predictors
-from examples.NSD.ridge_outputs import ridge_artifacts
+from boldtailor.workflow.outputs import ridge_artifacts
 from boldtailor.workflow.inputs import load_session, load_block
 
 

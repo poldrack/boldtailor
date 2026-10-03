@@ -12,7 +12,7 @@ from boldtailor.cifti import scalar_artifact, spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.publication import publish_artifact_set
 from boldtailor.reliability import library_indices
-from .workflow_artifacts import (
+from boldtailor.workflow.artifacts import (
     json_artifact,
     npz_artifact,
     parameter_artifact,

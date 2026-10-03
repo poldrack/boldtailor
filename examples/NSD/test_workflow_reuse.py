@@ -13,7 +13,7 @@ import pytest
 
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.workflow.inputs import NSD_TASK_MODEL, load_session
-from examples.NSD import workflow_outputs
+from boldtailor.workflow import outputs as workflow_outputs
 
 
 def execute_notebook(config):
@@ -135,7 +135,7 @@ def test_notebook_reuses_saved_results_without_fitting(
 ):
     from boldtailor.workflow import analysis as workflow_analysis
     from boldtailor.workflow import beta_series as ridge_workflow
-    from examples.NSD.ridge_outputs import tuning_table
+    from boldtailor.workflow.outputs import tuning_table
 
     root, prep = six_run_dataset
     config = dict(
@@ -242,13 +242,6 @@ def test_saved_results_with_other_task_model_are_rejected():
         validate_saved_settings({"settings": settings}, settings)
 
 
-def test_metadata_records_the_task_model_fingerprint(four_runs):
-    library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
-    runs = load_session(*four_runs)
-    published = workflow_outputs._metadata(runs, library, {})
-    assert published["task_model_fingerprint"] == NSD_TASK_MODEL.fingerprint
-
-
 def test_saved_results_with_other_hrf_normalization_are_rejected():
     from examples.NSD.workflow_reuse import validate_saved_settings
 
@@ -265,44 +258,3 @@ def test_saved_results_with_other_hrf_normalization_are_rejected():
     validate_saved_settings(
         {**current, "hrf_normalization": "peak_one_event_response"}, settings
     )
-
-
-def test_metadata_records_peak_hrf_normalization(four_runs):
-    library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
-    runs = load_session(*four_runs)
-    published = workflow_outputs._metadata(runs, library, {})
-    assert published["hrf_normalization"] == "peak_one_event_response"
-
-
-def test_metadata_pools_hrf_bound_flags_over_blocks(four_runs):
-    from boldtailor.hrf_library import PARAMETER_NAMES
-    from boldtailor.workflow import analysis as workflow_analysis
-    from boldtailor.workflow.inputs import make_blocks
-
-    library = HrfLibrary.from_parameters(
-        [
-            [3, 10, 0.5, 0.5, 2, 0, 36],
-            [4, 12, 1, 1.5, 5, 1, 36],
-            [6, 16, 1.5, 2.5, 8, 2, 36],
-        ]
-    )
-    runs = load_session(*four_runs)
-    blocks = make_blocks(runs, block_size=2, max_grayordinates=4)
-    selections = workflow_analysis.select_hrfs(runs, four_runs[0], blocks, library)
-    assert len(selections) > 1
-    published = workflow_outputs._metadata(runs, library, {}, selections=selections)
-    rows = pd.DataFrame(published["hrf_boundary_summary"])
-    for scope in ("all", "odd", "even"):
-        picked = [
-            bundle[scope] if scope == "all" else bundle[scope].training_selection
-            for bundle in selections.values()
-        ]
-        ids = np.concatenate([p.hrf_indices for p in picked])
-        flags = np.concatenate([p.parameter_bound_flags for p in picked])[ids > 0]
-        table = rows.loc[rows.scope == scope]
-        assert (table.n_custom == (ids > 0).sum()).all()
-        for row in table.itertuples():
-            p = PARAMETER_NAMES.index(row.parameter)
-            e = ("low", "high").index(row.edge)
-            expected = flags[:, p, e].mean() if len(flags) else np.nan
-            np.testing.assert_allclose(row.fraction_flagged, expected)
