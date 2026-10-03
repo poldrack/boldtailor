@@ -14,6 +14,11 @@ from nilearn.glm.first_level import compute_regressor
 from nilearn.glm.first_level.hemodynamic_models import _sample_condition, glover_hrf
 
 from boldtailor._arrays import readonly_array
+from boldtailor._constants import (  # owned here for every consumer
+    MIN_ONSET,
+    OVERSAMPLING,
+    TIE_TOLERANCE,
+)
 from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate, _peak_normalized
 
 HRF_NORMALIZATION = "peak_one_event_response"
@@ -21,7 +26,7 @@ _CANONICAL = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
 _UNIDENTIFIED = "hrf must be 'spm', 'glover', or an identified HrfCandidate"
 
 
-def _glover_kernel(tr, oversampling=50):
+def _glover_kernel(tr, oversampling=OVERSAMPLING):
     return _peak_normalized(glover_hrf(tr, oversampling))
 
 
@@ -41,7 +46,7 @@ def hrf_model(candidate):
     return candidate.kernel
 
 
-def hrf_kernel(model, tr, oversampling=50):
+def hrf_kernel(model, tr, oversampling=OVERSAMPLING):
     """Read-only peak-one kernel for a basis name or candidate."""
     return hrf_model(model)(tr, oversampling)
 
@@ -108,7 +113,12 @@ def _realized_counts(onsets, durations, frame_times, oversampling, min_onset):
 
 
 def event_response_scales(
-    kernel_fn, onsets, durations, frame_times, oversampling=50, min_onset=-24.0
+    kernel_fn,
+    onsets,
+    durations,
+    frame_times,
+    oversampling=OVERSAMPLING,
+    min_onset=MIN_ONSET,
 ):
     """Amplitudes giving each event's realized oversampled response a unit peak."""
     kernel = kernel_fn(frame_tr(frame_times), oversampling)
@@ -132,7 +142,7 @@ def scale_event_amplitudes(events, kernel_fn, frame_times, oversampling, min_ons
 
 def convolve_events(onsets, durations, times, candidate, name="stimulus"):
     onsets = np.asarray(onsets, dtype=float)
-    if np.any(onsets < times[0] - 24) or np.any(onsets >= times[-1]):
+    if np.any(onsets < times[0] + MIN_ONSET) or np.any(onsets >= times[-1]):
         raise ValueError(f"{name}: onset has no supported sampled response")
     kernel_fn = hrf_model(candidate)
     scales = event_response_scales(kernel_fn, onsets, durations, times)
@@ -141,7 +151,7 @@ def convolve_events(onsets, durations, times, candidate, name="stimulus"):
         kernel_fn,
         times,
         con_id=name,
-        oversampling=50,
+        oversampling=OVERSAMPLING,
     )
     if not np.isfinite(column).all() or not np.any(column):
         raise ValueError(f"{name}: no supported sampled response")
@@ -158,7 +168,9 @@ def stimulus_regressor(events, frame_times, candidate):
 
 
 @lru_cache(maxsize=64)
-def _boxcar_sampling(timing_bytes, times_bytes, oversampling=50, min_onset=-24.0):
+def _boxcar_sampling(
+    timing_bytes, times_bytes, oversampling=OVERSAMPLING, min_onset=MIN_ONSET
+):
     timing = np.frombuffer(timing_bytes, dtype="<f8").reshape(-1, 2)
     times = np.frombuffer(times_bytes, dtype="<f8")
     condition = np.vstack([timing.T, np.ones(len(timing))])
@@ -185,14 +197,14 @@ def trial_regressors(events, frame_times, candidate):
 
     times = np.asarray(frame_times, dtype=float)
     _validate_events(events, times, "trials")
-    if np.any(events.onset < times[0] - 24) or np.any(events.onset >= times[-1]):
+    if np.any(events.onset < times[0] + MIN_ONSET) or np.any(events.onset >= times[-1]):
         raise ValueError("trial onset has no supported sampled response")
     timing = np.asarray(events[["onset", "duration"]], dtype="<f8").tobytes()
     starts, stops, lower, upper, fraction = _boxcar_sampling(
         timing, np.asarray(times, dtype="<f8").tobytes()
     )
     tr = frame_tr(times)
-    kernel = hrf_kernel(candidate, tr, 50)
+    kernel = hrf_kernel(candidate, tr, OVERSAMPLING)
     scales = _count_scales(kernel, stops - starts)
     prefix = np.r_[0.0, np.cumsum(kernel)]
 

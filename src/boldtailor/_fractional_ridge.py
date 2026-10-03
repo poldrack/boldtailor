@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass
 from hashlib import sha256
-from numbers import Real
 
 import numpy as np
 
+from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import TrialRunFit, _project_design, validate_alpha
 
 NORM_BASIS = "raw_trial_coefficients_after_nuisance_projection"
@@ -15,13 +15,7 @@ def fraction_grid(values):
     grid = tuple(values)
     if (
         not grid
-        or any(
-            isinstance(f, (bool, np.bool_))
-            or not isinstance(f, Real)
-            or not np.isfinite(f)
-            or not 0 < f <= 1
-            for f in grid
-        )
+        or any(not is_real(f) or not np.isfinite(f) or not 0 < f <= 1 for f in grid)
         or len(set(grid)) != len(grid)
     ):
         raise ValueError("fractions must be distinct finite numbers in (0, 1]")
@@ -30,9 +24,7 @@ def fraction_grid(values):
 
 def fraction_map(values, n_features):
     raw = np.asarray(values, dtype=object)
-    if raw.shape not in ((), (n_features,)) or any(
-        isinstance(v, (bool, np.bool_)) or not isinstance(v, Real) for v in raw.flat
-    ):
+    if raw.shape not in ((), (n_features,)) or any(not is_real(v) for v in raw.flat):
         raise ValueError("ridge_fraction must be numeric, scalar or one per feature")
     array = np.full(n_features, float(raw)) if raw.ndim == 0 else np.asarray(raw, float)
     if np.any(np.isinf(array) | (array <= 0) | (array > 1)) or (

@@ -5,13 +5,17 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
-from numbers import Real
 from types import MappingProxyType
 
 import numpy as np
 
 from boldtailor._fit_diagnostics import DIAGNOSTIC_NOISE_MODEL
-from boldtailor._hrf_design import HRF_NORMALIZATION  # public re-export
+from boldtailor._hrf_design import (  # HRF_NORMALIZATION: public re-export
+    HRF_NORMALIZATION,
+    MIN_ONSET,
+    OVERSAMPLING,
+)
+from boldtailor._scalars import is_boolean, is_integer, is_real  # public
 
 ContrastWeights = Mapping[str, float]
 ContrastValue = str | ContrastWeights
@@ -101,8 +105,8 @@ class ModelSpec:
     drift_model: str | None = "cosine"
     high_pass: float = 0.01
     drift_order: int = 1
-    oversampling: int = 50
-    min_onset: float = -24.0
+    oversampling: int = OVERSAMPLING
+    min_onset: float = MIN_ONSET
     noise_model: str = "ar1"
     task_model: TaskModel | None = None
     _contrast_names: tuple[str, ...] = field(init=False, repr=False)
@@ -171,7 +175,7 @@ def _prepare_weights(values: Mapping[str, float], name: str) -> ContrastWeights:
     for regressor, value in values.items():
         if not isinstance(regressor, str) or not regressor:
             raise ValueError(f"contrast {name!r} has an invalid regressor name")
-        if _is_boolean(value):
+        if is_boolean(value):
             raise ValueError(f"contrast {name!r} weights must be numeric")
         try:
             weight = float(value)
@@ -214,26 +218,19 @@ def _validate_design_options(
     oversampling: int,
     min_onset: float,
 ) -> None:
-    if not _is_real_number(high_pass) or not np.isfinite(high_pass) or high_pass <= 0:
+    if not is_real(high_pass) or not np.isfinite(high_pass) or high_pass <= 0:
         raise ValueError("high_pass must be positive and finite")
-    if not _is_integer(drift_order) or drift_order < 0:
+    if not _is_builtin_int(drift_order) or drift_order < 0:
         raise ValueError("drift_order must be a non-negative integer")
-    if not _is_integer(oversampling) or oversampling < 1:
+    if not _is_builtin_int(oversampling) or oversampling < 1:
         raise ValueError("oversampling must be a positive integer")
-    if not _is_real_number(min_onset) or not np.isfinite(min_onset):
+    if not is_real(min_onset) or not np.isfinite(min_onset):
         raise ValueError("min_onset must be finite")
 
 
-def _is_boolean(value: object) -> bool:
-    return isinstance(value, (bool, np.bool_))
-
-
-def _is_real_number(value: object) -> bool:
-    return isinstance(value, Real) and not _is_boolean(value)
-
-
-def _is_integer(value: object) -> bool:
-    return isinstance(value, int) and not _is_boolean(value)
+def _is_builtin_int(value: object) -> bool:
+    """Built-in ints only, so model identities stay JSON-native."""
+    return isinstance(value, int) and is_integer(value)
 
 
 @dataclass(frozen=True)

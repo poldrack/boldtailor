@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._single_trial_design import compile_trial_run  # public re-export
-from boldtailor._hrf_design import HRF_NORMALIZATION, hrf_metadata
+from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING, hrf_metadata
 from boldtailor._single_trial_fit import (  # r_squared, validate_alpha: public
     fit_trial_run,
     r_squared,
@@ -87,7 +87,7 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
         name="single_trial",
         hrf=hrf_metadata(hrf),
         hrf_normalization=HRF_NORMALIZATION,
-        oversampling=50,
+        oversampling=OVERSAMPLING,
         run_labels=list(labels),
         ridge_alpha=alpha,
         beta_units="native_signal",

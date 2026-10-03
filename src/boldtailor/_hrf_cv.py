@@ -8,7 +8,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import hrf_model
+from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
 from boldtailor._single_trial_design import (
     _nuisance_matrix,
     _validate_events,
@@ -18,9 +18,6 @@ from boldtailor._single_trial_fit import _project_design
 from boldtailor._task_design import expand_events, task_columns
 from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
-
-MIN_ONSET = -24.0
-OVERSAMPLING = 50
 
 _Block = namedtuple("_Block", ["x", "qp", "a"])
 

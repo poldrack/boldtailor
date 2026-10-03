@@ -8,7 +8,7 @@ import pandas as pd
 
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING
 from boldtailor._single_trial_design import _validate_events
 from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
@@ -104,7 +104,7 @@ def _fit_activity(data, selection, labels, alpha, assignment, digest, fractions=
         normalization="unit_l2_after_nuisance_projection",
         hrf_normalization=HRF_NORMALIZATION,
         noise_model="ols",
-        oversampling=50,
+        oversampling=OVERSAMPLING,
         selection=identity_activity(selection.provenance),
     )
     if fractions is not None:

@@ -1,14 +1,11 @@
 """Select HRFs by held-out task-model prediction across runs, without repeated images."""
 
 from hashlib import sha256
-from numbers import Integral
 
 import numpy as np
 
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor._hrf_cv import (
-    MIN_ONSET,
-    OVERSAMPLING,
     prepare_runs,  # public re-export
     subset_runs,  # public re-export
     signal_statistics,
@@ -17,7 +14,8 @@ from boldtailor._hrf_cv import (
     pooled_amplitude,
     prediction_loss,
 )
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
+from boldtailor._scalars import is_integer
 from boldtailor.data import run_labels_for
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
@@ -32,11 +30,7 @@ def _validate(library, signature, batch, task_model):
         raise ValueError("task_model must be a TaskModel")
     if signature is not None and (not isinstance(signature, str) or not signature):
         raise ValueError("feature_signature must be a nonempty string or None")
-    if (
-        isinstance(batch, (bool, np.bool_))
-        or not isinstance(batch, Integral)
-        or batch < 1
-    ):
+    if not is_integer(batch) or batch < 1:
         raise ValueError("candidate_batch_size must be a positive integer")
 
 
@@ -199,12 +193,7 @@ def _fold_indices(values, n_runs, minimum, name):
     if (
         len(values) < minimum
         or len(set(values)) != len(values)
-        or any(
-            isinstance(i, (bool, np.bool_))
-            or not isinstance(i, Integral)
-            or not 0 <= i < n_runs
-            for i in values
-        )
+        or any(not is_integer(i) or not 0 <= i < n_runs for i in values)
     ):
         raise ValueError(f"{name} requires at least {minimum} unique valid run indices")
     return tuple(int(i) for i in values)

@@ -1,9 +1,9 @@
 """Select one ridge penalty using held-out trial encoding across features."""
 
-from numbers import Real
-
 import numpy as np
 
+from boldtailor._hrf_design import TIE_TOLERANCE
+from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.ridge_results import RidgeSelection
 
@@ -19,7 +19,8 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     """Reduce once across the complete feature population, never per block.
 
     Only features finite for every candidate enter the common mask. Negative
-    scores are valid. Objective ties within 1e-12 prefer the smaller penalty.
+    scores are valid. Objective ties within ``TIE_TOLERANCE`` prefer the smaller
+    penalty.
     ``at_boundary`` is True when the winner is the smallest or largest alpha
     (always True for a one-point grid).
     """
@@ -28,8 +29,7 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     if scores.ndim != 2 or scores.shape[0] != len(grid):
         raise ValueError("candidate_r2 must have one row per alpha")
     if (
-        isinstance(percentile, (bool, np.bool_))
-        or not isinstance(percentile, Real)
+        not is_real(percentile)
         or not np.isfinite(percentile)
         or not 0 <= percentile <= 100
     ):
@@ -47,7 +47,7 @@ def select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=
     objectives = np.percentile(
         scores[order][:, mask], percentile, axis=1, method="linear"
     )
-    winner = np.flatnonzero(objectives >= objectives.max() - 1e-12)[0]
+    winner = np.flatnonzero(objectives >= objectives.max() - TIE_TOLERANCE)[0]
     at_boundary = winner in (0, len(alphas) - 1)
     return RidgeSelection(
         alphas[winner], alphas, objectives, float(percentile), mask, at_boundary

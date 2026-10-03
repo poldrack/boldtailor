@@ -7,7 +7,12 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._hrf_design import resolve_hrf, scale_event_amplitudes
+from boldtailor._hrf_design import (
+    MIN_ONSET,
+    OVERSAMPLING,
+    resolve_hrf,
+    scale_event_amplitudes,
+)
 from boldtailor.model import TaskModel
 
 
@@ -66,7 +71,9 @@ def expand_events(events, task_model, run=0):
     )
 
 
-def task_columns(expanded, frame_times, hrf, *, min_onset=-24.0, oversampling=50):
+def task_columns(
+    expanded, frame_times, hrf, *, min_onset=MIN_ONSET, oversampling=OVERSAMPLING
+):
     """Nilearn task columns for one HRF: no drift, no constant, semantic names.
 
     Plain 'spm' and 'glover' become their peak-one kernels before Nilearn, and

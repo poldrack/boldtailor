@@ -4,7 +4,6 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 import logging
-from numbers import Real
 import re
 from uuid import uuid4
 
@@ -12,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import readonly_array
+from boldtailor._scalars import is_real
 from boldtailor._software import software_environment
 from boldtailor.logging import (
     _emit_record,
@@ -328,7 +328,7 @@ def _prepare_timing(
 
 
 def _prepare_tr(tr: object) -> float:
-    if not isinstance(tr, Real) or isinstance(tr, (bool, np.bool_)):
+    if not is_real(tr):
         raise ValueError("TR must be positive and finite")
     value = float(tr)
     if not np.isfinite(value) or value <= 0:

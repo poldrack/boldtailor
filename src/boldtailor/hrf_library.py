@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 from itertools import product
 import json
-from numbers import Integral
 from types import MappingProxyType
 
 import numpy as np
@@ -14,6 +13,10 @@ from nilearn.glm.first_level.hemodynamic_models import spm_hrf
 from scipy.stats import gamma, qmc
 
 from boldtailor._arrays import readonly_array
+from boldtailor._constants import OVERSAMPLING
+from boldtailor._scalars import is_integer
+
+_INTEGRAL_RATIO_TOLERANCE = 1e-12
 
 PARAMETER_NAMES = (
     "response_delay",
@@ -42,11 +45,7 @@ def _parameters(values):
 def _sampling(tr, oversampling):
     if not np.isfinite(tr) or tr <= 0:
         raise ValueError("TR must be positive and finite")
-    if (
-        isinstance(oversampling, (bool, np.bool_))
-        or not isinstance(oversampling, Integral)
-        or oversampling < 1
-    ):
+    if not is_integer(oversampling) or oversampling < 1:
         raise ValueError("oversampling must be a positive integer")
     return float(tr) / int(oversampling)
 
@@ -76,7 +75,7 @@ class HrfCandidate:
         if self.kind == "spm" and self.parameters != CANONICAL_PARAMETERS:
             raise ValueError("SPM candidate parameters must match the canonical kernel")
 
-    def kernel(self, tr, oversampling=50):
+    def kernel(self, tr, oversampling=OVERSAMPLING):
         dt = _sampling(tr, oversampling)
         if self.kind == "spm":
             return _peak_normalized(spm_hrf(tr, oversampling))
@@ -85,7 +84,9 @@ class HrfCandidate:
         # extra tail sample when duration/dt is numerically an integer.
         ratio_samples = duration / dt
         nearest = round(ratio_samples)
-        if abs(ratio_samples - nearest) <= 1e-12 * max(1, ratio_samples):
+        if abs(ratio_samples - nearest) <= _INTEGRAL_RATIO_TOLERANCE * max(
+            1, ratio_samples
+        ):
             ratio_samples = nearest
         times = np.arange(int(np.ceil(ratio_samples))) * dt - onset
         values = (
@@ -200,13 +201,12 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
     Custom candidates are sorted by parameters, not Sobol sequence order.
     """
     if (
-        isinstance(n_samples, (bool, np.bool_))
-        or not isinstance(n_samples, Integral)
+        not is_integer(n_samples)
         or n_samples < 1
         or int(n_samples) & (int(n_samples) - 1)
     ):
         raise ValueError("n_samples must be a positive integer power of two")
-    if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, Integral) or seed < 0:
+    if not is_integer(seed) or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
     points = qmc.Sobol(d=6, scramble=True, rng=int(seed)).random_base2(
         int(n_samples).bit_length() - 1

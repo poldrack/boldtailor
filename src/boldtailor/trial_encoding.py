@@ -1,10 +1,9 @@
 """Predict trial betas with shared slopes and explicit run-baseline semantics."""
 
-from numbers import Integral
-
 import numpy as np
 import pandas as pd
 
+from boldtailor._scalars import is_integer
 from boldtailor._single_trial_fit import r_squared
 from boldtailor.ridge_results import TrialEncodingResult
 
@@ -14,12 +13,7 @@ def _run_indices(values, n_runs, name):
     if (
         not indices
         or len(set(indices)) != len(indices)
-        or any(
-            isinstance(i, (bool, np.bool_))
-            or not isinstance(i, Integral)
-            or not 0 <= i < n_runs
-            for i in indices
-        )
+        or any(not is_integer(i) or not 0 <= i < n_runs for i in indices)
     ):
         raise ValueError(f"{name} requires unique valid run indices")
     return tuple(int(i) for i in indices)

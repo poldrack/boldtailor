@@ -1,9 +1,10 @@
 """Run-wise OLS and normalized ridge with an unpenalized nuisance span."""
 
 from dataclasses import dataclass
-from numbers import Real
 
 import numpy as np
+
+from boldtailor._scalars import is_real
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,7 @@ def prepare_trial_betas(x, nuisance, signals):
 
 
 def validate_alpha(alpha):
-    if isinstance(alpha, (bool, np.bool_)) or not isinstance(alpha, Real):
+    if not is_real(alpha):
         raise ValueError("ridge_alpha must be a finite nonnegative number")
     if not np.isfinite(alpha) or alpha < 0:
         raise ValueError("ridge_alpha must be a finite nonnegative number")
