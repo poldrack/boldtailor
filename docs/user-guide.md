@@ -453,12 +453,16 @@ the trough depth, and the trough depth, all measured on the combined curve,
 with onset fixed. Each sample is converted to SPM parameters by
 `spm_parameters_from_realized()`, which refines the closed-form lobe conversion
 until the measured curve matches within 0.01 s (times), 0.02 s (widths) and
-0.1 % (depth). The five quantities are not independent for a double gamma, so
-roughly 40 % of points in the default box are unrealizable (for example a wide
-response cannot be followed by an early trough); those points are skipped and
-counted in `library.origin["rejected"]`, and the accepted set stays uniform
-over the feasible part of the box. Downstream fitting is unchanged because
-candidates carry SPM parameters. `realized_timing()` measures any candidate;
+0.1 % (depth). The default box (`TIMING_BOUNDS`) spans peak times of 2.5-8.5 s,
+response widths of 2-6.5 s, trough times of 8-19 s, undershoot widths of
+4-10 s, and depths of 0.05-0.4 of the peak. The five quantities are not
+independent for a double gamma, so roughly 40 % of points in that box are
+unrealizable (for example a wide response cannot be followed by an early
+trough). The sampler keeps drawing Sobol points in power-of-two batches until
+`n_samples` are realizable, records the number skipped in
+`library.origin["rejected"]`, and the accepted set stays uniform over the
+feasible part of the box, so a sparse box costs time rather than coverage.
+Downstream fitting is unchanged because candidates carry SPM parameters. `realized_timing()` measures any candidate;
 `timing_parameters()` and `spm_parameters()` convert exactly between SPM
 parameters and the gamma-lobe description.
 `library.timing_table` lists both parameterizations. See
