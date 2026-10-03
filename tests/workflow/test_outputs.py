@@ -420,10 +420,11 @@ def test_hrf_artifacts_write_splits_only_when_requested(selected):
 
 
 def test_save_workflow_publishes_every_stage_and_the_report(
-    selected, small_library, tmp_path
+    selected, settings_for, tmp_path
 ):
-    settings, runs, model, _, library, blocks, selections = selected
-    root = settings.bids_dir
+    _, runs, model, _, library, blocks, selections = selected
+    root = selected[0].bids_dir
+    settings = settings_for(root, ridge_mode="off", output_dir=tmp_path / "out")
     glm = inputs.glm_model(runs, model)
     glms = {
         "CanonicalGLM": analysis.fit_glms(runs, root, blocks, glm),
@@ -476,3 +477,30 @@ def test_save_workflow_publishes_every_stage_and_the_report(
     assert effects.header.get_axis(0).name.tolist() == list(model.regressor_names)
     with pytest.raises(FileExistsError, match="existing_results"):
         outputs.check_output(settings)
+
+
+def test_save_workflow_keeps_another_sessions_dataset_description(
+    four_runs, small_library, settings_for, tmp_path
+):
+    root, _ = four_runs
+    settings = settings_for(root, output_dir=tmp_path / "out")
+    runs, model, _ = _session(settings)
+    existing = settings.output_dir / "dataset_description.json"
+    existing.parent.mkdir(parents=True)
+    existing.write_text('{"Name": "earlier session"}')
+    paths = outputs.save_workflow(
+        settings,
+        runs,
+        model,
+        small_library,
+        None,
+        {},
+        {},
+        figures={},
+        activation=None,
+        skipped=(),
+        report_html=None,
+    )
+    assert existing not in paths
+    assert json.loads(existing.read_text()) == {"Name": "earlier session"}
+    assert (settings.output_dir / f"{settings.stem}_desc-boldtailor_runs.tsv") in paths
