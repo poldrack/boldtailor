@@ -331,6 +331,11 @@ def test_bids_activity_has_command_and_timestamps(record_from_fit):
         ("single_trial", "boldtailor.fit_single_trials"),
         ("hrf_selection", "boldtailor.select_hrf"),
         ("normalize", "boldtailor.from_arrays"),
+        ("encoding_guided_ridge_cv", "boldtailor.score_ridge_candidates"),
+        (
+            "encoding_guided_fractional_ridge_cv",
+            "boldtailor.score_fraction_candidates",
+        ),
         ("brand_new_step", "boldtailor.brand_new_step"),
     ],
 )

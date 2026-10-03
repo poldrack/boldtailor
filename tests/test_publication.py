@@ -254,16 +254,26 @@ def test_existing_collision_is_refused_before_any_artifact_is_replaced(tmp_path)
     _assert_no_transaction_debris(destination)
 
 
-@pytest.mark.parametrize("symlink_location", ("destination", "parent", "artifact"))
+def test_symlinked_destination_resolves_to_its_target(tmp_path):
+    real = tmp_path / "scratch" / "derivs"
+    real.mkdir(parents=True)
+    destination = tmp_path / "derivatives"
+    destination.symlink_to(real, target_is_directory=True)
+
+    published = publish_artifact_set(destination, [Artifact("a/result.bin", b"r")])
+
+    assert published == (real / "a" / "result.bin",)
+    assert (real / "a" / "result.bin").read_bytes() == b"r"
+    assert (real.parent / "derivs.boldtailor" / "lock").exists()
+
+
+@pytest.mark.parametrize("symlink_location", ("parent", "artifact"))
 def test_preflight_never_follows_destination_symlinks(tmp_path, symlink_location):
     outside = tmp_path / "outside"
     outside.mkdir()
     destination = tmp_path / "derivatives"
     artifact_path = "nested/result.bin"
-    if symlink_location == "destination":
-        destination.symlink_to(outside, target_is_directory=True)
-        artifact_path = "result.bin"
-    elif symlink_location == "parent":
+    if symlink_location == "parent":
         destination.mkdir()
         (destination / "nested").symlink_to(outside, target_is_directory=True)
     else:
@@ -691,3 +701,32 @@ def test_control_files_cannot_overwrite_protected_sources(
     assert source.read_bytes() == b"irreplaceable-input"
     assert not (destination / "result.bin").exists()
     assert sorted(path.name for path in control.iterdir()) == [source_name]
+
+
+def test_recovery_directory_names_a_directory_that_exists(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "output"
+    real_replace = publication.os.replace
+    real_unlink = Path.unlink
+
+    def fail_second(source, target):
+        if Path(target).name == "b.bin":
+            raise OSError("promotion failed")
+        return real_replace(source, target)
+
+    def fail_unlink(path, *args, **kwargs):
+        if path.name == "a.bin":
+            raise OSError("cannot remove")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(publication.os, "replace", fail_second)
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    with pytest.raises(PublicationError) as caught:
+        publish_artifact_set(
+            destination, [Artifact("a.bin", b"a"), Artifact("b.bin", b"b")]
+        )
+    recovery = caught.value.recovery_directory
+    assert caught.value.rollback_errors
+    assert recovery is not None and recovery.is_dir()
+    assert recovery.name.startswith("stage-")
