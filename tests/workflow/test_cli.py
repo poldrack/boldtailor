@@ -168,3 +168,23 @@ def test_report_command_line_round_trips_through_the_parser(four_runs, tmp_path)
     assert tokens[:2] == ["boldtailor", "run"]
     again = cli.settings_from_args(cli.build_parser().parse_args(tokens[1:]))
     assert again == settings
+
+
+def test_skipping_a_stage_also_skips_the_stages_that_require_it(four_runs):
+    root, _ = four_runs
+    args = cli.build_parser().parse_args(_argv(root, "--skip-stage", "betas"))
+    assert cli.settings_from_args(args).stages == frozenset({"glms", "reliability"})
+
+
+def test_settings_stay_strict_about_stage_requirements(four_runs):
+    from boldtailor.workflow.settings import WorkflowSettings
+
+    root, _ = four_runs
+    with pytest.raises(ValueError, match="summaries requires stage betas"):
+        WorkflowSettings(
+            bids_dir=root,
+            subject="sub-07",
+            session="ses-nsd10",
+            task="nsdcore",
+            stages=frozenset({"glms", "summaries"}),
+        )

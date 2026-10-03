@@ -100,10 +100,12 @@ def test_reliability_is_skipped_with_a_reason_when_a_parity_is_short(
     assert not any(f"_desc-{d}_" in n for d in split_descriptors for n in names)
 
 
+@pytest.mark.parametrize("session", ["dataset", "four_runs"])
 def test_ridge_cv_with_a_short_parity_stops_before_any_fitting(
-    dataset, settings_for, tmp_path, monkeypatch
+    session, request, settings_for, tmp_path, monkeypatch
 ):
-    root, *_ = dataset  # two runs: one odd, one even
+    # Two runs (1 odd, 1 even) or four (2 and 2): optimized ridge CV needs 3 and 3.
+    root = request.getfixturevalue(session)[0]
 
     def refuse(*args, **kwargs):
         raise AssertionError("HRF selection ran before the ridge CV check")
@@ -114,7 +116,9 @@ def test_ridge_cv_with_a_short_parity_stops_before_any_fitting(
     with pytest.raises(inputs.InputError) as raised:
         workflow_run.run_workflow(settings)
     message = str(raised.value)
-    assert "ridge cross-validation needs at least two odd and two even runs" in message
+    assert (
+        "ridge cross-validation needs at least three odd and three even runs" in message
+    )
     assert "--ridge-mode off" in message and "--skip-stage betas" in message
     out = tmp_path / "out"
     assert not out.exists() or not any(out.iterdir())
