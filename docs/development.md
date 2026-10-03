@@ -316,3 +316,35 @@ describe features that have since shipped.
 - [Expanded HRF validation](superpowers/validation/2026-09-26-hrf-selection.md)
 - [Parallel execution validation](superpowers/validation/2026-09-26-nsd-parallel.md)
 - [Odd/even HRF validation](superpowers/validation/2026-09-27-split-hrf.md)
+
+## Dependency notes
+
+- `uv.lock` pins nilearn 0.14.0, a yanked release. `pyproject.toml` allows
+  `nilearn>=0.14.0,<0.15`.
+- `_hrf_design` imports Nilearn's private `_sample_condition` to build the
+  oversampled boxcar that the peak-normalized event scales are computed on.
+  `tests/oracles.py` imports it as well to build independent references.
+- Decision: stay on `<0.15` until the fast convolution path (the private
+  `_sample_condition` contract and `compute_regressor` numerics) is re-verified
+  against the next Nilearn release by the Nilearn oracle tests.
+
+## Branch inventory
+
+Branches merged into `main` and not checked out in a worktree were deleted with
+`git branch -d`. The remaining unmerged branches, with purposes taken from
+their last commit, are:
+
+| Branch | Purpose (last commit) |
+| --- | --- |
+| `feature/pre-fitlins-remediation` | Remediation work before FitLins integration (privacy coverage tests) |
+| `fix/red-team-remediation` | Red-team remediation (shared-checkout integration verification) |
+| `safety/prepared-notebook-source-access` | Safety copy: prepared notebook source-access documentation |
+| `safety/task-delta-r2-task4-d86b117` | Safety copy: task delta R-squared notebook diagnostics |
+| `safety/task-delta-r2-task4-fd2db4c` | Safety copy: task delta R-squared display |
+| `safety/task3-pre-clipped-regression` | Safety copy: serialized task delta R-squared map |
+| `safety/task4-before-missing-term-review` | Safety copy: prepared design-matrix fits |
+| `task3-review-safety-dbc5b14` | Safety copy: whole-brain notebook task report |
+| `task5-review-safety-daa401f` | Safety copy: prepared fit provenance |
+
+The `safety/` and `task*-safety` branches are review snapshots; delete them once
+the maintainer confirms they are no longer needed.
