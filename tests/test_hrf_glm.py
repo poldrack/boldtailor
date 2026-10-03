@@ -691,3 +691,92 @@ def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem
             hrf_selection=chosen,
             feature_signature="axis-tm",
         )
+
+
+_TRUE_CIDS = (1, 0, 2, 1)
+_AMPLITUDES = np.array([3.0, 0.8, -0.6])
+
+
+def _oracle_run(library, task_model, run):
+    from boldtailor._hrf_design import hrf_model
+    from boldtailor._task_design import run_task_columns
+
+    rng = np.random.default_rng(4100 + run)
+    t = 0.775 + 1.6 * np.arange(90 + 4 * run)
+    events = pd.DataFrame(
+        dict(
+            onset=np.array([5.3, 21.1, 42.2, 64.4, 88.5, 110.2]) + run,
+            duration=[1.2, 2.0, 0.7, 1.5, 1.1, 2.3],
+            trial_type=[0, 1, 1, 0, 1, 0],
+            response_time=np.array([0.8, 1.3, 0.9, 1.7, 1.1, 1.4]) + 0.1 * run,
+        )
+    )
+    motion = np.linspace(-1, 1, len(t)) * (run + 1)
+    features = []
+    for cid in _TRUE_CIDS:
+        kernel = hrf_model(library.candidates[cid])
+        columns = run_task_columns(
+            events,
+            task_model,
+            t,
+            kernel,
+            run=run,
+            min_onset=-24.0,
+            oversampling=50,
+        )
+        noise = rng.normal(0.0, 0.05, len(t))
+        features.append(columns.to_numpy() @ _AMPLITUDES + 0.3 * motion + 50 + noise)
+    return np.column_stack(features), events, t, pd.DataFrame(dict(motion=motion))
+
+
+@pytest.fixture(scope="module")
+def known_amplitude_problem(two_candidate_library):
+    library, task_model = two_candidate_library, _nsd_model()
+    runs = [_oracle_run(library, task_model, run) for run in range(3)]
+    signals, events, times, confounds = (list(part) for part in zip(*runs))
+    data = from_arrays(signals, events, frame_times=times, confounds=confounds)
+    selection = select_hrf(
+        data, library=library, feature_signature="axis-oracle", task_model=task_model
+    )
+    return data, selection, task_model
+
+
+def _nilearn_equal_weight(signals, designs, feature, column):
+    runs = []
+    for y, design in zip(signals, designs, strict=True):
+        vector = np.zeros(design.shape[1])
+        vector[design.columns.get_loc(column)] = 1.0
+        labels, fitted = run_glm(y[:, [feature]], design.to_numpy(), noise_model="ols")
+        runs.append(compute_contrast(labels, fitted, vector, stat_type="t"))
+    return (1 / 3) * (runs[0] + runs[1] + runs[2])
+
+
+def test_task_model_selected_glm_matches_nilearn_on_known_amplitudes(
+    known_amplitude_problem,
+):
+    data, selection, task_model = known_amplitude_problem
+    np.testing.assert_array_equal(selection.hrf_indices, _TRUE_CIDS)
+    model = ModelSpec(
+        contrasts={"rt": {"response_time": 1.0}},
+        confounds=("motion",),
+        hrf_model="spm",
+        noise_model="ols",
+        drift_model=None,
+        task_model=task_model,
+    )
+    result = fit(data, model, hrf_selection=selection, feature_signature="axis-oracle")
+    for feature, cid in enumerate(_TRUE_CIDS):
+        designs = [result.group_designs[run, cid] for run in range(3)]
+        expected = _nilearn_equal_weight(
+            data.signals, designs, feature, "response_time"
+        )
+        for accessor, oracle in [
+            ("effect", "effect_size"),
+            ("variance", "effect_variance"),
+            ("stat", "stat"),
+        ]:
+            np.testing.assert_allclose(
+                getattr(result, accessor)("rt")[feature],
+                getattr(expected, oracle)()[0],
+                rtol=1e-8,
+            )

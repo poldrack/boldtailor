@@ -380,3 +380,93 @@ def test_contrast_preflight_rejects_before_glm(
 
     if warning:
         assert any(warning in str(item.message) for item in caught)
+
+
+def _per_run_nilearn(signals, designs, vectors, noise_model):
+    from nilearn.glm import compute_contrast
+    from nilearn.glm.first_level import run_glm
+
+    out = []
+    for y, x, vector in zip(signals, designs, vectors, strict=True):
+        labels, results = run_glm(y, x.to_numpy(), noise_model=noise_model)
+        out.append(compute_contrast(labels, results, vector, stat_type="t"))
+    return out
+
+
+def _column_vector(design, weights):
+    vector = np.zeros(design.shape[1])
+    for name, weight in weights.items():
+        vector[design.columns.get_loc(name)] = weight
+    return vector
+
+
+@pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+def test_multirun_contrasts_are_equal_weight_fixed_effects(noise_model):
+    from scipy import stats
+
+    signals, events, frame_times, designs, model = _problem()
+    model = ModelSpec(
+        contrasts=model.contrasts, drift_model="cosine", noise_model=noise_model
+    )
+    result = fit(from_arrays(signals, events, frame_times=frame_times), model)
+    weights = {"face": 1.0, "house": -1.0}
+    vectors = [_column_vector(d, weights) for d in designs]
+    runs = _per_run_nilearn(signals, designs, vectors, noise_model)
+    n = len(runs)
+    effect = sum(r.effect_size() for r in runs) / n
+    variance = sum(r.effect_variance() for r in runs) / n**2
+    dof = sum(r.dof for r in runs)
+    t = effect / np.sqrt(variance)
+    name = "face_gt_house"
+    np.testing.assert_allclose(result.effect(name), effect, rtol=1e-8)
+    np.testing.assert_allclose(result.variance(name), variance, rtol=1e-8)
+    np.testing.assert_allclose(result.stat(name), t, rtol=1e-8)
+    np.testing.assert_allclose(
+        result.one_sided_p_value(name), stats.t.sf(t, dof), rtol=1e-8
+    )
+
+
+def _duplicated_fit_and_reduced_oracle():
+    from nilearn.glm import compute_contrast
+    from nilearn.glm.first_level import run_glm
+
+    signals, _, frame_times, designs, _ = _problem()
+    design, y = designs[0], signals[0]
+    duplicated = design.assign(face_copy=design["face"])
+    roles = {c: "nuisance" for c in duplicated.columns}
+    roles.update({c: "task" for c in ("face", "face_copy", "house")})
+    roles["constant"] = "intercept"
+    prepared = PreparedDesignAnalysis.from_arrays(
+        signals=[y],
+        design_matrices=[duplicated],
+        frame_times=[frame_times[0]],
+        column_roles=[roles],
+    )
+    contrasts = {"c": {"face": 0.5, "face_copy": 0.5, "house": -1.0}}
+    with pytest.warns(UserWarning, match="design rank"):
+        result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
+    labels, fitted = run_glm(y, design.to_numpy(), noise_model="ols")
+    # duplicated columns identify only b_f + b_c: 0.5*b_f + 0.5*b_c folds to 0.5.
+    vector = _column_vector(design, {"face": 0.5, "house": -1.0})
+    return result, compute_contrast(labels, fitted, vector, stat_type="t")
+
+
+def test_duplicated_regressor_effect_matches_reduced_design():
+    result, expected = _duplicated_fit_and_reduced_oracle()
+    np.testing.assert_allclose(result.effect("c"), expected.effect_size(), rtol=1e-8)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "finding: on a rank-deficient design nilearn's OLS dispersion divides by "
+        "n - n_columns (24) while df_residuals is n - rank (25), so the variance is "
+        "25/24 larger than on the reduced full-rank design"
+    ),
+)
+def test_duplicated_regressor_variance_and_stat_match_reduced_design():
+    result, expected = _duplicated_fit_and_reduced_oracle()
+    np.testing.assert_allclose(
+        result.variance("c"), expected.effect_variance(), rtol=1e-8
+    )
+    np.testing.assert_allclose(result.stat("c"), expected.stat(), rtol=1e-8)
