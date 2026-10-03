@@ -7,10 +7,13 @@
 > **Note (2026-10-02):** Recorded beta magnitudes below predate per-event
 > unit-peak normalization. They were fitted with sum-to-one kernels and unit
 > event amplitudes; current betas are the peak response to each presentation,
-> so their magnitudes differ by an event- and kernel-dependent factor (for
-> reference, canonical SPM's kernel sum-to-peak ratio at TR 1.6 s and
-> oversampling 50 is about 148). HRF selections, R², and fractions are
-> scale-invariant and unaffected.
+> so their magnitudes differ by an event- and kernel-dependent factor. For a
+> 3 s canonical SPM event at TR 1.6 s and oversampling 50, the event response
+> peaks at 87.3 against a kernel sum of 148.2, so current betas are about 0.59
+> times the recorded ones (the kernel sum-to-peak ratio alone, about 148, is
+> not the beta factor). HRF selections, R², and fractions are scale-invariant
+> and essentially unaffected (per-event realized-count scales vary by ±1
+> sample).
 
 These measurements describe the September 2026 analyses of `sub-07/ses-nsd10`.
 For running an analysis, see the [NSD guide](../../examples/NSD/README.md).

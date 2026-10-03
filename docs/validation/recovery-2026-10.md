@@ -33,8 +33,8 @@ Reproduce with `uv run pytest -q tests/test_recovery.py`.
   `[4, 10, 0.6, 0.8, 3, 0.3, 36]` (cosine to canonical 0.851 when both are
   sampled with `kernel(1.6, 50)` and zero-padded): selected ids
   `[0, 1, 2, 3, 2, 1, 0, 3]` equal the truth, i.e. 8/8 = 1.0 recovered
-  (threshold 0.75, unchanged). The earlier misses were therefore caused by the
-  near-duplicate library entry, not by a selection bias.
+  (threshold 0.75, unchanged). The earlier misses are therefore consistent
+  with the near-duplicate library entry rather than a selection bias.
 - Canonical control (truth canonical for all 6 features; library now includes
   the near-canonical `[5, 14, 1.0, 1.5, 6, 1.0, 36]` row, cosine 0.995 to
   canonical): selected ids `[2, 0, 0, 0, 0, 0]`, i.e. 5/6 = 0.833 selected

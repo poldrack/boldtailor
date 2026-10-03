@@ -15,13 +15,16 @@ uv run git diff --check
 ```
 
 `uv run pytest` runs the package suite in `tests/`. Example and notebook tests are
-opt-in: `uv run pytest examples/NSD` and
+opt-in: `uv run pytest examples/NSD`, `uv run pytest examples/validation`, and
 `uv run pytest --run-notebooks tests/test_stop_signal_demo.py examples/NSD`.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
 
-CI runs the full suite with warnings treated as errors and checks Python
-formatting on a clean Python 3.12 runner. It also builds and tests the installed
+CI splits the suites. On every push and pull request it runs the package
+suite in `tests/` with warnings treated as errors and checks Python formatting
+on a clean Python 3.12 runner. A separate `examples` job, run only on manual
+dispatch and on schedule, runs `examples/NSD`, `examples/validation`, and the
+stop-signal notebook test with `--run-notebooks` and warnings as errors. It also builds and tests the installed
 wheel in an isolated environment, without the checkout's editable installation
 or notebook development dependencies:
 
