@@ -45,7 +45,7 @@ def test_scalar_artifact_round_trips_names_axis_and_float32_values(
     image = nib.load(path)
     assert image.header.get_axis(0).name.tolist() == ["x", "y"]
     assert image.header.get_axis(1) == cortical_axis
-    assert image.nifti_header.get_intent()[0] == "dense scalar"
+    assert image.nifti_header.get_intent()[0] == "ConnDenseScalar"
     np.testing.assert_array_equal(image.get_fdata(), values.astype(np.float32))
 
 

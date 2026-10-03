@@ -76,6 +76,7 @@ source = { editable = "." }
 dependencies = [
     { name = "filelock" },
     { name = "joblib" },
+    { name = "nibabel" },
     { name = "nilearn" },
     { name = "numpy" },
     { name = "pandas" },
@@ -88,7 +89,6 @@ dev = [
     { name = "ipykernel" },
     { name = "matplotlib" },
     { name = "nbclient" },
-    { name = "nibabel" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -97,6 +97,7 @@ dev = [
 requires-dist = [
     { name = "filelock" },
     { name = "joblib", specifier = ">=1.3" },
+    { name = "nibabel", specifier = ">=5.2" },
     { name = "nilearn", specifier = ">=0.14.0,<0.15" },
     { name = "numpy" },
     { name = "pandas" },
@@ -109,7 +110,6 @@ dev = [
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "nbclient", specifier = ">=0.11.0" },
-    { name = "nibabel" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
