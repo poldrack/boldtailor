@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 from dataclasses import dataclass
+import io
 import warnings
 
 import numpy as np
@@ -148,14 +150,15 @@ def kernel_task_columns(frame_times, events, kernel, model, run):
         scaled = scale_event_amplitudes(
             events, kernel, frame_times, model.oversampling, model.min_onset
         )
-        task = make_first_level_design_matrix(
-            frame_times,
-            events=scaled,
-            hrf_model=kernel,
-            drift_model=None,
-            min_onset=model.min_onset,
-            oversampling=model.oversampling,
-        ).drop(columns="constant")
+        with redirect_stdout(io.StringIO()):  # Nilearn's modulation notice
+            task = make_first_level_design_matrix(
+                frame_times,
+                events=scaled,
+                hrf_model=kernel,
+                drift_model=None,
+                min_onset=model.min_onset,
+                oversampling=model.oversampling,
+            ).drop(columns="constant")
     except (NotImplementedError, ValueError) as error:
         raise ValueError(f"run {run} design compilation failed: {error}") from error
     task.columns = [name.removesuffix("_kernel") for name in task.columns]
