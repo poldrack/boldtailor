@@ -308,8 +308,10 @@ From `boldtailor.hrf_library`:
 | --- | --- |
 | `sobol_hrf_library(n_samples=512, *, seed=0)` | Sample continuous parameters with scrambled Sobol; add canonical SPM as ID 0 |
 | `expanded_hrf_library()` | Return the original 649-candidate grid library |
-| `timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0)` | Sample lobe timing (response peak/SD, undershoot peak/SD, depth) with scrambled Sobol, convert to SPM gamma parameters, add canonical SPM as ID 0; `bounds` overrides `TIMING_BOUNDS` |
-| `timing_parameters(parameters)` / `spm_parameters(timing)` | Exact conversion between the seven SPM gamma parameters and `TIMING_NAMES` (lobe peak time and SD, undershoot peak time and SD, undershoot depth, onset, duration) |
+| `timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0)` | Sample realized HRF timing (peak time, response-lobe SD, trough time, undershoot-lobe SD, trough depth; `REALIZED_NAMES`) with scrambled Sobol, convert each point to SPM gamma parameters by numerical refinement, skip infeasible points (`origin["rejected"]`), add canonical SPM as ID 0; `bounds` overrides `TIMING_BOUNDS` |
+| `realized_timing(parameters)` | Peak time, trough time, and trough depth measured on the combined curve (0.01 s grid) |
+| `spm_parameters_from_realized(timing)` | SPM gamma parameters whose curve realizes the requested peak time, trough time, and depth (lobe SDs and onset carried through); raises `ValueError` for infeasible targets |
+| `timing_parameters(parameters)` / `spm_parameters(timing)` | Exact closed-form conversion between the SPM gamma parameters and the gamma-lobe timing `TIMING_NAMES` (lobe peak time and SD, undershoot-lobe peak time and SD, lobe depth, onset, duration) |
 | `HrfLibrary.timing_table` | One row per candidate with both parameterizations |
 | `HrfLibrary.from_parameters(parameters)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 |
 | `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"` or `"double_gamma"` |
