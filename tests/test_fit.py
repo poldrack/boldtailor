@@ -807,3 +807,18 @@ def test_plain_fit_prints_nothing(single_run_problem, hrf_name, capsys):
     capsys.readouterr()
     fit(data, replace(model, hrf_model=hrf_name))
     assert capsys.readouterr().out == ""
+
+
+def _user_kernel(tr, oversampling=50):
+    return np.exp(-np.arange(0, 20, tr / oversampling) / 4.0)
+
+
+@pytest.mark.parametrize("hrf_model", ["fir", _user_kernel])
+def test_fir_and_user_kernels_record_no_normalization(single_run_problem, hrf_model):
+    from dataclasses import replace
+
+    from boldtailor.model import model_identity
+
+    _, _, _, model = single_run_problem
+    identity = model_identity(replace(model, hrf_model=hrf_model))
+    assert identity.activity.get("hrf_normalization") is None
