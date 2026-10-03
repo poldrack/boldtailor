@@ -76,6 +76,7 @@ source = { editable = "." }
 dependencies = [
     { name = "filelock" },
     { name = "joblib" },
+    { name = "matplotlib" },
     { name = "nibabel" },
     { name = "nilearn" },
     { name = "numpy" },
@@ -97,6 +98,7 @@ dev = [
 requires-dist = [
     { name = "filelock" },
     { name = "joblib", specifier = ">=1.3" },
+    { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "nibabel", specifier = ">=5.2" },
     { name = "nilearn", specifier = ">=0.14.0,<0.15" },
     { name = "numpy" },

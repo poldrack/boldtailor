@@ -59,8 +59,10 @@ Sources in `examples/NSD`: `workflow_files` → `files`; `workflow_inputs` and
 `settings` → `inputs` and `settings`; `workflow_analysis` and
 `parallel_blocks` → `analysis`; `ridge_workflow` and `ridge_provenance` →
 `beta_series`; `workflow_outputs`, `ridge_outputs`, `fractional_outputs` →
-`outputs`; `workflow_artifacts` → `artifacts`; `workflow_plots`,
-`rt_diagnostics` → `plots`; `workflow_surfaces` → `surfaces`.
+`outputs`; `workflow_artifacts` → `artifacts`; `workflow_plots`
+→ `plots`; `workflow_surfaces` → `surfaces`.
+
+`rt_diagnostics` is retired (used only by the legacy scripts; the notebook's RT check uses `boldtailor.diagnostics.even_run_points` directly).
 
 Retired with their tests: `nsd_hrf.py`, `nsd_single_trial.py`,
 `nsd_cifti.py`, `hrf_artifacts.py`, `single_trial_artifacts.py`,
@@ -147,11 +149,16 @@ function of the runs, the settings, and earlier results.
 1. `glms`: canonical GLM; HRF selection on all runs; optimized GLM; contrast,
    R², ΔR², selected-HRF and peak-time maps; design TSVs; library table.
 2. `reliability`: odd and even selections, parameter agreement and curve
-   correlation tables and figures. If fewer than two odd or two even runs, the
-   stage records the reason in the settings file's `skipped` list and the
-   run continues.
+   correlation tables and figures. The odd/even HRF artifacts (HRFOdd, HRFEven,
+   HRFOddToEven, HRFEvenToOdd, HRFReliability) are written only when the
+   reliability stage runs. If fewer than two odd or two even runs, the stage
+   records the reason in the settings file's `skipped` list and the run
+   continues.
 3. `betas`: canonical-HRF and optimized-HRF single-trial betas under
    `ridge_mode`, returning one `BetaModel` per HRF choice.
+
+`BetaModel` fields are `name` (descriptor such as `OptimizedTrialFractionalCV`), `hrf` (`canonical` or `optimized`), `estimator` (`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`), `fit` (the beta-series result: per-run betas, trial tables, R², designs, provenance, RT correlations or `None`), `tuning` and `evaluation` (cross-validated tuning and held-out encoding results, or `None` for `off` and `fixed`), `cv_provenance`, and `predictors`.
+
 4. `summaries`: RT correlation maps, mean-beta activation maps, comparison
    figures.
 
@@ -184,10 +191,8 @@ listed in the settings file, so an incomplete run has no report.
 
 Layout: `<output_dir>/dataset_description.json`;
 `<output_dir>/<sub>/<ses>/func/` holding `<stem>_space-fsLR_den-91k_desc-<D>_stat-<S>.dscalar.nii`
-maps, design and table TSVs, PNG figures, per-activity provenance JSON, and
-`<stem>_desc-boldtailor_settings.json` with the resolved settings, the
-discovered runs, the detected task model, the library fingerprint, and any
-skipped stages.
+maps, design and table TSVs, PNG figures, and per-activity provenance JSON.
+The spec's settings file is `<stem>_desc-boldtailor_metadata.json`, which carries the analysis metadata the multisession readers already consume plus `settings`, `runs`, `task_model`, `library_fingerprint`, `skipped`, and `report`.
 
 Descriptors: `canonicalGLM`, `optimizedGLM`, `HRF`, `HRFOdd`, `HRFEven`,
 `canonicalBetas`, `optimizedBetas`, `RT`, `activation`. No `notebook` prefix.
@@ -224,6 +229,9 @@ returns the exit code so tests call it directly.
 
 - Example tests move with their modules into `tests/workflow/` and run by
   default. The synthetic BIDS/fMRIPrep fixture moves to `tests/conftest.py`.
+  The synthetic BIDS builders live in `tests/workflow/synthetic_bids.py`;
+  `tests/workflow/conftest.py` and `examples/NSD/conftest.py` both register
+  fixtures from it.
 - New tests: settings validation and `output_name`; `from_dict` round trip;
   fMRIPrep directory resolution (unique, ambiguous, absent); modulator
   detection and `--modulator` parsing; `BetaModel` shape across all four ridge
