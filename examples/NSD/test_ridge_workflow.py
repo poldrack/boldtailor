@@ -5,17 +5,14 @@ import importlib
 
 import nibabel as nib
 import numpy as np
-import pandas as pd
 import pytest
 
-from boldtailor.hrf_library import HrfLibrary
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.hrf_selection import select_hrf
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.cifti import spatial_signature
 from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 
 
 def workflow():
@@ -23,38 +20,6 @@ def workflow():
         return importlib.import_module("examples.NSD.ridge_workflow")
     except ImportError as error:
         pytest.fail(f"Missing NSD ridge CV workflow: {error}")
-
-
-@pytest.fixture
-def six_run_dataset(dataset):
-    root, prep, *_ = dataset
-    for directory in (root, prep):
-        func = directory / "sub-07/ses-nsd10/func"
-        sources = list(func.glob("*run-01*"))
-        for number in (3, 4, 5, 6):
-            for source in sources:
-                target = source.with_name(
-                    source.name.replace("run-01", f"run-{number:02d}")
-                )
-                target.write_bytes(source.read_bytes())
-    rng = np.random.default_rng(75)
-    for number in range(1, 7):
-        path = next(prep.rglob(f"*run-{number:02d}*dtseries.nii"))
-        image = nib.load(path)
-        y = image.get_fdata()
-        y[:, :3] += rng.normal(0, 0.3, y[:, :3].shape)
-        nib.save(nib.Cifti2Image(y, header=image.header), path)
-        event_path = next((root / "sub-07").rglob(f"*run-{number:02d}*events.tsv"))
-        table = pd.read_csv(event_path, sep="\t")
-        table.response_time += 0.03 * number
-        table["stimulus_id"] = np.arange(len(table)) + number * 100
-        table.to_csv(event_path, sep="\t", index=False)
-    return root, prep
-
-
-@pytest.fixture
-def cv_library():
-    return HrfLibrary.from_parameters([[4, 12, 0.8, 1, 5, 0, 36]])
 
 
 def options(library, **extra):

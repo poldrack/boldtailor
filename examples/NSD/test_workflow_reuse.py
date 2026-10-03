@@ -10,10 +10,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import HrfLibrary
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_nsd_workflow import four_runs  # noqa: F401
 from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session
-from examples.NSD.test_ridge_workflow import six_run_dataset  # noqa: F401
 from examples.NSD import workflow_outputs
 
 
@@ -36,7 +33,7 @@ def execute_notebook(config):
 
 @pytest.mark.parametrize("mode", ["off", "cv", "fractional_cv"])
 def test_notebook_reuses_saved_results_without_fitting(
-    six_run_dataset, tmp_path, monkeypatch, mode  # noqa: F811
+    six_run_dataset, tmp_path, monkeypatch, mode
 ):
     from examples.NSD import workflow_analysis, ridge_workflow
     from examples.NSD.ridge_outputs import tuning_table
@@ -145,7 +142,7 @@ def test_saved_results_with_other_task_model_are_rejected():
         validate_saved_settings({"settings": settings}, settings)
 
 
-def test_metadata_records_the_task_model_fingerprint(four_runs):  # noqa: F811
+def test_metadata_records_the_task_model_fingerprint(four_runs):
     library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
     runs = load_session(*four_runs)
     published = workflow_outputs._metadata(runs, library, {})
@@ -170,7 +167,7 @@ def test_saved_results_with_other_hrf_normalization_are_rejected():
     )
 
 
-def test_metadata_records_peak_hrf_normalization(four_runs):  # noqa: F811
+def test_metadata_records_peak_hrf_normalization(four_runs):
     library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
     runs = load_session(*four_runs)
     published = workflow_outputs._metadata(runs, library, {})

@@ -10,13 +10,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_ridge_workflow import six_run_dataset  # noqa: F401
-from examples.NSD.test_multisession_analysis import api, saved_sessions  # noqa: F401
+from examples.NSD import (
+    multisession_analysis,
+    multisession_inputs,
+    multisession_outputs,
+    multisession_workflow,
+)
 
 
 @pytest.fixture
-def two_raw_sessions(six_run_dataset):  # noqa: F811
+def two_raw_sessions(six_run_dataset):
     root, prep = six_run_dataset
     for directory in (root, prep):
         source = directory / "sub-07/ses-nsd10/func"
@@ -34,7 +37,7 @@ def two_raw_sessions(six_run_dataset):  # noqa: F811
 def test_missing_sessions_fit_then_reuse_without_fitting(
     two_raw_sessions, tmp_path, monkeypatch
 ):
-    module = api("workflow")
+    module = multisession_workflow
     output = tmp_path / "output"
     config = dict(
         **two_raw_sessions,
@@ -48,7 +51,9 @@ def test_missing_sessions_fit_then_reuse_without_fitting(
     sessions = ["ses-nsd10", "ses-nsd11"]
     status = module.ensure_session_outputs(config, sessions, estimators=["OLS"])
     assert status.status.tolist() == ["fitted", "fitted"]
-    inputs = api("inputs").load_sessions(output, "sub-07", sessions, estimators=["OLS"])
+    inputs = multisession_inputs.load_sessions(
+        output, "sub-07", sessions, estimators=["OLS"]
+    )
     paths = [p for record in inputs["records"] for p in record["sources"]]
     before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in paths}
 
@@ -69,7 +74,7 @@ def test_missing_sessions_fit_then_reuse_without_fitting(
 
 def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
     with pytest.raises(FileNotFoundError, match="ses-nsd10"):
-        api("workflow").ensure_session_outputs(
+        multisession_workflow.ensure_session_outputs(
             dict(bids_root=str(tmp_path), output_root=str(tmp_path / "output")),
             ["ses-nsd10", "ses-nsd11"],
             estimators=["OLS"],
@@ -86,7 +91,7 @@ def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
         events.loc[1, "response_time"] = np.nan
         events.to_csv(path, sep="\t", index=False)
     output = tmp_path / "output"
-    status = api("workflow").ensure_session_outputs(
+    status = multisession_workflow.ensure_session_outputs(
         dict(
             **two_raw_sessions,
             output_root=str(output),
@@ -98,7 +103,9 @@ def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
         ["ses-nsd10", "ses-nsd11"],
     )
     assert status.status.tolist() == ["fitted", "fitted"]
-    loaded = api("inputs").load_sessions(output, "sub-07", ["ses-nsd10", "ses-nsd11"])
+    loaded = multisession_inputs.load_sessions(
+        output, "sub-07", ["ses-nsd10", "ses-nsd11"]
+    )
     assert len(loaded["records"]) == 2
     for record in loaded["records"]:
         assert (
@@ -130,7 +137,7 @@ def test_missing_rt_sessions_fit_glms_and_retain_all_trial_betas(
 
 @pytest.mark.notebook
 def test_multisession_notebook_executes_and_exports_paired_maps(
-    saved_sessions,  # noqa: F811
+    saved_sessions,
     tmp_path,
 ):
     output, sessions, _, brain = saved_sessions
@@ -172,23 +179,23 @@ def test_multisession_notebook_executes_and_exports_paired_maps(
     )
 
 
-def test_multisession_export_preserves_input_files(saved_sessions):  # noqa: F811
+def test_multisession_export_preserves_input_files(saved_sessions):
     output, sessions, _, _ = saved_sessions
-    loaded = api("inputs").load_sessions(output, "sub-07", sessions, estimators=["OLS"])
-    results = api("analysis").analyze_sessions(loaded)
+    loaded = multisession_inputs.load_sessions(
+        output, "sub-07", sessions, estimators=["OLS"]
+    )
+    results = multisession_analysis.analyze_sessions(loaded)
     source = loaded["records"][0]["sources"][0]
     before = source.read_bytes()
-    paths = api("outputs").save_multisession(output, loaded, results)
+    paths = multisession_outputs.save_multisession(output, loaded, results)
     assert paths and source.read_bytes() == before
     # Rerunning aggregate publication is supported without recomputing sessions.
-    assert api("outputs").save_multisession(output, loaded, results) == paths
+    assert multisession_outputs.save_multisession(output, loaded, results) == paths
 
 
-def test_incompatible_estimators_fail_before_fitting(
-    saved_sessions, monkeypatch
-):  # noqa: F811
+def test_incompatible_estimators_fail_before_fitting(saved_sessions, monkeypatch):
     root, sessions, _, _ = saved_sessions
-    module = api("workflow")
+    module = multisession_workflow
 
     def forbidden(*args, **kwargs):
         pytest.fail("Invalid estimator configuration must fail before fitting")
@@ -206,11 +213,11 @@ def test_incompatible_estimators_fail_before_fitting(
 
 
 def test_complete_sessions_are_validated_before_missing_session_fits(
-    saved_sessions,  # noqa: F811
+    saved_sessions,
     monkeypatch,
 ):
     root, sessions, _, _ = saved_sessions
-    module = api("workflow")
+    module = multisession_workflow
     changed = nib.cifti2.BrainModelAxis.from_surface([2, 0, 3], 5, "CortexLeft")
     for path in (root / "sub-07" / sessions[1]).rglob("*.dscalar.nii"):
         image = nib.load(path)

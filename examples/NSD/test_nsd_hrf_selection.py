@@ -11,7 +11,6 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import HrfLibrary
 from examples.NSD.nsd_single_trial import run_single_trial_analysis
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor._hrf_design import hrf_model
 from tests.oracles import scaled_condition
 

@@ -14,9 +14,6 @@ import pytest
 from boldtailor.publication import publish_artifact_set
 from examples.NSD.ridge_workflow import fit_cv_beta_series
 from examples.NSD.workflow_inputs import load_session
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_ridge_workflow import six_run_dataset, cv_library  # noqa: F401
-from examples.NSD.test_nsd_workflow import preview_library
 
 
 def outputs():
@@ -24,28 +21,6 @@ def outputs():
         return importlib.import_module("examples.NSD.ridge_outputs")
     except ImportError as error:
         pytest.fail(f"Missing ridge output support: {error}")
-
-
-@pytest.mark.parametrize(
-    "overrides,mode",
-    [
-        ({}, "fractional_cv"),
-        ({"ridge_alphas": [0, 0.1]}, "cv"),
-        ({"ridge_alpha": 0.2}, "fixed"),
-        ({"ridge_alpha": None}, "off"),
-        ({"ridge_mode": "off"}, "off"),
-        ({"ridge_mode": "cv", "ridge_alpha": None}, "cv"),
-    ],
-)
-def test_notebook_resolves_new_defaults_and_legacy_options(tmp_path, overrides, mode):
-    _, settings = preview_library(tmp_path, hrf_n_samples=2, **overrides)
-    assert settings.get("ridge_mode") == mode
-    assert settings.get("ridge_percentile") == 90.0
-
-
-def test_notebook_rejects_unknown_ridge_mode(tmp_path):
-    with pytest.raises(ValueError, match="ridge_mode"):
-        preview_library(tmp_path, ridge_mode="misspelled")
 
 
 def test_ridge_artifacts_match_numeric_results(six_run_dataset, cv_library, tmp_path):

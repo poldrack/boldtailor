@@ -7,106 +7,12 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from boldtailor.hrf_library import HrfLibrary
-from boldtailor.publication import publish_artifact_set
-from boldtailor.cifti import scalar_artifact
-from examples.NSD.workflow_artifacts import json_artifact, npz_artifact, table_artifact
-
 
 def api(module):
     try:
         return importlib.import_module("examples.NSD.multisession_" + module)
     except ModuleNotFoundError:
         pytest.fail(f"Multi-session {module} is not implemented")
-
-
-@pytest.fixture
-def saved_sessions(tmp_path):
-    brain = nib.cifti2.BrainModelAxis.from_surface([0, 2, 3], 5, "CortexLeft")
-    library = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
-    sessions = ["ses-nsd10", "ses-nsd11", "ses-nsd12"]
-    for i, session in enumerate(sessions):
-        base = f"sub-07/{session}/func/sub-07_{session}_task-nsdcore"
-        meta = dict(
-            settings=dict(subject="sub-07", session=session, ridge_mode="off"),
-            library_fingerprint=library.fingerprint,
-        )
-        artifacts = [
-            json_artifact(base + "_desc-notebook_metadata.json", meta),
-            table_artifact(
-                base + "_desc-notebookHRF_library.tsv", library.parameter_table
-            ),
-            npz_artifact(
-                base + "_desc-notebookHRF_library.npz",
-                times=library.times,
-                curves=library.curves,
-            ),
-        ]
-
-        def add(descriptor, stat, values, labels):
-            artifacts.append(
-                scalar_artifact(
-                    base
-                    + f"_space-fsLR_den-91k_desc-notebook{descriptor}_stat-{stat}.dscalar.nii",
-                    brain,
-                    values,
-                    labels,
-                )
-            )
-
-        ids = [i % 2, 1, np.nan]
-        add(
-            "HRFAll",
-            "selection",
-            [ids, [0.1, 0.2, np.nan], [0.1, 0.1, np.nan], [0, 0.1, np.nan]],
-            ["hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2"],
-        )
-        for optimized, prefix in enumerate(("Canonical", "Optimized")):
-            shift = optimized * (i + 1)
-            add(
-                prefix + "GLM",
-                "effects",
-                [
-                    [10 + i + shift, -4 - i - shift, np.nan],
-                    [0.1 * (i + 1 + shift), -0.2 * (i + 1 + shift), np.nan],
-                    [99, -99, np.nan],
-                ],
-                ["task", "response_time", "trial_type"],
-            )
-            add(
-                prefix + "TrialOLS",
-                "activation",
-                [
-                    [2 + shift, -2 - shift, np.nan],
-                    [4 + shift, -4 - shift, np.nan],
-                    [0.1, 0.1, np.nan],
-                    [20, 20, np.nan],
-                    [19, 19, np.nan],
-                ],
-                ["mean_beta", "t", "p_uncorrected", "n_trials", "df"],
-            )
-            add(
-                prefix + "TrialOLS",
-                "rsquared",
-                [
-                    [0.8, 0.8, np.nan],
-                    [0.7 - 0.01 * shift, 0.7, np.nan],
-                    [0.1 + 0.01 * shift, 0.1, np.nan],
-                ],
-                ["full_r2", "confounds_r2", "task_delta_r2"],
-            )
-            add(
-                prefix + "TrialOLS",
-                "rtcorrelation",
-                [
-                    [-0.2 - 0.1 * shift, 0.2, np.nan],
-                    [0.1, 0.1, np.nan],
-                    [0.1, 0.1, np.nan],
-                ],
-                ["all_runs", "odd_runs", "even_runs"],
-            )
-        publish_artifact_set(tmp_path, artifacts)
-    return tmp_path, sessions, library, brain
 
 
 def test_loading_and_hrf_correlations_use_full_curves(saved_sessions):

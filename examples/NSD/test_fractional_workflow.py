@@ -19,8 +19,6 @@ from examples.NSD.ridge_workflow import fit_cv_beta_series, trial_predictors
 from examples.NSD.ridge_outputs import ridge_artifacts, tuning_table, tuning_figure
 from examples.NSD.workflow_outputs import _beta_artifacts
 from examples.NSD.workflow_inputs import NSD_TASK_MODEL, load_session, load_block
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_ridge_workflow import six_run_dataset, cv_library  # noqa: F401
 
 
 def fit(runs, root, library=None, **kwargs):

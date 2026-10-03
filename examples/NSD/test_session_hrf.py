@@ -12,8 +12,6 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import sobol_hrf_library
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_nsd_workflow import four_runs  # noqa: F401
 
 NOTEBOOK = Path(__file__).with_name("nsd_session_hrf_reliability.ipynb")
 

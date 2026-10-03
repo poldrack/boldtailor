@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor._hrf_design import hrf_model
 from tests.oracles import scaled_condition
 

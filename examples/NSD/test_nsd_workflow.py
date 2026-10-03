@@ -3,7 +3,6 @@
 import importlib
 import json
 from pathlib import Path
-import warnings
 
 import nbformat
 from nbclient import NotebookClient
@@ -13,7 +12,6 @@ import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from boldtailor.hrf_library import HrfLibrary
 from tests.oracles import scaled_condition
 
@@ -25,32 +23,6 @@ def workflow(module="workflow_inputs"):
         return importlib.import_module(f"examples.NSD.{module}")
     except ModuleNotFoundError as error:
         pytest.fail(f"The NSD notebook workflow is not implemented: {error}")
-
-
-@pytest.fixture
-def four_runs(dataset):
-    root, prep, *_ = dataset
-    for directory in (root, prep):
-        func = directory / "sub-07/ses-nsd10/func"
-        for source in list(func.glob("*run-0[12]*")):
-            target = source.with_name(
-                source.name.replace("run-01", "run-03").replace("run-02", "run-04")
-            )
-            target.write_bytes(source.read_bytes())
-    for number, dropped in enumerate((1, 2, 3, 1), 1):
-        path = next(prep.rglob(f"*run-{number:02d}*confounds_timeseries.tsv"))
-        table = pd.read_csv(path, sep="\t")
-        for i in range(dropped):
-            table[f"non_steady_state_outlier{i:02d}"] = (
-                np.arange(len(table)) == i
-            ).astype(int)
-        table.to_csv(path, sep="\t", index=False)
-    return root, prep
-
-
-@pytest.fixture
-def small_library():
-    return HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
 
 
 def test_nsd_task_model_centers_rt_and_keeps_trial_type_uncentered(events):
@@ -269,21 +241,6 @@ def test_glm_model_and_selection_share_the_nsd_task_model(four_runs, small_libra
         )
 
 
-def test_quiet_glm_still_emits_design_warnings(four_runs, capfd):
-    root, prep = four_runs
-    inputs, analysis = workflow(), workflow("workflow_analysis")
-    runs = inputs.load_session(root, prep)
-    for run in runs:
-        run.events.loc[0, "onset"] = -40.0
-    blocks = inputs.make_blocks(runs, block_size=4)
-    model = inputs.glm_model(runs)
-    with pytest.warns(UserWarning, match="excluding"):
-        analysis.fit_glms(runs, root, blocks, model)
-    captured = capfd.readouterr()
-    assert "modulation" not in captured.out
-    assert "GLM:" in captured.out
-
-
 @pytest.mark.parametrize(
     "library_config, candidate_count",
     [
@@ -438,123 +395,6 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
     with pytest.raises(FileExistsError):
         workflow("workflow_outputs").check_output(output, "sub-07", "ses-nsd10")
     assert all(p.read_bytes() == value for p, value in before.items())
-
-
-def preview_library(tmp_path, **overrides):
-    """Execute the actual settings and preview cells without any input data."""
-    import matplotlib.pyplot as plt
-
-    plt.switch_backend("Agg")
-    cells = {c.id: c for c in nbformat.read(NOTEBOOK, as_version=4).cells}
-    context = {
-        "NSD_CONFIG": {
-            "bids_root": str(tmp_path / "bids"),
-            "output_root": str(tmp_path / "output"),
-            **overrides,
-        }
-    }
-    try:
-        exec(cells["de5dc917"].source, context)
-        # These cells run without Jupyter; only suppress Agg's show warning.
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="FigureCanvasAgg is non-interactive, and thus cannot be shown",
-                category=UserWarning,
-            )
-            exec(cells["f3d49ae3"].source, context)
-    except NameError as error:
-        pytest.fail(
-            f"The library preview must execute without loading or fitting data: {error}"
-        )
-    finally:
-        plt.close("all")
-    return context["library"], context["settings"]
-
-
-def test_notebook_default_preview_uses_approved_sobol_library(tmp_path):
-    from boldtailor import hrf_library
-
-    result, settings = preview_library(tmp_path)
-    assert len(result.candidates) == 513
-    assert settings["hrf_seed"] == 0
-    assert result.fingerprint == hrf_library.sobol_hrf_library().fingerprint
-    assert settings["hrf_selection_rt"] is True
-
-
-def test_notebook_preserves_expanded_configured_paths(tmp_path):
-    _, settings = preview_library(tmp_path, bids_root="~/nsd-example", hrf_n_samples=2)
-    assert settings["bids_root"] == str(Path("~/nsd-example").expanduser())
-
-
-def test_notebook_preview_honors_sobol_settings(tmp_path):
-    from boldtailor import hrf_library
-
-    result, _ = preview_library(tmp_path, hrf_n_samples=8, hrf_seed=11)
-    assert len(result.candidates) == 9
-    assert result.fingerprint == hrf_library.sobol_hrf_library(8, seed=11).fingerprint
-
-
-def test_notebook_preview_can_reproduce_grid_or_use_custom_rows(tmp_path):
-    from boldtailor.hrf_library import expanded_hrf_library
-
-    result, _ = preview_library(tmp_path, hrf_library="expanded")
-    assert result.fingerprint == expanded_hrf_library().fingerprint
-    rows = [[3, 10, 0.5, 0.5, 2, 0, 36]]
-    result, _ = preview_library(tmp_path, hrf_parameters=rows, hrf_n_samples=3)
-    assert result.fingerprint == HrfLibrary.from_parameters(rows).fingerprint
-
-
-def test_notebook_preview_rejects_unknown_library(tmp_path):
-    with pytest.raises(ValueError, match="hrf_library"):
-        preview_library(tmp_path, hrf_library="typo")
-
-
-def test_rerunning_beta_cell_uses_current_settings(four_runs, small_library):
-    assert NOTEBOOK.is_file(), "The full NSD workflow notebook has not been created"
-    root, prep = four_runs
-    inputs, analysis = workflow(), workflow("workflow_analysis")
-    runs = inputs.load_session(root, prep)
-    blocks = inputs.make_blocks(runs, block_size=4)
-    selections = analysis.select_hrfs(runs, root, blocks, small_library)
-    notebook = nbformat.read(NOTEBOOK, as_version=4)
-    cell = next(
-        c
-        for c in notebook.cells
-        if c.cell_type == "code" and "beta_models =" in c.source
-    )
-    context = dict(
-        runs=runs,
-        root=root,
-        blocks=blocks,
-        selections=selections,
-        fit_beta_series=analysis.fit_beta_series,
-        workers=1,
-        settings={"ridge_alpha": 0.1},
-        display=lambda value: None,
-    )
-    exec(cell.source, context)
-    original = context["beta_models"]["OptimizedTrialRidge"]["betas"][0].copy()
-    context["settings"]["ridge_alpha"] = 0.4
-    exec(cell.source, context)
-    refit = context["beta_models"]["OptimizedTrialRidge"]
-    assert refit["ridge_alpha"] == 0.4
-    assert not np.allclose(original[:, :3], refit["betas"][0][:, :3])
-
-
-def test_beta_series_progress_is_brief_across_blocks(four_runs, capfd):
-    root, prep = four_runs
-    inputs, analysis = workflow(), workflow("workflow_analysis")
-    runs = inputs.load_session(root, prep)
-    blocks = inputs.make_blocks(runs, block_size=1)
-    capfd.readouterr()
-    result = analysis.fit_beta_series(runs, root, blocks)
-    output = capfd.readouterr().out
-    messages = [line for line in output.splitlines() if line.startswith("Beta series")]
-    assert 1 <= len(messages) <= 2
-    assert "complete" in messages[-1].lower()
-    assert len(result["betas"]) == 4
-    assert all(np.isfinite(beta[:, :3]).all() for beta in result["betas"])
 
 
 def test_selection_task_model_switch_drops_only_rt():

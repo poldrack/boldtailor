@@ -20,54 +20,6 @@ def example():
         pytest.fail("The NSD CIFTI example has not been implemented")
 
 
-@pytest.fixture
-def confounds():
-    rng = np.random.default_rng(54)
-    table = pd.DataFrame()
-    for axis in ("trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"):
-        motion = rng.normal(size=96)
-        derivative = np.r_[np.nan, np.diff(motion)]
-        for suffix, values in {
-            "": motion,
-            "_derivative1": derivative,
-            "_power2": motion**2,
-            "_derivative1_power2": derivative**2,
-        }.items():
-            table[axis + suffix] = values
-    metadata = {}
-    for i in range(8):
-        name = f"a_comp_cor_{i:02d}"
-        table[name] = rng.normal(size=96)
-        metadata[name] = {
-            "Mask": "combined",
-            "Retained": True,
-            "VarianceExplained": (8 - i) / 100,
-            "Method": "aCompCor",
-        }
-    # A separate mask must not displace the combined-mask components.
-    table["a_comp_cor_08"] = rng.normal(size=96)
-    metadata["a_comp_cor_08"] = {
-        "Mask": "CSF",
-        "Retained": True,
-        "VarianceExplained": 0.8,
-    }
-    table["cosine00"] = np.cos(np.pi * (np.arange(96) + 0.5) / 96)
-    table["non_steady_state_outlier00"] = np.r_[1.0, np.zeros(95)]
-    return table, metadata
-
-
-@pytest.fixture
-def events():
-    return pd.DataFrame(
-        {
-            "onset": [8.0, 22.0, 38.0, 60.0, 90.0, 112.0],
-            "duration": [3.0] * 6,
-            "trial_type": [0, 1, 0, 1, 1, 0],
-            "response_time": [0.5, 1.0, 2.5, 1.5, 3.0, 0.5],
-        }
-    )
-
-
 def test_confounds_use_24_motion_top_six_combined_components_and_cosines(confounds):
     table, metadata = confounds
     result = example().select_confounds(table, metadata)
@@ -121,83 +73,6 @@ def test_missing_response_time_is_rejected_explicitly(events):
     events.loc[1, "response_time"] = np.nan
     with pytest.raises(ValueError, match="response_time"):
         example().task_regressors(events, np.arange(96) * 1.6)
-
-
-@pytest.fixture
-def dataset(tmp_path, confounds, events):
-    root = tmp_path / "bids"
-    prep = root / "derivatives" / "fmriprep"
-    raw_func = root / "sub-07" / "ses-nsd10" / "func"
-    prep_func = prep / "sub-07" / "ses-nsd10" / "func"
-    raw_func.mkdir(parents=True)
-    prep_func.mkdir(parents=True)
-    brain = nib.cifti2.BrainModelAxis.from_surface(
-        np.array([0, 2, 3, 6]),
-        8,
-        name="CortexLeft",
-    )
-    table, metadata = confounds
-    times = 0.775 + np.arange(96) * 1.6
-    # The oracle design uses the peak-one kernel; simulated responses keep
-    # their original Nilearn-scaled amplitudes.
-    task, simulated_task = (
-        np.column_stack(
-            [
-                compute_regressor(
-                    (
-                        np.vstack([events.onset, events.duration, amp])
-                        if hrf == "spm"
-                        else scaled_condition(
-                            events.onset, events.duration, amp, hrf, times
-                        )
-                    ),
-                    hrf,
-                    times,
-                )[0]
-                for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
-            ]
-        )
-        for hrf in (hrf_model("spm"), "spm")
-    )
-    nuisance = np.column_stack(
-        [
-            table.iloc[:, :30].fillna(0),
-            table.cosine00,
-            table.non_steady_state_outlier00,
-            np.ones(96),
-        ]
-    )
-    full = np.column_stack([task, nuisance])
-    simulated = np.column_stack([simulated_task, nuisance])
-    rng = np.random.default_rng(23)
-    signal_runs = []
-    # Unequal variances and run means expose erroneous arithmetic/global pooling.
-    for run, scale in [(1, 1), (2, 5)]:
-        stem = f"sub-07_ses-nsd10_task-nsdcore_run-{run:02d}"
-        events.to_csv(raw_func / f"{stem}_events.tsv", sep="\t", index=False)
-        table.to_csv(
-            prep_func / f"{stem}_desc-confounds_timeseries.tsv", sep="\t", index=False
-        )
-        (prep_func / f"{stem}_desc-confounds_timeseries.json").write_text(
-            json.dumps(metadata)
-        )
-        y = scale * (simulated @ rng.normal(size=(35, 4)) + rng.normal(size=(96, 4)))
-        y += run * 100
-        y[:, -1] = 0  # Undefined R² must retain its spatial position as NaN.
-        signal_runs.append(y)
-        axes = (nib.cifti2.SeriesAxis(0, 1.6, 96), brain)
-        image = nib.Cifti2Image(y, header=nib.Cifti2Header.from_axes(axes))
-        nib.save(image, prep_func / f"{stem}_space-fsLR_den-91k_bold.dtseries.nii")
-        (prep_func / f"{stem}_space-fsLR_den-91k_bold.json").write_text(
-            json.dumps(
-                {
-                    "StartTime": 0.775,
-                    "RepetitionTime": 1.6,
-                    "SliceTimingCorrected": True,
-                }
-            )
-        )
-    return root, prep, signal_runs, full, nuisance, brain
 
 
 def test_complete_example_publishes_correct_pooled_maps_and_designs(dataset, tmp_path):

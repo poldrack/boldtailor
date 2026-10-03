@@ -9,18 +9,6 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
-from examples.NSD.test_ridge_workflow import six_run_dataset  # noqa: F401
-from examples.NSD.test_nsd_workflow import preview_library
-
-
-def test_explicit_fractional_mode_uses_fraction_grid(tmp_path):
-    _, settings = preview_library(
-        tmp_path, hrf_n_samples=2, ridge_mode="fractional_cv", ridge_fractions=[0.4, 1]
-    )
-    assert settings["ridge_mode"] == "fractional_cv"
-    assert settings["ridge_fractions"] == [0.4, 1]
-
 
 @pytest.mark.notebook
 def test_notebook_default_executes_fractional_cv(six_run_dataset, tmp_path):

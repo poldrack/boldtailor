@@ -9,7 +9,6 @@ import pytest
 from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.hrf_library import PARAMETER_NAMES
-from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
 from examples.NSD.test_nsd_hrf_selection import find, hrf_nsd, run  # noqa: F401
 
 

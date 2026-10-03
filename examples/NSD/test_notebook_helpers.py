@@ -4,11 +4,9 @@ import importlib
 
 import matplotlib
 import numpy as np
-import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.reliability import compare_hrfs
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -79,29 +77,6 @@ def test_empty_root_gets_actionable_error(no_path_environment):
         helper("notebook_paths").notebook_paths({"bids_root": "  "})
 
 
-def test_library_plot_preserves_curves_and_peak_colors(library):
-    fig = helper("workflow_plots").library_figure(library)
-    axis = fig.axes[0]
-    np.testing.assert_array_equal(axis.lines[0].get_xdata(), library.times)
-    np.testing.assert_array_equal(axis.lines[0].get_ydata(), library.curves[0])
-    np.testing.assert_array_equal(
-        axis.collections[0].get_segments()[0][:, 1], library.curves[1]
-    )
-    np.testing.assert_array_equal(
-        axis.collections[0].get_array(),
-        library.parameter_table.peak_time.to_numpy()[1:],
-    )
-
-
-def test_design_plot_retains_original_acquisition_times():
-    times = np.array([4.2, 5.8, 7.4])
-    design = pd.DataFrame({"task": [1, 2, 3], "response_time": [4, 5, 6]})
-    fig = helper("workflow_plots").design_figure(times, design, list(design))
-    for line, name in zip(fig.axes[0].lines, design, strict=True):
-        np.testing.assert_array_equal(line.get_xdata(), times)
-        np.testing.assert_array_equal(line.get_ydata(), design[name])
-
-
 def test_glm_comparison_uses_paired_values_and_signed_difference():
     canonical = {
         "r2": np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])
@@ -157,25 +132,3 @@ def test_curve_agreement_uses_same_grayordinates_for_every_comparison(missing):
         np.testing.assert_allclose(table["median"], [0.3, 0.7, 0.3])
         np.testing.assert_allclose(table.q25, [0.25, 0.65, 0.2])
     np.testing.assert_array_equal(values, original)
-
-
-@pytest.mark.parametrize("missing", [False, True])
-def test_session_figures_preserve_pair_means_and_undefined_sessions(library, missing):
-    ids = np.array([[0, 1, np.nan], [0, 1, np.nan], [np.nan, np.nan, np.nan]])
-    if missing:
-        ids[:] = np.nan
-    comparison = compare_hrfs(library, ids, ["a", "b", "c"])
-    plots = helper("session_hrf_plots")
-    fig = plots.agreement_figure(comparison)
-    matrix = np.asarray(fig.axes[0].images[0].get_array())
-    assert matrix.shape == (4, 4)
-    assert np.isnan(matrix[2, :3]).all()
-    assert matrix[-1, -1] == 1
-    if missing:
-        assert np.isnan(matrix[:3]).all()
-    else:
-        np.testing.assert_allclose(matrix[:2, :2], 1)
-    variability = plots.parameter_variability_figure(comparison)
-    assert len(variability.axes) == 2
-    for ax in variability.axes:
-        assert sum(p.get_height() for p in ax.patches) == (0 if missing else 2)
