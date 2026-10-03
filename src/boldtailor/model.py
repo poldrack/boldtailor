@@ -299,9 +299,14 @@ def _identity_activity(
 
 
 def _hrf_normalization(value: object) -> str | None:
+    """Peak-one for named canonical shapes; Nilearn's sum-one for its
+    canonical derivative bases; nothing for FIR and user-supplied kernels,
+    which are used exactly as given."""
     if value in ("spm", "glover"):
         return HRF_NORMALIZATION
-    return "nilearn_sum_one" if isinstance(value, str) else None
+    if isinstance(value, str) and value != "fir":
+        return "nilearn_sum_one"
+    return None
 
 
 def _serialize_hrf(
