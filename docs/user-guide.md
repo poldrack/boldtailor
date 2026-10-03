@@ -544,7 +544,10 @@ record_json = result.provenance.canonical_json()
 For file-backed analyses, provide `RunSources` descriptors when creating the
 input object. These record relative filenames and file metadata; they do not
 read or hash input contents. Arrays without source descriptors can still be
-fitted, but cannot establish a stable source identity.
+fitted, but cannot establish a stable source identity. Supply `sha256` on each
+`SourceRef` to make identity content-based; without it, identity rests on path,
+size, and modification time. The library never opens the files, so the digest
+is whatever you compute and supply.
 
 `project_bids_provenance()` prepares metadata files, and
 `publish_artifact_set()` saves a collection of files together with overwrite

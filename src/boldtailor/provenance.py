@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import math
+import re
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from uuid import UUID
 
 SCHEMA_ID = "boldtailor.provenance/1"
-_FORBIDDEN_TOP_LEVEL_FIELDS = frozenset({"digest"})
 _QUALITY_WARNING = {
     "code": "provenance_quality",
     "message": "source metadata incomplete or anonymous; metadata fingerprint unavailable",
@@ -37,6 +37,7 @@ class SourceRef:
     media_type: str | None = None
     byte_size: int | None = None
     modified_at: str | None = None
+    sha256: str | None = None
     annotations: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -45,6 +46,7 @@ class SourceRef:
         object.__setattr__(self, "media_type", _validate_optional_text(self.media_type))
         object.__setattr__(self, "byte_size", _validate_byte_size(self.byte_size))
         object.__setattr__(self, "modified_at", _validate_modified_at(self.modified_at))
+        object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
         object.__setattr__(
             self,
             "annotations",
@@ -61,6 +63,8 @@ class SourceRef:
             data["byte_size"] = self.byte_size
         if self.modified_at is not None:
             data["modified_at"] = self.modified_at
+        if self.sha256 is not None:
+            data["sha256"] = self.sha256
         if self.annotations:
             data["annotations"] = _thaw(self.annotations)
         return data
@@ -73,6 +77,7 @@ class SourceRef:
             media_type=data.get("media_type"),
             byte_size=data.get("byte_size"),
             modified_at=data.get("modified_at"),
+            sha256=data.get("sha256"),
             annotations=data.get("annotations", {}),
         )
 
@@ -172,7 +177,7 @@ class ProvenanceRecord:
             "warnings": [_thaw(warning) for warning in self.warnings],
             "metadata_fingerprint": self.metadata_fingerprint,
         }
-        data.update(_thaw(_reject_forbidden_top_level_fields(self._extra)))
+        data.update(_thaw(self._extra))
         return data
 
     def canonical_json(self) -> str:
@@ -302,6 +307,14 @@ def _validate_byte_size(value: object) -> int | None:
         raise ValueError("byte_size must be a non-negative integer")
     if value < 0:
         raise ValueError("byte_size must be a non-negative integer")
+    return value
+
+
+def _validate_sha256(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError("sha256 must be 64 lowercase hexadecimal characters")
     return value
 
 
@@ -496,14 +509,4 @@ def _source_complete(source: SourceRef) -> bool:
 
 
 def _extra_fields(data: Mapping[str, object], known: set[str]) -> Mapping[str, object]:
-    extra = {key: value for key, value in data.items() if key not in known}
-    return _reject_forbidden_top_level_fields(extra)
-
-
-def _reject_forbidden_top_level_fields(
-    data: Mapping[str, object],
-) -> Mapping[str, object]:
-    for key in data:
-        if key.lower() in _FORBIDDEN_TOP_LEVEL_FIELDS:
-            raise ValueError(f"forbidden top-level field: {key}")
-    return data
+    return {key: value for key, value in data.items() if key not in known}

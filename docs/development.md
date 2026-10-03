@@ -354,6 +354,14 @@ Standalone all-run response-delay and time-to-peak files in
 the development NSD dataset were created separately; automatic exports contain
 those quantities in the multi-map HRF parameter images.
 
+## Provenance digests
+
+`SourceRef` accepts an optional caller-supplied `sha256` (64 lowercase hex
+characters). It enters the metadata fingerprint and is emitted as the BEP028
+`Digest` of the file entity. The earlier ban on a `digest` key was removed on
+2026-10-02: a content digest of imaging data is not identifying, and BEP028
+defines `Digest`.
+
 ## Design history and validation
 
 Current behavior is described by the [user guide](user-guide.md) and

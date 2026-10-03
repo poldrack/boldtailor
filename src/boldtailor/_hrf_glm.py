@@ -149,7 +149,9 @@ def _validate_parent(data, result, context):
             "task delta r-squared requires fingerprintable source provenance"
         )
     if context.analysis_id != result.provenance.analysis_fingerprint:
-        raise ValueError("full result does not match data, model, or HRF identity")
+        raise ValueError(
+            "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
+        )
     if len(result.run_r2) != data.n_runs or result.r2.shape != (data.n_features,):
         raise ValueError("full result dimensions do not match input")
 

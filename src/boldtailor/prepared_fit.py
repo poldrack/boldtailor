@@ -152,7 +152,9 @@ def _validate_prepared_parent(
             "task delta r-squared requires fingerprintable prepared sources"
         )
     if full_result.provenance.analysis_fingerprint != parent_id:
-        raise ValueError("full result does not match prepared input and model")
+        raise ValueError(
+            "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
+        )
     validate_result_dimensions(prepared, full_result, input_label="prepared input")
 
 

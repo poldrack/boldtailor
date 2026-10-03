@@ -30,7 +30,6 @@ _SENSITIVE_KEYS = frozenset(
     {
         "argv",
         "cwd",
-        "digest",
         "environment_variables",
         "hostname",
         "username",
@@ -217,7 +216,7 @@ def _entities(
                 anonymous.append(_anonymous_entity(source.role, run_index, token))
                 continue
             _check_case_collision(source.uri, seen_paths, "source path")
-            files.setdefault(source.uri, _file_entity(source.uri))
+            files.setdefault(source.uri, _file_entity(source.uri, source.sha256))
     document: dict[str, list[dict[str, object]]] = {}
     if files:
         document["Files"] = list(files.values())
@@ -230,7 +229,7 @@ def _entities(
     return document, identifiers
 
 
-def _file_entity(uri: str) -> dict[str, object]:
+def _file_entity(uri: str, sha256: str | None = None) -> dict[str, object]:
     if uri.startswith("bids:"):
         identifier = uri
         location = uri.split(":", 2)[2]
@@ -245,6 +244,8 @@ def _file_entity(uri: str) -> dict[str, object]:
     }
     if not uri.startswith("bids:"):
         entity["AtLocation"] = uri
+    if sha256:
+        entity["Digest"] = {"sha256": sha256}
     return entity
 
 
