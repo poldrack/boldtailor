@@ -773,16 +773,19 @@ def replace_indices(selection, indices):
 def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name):
     from dataclasses import replace
 
-    from tests.oracles import peak_kernel
+    from tests.oracles import oracle_event_scales, peak_kernel
 
     signals, events, _, model = single_run_problem
     model = replace(model, hrf_model=hrf_name)
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
     design = fit(data, model).design_matrices[0]
     assert list(design.columns) == ["face", "house", "constant"]
+    scales = oracle_event_scales(
+        peak_kernel(hrf_name), events.duration, np.arange(30) * 2.0
+    )
     expected = make_first_level_design_matrix(
         np.arange(30) * 2.0,
-        events=events,
+        events=events.assign(modulation=scales),
         hrf_model=peak_kernel(hrf_name),
         drift_model=None,
         min_onset=-24.0,
