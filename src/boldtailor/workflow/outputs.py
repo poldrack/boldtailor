@@ -58,18 +58,32 @@ def _title(name):
     return "".join(part.title() for part in name.split("_"))
 
 
+def _session_files(settings):
+    """This subject/session/task's files in its func directory, and nothing else."""
+    directory = settings.output_dir / settings.subject / settings.session / "func"
+    pattern = f"{settings.subject}_{settings.session}_task-{settings.task}_*"
+    return [p for p in directory.glob(pattern) if p.is_file() and not p.is_symlink()]
+
+
 def check_output(settings):
     """Refuse to replace this subject/session/task's outputs unless told to."""
     if settings.existing_results == "overwrite":
         return None
-    directory = settings.output_dir / settings.subject / settings.session / "func"
-    pattern = f"{settings.subject}_{settings.session}_task-{settings.task}_*"
-    if any(directory.glob(pattern)):
+    if _session_files(settings):
+        directory = settings.output_dir / settings.subject / settings.session / "func"
         raise FileExistsError(
             f"boldtailor outputs already exist in {directory}; set "
             "existing_results to overwrite, or choose a new output_dir"
         )
     return None
+
+
+def _remove_stale(settings, published):
+    """After an overwrite, drop earlier session/task files the new set lacks."""
+    keep = {Path(p).resolve() for p in published}
+    for path in _session_files(settings):
+        if path.resolve() not in keep:
+            path.unlink()
 
 
 def _design_artifact(settings, descriptor, result, runs):
@@ -168,9 +182,25 @@ def _split_artifacts(settings, brain, library, maps):
     return artifacts
 
 
+def _all_selection_maps(selections, n_features):
+    """The ``all`` selection maps alone; bundles need not hold odd/even splits."""
+    maps = np.full((len(SELECTION_NAMES), n_features), np.nan)
+    for indices, bundle in selections.items():
+        result = bundle["all"]
+        ids = np.where(result.hrf_indices >= 0, result.hrf_indices, np.nan)
+        maps[:, list(indices)] = np.stack(
+            [ids, result.cv_r2, result.canonical_cv_r2, result.delta_cv_r2]
+        )
+    return {"all": maps}
+
+
 def hrf_artifacts(settings, brain, selections, library, *, include_splits=True):
     """All-run selection, library and provenance; odd/even splits on request."""
-    maps = selection_maps(selections, len(brain))
+    maps = (
+        selection_maps(selections, len(brain))
+        if include_splits
+        else _all_selection_maps(selections, len(brain))
+    )
     scopes = ("all", "odd", "even") if include_splits else ("all",)
     artifacts = [
         *_library_artifacts(settings, library),
@@ -399,7 +429,7 @@ def tuning_figure(beta_models):
     return figure
 
 
-def _tuning_maps(settings, brain, descriptor, tuned, label, grid_names):
+def _tuning_maps(settings, brain, descriptor, tuned, grid_names):
     scores, selected = tuned["scores"], tuned["selection"]
     ids = np.where(scores.fold_hrf_indices >= 0, scores.fold_hrf_indices, np.nan)
     return [
@@ -502,7 +532,7 @@ def _tuning_artifacts(settings, brain, mode, scope, tuned, table):
     kind, unit = ("FractionalCV", "fraction") if fractional else ("RidgeCV", "alpha")
     descriptor = f"{mode}{kind}{scope.title()}"
     grid = [f"encoding_inner_cv_r2_{unit}-{v:g}" for v in tuned["scores"].grid]
-    artifacts = _tuning_maps(settings, brain, descriptor, tuned, scope, grid)
+    artifacts = _tuning_maps(settings, brain, descriptor, tuned, grid)
     if fractional:
         artifacts.extend(
             _fraction_selection_maps(settings, brain, descriptor, tuned["selection"])
@@ -677,6 +707,8 @@ def hrf_boundary_summary(selections):
         return None
     rows = []
     for scope in ("all", "odd", "even"):
+        if not all(scope in b for b in selections.values()):
+            continue
         picked = [_scope_selection(b, scope) for b in selections.values()]
         rows.extend(_pooled_bound_rows(picked, scope))
     return rows
@@ -754,10 +786,18 @@ def _activation_metadata():
 def _selection_description(task_model):
     names = ", ".join(task_model.regressor_names)
     return (
-        f"leave-one-run-out task-model prediction over {names}; missing-RT "
-        "indicator profiled per run when present; pooled held-out error over "
-        "confound-adjusted energy"
+        f"leave-one-run-out task-model prediction over {names}"
+        f"{_indicator_clause(task_model.profiled_names)}; pooled held-out error "
+        "over confound-adjusted energy"
     )
+
+
+def _indicator_clause(profiled):
+    if not profiled:
+        return ""
+    if tuple(profiled) == ("missing_response_time",):
+        return "; missing-RT indicator profiled per run when present"
+    return f"; {', '.join(profiled)} indicators profiled per run when present"
 
 
 def _rt_check_description(include_rt, ridge_cv):
@@ -781,6 +821,14 @@ def _rt_check_description(include_rt, ridge_cv):
         "Descriptive within-run-centered correlation, never used to select HRFs or "
         "fixed ridge strength; all-run optimized HRFs use both halves"
     )
+
+
+def _rt_check(include_rt, has_rt, beta_models):
+    """RT correlations are computed only when RT is a modulator."""
+    if not has_rt:
+        return {}
+    tuned = bool(_tuned(beta_models))
+    return dict(rt_check=_rt_check_description(include_rt, tuned))
 
 
 def _task_model_description(task_model):
@@ -877,7 +925,8 @@ def metadata(
     report,
 ):
     """The settings file: analysis description plus what ran and what was skipped."""
-    include_rt = settings.hrf_selection_rt
+    has_rt = "response_time" in task_model.regressor_names
+    include_rt = settings.hrf_selection_rt and has_rt
     return dict(
         regressors=list(task_model.regressor_names),
         task_model=task_model.to_dict(),
@@ -887,7 +936,7 @@ def metadata(
         hrf_selection=_selection_description(
             selection_task_model(task_model, include_rt)
         ),
-        rt_check=_rt_check_description(include_rt, bool(_tuned(beta_models))),
+        **_rt_check(include_rt, has_rt, beta_models),
         ridge_cv=_ridge_metadata(settings, task_model, beta_models),
         beta_activation=_activation_metadata() if activation else None,
         **_library_metadata(library, selections),
@@ -990,9 +1039,13 @@ def save_workflow(
     )
     artifacts.extend(_figure_artifacts(settings, figures))
     artifacts.extend(_root_artifacts(settings, report, report_html))
-    return publish_artifact_set(
+    overwrite = settings.existing_results == "overwrite"
+    paths = publish_artifact_set(
         settings.output_dir,
         artifacts,
         source_paths=[p for r in runs for p in input_paths(r.inputs)],
-        overwrite=settings.existing_results == "overwrite",
+        overwrite=overwrite,
     )
+    if overwrite:
+        _remove_stale(settings, paths)
+    return paths
