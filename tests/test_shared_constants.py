@@ -82,9 +82,19 @@ def test_public_scalar_predicates(value, boolean, integer, real):
     assert model.is_real(value) is real
 
 
-def test_model_options_still_require_builtin_integers():
+def test_model_options_accept_numpy_integers_stored_as_builtin_ints():
+    # Requirement change over the Task 4.7 pin, which demanded builtin ints.
+    spec = module("model").ModelSpec
+    model = spec(
+        contrasts={"task": "task"}, drift_order=np.int64(2), oversampling=np.int64(20)
+    )
+    assert (model.drift_order, model.oversampling) == (2, 20)
+    assert type(model.drift_order) is int and type(model.oversampling) is int
+
+
+def test_model_options_still_reject_booleans_and_floats():
     spec = module("model").ModelSpec
     with pytest.raises(ValueError, match="drift_order"):
-        spec(contrasts={"task": "task"}, drift_order=np.int64(1))
+        spec(contrasts={"task": "task"}, drift_order=np.float64(1.0))
     with pytest.raises(ValueError, match="oversampling"):
         spec(contrasts={"task": "task"}, oversampling=True)

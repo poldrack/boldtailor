@@ -138,6 +138,17 @@ def test_compile_designs_rejects_nonfinite_selected_confound(inputs, compiler):
         compiler(data, model)
 
 
+@pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
+def test_compile_designs_names_nonnumeric_selected_confound(inputs, compiler):
+    events, confounds = inputs
+    confounds["trans_x"] = ["n/a"] * len(confounds)
+    data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
+    model = ModelSpec(contrasts={"face": "face"}, confounds=("trans_x",))
+
+    with pytest.raises(ValueError, match="run 0.*non-numeric.*trans_x"):
+        compiler(data, model)
+
+
 def test_compile_designs_warns_and_records_early_event_exclusion(inputs):
     events, _ = inputs
     early = pd.DataFrame(

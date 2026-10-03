@@ -153,6 +153,36 @@ def test_validation_targets_use_candidate_penalty(ridge_problem):
     assert not np.allclose(result.cv_r2[1, :4], wrong[1, :4])
 
 
+def test_fold_record_takes_predictor_means_from_the_first_alpha_fit(
+    ridge_problem, monkeypatch
+):
+    import dataclasses
+
+    data, predictors, library = ridge_problem
+    module = importlib.import_module("boldtailor._ridge_cv")
+    original = module.evaluate_trial_encoding
+    calls = []
+
+    def shifted(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls.append(result.predictor_means.copy())
+        return dataclasses.replace(
+            result, predictor_means=result.predictor_means + len(calls)
+        )
+
+    monkeypatch.setattr(module, "evaluate_trial_encoding", shifted)
+    result = score(
+        data,
+        predictors,
+        alphas=[0.0, 0.2, 5.0],
+        library=library,
+        run_labels=[f"run-{i}" for i in range(6)],
+        feature_signature="fixture",
+    )
+    fold = result.provenance.to_dict()["activities"][-1]["folds"][0]
+    np.testing.assert_allclose(fold["predictor_means"], calls[0] + 1)
+
+
 def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatch):
     data, predictors, library = ridge_problem
     score(data, predictors, alphas=[0.0], library=library)

@@ -343,7 +343,7 @@ def test_unknown_encoding_mode_rejected(encoding_runs, mode):
 
 @pytest.mark.parametrize("encoding_mode", ["absolute", "within_run"])
 def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
-    from boldtailor._single_trial_fit import trial_beta_path
+    from tests.oracles import trial_beta_path
     from boldtailor.trial_encoding import evaluate_trial_encoding
 
     rng = np.random.default_rng(58)

@@ -606,6 +606,20 @@ def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem
 _RT_INDICATOR = Modulator("response_time", missing="indicator")
 
 
+@pytest.mark.parametrize("model_changes", [{"oversampling": 20}, {"min_onset": -10.0}])
+def test_selected_glm_setting_mismatch_names_the_required_values(
+    task_model_problem, model_changes
+):
+    data, model, selection, _ = task_model_problem
+    with pytest.raises(ValueError, match=r"-24\.0.*50|50.*-24\.0"):
+        fit(
+            data,
+            replace(model, **model_changes),
+            hrf_selection=selection,
+            feature_signature="axis-tm",
+        )
+
+
 @pytest.mark.parametrize(
     ("model_changes", "selection_task_model", "message"),
     [

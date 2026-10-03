@@ -14,6 +14,8 @@ PUBLIC = [
     ("fractional_ridge", "fraction_grid", "_fractional_ridge"),
     ("fractional_ridge", "regularization", "_fractional_ridge"),
     ("fractional_ridge", "NORM_BASIS", "_fractional_ridge"),
+    ("fractional_ridge", "fraction_alphas", "_fractional_ridge"),
+    ("single_trial", "project_trial_design", "_single_trial_fit"),
     ("single_trial", "r_squared", "_single_trial_fit"),
     ("single_trial", "validate_alpha", "_single_trial_fit"),
     ("single_trial", "compile_trial_run", "_single_trial_design"),

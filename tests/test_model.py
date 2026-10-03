@@ -64,6 +64,12 @@ def test_model_spec_rejects_invalid_arguments(kwargs, message):
         ModelSpec(**kwargs)
 
 
+def test_noise_model_message_has_no_phase_reference():
+    with pytest.raises(ValueError, match="'ols' or 'ar1'") as error:
+        ModelSpec(**_FACE, noise_model="ar2")
+    assert "Phase" not in str(error.value)
+
+
 _TASK_MODEL_HRF = "task_model requires hrf_model 'spm' or 'glover'"
 
 

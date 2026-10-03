@@ -7,7 +7,7 @@ from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.data import from_arrays
 from boldtailor.provenance import RunSources, SourceRef
-from tests.oracles import scaled_condition, peak_kernel
+from tests.oracles import peak_kernel, scaled_condition, trial_beta_path
 
 
 def entry(module="single_trial", name="fit_single_trials"):
@@ -22,10 +22,7 @@ def solve(x, n, y, alpha):
 
 
 def beta_path(x, n, y, alphas):
-    module = importlib.import_module("boldtailor._single_trial_fit")
-    if not hasattr(module, "trial_beta_path"):
-        pytest.fail("Missing shared-factorization trial beta path")
-    return module.trial_beta_path(x, n, y, alphas=alphas)
+    return trial_beta_path(x, n, y, alphas=alphas)
 
 
 @pytest.fixture

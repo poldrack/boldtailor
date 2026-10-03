@@ -9,7 +9,7 @@ import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
-from tests.oracles import fractional_beta_oracle as oracle
+from tests.oracles import fraction_beta_path, fractional_beta_oracle as oracle
 
 
 def fractional():
@@ -34,7 +34,7 @@ def regression():
 
 def test_fraction_path_matches_requested_norm_and_oracle(regression):
     x, n, y = regression
-    outputs = list(fractional().fraction_beta_path(x, n, y, fractions=[1, 0.8, 0.2]))
+    outputs = list(fraction_beta_path(x, n, y, fractions=[1, 0.8, 0.2]))
     assert [row[0] for row in outputs] == [1, 0.8, 0.2]
     for fraction, betas, alphas in outputs:
         for v in range(2):
@@ -97,12 +97,8 @@ def test_fraction_solver_handles_ill_conditioning_and_undefined_features(
     design = np.column_stack([first, second])
     signal = (first - second)[:, None]
     nuisance = np.ones((60, 1))
-    _, ols, _ = next(
-        fractional().fraction_beta_path(design, nuisance, signal, fractions=[1])
-    )
-    _, shrunk, _ = next(
-        fractional().fraction_beta_path(design, nuisance, signal, fractions=[0.4])
-    )
+    _, ols, _ = next(fraction_beta_path(design, nuisance, signal, fractions=[1]))
+    _, shrunk, _ = next(fraction_beta_path(design, nuisance, signal, fractions=[0.4]))
     if prepared:
         solver = fractional().prepare_fraction_betas(design, nuisance, signal)
         np.testing.assert_allclose(solver.betas_at(1), ols)
@@ -118,7 +114,7 @@ def test_fraction_solver_handles_ill_conditioning_and_undefined_features(
 def test_invalid_fraction_grids_fail(regression, fractions):
     x, n, y = regression
     with pytest.raises(ValueError):
-        list(fractional().fraction_beta_path(x, n, y, fractions=fractions))
+        list(fraction_beta_path(x, n, y, fractions=fractions))
 
 
 @pytest.mark.parametrize("selected", [False, True])
@@ -237,3 +233,18 @@ def test_fraction_results_own_arrays_without_solver_mutation(
         np.testing.assert_array_equal(actual, expected)
         assert not actual.flags.writeable
     assert not copied.ridge_fraction.flags.writeable
+
+
+def test_prepare_fraction_betas_factorizes_once(regression, monkeypatch):
+    x, n, y = regression
+    calls = []
+    original = np.linalg.svd
+
+    def counting(*args, **kwargs):
+        calls.append(np.shape(args[0]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(np.linalg, "svd", counting)
+    fractional().prepare_fraction_betas(x, n, y)
+    assert len(calls) == 2  # the nuisance span and the raw residualized design
+    assert sorted(calls) == sorted([n.shape, x.shape])

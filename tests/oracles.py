@@ -10,7 +10,9 @@ from nilearn.glm.first_level.hemodynamic_models import (
 from scipy.linalg import block_diag
 from scipy.optimize import brentq
 
+from boldtailor._fractional_ridge import fraction_grid, prepare_fraction_betas
 from boldtailor._hrf_design import stimulus_regressor
+from boldtailor._single_trial_fit import prepare_trial_betas, validate_alpha
 from boldtailor.data import from_arrays
 
 _NILEARN_SHAPES = {"spm": spm_hrf, "glover": glover_hrf}
@@ -264,3 +266,20 @@ SHARED_DELTA_ACTIVITY_KEYS = {
     "nuisance_model",
     "undefined_features",
 }
+
+
+def trial_beta_path(x, nuisance, signals, *, alphas):
+    """Yield (alpha, betas) from one shared normalized factorization."""
+    alphas = tuple(validate_alpha(a) for a in alphas)
+    prepared = prepare_trial_betas(x, nuisance, signals)
+    for alpha in alphas:
+        yield alpha, prepared.betas_at(alpha)
+
+
+def fraction_beta_path(x, nuisance, signals, *, fractions):
+    """Yield (fraction, betas, alphas) from one prepared raw-basis solver."""
+    grid = fraction_grid(fractions)
+    prepared = prepare_fraction_betas(x, nuisance, signals)
+    for fraction in grid:
+        betas, alphas = prepared.solve(fraction)
+        yield fraction, betas, alphas
