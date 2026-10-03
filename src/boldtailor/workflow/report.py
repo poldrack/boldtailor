@@ -89,6 +89,8 @@ def _path_flags(settings):
 
 
 def _modulator_flags(settings):
+    if settings.modulators == ():
+        return ["--no-modulators"]
     flags = []
     for mod in settings.modulators or ():
         text = mod.column + (":indicator" if mod.missing == "indicator" else "")
@@ -161,7 +163,7 @@ def _settings_body(settings):
     return f"<table>{rows}</table><h3>Equivalent command line</h3><pre>{command}</pre>"
 
 
-def _inputs_body(runs, task_model, library):
+def _inputs_body(runs, task_model, library, notes=()):
     labels = html.escape(", ".join(r.label for r in runs))
     regressors = html.escape(", ".join(task_model.regressor_names))
     items = [
@@ -178,6 +180,7 @@ def _inputs_body(runs, task_model, library):
             '<li class="note">No reaction-time column; '
             "RT correlations were not computed.</li>"
         )
+    items += [f'<li class="note">{html.escape(n)}</li>' for n in notes]
     return "<ul>" + "".join(items) + "</ul>"
 
 
@@ -224,7 +227,9 @@ def _stage_note(name, settings, skipped):
 def _bodies(settings, data, figures):
     return {
         "settings": _settings_body(settings),
-        "inputs": _inputs_body(data["runs"], data["task_model"], data["library"])
+        "inputs": _inputs_body(
+            data["runs"], data["task_model"], data["library"], data["notes"]
+        )
         + _figures(figures, ("Design", "Library")),
         "glms": _table(data["glm_summary"])
         + _table(data["hrf_summary"])
@@ -258,6 +263,7 @@ def render_report(
     figures,
     skipped,
     manifest,
+    notes=(),
 ):
     data = dict(locals())
     bodies = _bodies(settings, data, dict(figures))

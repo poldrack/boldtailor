@@ -1,5 +1,6 @@
 """Run the enabled stages in order and publish one BIDS derivative with a report."""
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import logging
 from pathlib import Path
@@ -31,6 +32,10 @@ RIDGE_CV_PARITY = (
     "ridge cross-validation needs at least three odd and three even runs; "
     "use --ridge-mode off|fixed or --skip-stage betas"
 )
+RIDGE_CV_MODULATORS = (
+    "ridge cross-validation scores trial-modulator encoding and needs at least "
+    "one modulator; use --ridge-mode off|fixed or --skip-stage betas"
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -61,6 +66,7 @@ class _State:
     activation: dict | None = None
     figures: dict = field(default_factory=dict)
     skipped: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
 
     @property
     def brain(self):
@@ -70,13 +76,35 @@ class _State:
         return stage in self.settings.stages
 
 
+@contextmanager
+def _input_errors():
+    """Loading and validation failures are input errors (CLI exit code 2)."""
+    try:
+        yield
+    except inputs.InputError:
+        raise
+    except ValueError as error:
+        raise inputs.InputError(str(error)) from error
+
+
+def _session(settings):
+    """Trimmed runs, the task model, and notes on what detection left out."""
+    with _input_errors():
+        runs = inputs.load_session(settings, hrf_only=True)
+        events = [r.events for r in runs]
+        task_model = inputs.detect_task_model(
+            events, settings.modulators, labels=[r.label for r in runs]
+        )
+    return runs, task_model, inputs.task_model_notes(events, settings.modulators)
+
+
 def describe_inputs(settings):
     """What a run would use (for ``--dry-run``), without fitting anything."""
-    runs = inputs.load_session(settings, hrf_only=True)
-    task_model = inputs.detect_task_model([r.events for r in runs], settings.modulators)
+    runs, task_model, notes = _session(settings)
     return dict(
         runs=[r.label for r in runs],
         task_model=task_model.to_dict(),
+        notes=notes,
         output_dir=str(settings.output_dir),
         fmriprep_dir=str(settings.fmriprep_dir),
         library_candidates=len(settings.build_library().candidates),
@@ -85,14 +113,14 @@ def describe_inputs(settings):
 
 
 def _load(settings):
-    runs = inputs.load_session(settings, hrf_only=True)
-    _check_ridge_cv(settings, runs)
-    task_model = inputs.detect_task_model([r.events for r in runs], settings.modulators)
-    blocks = inputs.make_blocks(
-        runs,
-        block_size=settings.block_size,
-        max_grayordinates=settings.max_grayordinates,
-    )
+    runs, task_model, notes = _session(settings)
+    _check_ridge_cv(settings, runs, task_model)
+    with _input_errors():
+        blocks = inputs.make_blocks(
+            runs,
+            block_size=settings.block_size,
+            max_grayordinates=settings.max_grayordinates,
+        )
     library = settings.build_library()
     log.info("Loaded %d runs; %d HRF candidates", len(runs), len(library.candidates))
     return _State(
@@ -101,6 +129,7 @@ def _load(settings):
         task_model=task_model,
         library=library,
         blocks=blocks,
+        notes=list(notes),
     )
 
 
@@ -108,11 +137,15 @@ def _splits_possible(runs, minimum=2):
     return all(len(half) >= minimum for half in odd_even_parity(runs).values())
 
 
-def _check_ridge_cv(settings, runs):
-    """Optimized-HRF ridge CV needs three runs per half; refuse before any fitting."""
+def _check_ridge_cv(settings, runs, task_model):
+    """Ridge CV needs three runs per half and a modulator; refuse before fitting."""
     cv = settings.ridge_mode in ("cv", "fractional_cv")
-    if "betas" in settings.stages and cv and not _splits_possible(runs, 3):
+    if "betas" not in settings.stages or not cv:
+        return
+    if not _splits_possible(runs, 3):
         raise inputs.InputError(RIDGE_CV_PARITY)
+    if not task_model.modulators:
+        raise inputs.InputError(RIDGE_CV_MODULATORS)
 
 
 def _reliability_runs(state):
@@ -311,6 +344,7 @@ def _render(state, paths):
         rt_summary=_rt_summary(state),
         figures=state.figures,
         skipped=state.skipped,
+        notes=state.notes,
         manifest=_manifest(paths, state.settings.stem),
     )
 
@@ -329,6 +363,7 @@ def _publish(state):
         figures=state.figures,
         activation=state.activation,
         skipped=state.skipped,
+        notes=state.notes,
         report=outputs.report_name(settings),
         include_hrf_splits=_reliability_runs(state),
     )

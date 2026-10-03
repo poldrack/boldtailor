@@ -967,6 +967,7 @@ def metadata(
     skipped,
     report,
     artifacts=None,
+    notes=(),
 ):
     """The settings file: analysis description plus what ran and what was skipped.
 
@@ -990,6 +991,7 @@ def metadata(
         **_library_metadata(library, selections),
         runs=[r.label for r in runs],
         skipped=list(skipped),
+        notes=list(notes),
         report=report,
         artifacts=sorted(artifacts or ()),
         settings=settings.to_dict(),
@@ -1044,6 +1046,7 @@ def workflow_artifacts(
     skipped,
     report,
     include_hrf_splits=True,
+    notes=(),
 ):
     """Everything ``save_workflow`` writes except the report and dataset description.
 
@@ -1073,6 +1076,7 @@ def workflow_artifacts(
         skipped=skipped,
         report=report,
         artifacts=listed + ([report] if report else []),
+        notes=notes,
     )
     return artifacts + [json_artifact(metadata_name(settings), settings_file)]
 

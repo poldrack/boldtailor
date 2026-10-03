@@ -21,23 +21,50 @@ class InputError(ValueError):
     """Inputs are missing or malformed; the CLI maps this to exit code 2."""
 
 
-def detect_task_model(events_tables, modulators=None):
-    """The task model from event columns, or explicit modulators checked per run."""
+TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
+_AUTOMATIC = (("response_time", "indicator"), ("trial_type", "error"))
+
+
+def _binary(table):
+    values = pd.to_numeric(table["trial_type"], errors="coerce").to_numpy(float)
+    return bool(np.isin(values, [0, 1]).all())
+
+
+def _detectable(column, tables):
+    """Present in every run; trial_type must also be numeric 0/1 throughout."""
+    if not all(column in t.columns for t in tables):
+        return False
+    return column != "trial_type" or all(_binary(t) for t in tables)
+
+
+def detect_task_model(events_tables, modulators=None, labels=None):
+    """The task model from event columns, or explicit modulators checked per run.
+
+    Detection takes ``response_time`` and a binary 0/1 ``trial_type``; ``labels``
+    (BIDS run labels) name the run in errors.
+    """
     tables = list(events_tables)
     if modulators is None:
         modulators = tuple(
             Modulator(column, missing=missing)
-            for column, missing in (
-                ("response_time", "indicator"),
-                ("trial_type", "error"),
-            )
-            if all(column in t.columns for t in tables)
+            for column, missing in _AUTOMATIC
+            if _detectable(column, tables)
         )
-    for index, table in enumerate(tables, 1):
+    labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
+    for label, table in zip(labels, tables, strict=True):
         missing = [m.column for m in modulators if m.column not in table.columns]
         if missing:
-            raise InputError(f"run {index} events lack modulator column(s) {missing}")
+            raise InputError(f"{label} events lack modulator column(s) {missing}")
     return TaskModel(tuple(modulators))
+
+
+def task_model_notes(events_tables, modulators=None):
+    """Why automatic detection left out a column that every run has."""
+    tables = list(events_tables)
+    present = all("trial_type" in t.columns for t in tables)
+    if modulators is None and present and not _detectable("trial_type", tables):
+        return [TRIAL_TYPE_NOTE]
+    return []
 
 
 def selection_task_model(task_model, include_rt=True):
@@ -99,7 +126,8 @@ def _missing_nonpositive_rt(events):
     return events.assign(response_time=np.where(np.isfinite(rt) & (rt > 0), rt, np.nan))
 
 
-def _trim(run, task_model):
+def _checked(run, task_model):
+    """Nonsteady columns, retained frames, and events with RT missingness."""
     flags = run.confounds.filter(like="non_steady_state_outlier")
     if not np.isin(flags.to_numpy(), [0, 1]).all():
         raise ValueError("Nonsteady flags must be binary")
@@ -110,11 +138,19 @@ def _trim(run, task_model):
     if not len(retained):
         raise ValueError("No scans remain after trimming")
     validate_glm_events(run.events, task_model)
+    return flags.columns, retained, _missing_nonpositive_rt(run.events)
+
+
+def _trim(run, task_model):
+    try:
+        flags, retained, events = _checked(run, task_model)
+    except ValueError as error:
+        raise InputError(f"{run.label}: {error}") from error
     return WorkflowRun(
         run.inputs,
         run.image,
-        _missing_nonpositive_rt(run.events),
-        run.confounds.drop(columns=flags.columns).iloc[retained].reset_index(drop=True),
+        events,
+        run.confounds.drop(columns=flags).iloc[retained].reset_index(drop=True),
         run.frame_times[retained],
         run.label,
         run.number,
@@ -125,7 +161,11 @@ def _trim(run, task_model):
 def load_session(settings, *, hrf_only=False):
     """Keep original event onsets and acquisition times when dropping NSS scans."""
     raw_runs, _ = load_runs(discover_runs(settings))
-    task_model = detect_task_model([r.events for r in raw_runs], settings.modulators)
+    task_model = detect_task_model(
+        [r.events for r in raw_runs],
+        settings.modulators,
+        labels=[r.label for r in raw_runs],
+    )
     runs = [_trim(run, task_model) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise InputError("Retained confound names must match across runs")

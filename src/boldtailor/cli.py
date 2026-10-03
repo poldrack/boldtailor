@@ -55,12 +55,19 @@ def _add_inputs(run):
     group.add_argument("--fmriprep-dir", type=Path)
     group.add_argument("--output-dir", type=Path)
     _choice(group, "--space", SUPPORTED_SPACES, "fsLR-91k")
-    group.add_argument(
+    exclusive = group.add_mutually_exclusive_group()
+    exclusive.add_argument(
         "--modulator",
         action="append",
         type=parse_modulator,
         metavar="COLUMN[:indicator]",
-        help="task modulator; repeat to list all; default detects response_time and trial_type",
+        help="task modulator; repeat to list all; default detects response_time "
+        "and a binary 0/1 trial_type",
+    )
+    exclusive.add_argument(
+        "--no-modulators",
+        action="store_true",
+        help="fit the task regressor alone",
     )
 
 
@@ -123,6 +130,12 @@ def _stages(skipped):
     return frozenset(stages)
 
 
+def _modulators(args):
+    if args.no_modulators:
+        return ()
+    return tuple(args.modulator) if args.modulator else None
+
+
 def settings_from_args(args):
     meshes = dict(args.surface_mesh) if args.surface_mesh else None
     return WorkflowSettings(
@@ -133,7 +146,7 @@ def settings_from_args(args):
         fmriprep_dir=args.fmriprep_dir,
         output_dir=args.output_dir,
         space=args.space,
-        modulators=tuple(args.modulator) if args.modulator else None,
+        modulators=_modulators(args),
         hrf_library=args.hrf_library,
         hrf_n_samples=args.hrf_n_samples,
         hrf_seed=args.hrf_seed,
@@ -154,10 +167,9 @@ def settings_from_args(args):
     )
 
 
-def _run(args):
+def _run(args, settings):
     from boldtailor.workflow import run as workflow_run
 
-    settings = settings_from_args(args)
     if args.dry_run:
         plan = dict(
             settings=settings.to_dict(), **workflow_run.describe_inputs(settings)
@@ -171,17 +183,25 @@ def _run(args):
     return 0
 
 
+def _fail(message, code):
+    print(message, file=sys.stderr)
+    return code
+
+
 def _execute(args):
+    """Settings and existing outputs exit 1, inputs exit 2; fitting errors propagate."""
     from boldtailor.workflow.inputs import InputError
 
     try:
-        return _run(args)
+        settings = settings_from_args(args)
+    except ValueError as error:
+        return _fail(f"error: {error}", 1)
+    try:
+        return _run(args, settings)
     except (InputError, FileNotFoundError) as error:
-        print(f"input error: {error}", file=sys.stderr)
-        return 2
-    except (ValueError, FileExistsError) as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 1
+        return _fail(f"input error: {error}", 2)
+    except FileExistsError as error:
+        return _fail(f"error: {error}", 1)
 
 
 def main(argv=None):
