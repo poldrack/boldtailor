@@ -1,6 +1,7 @@
 """Publish every workflow stage's maps, designs, tables, and provenance together."""
 
-from pathlib import Path
+import json
+from pathlib import Path, PurePosixPath
 
 from matplotlib.figure import Figure
 import numpy as np
@@ -69,20 +70,45 @@ def check_output(settings):
     """Refuse to replace this subject/session/task's outputs unless told to."""
     if settings.existing_results == "overwrite":
         return None
-    if _session_files(settings):
-        directory = settings.output_dir / settings.subject / settings.session / "func"
+    existing = _session_files(settings)
+    if existing:
+        names = ", ".join(sorted(p.name for p in existing))
         raise FileExistsError(
-            f"boldtailor outputs already exist in {directory}; set "
+            f"existing files in {settings.output_dir} ({names}); set "
             "existing_results to overwrite, or choose a new output_dir"
         )
     return None
 
 
-def _remove_stale(settings, published):
-    """After an overwrite, drop earlier session/task files the new set lacks."""
-    keep = {Path(p).resolve() for p in published}
-    for path in _session_files(settings):
-        if path.resolve() not in keep:
+def metadata_name(settings):
+    """The settings file's path relative to the derivative root."""
+    return f"{settings.stem}_desc-boldtailor_metadata.json"
+
+
+def _listed_artifacts(settings):
+    """The artifact paths an earlier run recorded in its settings file, if any."""
+    try:
+        text = (settings.output_dir / metadata_name(settings)).read_text()
+        listed = json.loads(text).get("artifacts")
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not isinstance(listed, list):
+        return []
+    return [p for p in listed if isinstance(p, str) and _inside(p)]
+
+
+def _inside(relative):
+    path = PurePosixPath(relative)
+    return not path.is_absolute() and ".." not in path.parts and "\\" not in relative
+
+
+def _remove_stale(settings, listed, published, sources):
+    """Delete files the earlier run listed that this run did not write again."""
+    keep = {Path(p).resolve() for p in (*published, *sources)}
+    root = settings.output_dir.resolve()
+    for relative in listed:
+        path = root / relative
+        if path.is_file() and not path.is_symlink() and path.resolve() not in keep:
             path.unlink()
 
 
@@ -940,8 +966,13 @@ def metadata(
     selections,
     skipped,
     report,
+    artifacts=None,
 ):
-    """The settings file: analysis description plus what ran and what was skipped."""
+    """The settings file: analysis description plus what ran and what was skipped.
+
+    ``artifacts`` lists every path this run publishes for the session (not the
+    shared dataset description); a later overwrite removes only those files.
+    """
     has_rt = "response_time" in task_model.regressor_names
     include_rt = settings.hrf_selection_rt and has_rt
     return dict(
@@ -960,6 +991,7 @@ def metadata(
         runs=[r.label for r in runs],
         skipped=list(skipped),
         report=report,
+        artifacts=sorted(artifacts or ()),
         settings=settings.to_dict(),
     )
 
@@ -1028,24 +1060,21 @@ def workflow_artifacts(
         beta_models,
         activation=activation,
         include_hrf_splits=include_hrf_splits,
+    ) + _figure_artifacts(settings, figures)
+    listed = [a.path for a in artifacts] + [metadata_name(settings)]
+    settings_file = metadata(
+        runs,
+        library,
+        settings,
+        task_model,
+        beta_models=beta_models,
+        activation=activation,
+        selections=selections,
+        skipped=skipped,
+        report=report,
+        artifacts=listed + ([report] if report else []),
     )
-    artifacts.append(
-        json_artifact(
-            f"{settings.stem}_desc-boldtailor_metadata.json",
-            metadata(
-                runs,
-                library,
-                settings,
-                task_model,
-                beta_models=beta_models,
-                activation=activation,
-                selections=selections,
-                skipped=skipped,
-                report=report,
-            ),
-        )
-    )
-    return artifacts + _figure_artifacts(settings, figures)
+    return artifacts + [json_artifact(metadata_name(settings), settings_file)]
 
 
 def _root_artifacts(settings, report_html):
@@ -1062,14 +1091,16 @@ def _root_artifacts(settings, report_html):
 def publish_workflow(settings, runs, artifacts, report_html):
     """Publish ``workflow_artifacts`` with the report and dataset description at once."""
     overwrite = settings.existing_results == "overwrite"
+    listed = _listed_artifacts(settings) if overwrite else []
+    sources = [p for r in runs for p in input_paths(r.inputs)]
     paths = publish_artifact_set(
         settings.output_dir,
         [*artifacts, *_root_artifacts(settings, report_html)],
-        source_paths=[p for r in runs for p in input_paths(r.inputs)],
+        source_paths=sources,
         overwrite=overwrite,
     )
     if overwrite:
-        _remove_stale(settings, paths)
+        _remove_stale(settings, listed, paths, sources)
     return paths
 
 

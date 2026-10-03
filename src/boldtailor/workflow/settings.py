@@ -48,6 +48,11 @@ def parse_modulator(text):
     return Modulator(parts[0], missing="indicator" if len(parts) == 2 else "error")
 
 
+def _nested(path, other):
+    """Whether two resolved paths are equal or one contains the other."""
+    return path == other or path in other.parents or other in path.parents
+
+
 def _check_label(value, name, prefix):
     text = str(value)
     body = text.removeprefix(prefix + "-") if prefix else text
@@ -126,6 +131,7 @@ class WorkflowSettings:
         self._validate_surfaces()
         self._validate_execution()
         self._resolve_output_dir()
+        self._check_output_overlap()
 
     def _set(self, name, value):
         object.__setattr__(self, name, value)
@@ -213,6 +219,16 @@ class WorkflowSettings:
         if out is None:
             out = self.bids_dir / "derivatives" / self.output_name()
         self._set("output_dir", Path(out).expanduser())
+
+    def _check_output_overlap(self):
+        """Outputs may never share a directory tree with the inputs."""
+        out = self.output_dir.resolve()
+        prep = self.fmriprep_dir.resolve()
+        if out == self.bids_dir.resolve() or _nested(out, prep):
+            raise ValueError(
+                f"output_dir {self.output_dir} must not be bids_dir, nor be, "
+                f"contain, or lie inside the fMRIPrep directory {prep}"
+            )
 
     def output_name(self):
         library = self.hrf_library
