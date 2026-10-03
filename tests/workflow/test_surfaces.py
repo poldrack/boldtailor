@@ -10,9 +10,9 @@ import pytest
 
 def surfaces():
     try:
-        return importlib.import_module("examples.NSD.workflow_surfaces")
+        return importlib.import_module("boldtailor.workflow.surfaces")
     except ModuleNotFoundError as error:
-        pytest.fail(f"Cortical surface summaries are not implemented: {error}")
+        pytest.fail(f"Workflow surface module is missing: {error}")
 
 
 @pytest.fixture
