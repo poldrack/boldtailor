@@ -131,13 +131,18 @@ def dataset(tmp_path, confounds, events):
     )
     table, metadata = confounds
     times = 0.775 + np.arange(96) * 1.6
-    task = np.column_stack(
-        [
-            compute_regressor(
-                np.vstack([events.onset, events.duration, amp]), "spm", times
-            )[0]
-            for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
-        ]
+    # The oracle design uses the peak-one kernel; simulated responses keep
+    # their original Nilearn-scaled amplitudes.
+    task, simulated_task = (
+        np.column_stack(
+            [
+                compute_regressor(
+                    np.vstack([events.onset, events.duration, amp]), hrf, times
+                )[0]
+                for amp in [np.ones(6), np.array([-1, -0.5, 1, 0, 1.5, -1])]
+            ]
+        )
+        for hrf in (hrf_model("spm"), "spm")
     )
     nuisance = np.column_stack(
         [
@@ -148,6 +153,7 @@ def dataset(tmp_path, confounds, events):
         ]
     )
     full = np.column_stack([task, nuisance])
+    simulated = np.column_stack([simulated_task, nuisance])
     rng = np.random.default_rng(23)
     signal_runs = []
     # Unequal variances and run means expose erroneous arithmetic/global pooling.
@@ -160,7 +166,7 @@ def dataset(tmp_path, confounds, events):
         (prep_func / f"{stem}_desc-confounds_timeseries.json").write_text(
             json.dumps(metadata)
         )
-        y = scale * (full @ rng.normal(size=(35, 4)) + rng.normal(size=(96, 4)))
+        y = scale * (simulated @ rng.normal(size=(35, 4)) + rng.normal(size=(96, 4)))
         y += run * 100
         y[:, -1] = 0  # Undefined R² must retain its spatial position as NaN.
         signal_runs.append(y)

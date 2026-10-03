@@ -10,6 +10,7 @@ import pytest
 from nilearn.glm.first_level import compute_regressor
 
 from examples.NSD.test_nsd_cifti import confounds, dataset, events  # noqa: F401
+from boldtailor._hrf_design import hrf_model
 
 
 def example():
@@ -32,13 +33,19 @@ def mini_nsd(dataset):
         table.loc[1, "response_time"] = np.nan
         table.loc[5, "response_time"] = -1.0
         table.to_csv(event_path, sep="\t", index=False)
-        x = np.column_stack(
-            [
-                compute_regressor(np.array([[t], [3.0], [1.0]]), "spm", times)[0][:, 0]
-                for t in table.onset
-            ]
+        x, simulated = (
+            np.column_stack(
+                [
+                    compute_regressor(np.array([[t], [3.0], [1.0]]), hrf, times)[0][
+                        :, 0
+                    ]
+                    for t in table.onset
+                ]
+            )
+            for hrf in (hrf_model("spm"), "spm")
         )
-        y = x @ rng.normal(size=(6, 4)) + nuisance @ rng.normal(size=(33, 4))
+        # x is the peak-one oracle; simulated responses keep original amplitudes.
+        y = simulated @ rng.normal(size=(6, 4)) + nuisance @ rng.normal(size=(33, 4))
         y += rng.normal(scale=0.1 * run, size=y.shape) + 100 * run
         y[:, -1] = 0
         path = next(prep.rglob(f"*run-{run:02d}*.dtseries.nii"))

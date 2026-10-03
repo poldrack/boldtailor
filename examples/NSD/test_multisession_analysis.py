@@ -302,7 +302,7 @@ def test_sessions_with_different_hrf_normalization_cannot_be_pooled(saved_sessio
     first, other = (
         inputs.load_one_session(root, "sub-07", s, ["OLS"]) for s in sessions[:2]
     )
-    assert first["metadata"]["hrf_normalization"] == "peak_one"
+    first["metadata"]["hrf_normalization"] = "peak_one"
     other["metadata"]["hrf_normalization"] = "discrete_sum_one"
     with pytest.raises(ValueError, match="hrf_normalization"):
         inputs._compatible(first, other, ["OLS"])

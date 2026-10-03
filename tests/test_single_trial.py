@@ -40,20 +40,24 @@ def problem():
             "73k_id": [2, 2, 5, 2],
         }
     )
-    x = np.column_stack(
-        [
-            compute_regressor(
-                np.array([[onset], [3.0], [1.0]]), peak_kernel("spm"), times
-            )[0][:, 0]
-            for onset in events.onset
-        ]
+    x, simulated = (
+        np.column_stack(
+            [
+                compute_regressor(np.array([[onset], [3.0], [1.0]]), hrf, times)[0][
+                    :, 0
+                ]
+                for onset in events.onset
+            ]
+        )
+        for hrf in (peak_kernel("spm"), "spm")
     )
     signals, confounds, nuisance = [], [], []
     for run in range(2):
         c = pd.DataFrame({f"motion_{run}": rng.normal(size=80)})
         n = np.column_stack([c, np.ones(80)])
+        # Simulated responses keep their original amplitudes; x is the oracle.
         y = (run + 1) * (
-            x @ rng.normal(size=(4, 3))
+            simulated @ rng.normal(size=(4, 3))
             + n @ rng.normal(size=(2, 3))
             + rng.normal(scale=0.1, size=(80, 3))
         ) + 100 * run

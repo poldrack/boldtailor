@@ -258,3 +258,17 @@ def test_compile_designs_with_task_model_reports_data_errors_with_run():
         match=r"^run 1 design compilation failed: (?!run 1).*response_time",
     ):
         compile_designs(data, model)
+
+
+def test_plain_string_hrf_keeps_confound_names_ending_in_kernel(inputs):
+    events, confounds = inputs
+    confounds = confounds.rename(columns={"trans_x": "face_kernel"})
+    data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
+    model = ModelSpec(
+        contrasts={"face_gt_house": "face - house"},
+        confounds=("face_kernel",),
+        drift_model=None,
+        noise_model="ols",
+    )
+    columns = list(compile_designs(data, model)[0].matrix.columns)
+    assert columns == ["face", "house", "face_kernel", "constant"]
