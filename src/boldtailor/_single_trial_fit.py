@@ -53,7 +53,7 @@ class PreparedTrialBetas:
 def prepare_trial_betas(x, nuisance, signals):
     """Project signals and factor the normalized trial design once."""
     x, nuisance, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    design = _project_design(x, nuisance)
+    design = project_trial_design(x, nuisance)
     varying = np.ptp(y, axis=0) > 0
     values = y[:, varying]
     q = design.nuisance_basis
@@ -69,17 +69,26 @@ def validate_alpha(alpha):
     return float(alpha)
 
 
-def _project_design(x, nuisance):
+def nuisance_span(nuisance):
+    """Orthonormal basis of the nuisance column span and its rank."""
     u, s, _ = np.linalg.svd(nuisance, full_matrices=False)
     tolerance = s[0] * max(nuisance.shape) * np.finfo(float).eps
-    nuisance_rank = int(np.sum(s > tolerance))
-    q = u[:, :nuisance_rank]
-    xr = x - q @ (q.T @ x)
-    scale = np.linalg.norm(xr, axis=0)
+    rank = int(np.sum(s > tolerance))
+    return u[:, :rank], rank
+
+
+def residual_column_scale(x, q):
+    """Column norms of the nuisance-residualized design; reject unsupported ones."""
+    scale = np.linalg.norm(x - q @ (q.T @ x), axis=0)
     tolerance = np.linalg.norm(x, ord=2) * max(x.shape) * np.finfo(float).eps
     if np.any(scale <= tolerance):
         raise ValueError("trial columns have no support outside nuisance span")
-    u, s, vt = np.linalg.svd(xr / scale, full_matrices=False)
+    return scale
+
+
+def design_diagnostics(x, normalized_s, nuisance_rank):
+    """Rank and degrees-of-freedom checks from normalized singular values."""
+    s = normalized_s
     task_rank = int(np.sum(s > s[0] * max(x.shape) * np.finfo(float).eps))
     if task_rank != x.shape[1]:
         raise ValueError("residualized trial design is rank deficient")
@@ -88,13 +97,20 @@ def _project_design(x, nuisance):
         raise ValueError(
             "single-trial fit requires positive residual degrees of freedom"
         )
-    diagnostics = dict(
+    return dict(
         rank=nuisance_rank + task_rank,
         nuisance_rank=nuisance_rank,
         task_rank=task_rank,
         residual_dof=dof,
         condition_number=float(s[0] / s[-1]),
     )
+
+
+def project_trial_design(x, nuisance):
+    q, nuisance_rank = nuisance_span(nuisance)
+    scale = residual_column_scale(x, q)
+    u, s, vt = np.linalg.svd((x - q @ (q.T @ x)) / scale, full_matrices=False)
+    diagnostics = design_diagnostics(x, s, nuisance_rank)
     return ProjectedTrialDesign(q, scale, u, s, vt, diagnostics)
 
 
@@ -123,14 +139,6 @@ def fit_trial_run(x, nuisance, signals, *, alpha):
     return TrialRunFit(
         betas, gamma, full_sse, nuisance_sse, total_ss, prepared.design.diagnostics
     )
-
-
-def trial_beta_path(x, nuisance, signals, *, alphas):
-    """Yield candidates using one prepared normalized solver."""
-    alphas = tuple(validate_alpha(a) for a in alphas)
-    prepared = prepare_trial_betas(x, nuisance, signals)
-    for alpha in alphas:
-        yield alpha, prepared.betas_at(alpha)
 
 
 def r_squared(sse, total_ss):

@@ -8,8 +8,8 @@ import pytest
 from scipy.linalg import block_diag
 from scipy.optimize import brentq
 
-from boldtailor._fractional_ridge import fraction_beta_path
 from boldtailor.trial_encoding import evaluate_trial_encoding
+from tests.oracles import fraction_beta_path
 
 
 def experiment():

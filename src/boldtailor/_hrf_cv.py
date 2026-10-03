@@ -14,7 +14,7 @@ from boldtailor._single_trial_design import (
     _validate_events,
     compile_trial_run,
 )
-from boldtailor._single_trial_fit import _project_design
+from boldtailor._single_trial_fit import project_trial_design
 from boldtailor._task_design import expand_events, task_columns
 from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
@@ -124,7 +124,7 @@ class RunDesign:
         """Estimability of the single-trial design; not used by selection."""
         if candidate_id not in self.trial_eligibility:
             try:
-                _project_design(self.trial_matrix(candidate_id), self.nuisance)
+                project_trial_design(self.trial_matrix(candidate_id), self.nuisance)
                 self.trial_eligibility[candidate_id] = (True, "")
             except ValueError as error:
                 self.trial_eligibility[candidate_id] = (False, str(error))

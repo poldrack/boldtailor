@@ -4,9 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._fractional_ridge import _alphas
-from boldtailor.fractional_ridge import fraction_grid
-from boldtailor._single_trial_fit import _project_design
+from boldtailor.fractional_ridge import fraction_alphas, fraction_grid
+from boldtailor.single_trial import project_trial_design
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from examples.validation.ridge_objective_simulation import score_prediction_runs
 
@@ -25,7 +24,7 @@ def prepare_runs(designs, signals, *, basis):
         raise ValueError("basis must be raw or normalized")
     prepared = []
     for (x, n), y in zip(designs, signals, strict=True):
-        design = _project_design(x, n)
+        design = project_trial_design(x, n)
         q, scale = design.nuisance_basis, design.column_scale
         u, s, vt = design.left_vectors, design.singular_values, design.right_vectors
         if basis == "raw":
@@ -50,7 +49,9 @@ def solve_run(run, alpha):
 def _fraction_alpha(runs, fraction):
     singular = np.concatenate([r.singular_values for r in runs])
     coordinates = np.concatenate([r.ols_coordinates for r in runs])
-    return _alphas(singular, coordinates, np.full(coordinates.shape[1], fraction))
+    return fraction_alphas(
+        singular, coordinates, np.full(coordinates.shape[1], fraction)
+    )
 
 
 def _split_betas(prepared, train, test, fraction, scope):

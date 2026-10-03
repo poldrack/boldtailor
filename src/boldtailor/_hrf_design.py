@@ -11,6 +11,12 @@ import hashlib
 from functools import lru_cache
 import numpy as np
 from nilearn.glm.first_level import compute_regressor
+
+# _sample_condition is private to Nilearn. We rely on it returning the
+# oversampled boxcar and its time grid for an event table (onset, duration,
+# amplitude rows) so each event's peak can be scaled exactly as compute_regressor
+# convolves it. pyproject pins nilearn<0.15 until that contract is re-verified
+# against the next release (see docs/development.md).
 from nilearn.glm.first_level.hemodynamic_models import _sample_condition, glover_hrf
 
 from boldtailor._arrays import readonly_array

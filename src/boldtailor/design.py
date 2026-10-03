@@ -223,7 +223,11 @@ def _select_confounds(
     missing = [name for name in names if name not in confounds]
     if missing:
         raise ValueError(f"run {run} missing confounds: {', '.join(missing)}")
-    selected = confounds.loc[:, list(names)].apply(pd.to_numeric, errors="coerce")
+    raw = confounds.loc[:, list(names)]
+    selected = raw.apply(pd.to_numeric, errors="coerce")
+    bad = [n for n in names if selected[n].isna().sum() > raw[n].isna().sum()]
+    if bad:
+        raise ValueError(f"run {run} non-numeric confound columns: {', '.join(bad)}")
     if not np.isfinite(selected.to_numpy()).all():
         raise ValueError(f"run {run} selected confounds must be finite")
     return selected

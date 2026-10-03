@@ -12,8 +12,9 @@ from boldtailor._single_trial_design import (  # compile_trial_run: public
     trial_table,
 )
 from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING, hrf_metadata
-from boldtailor._single_trial_fit import (  # r_squared, validate_alpha: public
+from boldtailor._single_trial_fit import (  # project_trial_design, r_squared, validate_alpha: public
     fit_trial_run,
+    project_trial_design,
     r_squared,
     validate_alpha,
 )

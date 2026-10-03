@@ -6,7 +6,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from boldtailor._hrf_design import (
-    convolve_events,
     identified_candidate,
     trial_regressors,
 )
@@ -87,7 +86,3 @@ def _nuisance_matrix(confounds, n_scans):
     if not np.isfinite(nuisance.to_numpy()).all():
         raise ValueError("confounds must be finite")
     return nuisance.assign(constant=1.0)
-
-
-def _trial_column(onset, duration, times, trial_id, hrf="spm"):
-    return convolve_events([onset], [duration], times, hrf, trial_id)

@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from boldtailor.single_trial import project_trial_design
+
 
 def simulation():
     try:
@@ -52,7 +54,10 @@ def test_generator_is_paired_and_stresses_the_design(problem):
         assert not np.allclose(x, truth_x)
         assert np.isfinite(y).all()
         assert not np.allclose(y, 25 + x @ beta)
-        assert np.ptp(np.linalg.norm(x, axis=0)) > 0.1
+        # Peak normalization equalizes the raw columns by design; the design
+        # still stresses the solver through unequal nuisance-residualized scales.
+        assert np.max(x, axis=0).min() > 0.9
+        assert np.ptp(project_trial_design(x, n).column_scale) > 0.1
 
 
 def test_noiseless_ols_recovers_truth():

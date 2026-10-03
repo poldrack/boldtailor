@@ -136,7 +136,7 @@ def _score_fold(
             raise ValueError(
                 f"validation {labels[test]}, beta run {labels[test]}: {error}"
             ) from error
-    losses, totals = [], []
+    losses, totals, first = [], [], None
     for alpha in alphas:
         betas = []
         for r, path in enumerate(paths):
@@ -155,13 +155,14 @@ def _score_fold(
             test_runs=[test],
             encoding_mode=encoding_mode,
         )
+        first = fit if first is None else first
         losses.append(fit.run_sse[0])
         totals.append(fit.run_sst[0])
     record = dict(
         train=[labels[r] for r in train],
         validation=labels[test],
-        predictor_means=fit.predictor_means.tolist(),
-        train_run_predictor_means=fit.train_run_predictor_means.tolist(),
+        predictor_means=first.predictor_means.tolist(),
+        train_run_predictor_means=first.train_run_predictor_means.tolist(),
         hrf_selection=selection_record,
     )
     return losses, totals, ids, record

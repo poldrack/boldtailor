@@ -6,7 +6,13 @@ from hashlib import sha256
 import numpy as np
 
 from boldtailor._scalars import is_real
-from boldtailor._single_trial_fit import TrialRunFit, _project_design, validate_alpha
+from boldtailor._single_trial_fit import (
+    TrialRunFit,
+    design_diagnostics,
+    nuisance_span,
+    residual_column_scale,
+    validate_alpha,
+)
 
 NORM_BASIS = "raw_trial_coefficients_after_nuisance_projection"
 
@@ -78,7 +84,7 @@ class PreparedFractionBetas:
         alphas = np.full(self.signals.shape[1], np.nan)
         if valid.any():
             s, ols = self.singular_values, self.ols_coordinates[:, valid]
-            alpha = _alphas(s, ols, fractions[valid])
+            alpha = fraction_alphas(s, ols, fractions[valid])
             attenuation = (s * s)[:, None] / ((s * s)[:, None] + alpha)
             betas[:, valid] = self.right_vectors.T @ (ols * attenuation)
             alphas[valid] = alpha
@@ -92,12 +98,15 @@ class PreparedFractionBetas:
 def prepare_fraction_betas(x, nuisance, signals):
     """Validate in normalized coordinates, then prepare the raw coefficient SVD."""
     x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
-    design = _project_design(x, n)
-    q = design.nuisance_basis
-    # Rank validation must be scale invariant. Fractional shrinkage instead uses
-    # raw trial amplitudes: column normalization would change the requested norm.
+    q, nuisance_rank = nuisance_span(n)
+    scale = residual_column_scale(x, q)
+    # Fractional shrinkage uses raw trial amplitudes: column normalization would
+    # change the requested norm. Rank validation must still be scale invariant.
     u, s, vt = np.linalg.svd(x - q @ (q.T @ x), full_matrices=False)
-    diagnostics = dict(design.diagnostics, condition_number=float(s[0] / s[-1]))
+    diagnostics = design_diagnostics(
+        x, _normalized_singular_values(s, vt, scale), nuisance_rank
+    )
+    diagnostics["condition_number"] = float(s[0] / s[-1])
     yr = y - q @ (q.T @ y)
     coordinates = u.T @ yr
     tolerance = max(x.shape) * np.finfo(float).eps * np.linalg.norm(y, axis=0)
@@ -107,7 +116,16 @@ def prepare_fraction_betas(x, nuisance, signals):
     )
 
 
-def _alphas(s, ols, fractions):
+def _normalized_singular_values(s, vt, scale):
+    """Singular values of the unit-norm columns, from the raw SVD factors.
+
+    X = U S Vt, so X / scale shares its singular values with the small
+    k-by-k matrix S Vt / scale; no second factorization of the T-by-k design.
+    """
+    return np.linalg.svdvals(s[:, None] * (vt / scale))
+
+
+def fraction_alphas(s, ols, fractions):
     """Bracket using singular-value extrema, then bisect in log-alpha space."""
     alphas = np.zeros(len(fractions))
     shrink = fractions < 1
@@ -125,15 +143,6 @@ def _alphas(s, ols, fractions):
         lo, hi = np.where(above, mid, lo), np.where(above, hi, mid)
     alphas[shrink] = np.exp((lo + hi) / 2)
     return alphas
-
-
-def fraction_beta_path(x, nuisance, signals, *, fractions):
-    """Stream candidate betas/alpha maps using one prepared raw-basis solver."""
-    grid = fraction_grid(fractions)
-    prepared = prepare_fraction_betas(x, nuisance, signals)
-    for fraction in grid:
-        betas, alphas = prepared.solve(fraction)
-        yield fraction, betas, alphas
 
 
 def fit_fraction_run(x, nuisance, signals, *, fractions):

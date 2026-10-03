@@ -11,7 +11,7 @@ from boldtailor._fit_diagnostics import (
     nested_ols_delta,
 )
 from boldtailor._hrf_assignment import validate_selection
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
 from boldtailor._hrf_glm_design import (
     compile_group_designs,
     design_identity,
@@ -62,7 +62,9 @@ def _check_task_model(model, selection):
     recorded = (activity.get("oversampling"), activity.get("min_onset"))
     if (model.oversampling, model.min_onset) != recorded:
         raise ValueError(
-            "ModelSpec.oversampling and min_onset must match the selection's settings"
+            f"ModelSpec.min_onset must be {MIN_ONSET} and oversampling must be "
+            f"{OVERSAMPLING} to match the selection's settings (got "
+            f"min_onset={model.min_onset}, oversampling={model.oversampling})"
         )
 
 

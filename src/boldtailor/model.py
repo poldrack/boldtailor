@@ -124,6 +124,9 @@ class ModelSpec:
         )
         object.__setattr__(self, "contrasts", MappingProxyType(normalized))
         object.__setattr__(self, "confounds", selected_confounds)
+        # Stored as builtin ints so model identities stay JSON-native.
+        object.__setattr__(self, "drift_order", int(self.drift_order))
+        object.__setattr__(self, "oversampling", int(self.oversampling))
         object.__setattr__(self, "_contrast_names", tuple(normalized))
 
     @property
@@ -210,7 +213,7 @@ def _prepare_confound_names(values: Sequence[str]) -> tuple[str, ...]:
 
 def _validate_noise_model(value: str) -> None:
     if value not in {"ols", "ar1"}:
-        raise ValueError("noise_model must be 'ols' or 'ar1' in Phase 1")
+        raise ValueError("noise_model must be 'ols' or 'ar1'")
 
 
 def _validate_task_model(task_model: object, hrf_model: HRFModel) -> None:
@@ -230,17 +233,12 @@ def _validate_design_options(
 ) -> None:
     if not is_real(high_pass) or not np.isfinite(high_pass) or high_pass <= 0:
         raise ValueError("high_pass must be positive and finite")
-    if not _is_builtin_int(drift_order) or drift_order < 0:
+    if not is_integer(drift_order) or drift_order < 0:
         raise ValueError("drift_order must be a non-negative integer")
-    if not _is_builtin_int(oversampling) or oversampling < 1:
+    if not is_integer(oversampling) or oversampling < 1:
         raise ValueError("oversampling must be a positive integer")
     if not is_real(min_onset) or not np.isfinite(min_onset):
         raise ValueError("min_onset must be finite")
-
-
-def _is_builtin_int(value: object) -> bool:
-    """Built-in ints only, so model identities stay JSON-native."""
-    return isinstance(value, int) and is_integer(value)
 
 
 @dataclass(frozen=True)

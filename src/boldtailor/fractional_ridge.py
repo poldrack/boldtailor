@@ -8,6 +8,7 @@ import pandas as pd
 from boldtailor._hrf_design import TIE_TOLERANCE
 from boldtailor._fractional_ridge import (  # public re-exports
     NORM_BASIS,
+    fraction_alphas,
     fraction_grid,
     regularization,
 )
