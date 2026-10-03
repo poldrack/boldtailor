@@ -36,7 +36,8 @@ def test_canonical_spm_has_the_expected_timing():
     assert timing["response_sd"] == pytest.approx(np.sqrt(6.0))
     assert timing["undershoot_peak"] == pytest.approx(15.0)
     assert timing["undershoot_sd"] == pytest.approx(4.0)
-    assert timing["undershoot_depth"] == pytest.approx(0.0967, abs=5e-4)
+    # closed form: gamma.pdf(15, 16) / 6 / gamma.pdf(5, 6) for shape/scale (16,1)/(6,1)
+    assert timing["undershoot_depth"] == pytest.approx(0.09730, abs=1e-4)
     assert timing["onset"] == 0.0 and timing["duration"] == 32.0
 
 
@@ -64,10 +65,16 @@ def test_timing_sampler_builds_a_valid_library_within_its_bounds():
     timing = np.array([timing_parameters(c.parameters) for c in library.candidates[1:]])
     for i, name in enumerate(TIMING_NAMES[:5]):
         low, high = bounds[name]
-        assert np.all(timing[:, i] >= low - 1e-9) and np.all(timing[:, i] <= high + 1e-9)
+        assert np.all(timing[:, i] >= low - 1e-9) and np.all(
+            timing[:, i] <= high + 1e-9
+        )
     assert np.all(timing[:, 5] == 0.0) and np.all(timing[:, 6] == 36.0)
     assert dict(library.origin) == dict(
-        kind="timing_sobol", n_samples=64, seed=3, onset=0.0, duration=36.0,
+        kind="timing_sobol",
+        n_samples=64,
+        seed=3,
+        onset=0.0,
+        duration=36.0,
         bounds={k: list(v) for k, v in bounds.items()},
     )
 

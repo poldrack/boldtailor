@@ -28,6 +28,24 @@ PARAMETER_NAMES = (
     "duration",
 )
 CANONICAL_PARAMETERS = (6.0, 16.0, 1.0, 1.0, 6.0, 0.0, 32.0)
+TIMING_NAMES = (
+    "response_peak",
+    "response_sd",
+    "undershoot_peak",
+    "undershoot_sd",
+    "undershoot_depth",
+    "onset",
+    "duration",
+)
+TIMING_BOUNDS = MappingProxyType(
+    {
+        "response_peak": (3.5, 7.5),
+        "response_sd": (1.0, 3.0),
+        "undershoot_peak": (10.0, 18.0),
+        "undershoot_sd": (2.5, 6.0),
+        "undershoot_depth": (0.05, 0.5),
+    }
+)
 
 
 def _parameters(values):
@@ -205,6 +223,93 @@ class HrfLibrary:
             )
         return pd.DataFrame(rows)
 
+    @property
+    def timing_table(self):
+        """Both parameterizations per candidate: SPM gamma values and lobe timing."""
+        rows = []
+        for candidate in self.candidates:
+            rows.append(
+                dict(
+                    hrf_id=candidate.id,
+                    kind=candidate.kind,
+                    **dict(zip(PARAMETER_NAMES, candidate.parameters, strict=True)),
+                    **dict(
+                        zip(
+                            TIMING_NAMES[:6],
+                            timing_parameters(candidate.parameters)[:6],
+                            strict=True,
+                        )
+                    ),
+                )
+            )
+        return pd.DataFrame(rows)
+
+
+def _lobe_timing(delay, dispersion, onset):
+    """Mode and standard deviation of a gamma lobe with shape delay/dispersion."""
+    return onset + delay - dispersion, float(np.sqrt(delay * dispersion))
+
+
+def _lobe_parameters(peak, sd, onset):
+    """Invert :func:`_lobe_timing`: delay - dispersion = peak - onset, product = sd**2."""
+    mode = peak - onset
+    dispersion = (-mode + np.sqrt(mode * mode + 4.0 * sd * sd)) / 2.0
+    return mode + dispersion, dispersion
+
+
+def _lobe_height(delay, dispersion):
+    return gamma.pdf(delay - dispersion, delay / dispersion, scale=dispersion)
+
+
+def timing_parameters(parameters):
+    """SPM gamma parameters to lobe timing: peak, SD, undershoot peak/SD, depth, onset.
+
+    Peak and SD are the mode and standard deviation of each gamma lobe; depth is
+    the undershoot lobe's height relative to the response lobe's height. The
+    response peak predicts the sampled kernel's maximum to about 0.1 s; the
+    undershoot values describe the lobe, not the trough of the combined curve.
+    """
+    a, b, c, d, ratio, onset, duration = _parameters(parameters)
+    response_peak, response_sd = _lobe_timing(a, c, onset)
+    undershoot_peak, undershoot_sd = _lobe_timing(b, d, onset)
+    depth = (_lobe_height(b, d) / ratio) / _lobe_height(a, c)
+    return (
+        response_peak,
+        response_sd,
+        undershoot_peak,
+        undershoot_sd,
+        depth,
+        onset,
+        duration,
+    )
+
+
+def spm_parameters(timing):
+    """Lobe timing (see :func:`timing_parameters`) back to SPM gamma parameters."""
+    values = tuple(float(v) for v in timing)
+    if len(values) != 7 or not np.isfinite(values).all():
+        raise ValueError("timing parameters must be seven finite numbers")
+    (
+        response_peak,
+        response_sd,
+        undershoot_peak,
+        undershoot_sd,
+        depth,
+        onset,
+        duration,
+    ) = values
+    if (
+        min(response_sd, undershoot_sd, depth) <= 0
+        or min(response_peak, undershoot_peak) <= onset
+    ):
+        raise ValueError(
+            "timing SDs and depth must be positive and peaks must follow the onset"
+        )
+    a, c = _lobe_parameters(response_peak, response_sd, onset)
+    b, d = _lobe_parameters(undershoot_peak, undershoot_sd, onset)
+    ratio = (_lobe_height(b, d) / _lobe_height(a, c)) / depth
+    return _parameters((a, b, c, d, ratio, onset, duration))
+
 
 def expanded_hrf_library():
     """The original 648 double-gamma grid plus peak-scaled canonical SPM."""
@@ -231,6 +336,14 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
     36 seconds. This balances parameter coverage, not waveform distances.
     Custom candidates are sorted by parameters, not Sobol sequence order.
     """
+    points = _sobol_points(n_samples, seed, dimensions=6)
+    parameters = qmc.scale(points, [3, 10, 0.5, 0.5, 2, 0], [6, 16, 1.5, 2.5, 8, 2])
+    rows = np.column_stack([parameters, np.full(int(n_samples), 36.0)])
+    origin = {"kind": "sobol", "n_samples": int(n_samples), "seed": int(seed)}
+    return HrfLibrary.from_parameters(rows, origin={**origin, "duration": 36.0})
+
+
+def _sobol_points(n_samples, seed, *, dimensions):
     if (
         not is_integer(n_samples)
         or n_samples < 1
@@ -239,10 +352,46 @@ def sobol_hrf_library(n_samples=512, *, seed=0):
         raise ValueError("n_samples must be a positive integer power of two")
     if not is_integer(seed) or seed < 0:
         raise ValueError("seed must be a nonnegative integer")
-    points = qmc.Sobol(d=6, scramble=True, rng=int(seed)).random_base2(
-        int(n_samples).bit_length() - 1
+    sampler = qmc.Sobol(d=dimensions, scramble=True, rng=int(seed))
+    return sampler.random_base2(int(n_samples).bit_length() - 1)
+
+
+def _timing_bounds(bounds):
+    merged = dict(TIMING_BOUNDS)
+    for name, values in dict(bounds or {}).items():
+        if name not in merged:
+            raise ValueError(f"bounds names must be timing parameters, not {name!r}")
+        low, high = (float(v) for v in values)
+        if not np.isfinite((low, high)).all() or low >= high:
+            raise ValueError(f"bounds for {name!r} must be finite with low < high")
+        merged[name] = (low, high)
+    return merged
+
+
+def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0):
+    """Sample lobe timing with scrambled Sobol, plus peak-scaled canonical SPM at ID zero.
+
+    The five sampled quantities are the response lobe's peak time and SD, the
+    undershoot lobe's peak time and SD, and the undershoot depth relative to the
+    response (see :func:`timing_parameters`); ``onset`` is fixed because onset
+    and response delay trade off into the same peak time, which is what makes
+    the gamma-parameter box oversample near-identical waveforms. ``bounds``
+    overrides entries of :data:`TIMING_BOUNDS`. Candidates are stored with
+    their SPM gamma parameters, so downstream modeling is unchanged.
+    """
+    limits = _timing_bounds(bounds)
+    points = _sobol_points(n_samples, seed, dimensions=5)
+    names = TIMING_NAMES[:5]
+    sampled = qmc.scale(
+        points, [limits[n][0] for n in names], [limits[n][1] for n in names]
     )
-    parameters = qmc.scale(points, [3, 10, 0.5, 0.5, 2, 0], [6, 16, 1.5, 2.5, 8, 2])
-    rows = np.column_stack([parameters, np.full(int(n_samples), 36.0)])
-    origin = {"kind": "sobol", "n_samples": int(n_samples), "seed": int(seed)}
-    return HrfLibrary.from_parameters(rows, origin={**origin, "duration": 36.0})
+    rows = [spm_parameters((*row, float(onset), float(duration))) for row in sampled]
+    origin = dict(
+        kind="timing_sobol",
+        n_samples=int(n_samples),
+        seed=int(seed),
+        onset=float(onset),
+        duration=float(duration),
+        bounds={name: list(limits[name]) for name in names},
+    )
+    return HrfLibrary.from_parameters(rows, origin=origin)
