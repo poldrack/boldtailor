@@ -447,16 +447,20 @@ arise from different parameter combinations.
 
 Those collisions are systematic: peak time is `onset + response_delay -
 response_dispersion`, so onset and delay trade off into the same waveform.
-`timing_hrf_library()` samples realized timing instead: the peak time, trough
-time, and trough depth measured on the combined curve, plus the two gamma
-lobes' SDs, with onset fixed. Each sample is converted to SPM parameters by
-`spm_parameters_from_realized()`, which refines the closed-form lobe
-conversion until the measured curve matches within 0.01 s and 0.1 %; targets
-no double gamma can realize (for example a trough 2 s after a wide peak) are
-skipped and counted in `library.origin["rejected"]`. Downstream fitting is
-unchanged because candidates carry SPM parameters. `realized_timing()`
-measures any candidate; `timing_parameters()` and `spm_parameters()` convert
-exactly between SPM parameters and the gamma-lobe description.
+`timing_hrf_library()` samples realized timing instead: the peak time, the
+response width at half maximum, the trough time, the undershoot width at half
+the trough depth, and the trough depth, all measured on the combined curve,
+with onset fixed. Each sample is converted to SPM parameters by
+`spm_parameters_from_realized()`, which refines the closed-form lobe conversion
+until the measured curve matches within 0.01 s (times), 0.02 s (widths) and
+0.1 % (depth). The five quantities are not independent for a double gamma, so
+roughly 40 % of points in the default box are unrealizable (for example a wide
+response cannot be followed by an early trough); those points are skipped and
+counted in `library.origin["rejected"]`, and the accepted set stays uniform
+over the feasible part of the box. Downstream fitting is unchanged because
+candidates carry SPM parameters. `realized_timing()` measures any candidate;
+`timing_parameters()` and `spm_parameters()` convert exactly between SPM
+parameters and the gamma-lobe description.
 `library.timing_table` lists both parameterizations. See
 `examples/validation/hrf_library_similarity.ipynb` for how the two samplers
 compare in waveform similarity.
