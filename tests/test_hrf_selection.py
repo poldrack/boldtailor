@@ -447,3 +447,42 @@ def test_selection_flags_features_at_the_parameter_box_edge(cv_fixture):
     assert selection.at_parameter_bound.dtype == bool
     assert not selection.at_parameter_bound.flags.writeable
     assert not selection.at_parameter_bound[selection.hrf_indices <= 0].any()
+
+
+def test_select_hrfs_is_the_name_and_select_hrf_a_deprecated_alias(selected_fixture):
+    from boldtailor import hrf_selection
+
+    data, selection = selected_fixture
+    options = dict(library=selection.library, feature_signature="ordered-axis")
+    current = hrf_selection.select_hrfs(data, **options)
+    with pytest.warns(DeprecationWarning, match="select_hrfs"):
+        old = hrf_selection.select_hrf(data, **options)
+    np.testing.assert_array_equal(current.hrf_indices, old.hrf_indices)
+    np.testing.assert_array_equal(current.cv_r2, old.cv_r2)
+    assert (
+        current.provenance.analysis_fingerprint == old.provenance.analysis_fingerprint
+    )
+
+
+def test_evaluate_hrf_split_threads_candidate_batch_size(selected_fixture, monkeypatch):
+    from boldtailor import hrf_selection
+
+    data, selection = selected_fixture
+    split = dict(library=selection.library, train_runs=[0, 1], test_runs=[2])
+    default = hrf_selection.evaluate_hrf_split(data, **split)
+    batches = []
+    original = hrf_selection.signal_statistics
+
+    def spy(runs, signals, batch):
+        batches.append(batch)
+        return original(runs, signals, batch)
+
+    monkeypatch.setattr(hrf_selection, "signal_statistics", spy)
+    small = hrf_selection.evaluate_hrf_split(data, **split, candidate_batch_size=7)
+    assert batches and set(batches) == {7}
+    np.testing.assert_array_equal(
+        small.training_selection.hrf_indices, default.training_selection.hrf_indices
+    )
+    np.testing.assert_array_equal(small.test_r2, default.test_r2)
+    with pytest.raises(ValueError, match="candidate_batch_size"):
+        hrf_selection.evaluate_hrf_split(data, **split, candidate_batch_size=0)

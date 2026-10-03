@@ -390,3 +390,35 @@ def test_ols_and_ridge_preserve_supported_trials_with_small_hrf_support(alpha):
     result = entry()(data, ridge_alpha=alpha)
     np.testing.assert_allclose(result.run_betas[0], [[2 / (1 + alpha)]], rtol=1e-8)
     assert result.full_r2[0] > 0.99
+
+
+def _same_trials(left, right):
+    for a, b in zip(left.run_betas, right.run_betas, strict=True):
+        np.testing.assert_array_equal(a, b)
+    np.testing.assert_array_equal(left.delta_r2, right.delta_r2)
+    assert left.provenance.analysis_fingerprint == right.provenance.analysis_fingerprint
+
+
+def test_fit_single_trials_names_its_hrf_hrf_model(selected_fixture):
+    data, selection = selected_fixture
+    candidate = selection.library.candidates[1]
+    named = entry()(data, hrf_model=candidate)
+    with pytest.warns(DeprecationWarning, match="hrf_model"):
+        old = entry()(data, hrf=candidate)
+    _same_trials(named, old)
+    with pytest.raises(TypeError, match="hrf_model"):
+        entry()(data, hrf=candidate, hrf_model=candidate)
+
+
+def test_fit_selected_hrfs_names_its_input_hrf_selection(selected_fixture):
+    data, selection = selected_fixture
+    function = entry(name="fit_selected_hrfs")
+    signature = dict(feature_signature="ordered-axis")
+    named = function(data, hrf_selection=selection, **signature)
+    with pytest.warns(DeprecationWarning, match="hrf_selection"):
+        old = function(data, selection=selection, **signature)
+    _same_trials(named, old)
+    with pytest.raises(TypeError, match="hrf_selection"):
+        function(data, selection=selection, hrf_selection=selection, **signature)
+    with pytest.raises(TypeError, match="hrf_selection"):
+        function(data, **signature)

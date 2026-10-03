@@ -1041,3 +1041,79 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
     assert records[-1].get("execution_id") is None
     assert records[-1].get("data_id") is None
     assert records[-1].get("analysis_id") is None
+
+
+def _same_comparison(left, right):
+    for name in ("full_r2", "nuisance_r2", "raw_delta_r2", "delta_r2"):
+        np.testing.assert_array_equal(getattr(left, name), getattr(right, name))
+    assert left.provenance.analysis_fingerprint == right.provenance.analysis_fingerprint
+    assert left.provenance.activities[-1] == right.provenance.activities[-1]
+
+
+def test_task_delta_r2_prepared_reads_the_model_from_provenance(
+    prepared_delta_problem,
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    derived = task_delta_r2_prepared(prepared, full_result)
+    with pytest.warns(DeprecationWarning, match="task_delta_r2_prepared"):
+        explicit = task_delta_r2_prepared(
+            prepared,
+            full_result,
+            contrasts=contrasts,
+            noise_model="ar1",
+            model_metadata=metadata,
+        )
+    _same_comparison(derived, explicit)
+
+
+def test_task_delta_r2_prepared_restores_expression_contrasts(
+    prepared_problem, complete_sources
+):
+    prepared, contrasts, _ = prepared_problem
+    sourced = PreparedDesignAnalysis.from_arrays(
+        signals=prepared.signals,
+        design_matrices=prepared.design_matrices,
+        tr=2.0,
+        column_roles=prepared.column_roles,
+        sources=complete_sources(prepared.n_runs),
+    )
+    full_result = fit_prepared(sourced, contrasts=contrasts, noise_model="ols")
+    derived = task_delta_r2_prepared(sourced, full_result)
+    with pytest.warns(DeprecationWarning):
+        explicit = task_delta_r2_prepared(
+            sourced, full_result, contrasts=contrasts, noise_model="ols"
+        )
+    _same_comparison(derived, explicit)
+
+
+@pytest.mark.parametrize(
+    "supplied",
+    [
+        dict(contrasts={"face": {"face": 1.0}}),
+        dict(noise_model="ols"),
+        dict(model_metadata={"origin": "other"}),
+    ],
+)
+def test_task_delta_r2_prepared_rejects_keywords_that_disagree_with_provenance(
+    prepared_delta_problem, supplied
+):
+    prepared, contrasts, metadata, full_result = prepared_delta_problem
+    arguments = dict(contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
+    arguments.update(supplied)
+    with (
+        pytest.warns(DeprecationWarning),
+        pytest.raises(ValueError, match="provenance identity"),
+    ):
+        task_delta_r2_prepared(prepared, full_result, **arguments)
+
+
+def test_task_delta_r2_prepared_requires_a_fit_prepared_parent(
+    prepared_delta_problem,
+):
+    prepared, _, _, full_result = prepared_delta_problem
+    record = full_result.provenance
+    stripped = replace(
+        full_result, _provenance=replace(record, activities=record.activities[:-1])
+    )
+    with pytest.raises(ValueError, match="fit_prepared"):
+        task_delta_r2_prepared(prepared, stripped)
