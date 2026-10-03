@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from boldtailor._software import software_environment
 from boldtailor.data import from_arrays
 
 
@@ -324,3 +325,8 @@ def test_normalization_catches_final_failures_and_isolates_context(
         )
     assert "private" not in caplog.text
     assert all(restored[k] == v for k, v in outer.items())
+
+
+def test_normalization_activity_records_the_software_environment(events):
+    data = from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0)
+    assert data.provenance.activities[0]["software"] == software_environment()

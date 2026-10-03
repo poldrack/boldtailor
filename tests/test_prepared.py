@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from boldtailor._software import software_environment
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.provenance import ProvenanceRecord, RunSources
 
@@ -328,6 +329,7 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
         "run_design_fingerprints": list(first.run_design_fingerprints),
         "design_fingerprint": first.design_fingerprint,
         "run_metadata": prepared_inputs[3],
+        "software": software_environment(),
     }
     assert first.provenance.execution_id != second.provenance.execution_id
     assert (
@@ -500,3 +502,10 @@ def test_normalization_catches_final_failures_and_isolates_context(
         )
     assert "private" not in caplog.text
     assert all(restored[k] == v for k, v in outer.items())
+
+
+def test_prepared_normalization_activity_records_the_software_environment(
+    prepared_inputs,
+):
+    prepared = _make_prepared(prepared_inputs)
+    assert prepared.provenance.activities[0]["software"] == software_environment()
