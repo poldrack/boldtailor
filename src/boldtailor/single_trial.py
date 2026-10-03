@@ -7,7 +7,10 @@ import json
 import numpy as np
 import pandas as pd
 
-from boldtailor._single_trial_design import compile_trial_run  # public re-export
+from boldtailor._single_trial_design import (  # compile_trial_run: public
+    compile_trial_run,
+    trial_table,
+)
 from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING, hrf_metadata
 from boldtailor._single_trial_fit import (  # r_squared, validate_alpha: public
     fit_trial_run,
@@ -72,7 +75,8 @@ def fit_single_trials(
                 data.provenance.metadata_fingerprint, activity
             ),
         )
-        return _assemble_result(compiled, fits, alpha, provenance, fractions)
+        trials = trial_table(data.events, labels)
+        return _assemble_result(compiled, trials, fits, alpha, provenance, fractions)
 
 
 def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
@@ -98,21 +102,15 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
     )
 
 
-def _assemble_result(compiled, fits, alpha, provenance, fractions=None):
-    tables, designs = [], []
-    for run, (x, n, table) in enumerate(compiled):
-        table = table.assign(run_index=run)
-        tables.append(table)
-        designs.append(pd.concat([x, n], axis=1))
-    trials = pd.concat(tables, ignore_index=True)
-    trials.insert(0, "trial_index", np.arange(len(trials)))
+def _assemble_result(compiled, trials, fits, alpha, provenance, fractions=None):
+    designs = tuple(pd.concat([x, n], axis=1) for x, n, _ in compiled)
     total = np.sum([f.total_ss for f in fits], axis=0)
     full = r_squared(np.sum([f.full_sse for f in fits], axis=0), total)
     nuisance = r_squared(np.sum([f.nuisance_sse for f in fits], axis=0), total)
     return SingleTrialResult(
         run_betas=tuple(f.betas for f in fits),
         _trial_table=trials,
-        design=SharedTrialDesign(tuple(designs)),
+        design=SharedTrialDesign(designs),
         run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
         run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
         full_r2=full,
@@ -151,9 +149,9 @@ def fit_selected_hrfs(
 
     return fit_groups(
         data,
-        selection,
-        ridge_alpha,
-        run_labels,
-        feature_signature,
+        selection=selection,
+        ridge_alpha=ridge_alpha,
+        run_labels=run_labels,
+        feature_signature=feature_signature,
         ridge_fraction=ridge_fraction,
     )

@@ -1,5 +1,6 @@
 """Apply an identified HRF assignment, fitting only its feature groups."""
 
+from dataclasses import dataclass
 from hashlib import sha256
 import json
 
@@ -9,7 +10,11 @@ import pandas as pd
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor._hrf_assignment import validate_selection
 from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING
-from boldtailor._single_trial_design import _validate_events
+from boldtailor._single_trial_design import (
+    _validate_events,
+    check_trial_ids,
+    trial_table,
+)
 from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
     regularization,
@@ -23,23 +28,11 @@ from boldtailor._fit_lifecycle import fit_operation
 
 
 def _tables(data, labels):
-    tables = []
-    for r, (events, times, confounds, label) in enumerate(
-        zip(data.events, data.frame_times, data.confounds, labels, strict=True)
-    ):
+    for events, times, label in zip(data.events, data.frame_times, labels, strict=True):
         _validate_events(events, times, label)
-        ids = [f"{label}_trial-{i+1:04d}" for i in range(len(events))]
-        if set(ids) & set(confounds):
-            raise ValueError("nuisance columns collide with reserved trial IDs")
-        table = events.reset_index(drop=True).assign(
-            trial_id=ids,
-            event_index=np.arange(len(events)),
-            run_index=r,
-            run_label=label,
-        )
-        tables.append(table)
-    trials = pd.concat(tables, ignore_index=True)
-    trials.insert(0, "trial_index", np.arange(len(trials)))
+    trials = trial_table(data.events, labels)
+    for run, confounds in enumerate(data.confounds):
+        check_trial_ids(trials.trial_id[trials.run_index == run], confounds)
     return trials
 
 
@@ -57,11 +50,24 @@ def _fit_group(run, x, y, alpha, fractions):
     return fit_fraction_run(x, run.nuisance, y, fractions=fractions)
 
 
-def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None):
-    betas = np.full((len(run.events), y.shape[1]), np.nan)
-    full, null, total = (np.zeros(y.shape[1]) for _ in range(3))
+@dataclass(frozen=True, kw_only=True)
+class GroupRunFit:
+    """One run's fits over every HRF group, assembled in feature order."""
+
+    betas: np.ndarray
+    full_sse: np.ndarray
+    nuisance_sse: np.ndarray
+    total_ss: np.ndarray
+    diagnostics: list[dict]
+    alphas: np.ndarray
+
+
+def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunFit:
+    n_features = y.shape[1]
+    betas = np.full((len(run.events), n_features), np.nan)
+    full, null, total = (np.zeros(n_features) for _ in range(3))
     diagnostics = []
-    alphas = np.full(y.shape[1], np.nan)
+    alphas = np.full(n_features, np.nan)
     for cid in np.unique(ids[ids >= 0]):
         features = np.flatnonzero(ids == cid)
         x = run.trial_matrix(int(cid))
@@ -82,7 +88,14 @@ def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None):
                 **fit.diagnostics,
             )
         )
-    return betas, full, null, total, diagnostics, alphas
+    return GroupRunFit(
+        betas=betas,
+        full_sse=full,
+        nuisance_sse=null,
+        total_ss=total,
+        diagnostics=diagnostics,
+        alphas=alphas,
+    )
 
 
 def _fit_activity(data, selection, labels, alpha, assignment, digest, fractions=None):
@@ -127,7 +140,13 @@ def _rebuilder(runs, ids):
 
 
 def fit_groups(
-    data, selection, ridge_alpha, run_labels, feature_signature, *, ridge_fraction=None
+    data,
+    *,
+    selection,
+    ridge_alpha,
+    run_labels,
+    feature_signature,
+    ridge_fraction=None,
 ):
     with fit_operation("selected_hrf_single_trial", data.provenance) as operation:
         alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
@@ -140,9 +159,9 @@ def fit_groups(
             _fit_run(run, y, selection.hrf_indices, alpha, r, digest, fractions)
             for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
         ]
-        total = sum(f[3] for f in fits)
-        full = r_squared(sum(f[1] for f in fits), total)
-        null = r_squared(sum(f[2] for f in fits), total)
+        total = sum(f.total_ss for f in fits)
+        full = r_squared(sum(f.full_sse for f in fits), total)
+        null = r_squared(sum(f.nuisance_sse for f in fits), total)
         activity = _fit_activity(
             data, selection, labels, alpha, assignment, digest, fractions
         )
@@ -153,7 +172,7 @@ def fit_groups(
             ),
         )
         return SingleTrialResult(
-            run_betas=tuple(f[0] for f in fits),
+            run_betas=tuple(f.betas for f in fits),
             _trial_table=trials,
             design=SelectedTrialDesign(
                 selection.hrf_indices,
@@ -161,14 +180,16 @@ def fit_groups(
                 selection.provenance,
                 _rebuilder(runs, selection.hrf_indices),
             ),
-            run_full_r2=tuple(r_squared(f[1], f[3]) for f in fits),
-            run_nuisance_r2=tuple(r_squared(f[2], f[3]) for f in fits),
+            run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
+            run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
             full_r2=full,
             nuisance_r2=null,
             delta_r2=full - null,
-            _diagnostics=tuple(d for f in fits for d in f[4]),
+            _diagnostics=tuple(d for f in fits for d in f.diagnostics),
             ridge_alpha=alpha,
             provenance=provenance,
             ridge_fraction=fractions,
-            run_ridge_alphas=None if fractions is None else tuple(f[5] for f in fits),
+            run_ridge_alphas=(
+                None if fractions is None else tuple(f.alphas for f in fits)
+            ),
         )
