@@ -6,7 +6,11 @@
 
 These results come from `tests/test_recovery.py`, which simulates data with
 known truth (AR(1) noise) and checks that the selection methods recover it.
-Reproduce with `uv run pytest -q tests/test_recovery.py`.
+Reproduce the pass/fail outcome with `uv run pytest -q tests/test_recovery.py`.
+To print the quantities behind each assertion (selected fractions and
+penalties, CV R² profiles, recovery rates, centered RMSE) run
+`uv run python examples/validation/recovery_report.py`; it executes the
+tests unchanged and reports what they saw.
 
 ## Fraction selection (shrinkage)
 
