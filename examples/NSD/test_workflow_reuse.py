@@ -58,7 +58,7 @@ def _assert_two_point_grid_boundary(metadata):
     rows = metadata["ridge_cv"]["at_boundary_fraction"]
     assert {(r["mode"], r["scope"]) for r in rows} == {
         (mode, scope)
-        for mode in ("canonical", "optimized")
+        for mode in ("Canonical", "Optimized")
         for scope in ("all", "odd", "even")
     }
     assert all(r["fraction"] == 1.0 for r in rows)
