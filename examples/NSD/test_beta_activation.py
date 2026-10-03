@@ -1,9 +1,6 @@
 """Descriptive beta-versus-zero maps pool independent trial observations."""
 
-import importlib
-
 import numpy as np
-import pytest
 
 
 def test_activation_exports_preserve_map_names_axis_and_values(tmp_path):
