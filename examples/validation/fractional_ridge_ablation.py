@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._fractional_ridge import _alphas, fraction_grid
+from boldtailor._fractional_ridge import _alphas
+from boldtailor.fractional_ridge import fraction_grid
 from boldtailor._single_trial_fit import _project_design
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from examples.validation.ridge_objective_simulation import score_prediction_runs

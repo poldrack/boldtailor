@@ -423,6 +423,34 @@ records contain `error_code` instead of exception text; callers still receive
 the original exception. See the [lifecycle migration](lifecycle-migration.md)
 and [developer guide](development.md) for event names and identity rules.
 
+## Imaging, diagnostics, and parallel helpers
+
+These modules operate on fitted arrays and CIFTI axes; none fits a model.
+
+| Function | Use |
+| --- | --- |
+| `boldtailor.cifti.scalar_artifact(path, brain, values, names)` | A float32 `.dscalar.nii` `Artifact` with one named map per row on a `BrainModelAxis` |
+| `boldtailor.cifti.read_scalar(path, brain, names=None)` | Load saved maps after checking the grayordinate axis and, optionally, map names |
+| `boldtailor.cifti.cortical_values(values, brain)` | Scatter a grayordinate vector onto `left`/`right` cortical vertices; absent vertices are NaN |
+| `boldtailor.cifti.spatial_signature(brain, indices)` | SHA-256 feature identity of the ordered axis and selected grayordinates, for `feature_signature` |
+| `boldtailor.diagnostics.one_sample_t(run_betas)` | Pooled trial-beta mean, t, uncorrected two-sided p, count, and df (`ONE_SAMPLE_T_NAMES`), assuming independent trials |
+| `boldtailor.diagnostics.correlate_rt(beta_runs, rt_runs, *, run_numbers)` | Within-run-centered beta/RT Pearson r and counts per run and for all, odd, and even runs |
+| `boldtailor.diagnostics.even_run_points(beta_runs, rt_runs, run_numbers, vertex)` | The matched, centered (RT, beta) points from even runs at one feature |
+| `boldtailor.reliability.curve_correlations(library, ids_a, ids_b)` | Full-curve Pearson r for a/b, a/canonical, and b/canonical selections (`CORRELATION_NAMES`) |
+| `boldtailor.reliability.compare_hrfs(library, hrf_indices, sessions)` | Pairwise session curve agreement, matched canonical baselines, parameter SDs, and mean peak times |
+| `boldtailor.parallel.map_blocks(function, blocks, *, args=(), n_jobs=1)` | Ordered `(block, result)` pairs; several workers run in bounded loky batches with one inner thread |
+
+`map_blocks` workers should return arrays or dictionaries; result objects are
+not picklable. `library_indices`, `finite_mean`, and `validate_n_jobs` are the
+corresponding validation helpers.
+
+Lower-level helpers used by the examples are also importable from public
+modules: `expand_events` and `task_columns` (`boldtailor.design`),
+`prepare_runs` and `subset_runs` (`boldtailor.hrf_selection`),
+`fraction_grid`, `regularization`, and `NORM_BASIS`
+(`boldtailor.fractional_ridge`), `r_squared` (`boldtailor.single_trial`), and
+`HRF_NORMALIZATION` (`boldtailor.model`).
+
 ## Example workflows
 
 These functions live under `examples/`, rather than the installed core package.
@@ -430,16 +458,14 @@ Run them from the repository checkout:
 
 | Module / function | Use |
 | --- | --- |
-| `examples.NSD.nsd_cifti.run_analysis` | Conventional stimulus-plus-RT CIFTI analysis |
-| `examples.NSD.nsd_single_trial.run_single_trial_analysis` | Canonical or selected-HRF CIFTI beta series and diagnostics |
-| `examples.NSD.rt_diagnostics.correlate_rt` | Within-run-centered beta/RT correlations and counts, pooled by run partition |
-| `examples.NSD.rt_diagnostics.select_vertices` | Select cortical vertices by absolute odd-run correlation |
-| `examples.NSD.rt_diagnostics.scatter_artifact` | Create even-run RT scatterplots for the selected vertices |
+| `examples.NSD.settings.resolve_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
+| `examples.NSD.workflow_inputs.load_session`, `make_blocks`, `load_block` | Load, trim, and block an NSD session's CIFTI runs |
+| `examples.NSD.workflow_analysis.select_hrfs`, `fit_glms`, `fit_beta_series` | All/odd/even HRF selection, matched GLMs, and beta series over feature blocks |
 | `examples.NSD.ridge_workflow.fit_cv_beta_series` | Tune per-grayordinate fractions (`fractions=...`) or one global alpha (`alphas=...`), evaluate both odd/even outer splits, and fit final all-run betas |
+| `examples.NSD.workflow_outputs.save_workflow` | Publish the notebook's maps, designs, tables, and provenance together |
+| `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
+| `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
 | `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
 | `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 
-The NSD runners accept BIDS, fMRIPrep, and output roots plus `subject`,
-`session`, and `block_size`. The single-trial runner also accepts `ridge_alpha`,
-`hrf_library` (`"canonical"` or `"expanded"`), and `n_jobs`.
-See [NSD commands and options](../examples/NSD/README.md#run-an-analysis).
+See [running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks).

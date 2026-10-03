@@ -6,13 +6,6 @@ import numpy as np
 import pytest
 
 
-def activation():
-    try:
-        return importlib.import_module("examples.NSD.beta_activation")
-    except ModuleNotFoundError as error:
-        pytest.fail(f"Missing example beta activation analysis: {error}")
-
-
 def test_activation_exports_preserve_map_names_axis_and_values(tmp_path):
     import nibabel as nib
     from boldtailor.publication import publish_artifact_set

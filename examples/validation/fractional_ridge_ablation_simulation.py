@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from boldtailor._fractional_ridge import fraction_grid
+from boldtailor.fractional_ridge import fraction_grid
 from boldtailor._single_trial_design import compile_trial_run
-from boldtailor._single_trial_fit import r_squared
+from boldtailor.single_trial import r_squared
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from examples.validation.fractional_ridge_ablation import prepare_runs, fit_split

@@ -21,7 +21,7 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
 | Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.ipynb) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
-| Analyze NSD CIFTIs, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
+| Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
 | Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |
 | Fit and view whole-brain NIfTI contrast and R² maps | [Whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
@@ -93,9 +93,10 @@ which predicts beta series from trial variables such as trial type and RT.
 
 ## Working with images
 
-The [NSD guide](examples/NSD/README.md) covers conventional and single-trial
-CIFTI models, optimized HRFs, odd/even HRF parameter maps, and their outputs.
-It includes commands for using your own data paths and running several workers.
+The [NSD guide](examples/NSD/README.md) covers the NSD notebooks: conventional
+and single-trial CIFTI models, optimized HRFs, odd/even HRF parameter maps, and
+their outputs. It explains the notebook settings (`examples/NSD/settings.py`),
+your own data paths, and running several workers.
 
 The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
@@ -143,7 +144,7 @@ and differences from the locally developed GLMsingle API.
 - [Result migration](docs/result-migration.md): current result classes and design access.
 - [Documentation index](docs/README.md): current guides and dated development records.
 - [GLMsingle comparison](docs/glmsingle-comparison.md): HRFs, denoising, regularization, and validation.
-- [NSD guide](examples/NSD/README.md): commands and CIFTI output reference.
+- [NSD guide](examples/NSD/README.md): notebook settings and CIFTI output reference.
 - [NSD validation](docs/validation/nsd-session.md): recorded numerical checks and benchmarks.
 - [Developer guide](docs/development.md): testing, architecture, provenance, and file-writing conventions.
 

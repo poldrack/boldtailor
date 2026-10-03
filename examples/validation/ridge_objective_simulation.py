@@ -15,7 +15,8 @@ import pandas as pd
 
 from boldtailor._fractional_ridge import fraction_beta_path
 from boldtailor._single_trial_design import compile_trial_run
-from boldtailor._single_trial_fit import trial_beta_path, r_squared
+from boldtailor._single_trial_fit import trial_beta_path
+from boldtailor.single_trial import r_squared
 from boldtailor.trial_encoding import evaluate_trial_encoding
 
 ALPHAS = (0.0, 0.1, 1.0, 10.0, 100.0, 1e4, 1e8)

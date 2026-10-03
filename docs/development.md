@@ -58,6 +58,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication` |
+| CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
 | Dataset discovery and image reconstruction | `examples/NSD`, `examples/stop_signal_demo.py` |
 
 The core numerical functions accept arrays and tables and return results in
@@ -65,13 +66,17 @@ memory. Example workflows own dataset discovery, image loading, spatial axes,
 and image reconstruction. The prepared-design API is the entry point for
 externally compiled designs; it does not perform BIDS parsing or transformations.
 
-Keep NSD and imaging-format adapters in the examples, outside the installed
-package. The NSD notebooks retain scientific settings and fitting calls;
-`examples/NSD/workflow_plots.py` and `session_hrf_plots.py` return presentation
-figures from fitted results. `notebook_paths.py` resolves explicit configuration
-and environment paths without file writes. See the [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
-These helpers use development dependencies; they add no runtime dependencies
-or public imaging API to Boldtailor.
+Keep NSD-specific discovery and plotting in the examples, outside the
+installed package. Generic CIFTI dense-scalar I/O lives in `boldtailor.cifti`
+(nibabel is a runtime dependency). Examples import only public modules. The NSD
+notebooks retain scientific settings and fitting calls; `settings.py` resolves
+the workflow notebook's settings, `workflow_files.py` discovers and loads runs,
+and `workflow_plots.py` and `session_hrf_plots.py` return presentation figures
+from fitted results. `notebook_paths.py` resolves explicit configuration and
+environment paths without file writes. See the [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
+Plotting helpers use development dependencies. Shared NSD test fixtures live in
+`examples/NSD/conftest.py`; each notebook has one `@pytest.mark.notebook`
+kernel smoke test.
 
 Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
 `_arrays.readonly_array`. Float values use float64, indices use int64, and masks
@@ -275,29 +280,21 @@ up); `rollback_errors` lists the failures.
 
 ## NSD exports and parallel execution
 
-The NSD runners load feature blocks, preserve CIFTI axes, and reconstruct full
-output arrays in the parent process. `n_jobs>1` uses bounded batches of joblib
-loky processes. Each worker has all runs for its assigned feature block and
-limits numerical-library threads to one. Worker failure prevents publication;
-workers do not write derivatives. Library/timing/design caches are process-local.
-Full output beta arrays and the assembled artifact set still consume memory.
+The NSD notebook helpers load feature blocks, preserve CIFTI axes, and
+reconstruct full output arrays in the parent process. `n_jobs>1` uses
+`boldtailor.parallel.map_blocks`: bounded batches of joblib loky processes,
+each with all runs for its assigned feature block and one numerical-library
+thread. Workers return arrays and dictionaries, never write derivatives, and
+a worker failure prevents publication. Library/timing/design caches are
+process-local. Full output beta arrays and the assembled artifact set still
+consume memory.
 
-For optimized HRFs, each run's NPZ stores `hrf_<id>` trial matrices, shared
-`nuisance`, `frame_times`, `trial_columns`, `nuisance_columns`, `hrf_ids`, and
-`library_fingerprint`. Matrices are float64; labels use string arrays. Load with
-`allow_pickle=False` and assemble a full design as
-`np.column_stack([saved[f"hrf_{h}"], saved["nuisance"]])`.
-
-These archives cover all-run production fits. An HRF used only by an independent
-RT diagnostic may need reconstruction from the saved library, event timing,
-frame times, and nuisance matrix. The installed core has no general loader
-that reconstructs an
-`HrfSelectionResult` from image files. The session-reliability example can
-reuse compatible saved selection maps and provenance through its dedicated
-cache/import helpers; it does not provide a general selection-object loader.
-Standalone all-run response-delay and time-to-peak files in
-the development NSD dataset were created separately; automatic exports contain
-those quantities in the multi-map HRF parameter images.
+Each `desc-notebook<model>_designs.npz` stores, per run label and HRF ID, the
+float64 design (`<run>_hrf-<id>`), its column names (`_columns`), and frame
+times (`_frame_times`). Load with `allow_pickle=False`. The installed core has
+no general loader that reconstructs an `HrfSelectionResult` from image files.
+The session-reliability example reuses compatible saved selection maps and
+provenance through its dedicated cache/import helpers.
 
 ## Provenance digests
 
