@@ -445,6 +445,18 @@ onset edge.
 This balances coverage in parameter space, though similar waveforms can still
 arise from different parameter combinations.
 
+Those collisions are systematic: peak time is `onset + response_delay -
+response_dispersion`, so onset and delay trade off into the same waveform.
+`timing_hrf_library()` samples lobe timing instead (response peak time and SD,
+undershoot peak time and SD, undershoot depth) with onset fixed, and converts
+each sample to SPM parameters, so downstream fitting is unchanged.
+`timing_parameters()` and `spm_parameters()` convert exactly in both directions
+(the response peak predicts the sampled kernel's maximum to about 0.1 s; the
+undershoot values describe the gamma lobe, not the trough of the combined
+curve). `library.timing_table` lists both parameterizations. See
+`examples/validation/hrf_library_similarity.ipynb` for how the two samplers
+compare in waveform similarity.
+
 Inspect `library.parameter_table`, `library.times`, and `library.curves`.
 Use `expanded_hrf_library()` for the original 649-candidate grid, or
 `HrfLibrary.from_parameters()` for explicit custom rows. All three factories

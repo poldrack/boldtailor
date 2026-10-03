@@ -308,6 +308,9 @@ From `boldtailor.hrf_library`:
 | --- | --- |
 | `sobol_hrf_library(n_samples=512, *, seed=0)` | Sample continuous parameters with scrambled Sobol; add canonical SPM as ID 0 |
 | `expanded_hrf_library()` | Return the original 649-candidate grid library |
+| `timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0)` | Sample lobe timing (response peak/SD, undershoot peak/SD, depth) with scrambled Sobol, convert to SPM gamma parameters, add canonical SPM as ID 0; `bounds` overrides `TIMING_BOUNDS` |
+| `timing_parameters(parameters)` / `spm_parameters(timing)` | Exact conversion between the seven SPM gamma parameters and `TIMING_NAMES` (lobe peak time and SD, undershoot peak time and SD, undershoot depth, onset, duration) |
+| `HrfLibrary.timing_table` | One row per candidate with both parameterizations |
 | `HrfLibrary.from_parameters(parameters)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 |
 | `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"` or `"double_gamma"` |
 | `candidate.kernel(tr, oversampling=50)` | Sample a read-only kernel scaled to a peak of one at TR/oversampling; canonical SPM is Nilearn's `spm_hrf` divided by its maximum |
