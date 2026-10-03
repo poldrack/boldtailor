@@ -39,9 +39,9 @@ TIMING_NAMES = (
 )
 REALIZED_NAMES = (
     "peak_time",
-    "response_sd",
+    "response_fwhm",
     "trough_time",
-    "undershoot_sd",
+    "undershoot_fwhm",
     "trough_depth",
     "onset",
     "duration",
@@ -49,10 +49,10 @@ REALIZED_NAMES = (
 TIMING_BOUNDS = MappingProxyType(
     {
         "peak_time": (3.5, 7.5),
-        "response_sd": (1.0, 3.0),
-        "trough_time": (10.0, 18.0),
-        "undershoot_sd": (2.5, 6.0),
-        "trough_depth": (0.05, 0.5),
+        "response_fwhm": (3.0, 6.0),
+        "trough_time": (11.0, 18.0),
+        "undershoot_fwhm": (6.0, 12.0),
+        "trough_depth": (0.05, 0.4),
     }
 )
 _REALIZED_DT = 0.01
@@ -252,7 +252,7 @@ class HrfLibrary:
                     ),
                     **dict(
                         zip(
-                            ("peak_time", "trough_time", "trough_depth"),
+                            REALIZED_NAMES[:5],
                             realized_timing(candidate.parameters),
                             strict=True,
                         )
@@ -338,71 +338,146 @@ def _dense_curve(parameters):
     return t + onset, curve / peak
 
 
-def realized_timing(parameters):
-    """Peak time, trough time, and trough depth measured on the combined curve.
+def _subgrid_extremum(times, curve, index):
+    """Parabolic refinement of a grid extremum: (time, value)."""
+    if not 0 < index < len(curve) - 1:
+        return float(times[index]), float(curve[index])
+    y0, y1, y2 = curve[index - 1], curve[index], curve[index + 1]
+    denominator = y0 - 2.0 * y1 + y2
+    offset = 0.5 * (y0 - y2) / denominator if denominator != 0 else 0.0
+    return float(times[index] + offset * _REALIZED_DT), float(
+        y1 - 0.25 * (y0 - y2) * offset
+    )
 
-    The curve is evaluated on a 0.01 s grid. Depth is the trough amplitude
-    relative to the unit peak. These are the quantities
+
+def _width_at(times, curve, index, level):
+    """Width of the contiguous region around ``index`` where the curve is at least ``level``.
+
+    ``level`` is compared with the same sign as the curve at ``index``; the
+    crossing points are linearly interpolated between grid samples.
+    """
+    sign = 1.0 if curve[index] >= 0 else -1.0
+    values, threshold = sign * curve, sign * level
+    left = right = index
+    while left > 0 and values[left - 1] >= threshold:
+        left -= 1
+    while right < len(values) - 1 and values[right + 1] >= threshold:
+        right += 1
+    start = times[left]
+    if left > 0:
+        start = times[left - 1] + _REALIZED_DT * (threshold - values[left - 1]) / (
+            values[left] - values[left - 1]
+        )
+    stop = times[right]
+    if right < len(values) - 1:
+        stop = times[right] + _REALIZED_DT * (values[right] - threshold) / (
+            values[right] - values[right + 1]
+        )
+    return float(stop - start)
+
+
+def realized_timing(parameters):
+    """Peak time, response FWHM, trough time, undershoot FWHM, and trough depth.
+
+    All five are measured on the combined curve sampled at 0.01 s (extrema are
+    refined parabolically, half-maximum crossings are interpolated). Depth is
+    the trough amplitude relative to the unit peak and the undershoot FWHM is
+    the width at half that depth. These are the quantities
     :func:`timing_hrf_library` samples; :func:`timing_parameters` describes the
-    gamma lobes instead.
+    gamma lobes instead. Raises ``ValueError`` when the curve has no trough.
     """
     times, curve = _dense_curve(_parameters(parameters))
-    trough = int(np.argmin(curve))
-    return float(times[np.argmax(curve)]), float(times[trough]), float(-curve[trough])
+    peak, trough = int(np.argmax(curve)), int(np.argmin(curve))
+    if curve[trough] >= 0 or trough == len(curve) - 1:
+        raise ValueError("double gamma has no trough within its duration")
+    peak_time, _ = _subgrid_extremum(times, curve, peak)
+    trough_time, minimum = _subgrid_extremum(times, curve, trough)
+    return (
+        peak_time,
+        _width_at(times, curve, peak, 0.5),
+        trough_time,
+        _width_at(times, curve, trough, minimum / 2.0),
+        -minimum,
+    )
 
 
-def _has_trough(parameters):
-    _, curve = _dense_curve(parameters)
-    trough = int(np.argmin(curve))
-    return curve[trough] < 0 and trough < len(curve) - 1
+_REALIZED_TOLERANCES = (0.01, 0.02, 0.01, 0.02)  # seconds; depth is relative (1e-3)
+
+
+def _realized_close(realized, target, depth_tolerance):
+    times_close = all(
+        abs(r - t) <= tol
+        for r, t, tol in zip(
+            realized[:4], target[:4], _REALIZED_TOLERANCES, strict=True
+        )
+    )
+    return times_close and abs(realized[4] / target[4] - 1.0) <= depth_tolerance
 
 
 def _corrected_lobe(lobe, realized, target, damping):
-    peak, _, trough, _, depth, onset, duration = target
+    peak, fwhm, trough, undershoot_fwhm, depth, onset, duration = target
     lobe[0] -= damping * (realized[0] - peak)
-    lobe[2] -= damping * (realized[1] - trough)
-    lobe[4] *= (depth / realized[2]) ** damping
+    lobe[1] *= (fwhm / realized[1]) ** damping
+    lobe[2] -= damping * (realized[2] - trough)
+    lobe[3] *= (undershoot_fwhm / realized[3]) ** damping
+    lobe[4] *= (depth / realized[4]) ** damping
     lobe[0] = max(lobe[0], onset + 0.1)
+    lobe[1] = min(max(lobe[1], 0.2), 6.0)
     lobe[2] = min(max(lobe[2], lobe[0] + 0.5), duration - 2.0)
+    lobe[3] = min(max(lobe[3], 0.5), 12.0)
     return lobe
 
 
+def _realized_error(realized, target, depth_tolerance):
+    """Largest tolerance-scaled deviation between realized and target quantities."""
+    scaled = [
+        abs(r - t) / tol
+        for r, t, tol in zip(
+            realized[:4], target[:4], _REALIZED_TOLERANCES, strict=True
+        )
+    ]
+    scaled.append(abs(realized[4] / target[4] - 1.0) / depth_tolerance)
+    return max(scaled)
+
+
 def spm_parameters_from_realized(
-    timing, *, seconds_tolerance=0.01, depth_tolerance=1e-3, max_iterations=80
+    timing, *, depth_tolerance=1e-3, max_iterations=200, stall_iterations=15
 ):
     """SPM gamma parameters whose combined curve realizes the requested timing.
 
     ``timing`` follows :data:`REALIZED_NAMES`: realized peak time, response
-    lobe SD, realized trough time, undershoot lobe SD, realized trough depth,
-    onset, duration. The lobe-based closed form is the starting point and the
-    lobe peak, lobe trough, and lobe depth are corrected by fixed-point
-    iteration until the measured curve matches within the tolerances. Targets
-    that no double gamma can realize (for example a trough too soon after a
-    wide peak) raise ``ValueError``.
+    FWHM, trough time, undershoot FWHM, trough depth, onset, duration. The
+    gamma-lobe closed form (with SD = FWHM / 2.355) is the starting point and
+    the lobe peak, SD, trough, undershoot SD, and depth are corrected by damped
+    fixed-point iteration until the measured curve matches within 0.01 s
+    (times), 0.02 s (widths), and ``depth_tolerance`` (relative). The five
+    realized quantities are not independent for a double gamma; targets no
+    double gamma can realize raise ``ValueError`` once the iteration stalls for
+    ``stall_iterations`` steps or exhausts ``max_iterations``.
     """
     target = tuple(float(v) for v in timing)
     if len(target) != 7 or not np.isfinite(target).all():
         raise ValueError("realized timing parameters must be seven finite numbers")
-    lobe = list(target)
+    peak, fwhm, trough, undershoot_fwhm, depth, onset, duration = target
+    lobe = [peak, fwhm / 2.355, trough, undershoot_fwhm / 2.355, depth, onset, duration]
+    best, stalled = np.inf, 0
     for _ in range(max_iterations):
         try:
             candidate = spm_parameters(lobe)
-            trough = _has_trough(candidate)
-            realized = realized_timing(candidate) if trough else None
-        except ValueError as error:
-            raise ValueError(f"no feasible double gamma for {target[:5]}") from error
-        if not trough:
+            realized = realized_timing(candidate)
+        except ValueError:
             lobe[4] = min(lobe[4] * 2.0, 5.0)
-            lobe[2] = min(lobe[2] + 0.5, target[6] - 2.0)
+            lobe[2] = min(lobe[2] + 0.5, duration - 2.0)
             continue
-        if (
-            abs(realized[0] - target[0]) <= seconds_tolerance
-            and abs(realized[1] - target[2]) <= seconds_tolerance
-            and abs(realized[2] / target[4] - 1.0) <= depth_tolerance
-        ):
+        error = _realized_error(realized, target, depth_tolerance)
+        if error <= 1.0:
             return candidate
-        lobe = _corrected_lobe(lobe, realized, target, 0.8)
-    raise ValueError(f"no feasible double gamma for {target[:5]}")
+        stalled = 0 if error < 0.99 * best else stalled + 1
+        best = min(best, error)
+        if stalled >= stall_iterations:
+            break
+        lobe = _corrected_lobe(lobe, realized, target, 0.6)
+    raise ValueError(f"no feasible double gamma for realized timing {target[:5]}")
 
 
 def expanded_hrf_library():
@@ -465,9 +540,10 @@ def _timing_bounds(bounds):
 def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duration=36.0):
     """Sample realized HRF timing with scrambled Sobol, plus canonical SPM at ID zero.
 
-    The five sampled quantities follow :data:`REALIZED_NAMES`: the realized peak
-    time, the response lobe's SD, the realized trough time, the undershoot
-    lobe's SD, and the realized trough depth relative to the peak. Each point is
+    The five sampled quantities follow :data:`REALIZED_NAMES` and are all
+    measured on the combined curve: peak time, response FWHM, trough time,
+    undershoot FWHM (width at half the trough depth), and trough depth relative
+    to the peak. Each point is
     converted to SPM gamma parameters by :func:`spm_parameters_from_realized`;
     points no double gamma can realize are skipped deterministically, and the
     count skipped is recorded in ``origin["rejected"]``. ``onset`` is fixed
