@@ -420,3 +420,27 @@ def test_selection_provenance_records_library_origin(cv_fixture):
     activity = select_hrf(data, library=library).provenance.to_dict()["activities"][-1]
     assert activity["library"] == dict(library.origin)
     assert activity["library_fingerprint"] == library.fingerprint
+
+
+def _near_edge(library, cid):
+    bounds = library.parameter_bounds
+    values = np.asarray(library.candidates[cid].parameters[:6])
+    width = (bounds["high"] - bounds["low"]).to_numpy()
+    low = values - bounds["low"].to_numpy() <= 0.02 * width
+    high = bounds["high"].to_numpy() - values <= 0.02 * width
+    return bool(np.any(low | high))
+
+
+def test_selection_flags_features_at_the_parameter_box_edge(cv_fixture):
+    from boldtailor.hrf_selection import select_hrf
+
+    data, library = cv_fixture
+    selection = select_hrf(data, library=library)
+    expected = np.array(
+        [cid > 0 and _near_edge(library, cid) for cid in selection.hrf_indices]
+    )
+    assert expected.any()
+    np.testing.assert_array_equal(selection.at_parameter_bound, expected)
+    assert selection.at_parameter_bound.dtype == bool
+    assert not selection.at_parameter_bound.flags.writeable
+    assert not selection.at_parameter_bound[selection.hrf_indices <= 0].any()

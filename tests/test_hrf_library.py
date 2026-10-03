@@ -167,3 +167,13 @@ def test_direct_spm_candidate_cannot_mislabel_fixed_kernel(parameters):
 
     with pytest.raises(ValueError, match="canonical|SPM|spm"):
         HrfCandidate(0, "spm", parameters)
+
+
+def test_parameter_bounds_cover_custom_candidates(two_candidate_library):
+    from boldtailor.hrf_library import PARAMETER_NAMES
+
+    bounds = two_candidate_library.parameter_bounds
+    assert list(bounds.index) == list(PARAMETER_NAMES[:6])
+    assert list(bounds.columns) == ["low", "high"]
+    assert bounds.loc["response_delay", "low"] == 3
+    assert bounds.loc["response_delay", "high"] == 6

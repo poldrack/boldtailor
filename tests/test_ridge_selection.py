@@ -84,3 +84,21 @@ def test_invalid_percentile_rejected(percentile):
 def test_empty_or_malformed_population_rejected(scores, mask):
     with pytest.raises(ValueError):
         select(scores, [0.0, 1.0], feature_mask=mask)
+
+
+def test_ridge_penalty_selection_flags_grid_endpoint():
+    scores = np.array([[0.9, 0.9], [0.1, 0.1]])
+    assert select(scores, (0.0, 1.0)).at_boundary is True
+    interior = np.array([[0.1, 0.1], [0.9, 0.9], [0.1, 0.1]])
+    assert select(interior, (0.0, 1.0, 2.0)).at_boundary is False
+
+
+def test_fraction_selection_flags_grid_endpoints():
+    from boldtailor.fractional_ridge import select_ridge_fractions
+
+    scores = np.array([[0.1, 0.5, 0.3], [0.2, 0.4, 0.9], [0.9, 0.1, 0.1]])
+    choice = select_ridge_fractions(scores, (1.0, 0.5, 0.1))
+    np.testing.assert_array_equal(choice.ridge_fraction, [0.1, 1.0, 0.5])
+    np.testing.assert_array_equal(choice.at_boundary, [True, True, False])
+    assert choice.at_boundary.dtype == bool
+    assert not choice.at_boundary.flags.writeable
