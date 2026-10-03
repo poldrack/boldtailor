@@ -109,7 +109,7 @@ def test_regressor_without_nonzero_amplitude_is_rejected(events):
     with pytest.raises(ValueError, match="run 1.*trial_type.*nonzero"):
         expand_events(events.assign(trial_type=0), NSD, run=1)
     with pytest.raises(ValueError, match="response_time.*nonzero"):
-        expand_events(events.assign(response_time=2.0), NSD)
+        expand_events(events.assign(response_time=0.0), NSD)
 
 
 def test_missing_modulator_column_or_timing_is_rejected(events):

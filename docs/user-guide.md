@@ -505,14 +505,16 @@ same task model the GLM will fit:
 from boldtailor.model import Modulator, TaskModel
 
 task_model = TaskModel((
-    Modulator("response_time", center=True, missing="indicator"),
-    Modulator("trial_type", center=False),
+    Modulator("response_time", missing="indicator"),
+    Modulator("trial_type"),
 ))
 selection = select_hrfs(multi_run_data, library=library, task_model=task_model)
 ```
 
-Each modulator names a numeric column of the raw per-trial events. `center`
-subtracts the within-run mean of observed values. `missing="indicator"` gives
+Each modulator names a numeric column of the raw per-trial events.
+Modulators are not centered; the `task` contrast is the response at modulator
+value zero, and R², ΔR², and HRF selection are unchanged by this choice.
+`missing="indicator"` gives
 missing (non-finite) trials zero modulation and adds a `missing_<column>`
 regressor in runs that need it; its coefficient is fit freely within each run,
 like a confound, but with the candidate HRF. `missing="error"` rejects

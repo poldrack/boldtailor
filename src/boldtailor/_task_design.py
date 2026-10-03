@@ -35,8 +35,7 @@ def _modulator_amplitudes(events, modulator, run):
     if modulator.missing == "error" and not observed.all():
         raise ValueError(f"run {run}: modulator {modulator.column!r} must be finite")
     amplitude = np.zeros(len(values))
-    offset = values[observed].mean() if modulator.center else 0.0
-    amplitude[observed] = values[observed] - offset
+    amplitude[observed] = values[observed]
     columns = {modulator.column: amplitude}
     if modulator.missing == "indicator" and not observed.all():
         columns[modulator.indicator_name] = (~observed).astype(float)

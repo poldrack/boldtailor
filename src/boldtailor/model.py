@@ -27,16 +27,17 @@ _MISSING_POLICIES = ("error", "indicator")
 
 @dataclass(frozen=True)
 class Modulator:
-    """One parametric task regressor derived from a raw events column."""
+    """One parametric task regressor derived from a raw events column.
+
+    Values enter uncentered, so the task regressor is the response at modulator
+    value zero.
+    """
 
     column: str
-    center: bool = True
     missing: str = "error"
 
     def __post_init__(self) -> None:
         _validate_modulator_column(self.column)
-        if not isinstance(self.center, bool):
-            raise ValueError("modulator center must be a boolean")
         if self.missing not in _MISSING_POLICIES:
             raise ValueError("modulator missing policy must be 'error' or 'indicator'")
 
@@ -45,7 +46,7 @@ class Modulator:
         return f"missing_{self.column}"
 
     def to_dict(self) -> dict[str, object]:
-        return {"column": self.column, "center": self.center, "missing": self.missing}
+        return {"column": self.column, "missing": self.missing}
 
 
 @dataclass(frozen=True)

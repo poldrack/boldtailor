@@ -398,7 +398,7 @@ index row 0 where earlier releases returned a one-dimensional array. Selection p
 `task_model_fingerprint`, `task_regressors`, `profiled_regressors`,
 `min_onset`, and `oversampling`.
 
-From `boldtailor.model`: `Modulator(column, center=True, missing="error")` and
+From `boldtailor.model`: `Modulator(column, missing="error")` and
 `TaskModel(modulators=())`, with `regressor_names`, `profiled_names`,
 `fingerprint`, and `to_dict()`.
 
