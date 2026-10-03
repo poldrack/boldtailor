@@ -13,6 +13,7 @@ from boldtailor.logging import (
     bind_context,
     emit_event,
 )
+from boldtailor._software import software_environment
 from boldtailor.provenance import ProvenanceRecord, extend_provenance
 
 
@@ -42,7 +43,7 @@ class FitOperation:
         record = extend_provenance(
             self.parent,
             execution_id=self.execution_id,
-            activity=activity,
+            activity={**activity, "software": software_environment()},
             events=append_event_history(self.history, completion),
             warnings=warnings,
             analysis_id=analysis_id,

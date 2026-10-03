@@ -4,7 +4,6 @@ from collections.abc import Sequence
 import hashlib
 import json
 
-import nilearn
 import numpy as np
 import pandas as pd
 
@@ -102,8 +101,6 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
         noise_model="ols",
         nuisance_columns=[list(n) for _, n, _ in compiled],
         design_fingerprint=digest.hexdigest(),
-        numpy_version=np.__version__,
-        nilearn_version=nilearn.__version__,
     )
 
 

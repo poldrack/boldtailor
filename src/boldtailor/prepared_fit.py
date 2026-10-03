@@ -16,7 +16,6 @@ from boldtailor._fit_diagnostics import (
     validate_nested_ols_delta,
     validate_result_dimensions,
 )
-from boldtailor._software import package_version
 from boldtailor._fit_lifecycle import fit_operation
 from boldtailor.model import (
     ContrastValue,
@@ -305,7 +304,6 @@ def _fit_activity(
     return {
         "name": "fit_prepared",
         "stage": "fit",
-        "numerical_backend": {"name": "nilearn", "version": package_version("nilearn")},
         "model": model,
         "runs": tuple(_run_diagnostic(prepared, run) for run in range(prepared.n_runs)),
     }

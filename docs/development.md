@@ -192,6 +192,8 @@ selected over all runs are shared by the final OLS and ridge fits.
 
 ## Source identity and provenance
 
+Every operation records `software` (interpreter, platform, package versions) in its activity; `analysis_id` is computed before this key is added, so identities do not change across environments.
+
 `SourceRef` accepts dataset-relative POSIX URIs or BIDS URIs, an optional media
 type, byte size, UTC modification time, and annotations. `RunSources` groups
 signal, events, and optional confound references for a run. Supply complete

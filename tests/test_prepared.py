@@ -2,7 +2,6 @@ import json
 import logging
 import re
 from copy import deepcopy
-from importlib.metadata import version
 
 import numpy as np
 import pandas as pd
@@ -329,11 +328,6 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
         "run_design_fingerprints": list(first.run_design_fingerprints),
         "design_fingerprint": first.design_fingerprint,
         "run_metadata": prepared_inputs[3],
-        "software_versions": {
-            "boldtailor": version("boldtailor"),
-            "numpy": version("numpy"),
-            "pandas": version("pandas"),
-        },
     }
     assert first.provenance.execution_id != second.provenance.execution_id
     assert (
@@ -379,11 +373,7 @@ def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
         "node": "run",
     }
     assert activity["run_metadata"] == prepared_inputs[3]
-    assert activity["software_versions"] == {
-        "boldtailor": version("boldtailor"),
-        "numpy": version("numpy"),
-        "pandas": version("pandas"),
-    }
+    assert "software_versions" not in activity
     assert activity == second.provenance.to_dict()["activities"][0]
     assert first.design_fingerprint == second.design_fingerprint
     assert first.design_fingerprint == third.design_fingerprint

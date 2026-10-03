@@ -12,7 +12,6 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from boldtailor._software import package_version
 from boldtailor.data import (
     _as_signal_runs,
     _prepare_signal,
@@ -248,9 +247,6 @@ def _normalization_activity(
         "run_design_fingerprints": list(run_fingerprints),
         "design_fingerprint": design_fingerprint,
         "run_metadata": [_thaw(metadata) for metadata in run_metadata],
-        "software_versions": {
-            name: package_version(name) for name in ("boldtailor", "numpy", "pandas")
-        },
     }
     if provenance_metadata is not None:
         activity["metadata"] = _thaw(provenance_metadata)
