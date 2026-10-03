@@ -303,8 +303,10 @@ betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
 
 Each grayordinate chooses its own fraction by maximizing pooled held-out
 encoding R². Ties within `1e-12` favor the largest fraction. `at_boundary`
-marks features whose winner sits at an end of the candidate grid; a high
-proportion means the grid should be extended. Fractions must
+marks features whose winner sits at an end of the candidate grid. An endpoint
+winner at the shrinkage end (smallest fraction / largest alpha) means the grid
+should be extended; a winner at fraction 1.0 or alpha 0 means no
+regularization was preferred. Fractions must
 have finite scores across all candidates at that location; undefined locations
 receive NaN. A zero OLS task-coefficient norm has undefined fractional
 shrinkage and is excluded. Negative scores remain valid.
@@ -428,9 +430,18 @@ ranges as the original grid: response delay 3–6 s, undershoot delay 10–16 s,
 response dispersion 0.5–1.5, undershoot dispersion 0.5–2.5,
 response/undershoot ratio 2–8, and onset delay 0–2 s. Custom curves span 36 s.
 The sample count must be a power of two; the seed controls reproducibility.
-`at_parameter_bound` marks features whose selected kernel lies within 2 % of
-the sampled parameter box; the default box implies peak times of roughly
-1.5–7.5 s, so late-peaking responses will saturate at the box edge.
+`parameter_bound_flags` records, per feature, which of the six sampled
+parameters of the selected custom kernel lie within 2 % of the library box
+width of their low or high edge (shape `(n_features, 6, 2)`), and
+`parameter_bound_table()` summarizes the fraction of custom picks flagged at
+each edge. `at_parameter_bound` is True when any *informative* parameter is
+flagged: one with at least three distinct library values and nonzero width
+(`library.informative_parameters`). Two-level grid parameters such as the
+expanded grid's undershoot delay (10 or 16 s) put every pick at an edge and are
+therefore reported in the table but excluded from the scalar; every Sobol
+parameter is informative. The default box implies peak times of roughly
+1.5–7.5 s, so late-peaking responses will saturate at the response-delay or
+onset edge.
 This balances coverage in parameter space, though similar waveforms can still
 arise from different parameter combinations.
 

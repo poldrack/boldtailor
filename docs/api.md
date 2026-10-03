@@ -198,7 +198,9 @@ Targets do not depend on the fraction grid.
 `FractionSelection` has the candidate `fractions`, per-feature
 `ridge_fraction`, `selected_r2`, `fraction_indices`, `scoring_mask`, and
 `at_boundary` (boolean per feature: the winner is the largest or smallest
-fraction; a high proportion means the grid should be extended).
+fraction). A winner at the smallest fraction (the shrinkage end) means the
+grid should be extended; a winner at fraction 1.0 means no regularization was
+preferred.
 Every candidate must have a finite score for an eligible feature. Ties within
 `1e-12` choose the largest fraction; excluded features have NaN values and
 index -1. An entirely invalid block returns undefined maps.
@@ -247,7 +249,9 @@ at every alpha; an empty common mask raises `ValueError`. Percentiles use linear
 interpolation. Ties within `1e-12` choose the smaller alpha, including zero.
 `RidgeSelection` exposes `ridge_alpha`, sorted `alphas`, `objective_scores`,
 `percentile`, `scoring_mask`, and `at_boundary` (the chosen alpha is an end of
-the grid; extend the grid if so). Merge spatial blocks before this call.
+the grid). A winner at the largest alpha (the shrinkage end) means the grid
+should be extended; a winner at alpha 0 means no regularization was
+preferred. Merge spatial blocks before this call.
 
 From `boldtailor.trial_encoding`:
 
@@ -314,7 +318,10 @@ SPM candidates require the exact canonical parameter tuple
 `(6, 16, 1, 1, 6, 0, 32)`.
 
 `HrfLibrary` exposes `candidates`, `parameter_table`, `parameter_bounds`
-(`low`/`high` of the six sampled parameters over custom candidates), `curves`, `times`, and
+(`low`/`high` of the six sampled parameters over custom candidates),
+`informative_parameters` (names among the six with at least three distinct
+custom values and nonzero width), `candidate_bound_flags(margin=0.02)`
+(per-candidate `(n_candidates, 6, 2)` edge flags), `curves`, `times`, and
 `fingerprint`. Every curve peaks at one. Every event's predicted response is scaled to a peak of one (kernels are
 also stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
@@ -356,10 +363,17 @@ result.
 
 `select_hrfs` returns `HrfSelectionResult`: `hrf_indices`, `cv_r2`,
 `canonical_cv_r2`, `delta_cv_r2`, `library`, `eligibility`, `run_labels`,
-`feature_signature`, `provenance`, and `at_parameter_bound` (boolean per
-feature: the selected custom kernel is within 2 % of the parameter box width
-of an edge; the default box implies peak times of roughly 1.5–7.5 s, so
-late-peaking responses saturate there). Eligibility records are checked lazily;
+`feature_signature`, `provenance`, `parameter_bound_flags`, and
+`at_parameter_bound`. `parameter_bound_flags` is a read-only boolean array of
+shape `(n_features, 6, 2)` over `PARAMETER_NAMES[:6]` and `[low, high]`: True
+where the selected custom kernel's parameter lies within 2 % of the library
+box width of that edge; all False for IDs 0 and -1. `at_parameter_bound` is the
+per-feature `any()` over `library.informative_parameters` only, so a constant or
+two-level grid parameter (for `expanded_hrf_library()`, `undershoot_delay`) does
+not flag every pick. `parameter_bound_table()` returns a DataFrame with
+columns `parameter`, `edge`, and `fraction_flagged` (over features with ID > 0;
+NaN when there are none). The default box implies peak times of roughly
+1.5–7.5 s, so late-peaking responses saturate there. Eligibility records are checked lazily;
 an unchecked candidate is not an excluded candidate.
 
 `evaluate_hrf_split` uses disjoint, zero-based run indices. Its
