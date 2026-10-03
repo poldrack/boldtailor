@@ -177,3 +177,29 @@ def test_beta_series_without_response_time_has_no_rt_correlations(
     blocks = inputs.make_blocks(runs, block_size=2)
     result = analysis.fit_beta_series(runs, root, blocks, task_model=model)
     assert result["rt"] is None and len(result["betas"]) == 4
+
+
+def test_select_hrfs_without_splits_selects_on_all_runs_only(
+    dataset, four_runs, small_library, settings_for
+):
+    root, *_ = dataset
+    runs = inputs.load_session(settings_for(root), hrf_only=True)
+    model_task = inputs.detect_task_model([r.events for r in runs])
+    blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
+    alone = analysis.select_hrfs(
+        runs, root, blocks, small_library, task_model=model_task, splits=False
+    )
+    assert alone and all(set(bundle) == {"all"} for bundle in alone.values())
+    root, _ = four_runs
+    runs = inputs.load_session(settings_for(root))
+    full = analysis.select_hrfs(
+        runs, root, blocks, small_library, task_model=model_task
+    )
+    alone = analysis.select_hrfs(
+        runs, root, blocks, small_library, task_model=model_task, splits=False
+    )
+    for key, bundle in alone.items():
+        assert set(bundle) == {"all"}
+        np.testing.assert_array_equal(
+            bundle["all"].hrf_indices, full[key]["all"].hrf_indices
+        )

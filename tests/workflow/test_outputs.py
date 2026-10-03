@@ -3,6 +3,7 @@
 from importlib.metadata import version
 import json
 
+from matplotlib.figure import Figure
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -595,3 +596,52 @@ def test_overwrite_replaces_the_session_task_output_set(
     assert not stale.exists()
     assert all(path.exists() for path in kept)
     assert all(path.exists() for path in second)
+
+
+def test_hrf_boundary_table_is_the_pooled_summary_as_a_frame(selected):
+    selections = selected[-1]
+    table = outputs.hrf_boundary_table(selections)
+    expected = pd.DataFrame(outputs.hrf_boundary_summary(selections))
+    pd.testing.assert_frame_equal(table, expected)
+    assert outputs.hrf_boundary_table(None) is None
+
+
+def test_workflow_artifacts_are_the_published_set_less_report_and_description(
+    selected, settings_for, tmp_path
+):
+    _, runs, model, _, library, _, selections = selected
+    settings = settings_for(selected[0].bids_dir, output_dir=tmp_path / "out")
+    figure = Figure()
+    figure.subplots().plot([0, 1])
+    options = dict(activation=None, skipped=(), include_hrf_splits=False)
+    report = "sub-07_ses-nsd10_task-nsdcore_report.html"
+    listed = outputs.workflow_artifacts(
+        settings,
+        runs,
+        model,
+        library,
+        selections,
+        {},
+        {},
+        figures={"Example": figure},
+        report=report,
+        **options,
+    )
+    assert figure.get_axes(), "listing artifacts must leave figures intact"
+    paths = outputs.save_workflow(
+        settings,
+        runs,
+        model,
+        library,
+        selections,
+        {},
+        {},
+        figures={"Example": figure},
+        report_html=b"<html></html>",
+        **options,
+    )
+    published = {p.relative_to(settings.output_dir).as_posix() for p in paths}
+    assert published - {a.path for a in listed} == {report, "dataset_description.json"}
+    assert {a.path for a in listed} <= published
+    assert f"{settings.stem}_desc-Example_plot.png" in published
+    assert not any("HRFOdd" in a.path for a in listed)
