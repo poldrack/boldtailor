@@ -1241,6 +1241,46 @@ def test_hrf_selection_keeps_canonical_when_truth_is_canonical():
 - [ ] **Step 3:** Replace the personal path at `glmsingle-comparison.md:98` with "a local GLMsingle checkout"; add the dated-record banner to the two validation docs lacking it; fix the sanitizer sentence; replace the dangling temp-script reference; add to the 2026-09-28 review a one-line note: "2026-10-02: the constant-feature masking described in §2.1 was not present in the tree; fixed in Task 1.1 of the remediation plan."
 - [ ] **Step 4:** `uv run pytest -q` → pass (a test pins the activity keys; update its expected set). Commit `docs: indicator in-sample note, fixed-effects weighting, stale references`.
 
+### Task 3.5: Rank-deficient designs fit in a full-rank basis (added by controller ruling after Task 3.1)
+
+**Why:** Task 3.1 found that nilearn 0.14.0 `OLSModel.fit` (`nilearn/glm/regression.py:196-198`) divides the residual dispersion by `n - n_columns` while `df_residuals = n - rank`. On a rank-deficient design the contrast variance is therefore inflated by `(n - rank)/(n - n_columns)` (25/24 in the probe) and t/z/p are conservative. `boldtailor` passes rank-deficient designs straight to `run_glm` (after a warning) and inherits the defect. `tests/test_multirun.py::test_duplicated_regressor_variance_and_stat_match_reduced_design` records it as a strict xfail.
+
+**Files:**
+- Modify: `src/boldtailor/_conventional.py` (`_fit_glm`, `_fit_run`, `_nilearn_t_contrast`, `_prediction`)
+- Modify: `tests/test_multirun.py` (turn the strict xfail into a passing assertion; add an AR(1) case)
+- Modify: `docs/user-guide.md` (one sentence in the conventional-GLM section), `docs/development.md` (one sentence)
+
+**Interfaces:**
+- Consumes: nilearn `run_glm`, `compute_contrast`; the existing estimability check `_validate_estimable` (contrast `c` satisfies `c = c pinv(X) X`).
+- Produces: `_conventional._full_rank_basis(design: np.ndarray) -> np.ndarray | None` returning `V_r` (shape `p × r`, orthonormal columns spanning the row space of `X`, from `np.linalg.svd` with the same relative tolerance `matrix_rank` uses) or `None` when `X` is full rank; `_fit_glm` fits `X_r = X @ V_r` when `V_r` is not None and stores `V_r` on `_GLMFit`; `_fit_run` maps each contrast vector to `c_r = V_r.T @ c` before `compute_contrast`; `_prediction` uses `X_r @ theta`. Full-rank designs take the unchanged path. Residual sums of squares, R², and `residual_dof = n - rank` are unchanged in value.
+
+- [ ] **Step 1: Turn the xfail into the requirement**
+
+In `tests/test_multirun.py`, remove the `@pytest.mark.xfail(strict=True, ...)` from `test_duplicated_regressor_variance_and_stat_match_reduced_design` so variance and stat must match the reduced-design nilearn oracle at `rtol=1e-8`. Parametrize that test over `noise_model in ("ols", "ar1")` (the reduced-design oracle is nilearn on the reduced design with the same noise model). Also assert the effect still matches, the rank warning is still emitted, and `result.design_provenance[0]["residual_dof"] == n - rank` (adapt the accessor to whatever the prepared/fit result exposes; the existing test reads it already).
+
+- [ ] **Step 2: Run** `uv run pytest -q tests/test_multirun.py -k duplicated` → FAIL (variance ratio 25/24). Commit `test: rank-deficient designs must match the reduced-design oracle`.
+
+- [ ] **Step 3: Implement** in `src/boldtailor/_conventional.py`:
+
+```python
+def _full_rank_basis(design: np.ndarray) -> np.ndarray | None:
+    """Orthonormal row-space basis when the design is rank deficient, else None."""
+    _, s, vt = np.linalg.svd(design, full_matrices=False)
+    tolerance = s[0] * max(design.shape) * np.finfo(float).eps
+    rank = int(np.sum(s > tolerance))
+    if rank == design.shape[1]:
+        return None
+    return vt[:rank].T
+```
+
+Extend `_GLMFit` with `basis: np.ndarray | None`. In `_fit_glm`: `basis = _full_rank_basis(design)`; `fitted = design if basis is None else design @ basis`; call `run_glm(signals, fitted, noise_model=noise_model)`; compute `prediction` with `fitted`; store `basis`. In `_fit_run`, before `_nilearn_t_contrast`, map `vector` to `glm_fit.basis.T @ vector` when `glm_fit.basis is not None` (the estimability preflight already guarantees `c` lies in the row space, so `V_r V_rᵀ c = c`). Keep `_warn_if_rank_deficient` as is.
+
+- [ ] **Step 4: Run** `uv run pytest -q tests/test_multirun.py tests/test_fit.py tests/test_hrf_glm.py tests/test_prepared_fit.py` → PASS; then `uv run pytest -q` → pass (the strict xfail is gone, so the xfailed count drops to 0).
+
+- [ ] **Step 5: Docs.** `docs/user-guide.md` conventional-GLM section: "Rank-deficient designs are fitted in a full-rank basis of their column space, so variances use `n - rank` degrees of freedom; a warning names the run and its rank." `docs/development.md`: "Nilearn 0.14 divides the OLS/AR(1) dispersion by `n - columns` (`regression.py:196`), inconsistent with its `df_residuals = n - rank`; Boldtailor avoids it by fitting rank-deficient designs in a full-rank basis (`_conventional._full_rank_basis`)."
+
+- [ ] **Step 6: Commit** `fix: fit rank-deficient designs in a full-rank basis so variances use n - rank` with the trailer.
+
 ---
 
 # Phase 4: Architecture
