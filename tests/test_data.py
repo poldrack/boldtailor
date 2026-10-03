@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from boldtailor._software import software_environment
-from boldtailor.data import from_arrays
+from boldtailor.data import from_arrays, run_labels_for
 
 
 @pytest.fixture
@@ -330,3 +330,59 @@ def test_normalization_catches_final_failures_and_isolates_context(
 def test_normalization_activity_records_the_software_environment(events):
     data = from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0)
     assert data.provenance.activities[0]["software"] == software_environment()
+
+
+@pytest.fixture
+def two_run_data(events):
+    signals = [np.arange(20.0).reshape(10, 2)] * 2
+    return from_arrays(signals, [events, events], tr=2.0)
+
+
+def test_run_labels_for_defaults_to_numbered_labels(two_run_data):
+    assert run_labels_for(two_run_data, None) == ("run-01", "run-02")
+
+
+@pytest.mark.parametrize("labels", [["a", "a"], ["a b", "c"], ["only-one"], [1, 2]])
+def test_run_labels_for_rejects_invalid_labels(two_run_data, labels):
+    with pytest.raises(ValueError, match="run labels must be unique"):
+        run_labels_for(two_run_data, labels)
+
+
+@pytest.fixture
+def run_entry_point_with_labels(ridge_problem, selected_fixture):
+    from boldtailor.hrf_selection import select_hrf
+    from boldtailor.ridge_selection import score_ridge_candidates
+    from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
+
+    data, predictors, library = ridge_problem
+    sel_data, selection = selected_fixture
+
+    def run(entry, labels):
+        full = labels + [f"r{i}" for i in range(data.n_runs - len(labels))]
+        calls = {
+            "fit_single_trials": lambda: fit_single_trials(data, run_labels=full),
+            "fit_selected_hrfs": lambda: fit_selected_hrfs(
+                sel_data,
+                selection=selection,
+                feature_signature="ordered-axis",
+                run_labels=labels + ["z"],
+            ),
+            "select_hrf": lambda: select_hrf(data, library=library, run_labels=full),
+            "score_ridge_candidates": lambda: score_ridge_candidates(
+                data, predictors, alphas=(0.0, 1.0), run_labels=full
+            ),
+        }
+        return calls[entry]()
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "entry",
+    ["fit_single_trials", "fit_selected_hrfs", "select_hrf", "score_ridge_candidates"],
+)
+def test_every_entry_point_uses_the_same_run_label_error(
+    entry, run_entry_point_with_labels
+):
+    with pytest.raises(ValueError, match="run labels must be unique"):
+        run_entry_point_with_labels(entry, ["a b", "c"])
