@@ -4,7 +4,7 @@
       "AssociatedWith": [
         "bids::prov#boldtailor-12345678123456781234567812345678"
       ],
-      "Command": "boldtailor Python API activity {\"feature_count\":2,\"name\":\"normalize\",\"run_count\":1,\"stage\":\"data\",\"timing_source\":\"tr\"}",
+      "Command": "boldtailor.from_arrays",
       "Id": "bids::prov#normalize-12345678123456781234567812345678-0",
       "Label": "normalize",
       "Used": [
@@ -17,9 +17,11 @@
       "AssociatedWith": [
         "bids::prov#boldtailor-12345678123456781234567812345678"
       ],
-      "Command": "boldtailor Python API activity {\"model\":{\"noise_model\":\"ols\"},\"name\":\"fit\",\"stage\":\"fit\"}",
+      "Command": "boldtailor.fit",
+      "EndedAtTime": "2026-08-08T12:00:01.000Z",
       "Id": "bids::prov#fit-12345678123456781234567812345678-1",
       "Label": "fit",
+      "StartedAtTime": "2026-08-08T12:00:00.000Z",
       "Used": [
         "bids::sub-01/func/sub-01_task-rest_bold.tsv",
         "bids:raw:sub-01/func/sub-01_task-rest_events.tsv",

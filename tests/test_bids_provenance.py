@@ -41,6 +41,12 @@ def provenance_record():
                     "name": "fit",
                     "stage": "fit",
                     "model": {"noise_model": "ols"},
+                    "software": {
+                        "python": "3.12.0",
+                        "platform": "Test-Platform-1.0",
+                        "boldtailor": "0.1.0",
+                        "numpy": "2.0.0",
+                    },
                 },
             ],
             "events": [
@@ -257,15 +263,7 @@ _MODEL_SIDECAR = "sub-01/func/sub-01_desc-model_bold.json"
             {"derivative_sidecars": {"sub-01/func/not-a-sidecar.tsv": ()}},
             "sidecar path",
         ),
-        (
-            {
-                "derivative_sidecars": {
-                    _MODEL_SIDECAR: (),
-                    "sub-01/func/SUB-01_desc-model_bold.json": (),
-                }
-            },
-            "collision",
-        ),
+        ({"derivative_sidecars": {"sub-01/my file.json": ()}}, "relative path"),
         ({"derivative_sidecars": {"dataset_description.json": ()}}, "collision"),
         ({"derivative_sidecars": {"provenance.json": ()}}, "collision"),
         (
@@ -281,3 +279,95 @@ _MODEL_SIDECAR = "sub-01/func/sub-01_desc-model_bold.json"
 def test_projection_rejects_invalid_options(provenance_record, options, message):
     with pytest.raises(ValueError, match=message):
         project_bids_provenance(provenance_record, **options)
+
+
+def _draft(projected, kind):
+    return json.loads(projected[f"prov/prov-boldtailor_{kind}.json"])
+
+
+@pytest.fixture
+def record_from_fit(complete_sources):
+    import numpy as np
+    import pandas as pd
+
+    from boldtailor.data import from_arrays
+    from boldtailor.fit import fit
+    from boldtailor.model import ModelSpec
+
+    rng = np.random.default_rng(20261002)
+    events = pd.DataFrame(
+        {"onset": [4.0, 24.0, 44.0, 64.0], "duration": 1.0, "trial_type": "face"}
+    )
+    data = from_arrays(
+        rng.normal(size=(40, 2)), events, tr=2.0, sources=complete_sources(1)
+    )
+    return fit(data, ModelSpec(contrasts={"face": "face"})).provenance
+
+
+def test_bids_activity_has_command_and_timestamps(record_from_fit):
+    from boldtailor._software import software_environment
+
+    projected = project_bids_provenance(record_from_fit)
+    activity = _draft(projected, "act")["Activities"][-1]
+    assert activity["Command"] == "boldtailor.fit"
+    assert activity["StartedAtTime"] <= activity["EndedAtTime"]
+    own = [
+        event["timestamp"]
+        for event in record_from_fit.events
+        if event["execution_id"] == record_from_fit.execution_id
+    ]
+    assert (activity["StartedAtTime"], activity["EndedAtTime"]) == (min(own), max(own))
+    env = _draft(projected, "env")["Environments"][0]
+    assert env["Python"] == software_environment()["python"]
+    assert env["Platform"] == software_environment()["platform"]
+    packages = {item["Label"]: item["Version"] for item in env["Software"]}
+    assert packages["nilearn"] == software_environment()["nilearn"]
+
+
+@pytest.mark.parametrize(
+    ("name", "command"),
+    [
+        ("fit", "boldtailor.fit"),
+        ("single_trial", "boldtailor.fit_single_trials"),
+        ("hrf_selection", "boldtailor.select_hrf"),
+        ("normalize", "boldtailor.from_arrays"),
+        ("brand_new_step", "boldtailor.brand_new_step"),
+    ],
+)
+def test_bids_command_names_the_entry_point(provenance_record, name, command):
+    payload = provenance_record.to_dict()
+    payload["activities"][-1]["name"] = name
+    projected = project_bids_provenance(ProvenanceRecord.from_dict(payload))
+    assert _draft(projected, "act")["Activities"][-1]["Command"] == command
+
+
+def test_projection_equals_record_for_sensitive_looking_keys(provenance_record):
+    payload = provenance_record.to_dict()
+    payload["sources"][0]["signal"]["annotations"] = {"hostname": "h", "cwd": "c"}
+    payload["activities"][-1]["cwd"] = "kept"
+    record = ProvenanceRecord.from_dict(payload)
+    projected = project_bids_provenance(record)
+    logged = json.loads(projected["logs/boldtailor_provenance.json"])
+    assert logged == record.to_dict()
+    assert projected["logs/boldtailor_provenance.json"] == (
+        record.canonical_json().encode("utf-8") + b"\n"
+    )
+
+
+def test_bids_projection_uses_the_shared_relative_path_rule():
+    import boldtailor.bids_provenance as bids
+    import boldtailor.provenance as provenance
+
+    assert bids.validate_relative_path is provenance.validate_relative_path
+    assert not hasattr(bids, "_validate_relative_path")
+
+
+def test_sidecar_paths_differing_only_in_case_are_both_projected(
+    provenance_record,
+):
+    upper = "sub-01/func/SUB-01_desc-model_bold.json"
+    projected = project_bids_provenance(
+        provenance_record,
+        derivative_sidecars={_MODEL_SIDECAR: (), upper: ()},
+    )
+    assert _MODEL_SIDECAR in projected and upper in projected

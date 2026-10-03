@@ -2,7 +2,19 @@
   "Environments": [
     {
       "Id": "bids::prov#environment-12345678123456781234567812345678",
-      "Label": "Boldtailor execution environment"
+      "Label": "Boldtailor execution environment",
+      "Platform": "Test-Platform-1.0",
+      "Python": "3.12.0",
+      "Software": [
+        {
+          "Label": "boldtailor",
+          "Version": "0.1.0"
+        },
+        {
+          "Label": "numpy",
+          "Version": "2.0.0"
+        }
+      ]
     }
   ]
 }
