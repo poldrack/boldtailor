@@ -1,5 +1,6 @@
 """boldtailor run: argument parsing, dry run, exit codes."""
 
+import json
 import shlex
 
 import pytest
@@ -197,3 +198,72 @@ def test_overwrite_into_the_fmriprep_directory_is_refused(four_runs, capsys):
     assert cli.main([*argv, "--hrf-library", "canonical", "--ridge-mode", "off"]) == 1
     assert "output_dir" in capsys.readouterr().err
     assert bold and all(p.exists() for p in bold)
+
+
+def test_dry_run_with_string_trial_type_is_task_only(four_runs, capsys):
+    from tests.workflow.synthetic_bids import face_house_events, rewrite_events
+
+    root, _ = four_runs
+    rewrite_events(root, face_house_events)
+    argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
+    assert cli.main(argv) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["task_model"]["regressors"] == ["task"]
+    assert "trial_type is not binary 0/1; not used as a modulator" in plan["notes"]
+
+
+def test_no_modulators_fits_a_task_only_model(four_runs, capsys):
+    root, _ = four_runs
+    argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
+    assert cli.main([*argv, "--no-modulators"]) == 0
+    assert json.loads(capsys.readouterr().out)["task_model"]["regressors"] == ["task"]
+    args = cli.build_parser().parse_args(_argv(root, "--no-modulators"))
+    settings = cli.settings_from_args(args)
+    assert settings.modulators == ()
+    tokens = shlex.split(report.command_line(settings))
+    assert "--no-modulators" in tokens
+    assert cli.settings_from_args(cli.build_parser().parse_args(tokens[1:])) == settings
+
+
+def test_no_modulators_excludes_modulator(four_runs, capsys):
+    root, _ = four_runs
+    argv = _argv(root, "--no-modulators", "--modulator", "trial_type", "--dry-run")
+    assert cli.main(argv) == 1
+    assert len(capsys.readouterr().err.strip().splitlines()) == 1
+
+
+def _quick(root, tmp_path, *extra):
+    return _argv(
+        root,
+        *("--output-dir", str(tmp_path / "out"), "--hrf-library", "canonical"),
+        *("--ridge-mode", "off", "--n-jobs", "1", "--block-size", "2"),
+        "--no-surface-maps",
+        *extra,
+    )
+
+
+def test_malformed_confounds_exit_two(four_runs, tmp_path, capsys):
+    import pandas as pd
+
+    root, prep = four_runs
+    path = next(prep.rglob("*run-02*confounds_timeseries.tsv"))
+    pd.read_csv(path, sep="\t").drop(columns="cosine00").to_csv(
+        path, sep="\t", index=False
+    )
+    assert cli.main(_quick(root, tmp_path, "--dry-run")) == 2
+    assert "cosine" in capsys.readouterr().err
+    assert cli.main(_quick(root, tmp_path)) == 2
+    assert "cosine" in capsys.readouterr().err
+
+
+def test_errors_during_fitting_propagate_with_a_traceback(
+    four_runs, tmp_path, monkeypatch
+):
+    from boldtailor.workflow import run as workflow_run
+
+    def fail(*args, **kwargs):
+        raise ValueError("numerical failure inside fitting")
+
+    monkeypatch.setattr(workflow_run.analysis, "fit_glms", fail)
+    with pytest.raises(ValueError, match="numerical failure inside fitting"):
+        cli.main(_quick(root=four_runs[0], tmp_path=tmp_path))

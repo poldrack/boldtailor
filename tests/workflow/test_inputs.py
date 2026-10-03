@@ -166,3 +166,63 @@ def test_missing_modulator_column_in_a_session_is_an_input_error(
     settings = settings_for(root, modulators=(Modulator("stimulus_id"),))
     with pytest.raises(inputs.InputError, match="stimulus_id"):
         inputs.load_session(settings)
+
+
+TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
+
+
+@pytest.mark.parametrize(
+    "values", [["face", "house"] * 3, [0, 1, 2, 0, 1, 2], [0, 1, 0, 1, 0, None]]
+)
+def test_detection_skips_a_trial_type_that_is_not_binary(events, values):
+    other = events.assign(trial_type=values)
+    tables = [events, other]
+    model = inputs.detect_task_model(tables)
+    assert model == TaskModel((Modulator("response_time", missing="indicator"),))
+    assert inputs.task_model_notes(tables) == [TRIAL_TYPE_NOTE]
+
+
+def test_detection_keeps_binary_trial_type_written_as_text(events):
+    text = events.assign(trial_type=events.trial_type.astype(str))
+    assert Modulator("trial_type") in inputs.detect_task_model([text]).modulators
+    assert inputs.task_model_notes([text]) == []
+
+
+def test_notes_are_only_for_automatic_detection(events):
+    strings = events.assign(trial_type=["face", "house"] * 3)
+    assert inputs.task_model_notes([strings], modulators=()) == []
+    assert inputs.task_model_notes([strings], modulators=(Modulator("x"),)) == []
+
+
+def test_explicit_modulator_errors_name_the_bids_run(events):
+    wanted = (Modulator("stimulus_id"),)
+    with pytest.raises(inputs.InputError, match="run-02.*stimulus_id"):
+        inputs.detect_task_model(
+            [events.assign(stimulus_id=1), events], wanted, labels=["run-01", "run-02"]
+        )
+
+
+def test_explicit_trial_type_stays_strict_and_names_the_run(four_runs, settings_for):
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.assign(trial_type=["face", "house"] * 3).to_csv(path, sep="\t", index=False)
+    settings = settings_for(root, modulators=(Modulator("trial_type"),))
+    with pytest.raises(inputs.InputError, match="run-02.*trial_type"):
+        inputs.load_session(settings)
+
+
+def test_trimming_errors_name_the_bids_run(four_runs, settings_for):
+    root, prep = four_runs
+    path = next(prep.rglob("*run-03*confounds_timeseries.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.loc[0, "non_steady_state_outlier00"] = 0.5
+    table.to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match="run-03.*binary"):
+        inputs.load_session(settings_for(root))
+
+
+def test_no_modulators_means_a_task_only_model(four_runs, settings_for):
+    root, _ = four_runs
+    runs = inputs.load_session(settings_for(root, modulators=()))
+    assert inputs.detect_task_model([r.events for r in runs], ()) == TaskModel()

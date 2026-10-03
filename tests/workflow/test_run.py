@@ -3,6 +3,7 @@
 import json
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import pytest
 
 from boldtailor.workflow import inputs, run as workflow_run
@@ -240,3 +241,65 @@ def test_task_only_session_runs_without_rt_or_trial_type(
     absent = {"rt_check", "response_time", "missing_response_time"}
     assert not absent & set(metadata)
     assert metadata["task_model"]["regressors"] == ["task"]
+
+
+TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
+
+
+def test_string_trial_type_is_reported_and_left_out_of_the_model(
+    four_runs, settings_for, tmp_path
+):
+    from tests.workflow.synthetic_bids import face_house_events, rewrite_events
+
+    root, _ = four_runs
+    rewrite_events(root, face_house_events)
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    info = workflow_run.describe_inputs(settings)
+    assert info["task_model"]["regressors"] == ["task"]
+    assert TRIAL_TYPE_NOTE in info["notes"]
+    result = workflow_run.run_workflow(settings)
+    assert TRIAL_TYPE_NOTE in result.report_path.read_text()
+    metadata = json.loads(
+        (
+            _func(settings)
+            / "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json"
+        ).read_text()
+    )
+    assert TRIAL_TYPE_NOTE in metadata["notes"]
+
+
+def test_ridge_cv_without_modulators_stops_before_any_fitting(
+    six_run_dataset, settings_for, tmp_path, monkeypatch
+):
+    from tests.workflow.synthetic_bids import rewrite_events, task_only_events
+
+    root, _ = six_run_dataset
+    rewrite_events(root, task_only_events)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("HRF selection ran before the ridge CV check")
+
+    monkeypatch.setattr(workflow_run.analysis, "select_hrfs", refuse)
+    settings = settings_for(root, output_dir=tmp_path / "out", hrf_library="canonical")
+    assert settings.ridge_mode == "fractional_cv"
+    with pytest.raises(inputs.InputError) as raised:
+        workflow_run.run_workflow(settings)
+    message = str(raised.value)
+    assert "modulator" in message
+    assert "--ridge-mode off" in message and "--skip-stage betas" in message
+
+
+def test_loading_errors_become_input_errors(four_runs, settings_for, tmp_path):
+    root, prep = four_runs
+    path = next(prep.rglob("*run-02*confounds_timeseries.tsv"))
+    pd.read_csv(path, sep="\t").drop(columns="cosine00").to_csv(
+        path, sep="\t", index=False
+    )
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    for call in (workflow_run.describe_inputs, workflow_run.run_workflow):
+        with pytest.raises(inputs.InputError, match="cosine"):
+            call(settings)

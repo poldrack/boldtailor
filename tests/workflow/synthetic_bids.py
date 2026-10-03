@@ -174,3 +174,19 @@ def make_six_runs(root, prep):
         table["stimulus_id"] = np.arange(len(table)) + number * 100
         table.to_csv(event_path, sep="\t", index=False)
     return root, prep
+
+
+def rewrite_events(root, transform):
+    """Apply ``transform`` to every run's events table in place."""
+    for path in sorted((root / "sub-07" / "ses-nsd10" / "func").glob("*_events.tsv")):
+        transform(pd.read_csv(path, sep="\t")).to_csv(path, sep="\t", index=False)
+
+
+def face_house_events(table):
+    """String trial types and no reaction times, as in many BIDS datasets."""
+    labels = np.where(np.arange(len(table)) % 2, "house", "face")
+    return table.drop(columns="response_time").assign(trial_type=labels)
+
+
+def task_only_events(table):
+    return table.drop(columns=["response_time", "trial_type"])
