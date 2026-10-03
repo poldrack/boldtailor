@@ -2,7 +2,9 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import lru_cache
 from hashlib import sha256
+from importlib.resources import files
 from itertools import product
 import json
 from types import MappingProxyType
@@ -17,6 +19,9 @@ from boldtailor._constants import OVERSAMPLING
 from boldtailor._scalars import is_integer
 
 _INTEGRAL_RATIO_TOLERANCE = 1e-12
+GLMSINGLE_HRF_COUNT = 20  # columns of GLMsingle's getcanonicalhrflibrary.tsv
+_GLMSINGLE_DT = 0.1  # the published library is sampled at 0.1 s from onset
+_KINDS = ("spm", "double_gamma", "glmsingle")
 
 PARAMETER_NAMES = (
     "response_delay",
@@ -88,11 +93,65 @@ def _peak_normalized(values):
     return readonly_array(values / np.max(values))
 
 
+@lru_cache(maxsize=1)
+def glmsingle_hrf_curves():
+    """GLMsingle's 20 empirical HRFs, ``(20, 501)`` at 0.1 s, each at unit peak.
+
+    Copied unchanged from ``glmsingle/hrf/getcanonicalhrflibrary.tsv``
+    (cvnlab/GLMsingle, BSD-3; see ``_resources/glmsingle_hrf_library.md``)
+    and rescaled here so every candidate shares the package's peak-one
+    convention.
+    """
+    path = files("boldtailor._resources").joinpath("glmsingle_hrf_library.tsv")
+    with path.open("rb") as handle:
+        curves = np.loadtxt(handle).T
+    return readonly_array(curves / curves.max(axis=1, keepdims=True))
+
+
+def _glmsingle_index(values):
+    try:
+        (index,) = values
+    except (TypeError, ValueError) as error:
+        raise ValueError("GLMsingle candidates take one library index") from error
+    if not is_integer(index) or not 1 <= index <= GLMSINGLE_HRF_COUNT:
+        raise ValueError(f"GLMsingle library index must be 1..{GLMSINGLE_HRF_COUNT}")
+    return (int(index),)
+
+
+def _kernel_samples(duration, dt):
+    """Number of samples covering ``duration`` at ``dt``; no extra tail sample
+    when the ratio is numerically an integer (TR inferred from frame
+    differences carries roundoff)."""
+    ratio_samples = duration / dt
+    nearest = round(ratio_samples)
+    if abs(ratio_samples - nearest) <= _INTEGRAL_RATIO_TOLERANCE * max(
+        1, ratio_samples
+    ):
+        ratio_samples = nearest
+    return int(np.ceil(ratio_samples))
+
+
+def _double_gamma_kernel(parameters, dt):
+    a, b, c, d, ratio, onset, duration = parameters
+    times = np.arange(_kernel_samples(duration, dt)) * dt - onset
+    return gamma.pdf(times, a / c, scale=c) - gamma.pdf(times, b / d, scale=d) / ratio
+
+
+def _glmsingle_kernel(index, dt):
+    curve = glmsingle_hrf_curves()[index - 1]
+    source = np.arange(len(curve)) * _GLMSINGLE_DT
+    # every sample lies within the published 0..50 s record
+    count = int(np.floor(source[-1] / dt + _INTEGRAL_RATIO_TOLERANCE)) + 1
+    return np.interp(np.arange(count) * dt, source, curve)
+
+
 @dataclass(frozen=True)
 class HrfCandidate:
     """Stable library index and identified kernel, sampled at TR/oversampling.
 
-    Every kernel is scaled to a peak of one, including canonical SPM.
+    ``parameters`` are the seven SPM double-gamma values for ``spm`` and
+    ``double_gamma`` kinds and the one-based GLMsingle library index for
+    ``glmsingle``. Every kernel is scaled to a peak of one.
     """
 
     id: int
@@ -100,8 +159,11 @@ class HrfCandidate:
     parameters: tuple[float, ...]
 
     def __post_init__(self):
-        if self.kind not in ("spm", "double_gamma"):
+        if self.kind not in _KINDS:
             raise ValueError("unknown HRF kind")
+        if self.kind == "glmsingle":
+            object.__setattr__(self, "parameters", _glmsingle_index(self.parameters))
+            return
         object.__setattr__(self, "parameters", _parameters(self.parameters))
         if self.kind == "spm" and self.parameters != CANONICAL_PARAMETERS:
             raise ValueError("SPM candidate parameters must match the canonical kernel")
@@ -110,20 +172,9 @@ class HrfCandidate:
         dt = _sampling(tr, oversampling)
         if self.kind == "spm":
             return _peak_normalized(spm_hrf(tr, oversampling))
-        a, b, c, d, ratio, onset, duration = self.parameters
-        # TR inferred from frame differences carries roundoff; do not add an
-        # extra tail sample when duration/dt is numerically an integer.
-        ratio_samples = duration / dt
-        nearest = round(ratio_samples)
-        if abs(ratio_samples - nearest) <= _INTEGRAL_RATIO_TOLERANCE * max(
-            1, ratio_samples
-        ):
-            ratio_samples = nearest
-        times = np.arange(int(np.ceil(ratio_samples))) * dt - onset
-        values = (
-            gamma.pdf(times, a / c, scale=c) - gamma.pdf(times, b / d, scale=d) / ratio
-        )
-        return _peak_normalized(values)
+        if self.kind == "glmsingle":
+            return _peak_normalized(_glmsingle_kernel(self.parameters[0], dt))
+        return _peak_normalized(_double_gamma_kernel(self.parameters, dt))
 
 
 @dataclass(frozen=True)
@@ -161,21 +212,35 @@ class HrfLibrary:
         object.__setattr__(self, "origin", MappingProxyType(dict(self.origin)))
 
     @classmethod
-    def from_parameters(cls, parameters, origin=None):
+    def from_parameters(cls, parameters, origin=None, *, include_glmsingle=False):
+        """Canonical SPM, the sorted double-gamma rows, then (optionally) the
+        20 GLMsingle kernels, with stable consecutive IDs."""
         rows = [_parameters(row) for row in parameters]
         if len(rows) != len(set(rows)):
             raise ValueError("duplicate HRF parameter rows")
         canonical = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
-        custom = tuple(
+        custom = [
             HrfCandidate(i, "double_gamma", row)
             for i, row in enumerate(sorted(rows), 1)
-        )
+        ]
+        if include_glmsingle:
+            custom.extend(_glmsingle_candidates(len(custom) + 1))
         origin = (
             origin
             if origin is not None
-            else {"kind": "explicit", "n_candidates": len(rows)}
+            else {"kind": "explicit", "n_candidates": len(custom)}
         )
         return cls((canonical, *custom), origin=origin)
+
+    @classmethod
+    def from_table(cls, table, origin=None):
+        """Rebuild a library from its :attr:`parameter_table`."""
+        table = pd.DataFrame(table)
+        rows = table.loc[table.kind == "double_gamma", list(PARAMETER_NAMES)].to_numpy()
+        empirical = table.loc[table.kind == "glmsingle", "source_index"].tolist()
+        if empirical and empirical != list(range(1, GLMSINGLE_HRF_COUNT + 1)):
+            raise ValueError("table must list every GLMsingle kernel in order or none")
+        return cls.from_parameters(rows, origin, include_glmsingle=bool(empirical))
 
     @property
     def parameter_bounds(self):
@@ -191,7 +256,7 @@ class HrfLibrary:
         )
 
     def _custom_parameters(self):
-        rows = [c.parameters[:6] for c in self.candidates if c.kind != "spm"]
+        rows = [c.parameters[:6] for c in self.candidates if c.kind == "double_gamma"]
         return np.array(rows or [CANONICAL_PARAMETERS[:6]], dtype=float)
 
     @property
@@ -217,20 +282,25 @@ class HrfLibrary:
         bounds = self.parameter_bounds
         low, high = bounds["low"].to_numpy(), bounds["high"].to_numpy()
         tol = margin * (high - low)
-        params = np.array([c.parameters[:6] for c in self.candidates], dtype=float)
+        params = np.array([_box_parameters(c)[:6] for c in self.candidates])
         flags = np.stack([params - low <= tol, high - params <= tol], axis=-1)
-        flags[[c.kind == "spm" for c in self.candidates]] = False
+        flags[[c.kind != "double_gamma" for c in self.candidates]] = False
         return flags
 
     @property
     def parameter_table(self):
+        """One row per candidate: SPM parameters (NaN for empirical kernels),
+        the GLMsingle ``source_index`` (NaN otherwise), and the 0.1 s peak time."""
         rows = []
         for candidate, curve in zip(self.candidates, self.curves, strict=True):
             rows.append(
                 dict(
                     hrf_id=candidate.id,
                     kind=candidate.kind,
-                    **dict(zip(PARAMETER_NAMES, candidate.parameters, strict=True)),
+                    **dict(
+                        zip(PARAMETER_NAMES, _box_parameters(candidate), strict=True)
+                    ),
+                    source_index=_source_index(candidate),
                     peak_time=float(self.times[np.argmax(curve)]),
                 )
             )
@@ -238,31 +308,61 @@ class HrfLibrary:
 
     @property
     def timing_table(self):
-        """Both parameterizations per candidate: SPM gamma values and lobe timing."""
-        rows = []
-        for candidate in self.candidates:
-            rows.append(
-                dict(
-                    hrf_id=candidate.id,
-                    kind=candidate.kind,
-                    **dict(zip(PARAMETER_NAMES, candidate.parameters, strict=True)),
-                    **dict(
-                        zip(
-                            TIMING_NAMES[:6],
-                            timing_parameters(candidate.parameters)[:6],
-                            strict=True,
-                        )
-                    ),
-                    **dict(
-                        zip(
-                            REALIZED_NAMES[:5],
-                            realized_timing(candidate.parameters),
-                            strict=True,
-                        )
-                    ),
-                )
+        """Both parameterizations per candidate: SPM gamma values, lobe timing,
+        and realized timing. Gamma columns are NaN for empirical kernels; the
+        realized trough columns are NaN when a kernel has no undershoot."""
+        return pd.DataFrame([_timing_row(c) for c in self.candidates])
+
+
+def _box_parameters(candidate):
+    if candidate.kind == "glmsingle":
+        return (np.nan,) * len(PARAMETER_NAMES)
+    return candidate.parameters
+
+
+def _source_index(candidate):
+    return float(candidate.parameters[0]) if candidate.kind == "glmsingle" else np.nan
+
+
+def _timing_row(candidate):
+    row = dict(hrf_id=candidate.id, kind=candidate.kind)
+    row.update(zip(PARAMETER_NAMES, _box_parameters(candidate), strict=True))
+    if candidate.kind == "glmsingle":
+        row.update(dict.fromkeys(TIMING_NAMES[:6], np.nan))
+        realized = _glmsingle_realized(candidate.parameters[0])
+    else:
+        row.update(
+            zip(
+                TIMING_NAMES[:6],
+                timing_parameters(candidate.parameters)[:6],
+                strict=True,
             )
-        return pd.DataFrame(rows)
+        )
+        realized = realized_timing(candidate.parameters)
+    row.update(zip(REALIZED_NAMES[:5], realized, strict=True))
+    return row
+
+
+def _glmsingle_realized(index):
+    """Realized timing of a GLMsingle kernel on the 0.01 s grid; the trough
+    columns are NaN when the kernel has no undershoot."""
+    curve = glmsingle_hrf_curves()[index - 1]
+    source = np.arange(len(curve)) * _GLMSINGLE_DT
+    times = np.arange(0.0, source[-1], _REALIZED_DT)
+    dense = np.interp(times, source, curve)
+    try:
+        return _realized_from_curve(times, dense)
+    except ValueError:
+        peak = int(np.argmax(dense))
+        peak_time, _ = _subgrid_extremum(times, dense, peak)
+        return (peak_time, _width_at(times, dense, peak, 0.5), np.nan, np.nan, np.nan)
+
+
+def _glmsingle_candidates(first_id):
+    return [
+        HrfCandidate(first_id + k, "glmsingle", (k + 1,))
+        for k in range(GLMSINGLE_HRF_COUNT)
+    ]
 
 
 def _lobe_timing(delay, dispersion, onset):
@@ -391,6 +491,10 @@ def realized_timing(parameters):
     after its peak deeper than one part in a million of the peak.
     """
     times, curve = _dense_curve(_parameters(parameters))
+    return _realized_from_curve(times, curve)
+
+
+def _realized_from_curve(times, curve):
     peak, trough = int(np.argmax(curve)), int(np.argmin(curve))
     if trough <= peak or trough == len(curve) - 1 or curve[trough] > -_MIN_TROUGH:
         raise ValueError("double gamma has no trough after its peak")
@@ -619,3 +723,29 @@ def timing_hrf_library(n_samples=512, *, seed=0, bounds=None, onset=0.0, duratio
         rejected=rejected,
     )
     return HrfLibrary.from_parameters(rows, origin=origin)
+
+
+def glmsingle_hrf_library():
+    """Canonical SPM plus the 20 GLMsingle empirical HRFs."""
+    return HrfLibrary.from_parameters(
+        [],
+        origin={"kind": "glmsingle", "n_candidates": GLMSINGLE_HRF_COUNT},
+        include_glmsingle=True,
+    )
+
+
+@lru_cache(maxsize=4)
+def default_hrf_library(n_samples=512, *, seed=0):
+    """The library HRF selection uses when none is given: canonical SPM,
+    ``n_samples`` timing-space candidates, then the 20 GLMsingle HRFs.
+
+    Built once per ``(n_samples, seed)`` and cached; libraries are immutable.
+    """
+    timing = timing_hrf_library(n_samples, seed=seed)
+    rows = [c.parameters for c in timing.candidates[1:]]
+    origin = {
+        "kind": "default",
+        "timing": dict(timing.origin),
+        "glmsingle": GLMSINGLE_HRF_COUNT,
+    }
+    return HrfLibrary.from_parameters(rows, origin, include_glmsingle=True)

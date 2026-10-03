@@ -185,7 +185,9 @@ def test_timing_sampler_keeps_drawing_when_most_of_the_box_is_infeasible():
 def test_trough_depth_is_sampled_log_uniformly():
     assert LOG_SCALED_TIMING == ("trough_depth",)
     library = timing_hrf_library(n_samples=256, seed=5)
-    depths = np.array([realized_timing(c.parameters)[4] for c in library.candidates[1:]])
+    depths = np.array(
+        [realized_timing(c.parameters)[4] for c in library.candidates[1:]]
+    )
     # log-uniform on 0.01-0.4 puts log(10)/log(40) = 62 % of the mass below 0.1;
     # uniform sampling would put 23 % there.
     assert 0.5 <= np.mean(depths < 0.1) <= 0.75

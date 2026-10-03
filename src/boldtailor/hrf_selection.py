@@ -19,7 +19,7 @@ from boldtailor._hrf_cv import (
 from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
 from boldtailor._scalars import is_integer
 from boldtailor.data import AnalysisData, run_labels_for
-from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_library import HrfLibrary, default_hrf_library
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint, identity_activity
@@ -127,7 +127,7 @@ def _select(
 def select_hrfs(
     data: AnalysisData,
     *,
-    library: HrfLibrary,
+    library: HrfLibrary | None = None,
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     candidate_batch_size: int = 32,
@@ -140,6 +140,7 @@ def select_hrfs(
     runs. Anonymous arrays without feature_signature require the caller to
     preserve feature order.
     """
+    library = default_hrf_library() if library is None else library
     with fit_operation("hrf_selection", data.provenance) as operation:
         return _select_hrfs(
             operation,
@@ -207,7 +208,7 @@ def _predict(a, b, c, energy, train, test):
 def evaluate_hrf_split(
     data: AnalysisData,
     *,
-    library: HrfLibrary,
+    library: HrfLibrary | None = None,
     train_runs: Sequence[int],
     test_runs: Sequence[int],
     run_labels: Sequence[str] | None = None,
@@ -220,6 +221,7 @@ def evaluate_hrf_split(
     ``candidate_batch_size`` bounds memory exactly as in :func:`select_hrfs`;
     it never changes the result.
     """
+    library = default_hrf_library() if library is None else library
     with fit_operation("hrf_independent_evaluation", data.provenance) as operation:
         return _evaluate_split(
             operation,

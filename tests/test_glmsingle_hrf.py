@@ -30,12 +30,14 @@ def test_glmsingle_candidate_kernel_is_the_curve_resampled_to_the_design_grid():
     candidate = HrfCandidate(3, "glmsingle", (7,))
     np.testing.assert_array_equal(candidate.kernel(0.1, 1), glmsingle_hrf_curves()[6])
     fine = candidate.kernel(1.6, 50)
-    assert len(fine) == 50.0 / (1.6 / 50) and fine.max() == pytest.approx(1.0)
+    # every sample lies within the published 0..50 s record (501 samples at 0.1 s)
+    assert len(fine) == int(np.floor(50.0 / (1.6 / 50))) + 1
+    assert fine.max() == pytest.approx(1.0)
     assert not fine.flags.writeable
+    # linear interpolation of the 0.1 s curve, rescaled to unit peak on the new grid
     grid = np.arange(len(fine)) * (1.6 / 50)
-    np.testing.assert_allclose(
-        fine, np.interp(grid, 0.1 * np.arange(501), glmsingle_hrf_curves()[6])
-    )
+    expected = np.interp(grid, 0.1 * np.arange(501), glmsingle_hrf_curves()[6])
+    np.testing.assert_allclose(fine, expected / expected.max())
 
 
 @pytest.mark.parametrize("parameters", [(0,), (21,), (1.5,), (1, 2), ()])
@@ -68,7 +70,8 @@ def test_timing_table_measures_empirical_kernels_and_leaves_gammas_blank():
         .all()
     )
     assert table.loc[1:, "peak_time"].between(2.6, 5.8).all()
-    assert table.loc[1:, "response_fwhm"].between(2.8, 5.0).all()
+    # interpolated half-maximum crossings: 2.98-5.06 s (the 0.1 s grid gives 2.9-4.9)
+    assert table.loc[1:, "response_fwhm"].between(2.9, 5.1).all()
     # three GLMsingle HRFs have no undershoot; their trough columns are NaN
     assert table.loc[1:, "trough_depth"].isna().sum() == 3
 

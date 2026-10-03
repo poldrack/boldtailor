@@ -412,12 +412,10 @@ following example, `multi_run_data` is an `AnalysisData` object created from
 lists of runs as described above:
 
 ```python
-from boldtailor.hrf_library import sobol_hrf_library
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_selected_hrfs
 
-library = sobol_hrf_library(n_samples=512, seed=0)
-selection = select_hrfs(multi_run_data, library=library)
+selection = select_hrfs(multi_run_data)  # default_hrf_library()
 optimized = fit_selected_hrfs(multi_run_data, hrf_selection=selection)
 optimized_ridge = fit_selected_hrfs(
     multi_run_data, hrf_selection=selection, ridge_alpha=0.1
@@ -470,6 +468,19 @@ parameters and the gamma-lobe description.
 `library.timing_table` lists both parameterizations. See
 `examples/validation/hrf_library_similarity.ipynb` for how the two samplers
 compare in waveform similarity.
+
+When `select_hrfs()` or `evaluate_hrf_split()` is called without a library it
+uses `default_hrf_library()`: canonical SPM (ID 0), 512 timing-space Sobol
+candidates (seed 0), and then the 20 empirical HRFs of the GLMsingle library
+used for the Natural Scenes Dataset (`glmsingle_hrf_curves()`, kind
+`glmsingle`, identified by their one-based column index). The default is built
+once and cached. GLMsingle kernels carry no gamma parameters, so their rows in
+`parameter_table` and `timing_table` have NaN parameter columns and a
+`source_index`; the realized timing columns are measured from the curve. The
+parameter-bound diagnostics consider only double-gamma candidates.
+`HrfLibrary.from_table()` rebuilds any library from its saved
+`parameter_table`, and `glmsingle_hrf_library()` gives canonical plus the 20
+empirical kernels alone.
 
 Inspect `library.parameter_table`, `library.times`, and `library.curves`.
 Use `expanded_hrf_library()` for the original 649-candidate grid, or
