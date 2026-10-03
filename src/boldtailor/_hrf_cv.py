@@ -16,6 +16,7 @@ from boldtailor._single_trial_design import (
 )
 from boldtailor._single_trial_fit import _project_design
 from boldtailor._task_design import expand_events, task_columns
+from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
 
 MIN_ONSET = -24.0
@@ -311,3 +312,16 @@ def choose_eligible(scores, runs):
         ]
     )
     return indices, scores, table
+
+
+def subset_runs(data, indices):
+    """Subset run data and source records together without relabeling features."""
+    signals, events, times = data.signals, data.events, data.frame_times
+    confounds, sources = data.confounds, data.provenance.sources
+    return from_arrays(
+        [signals[i] for i in indices],
+        [events[i] for i in indices],
+        frame_times=[times[i] for i in indices],
+        confounds=[confounds[i] for i in indices],
+        sources=[sources[i] for i in indices],
+    )

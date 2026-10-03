@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import numpy as np
 
-from boldtailor._hrf_cv import prepare_runs
+from boldtailor._hrf_cv import prepare_runs, subset_runs
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
 from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
@@ -28,19 +28,6 @@ from boldtailor.trial_encoding import (
     encoding_metadata,
     validate_encoding_mode,
 )
-
-
-def subset_runs(data, indices):
-    """Subset run data and source records together without relabeling features."""
-    signals, events, times = data.signals, data.events, data.frame_times
-    confounds, sources = data.confounds, data.provenance.sources
-    return from_arrays(
-        [signals[i] for i in indices],
-        [events[i] for i in indices],
-        frame_times=[times[i] for i in indices],
-        confounds=[confounds[i] for i in indices],
-        sources=[sources[i] for i in indices],
-    )
 
 
 def _validate(data, predictors, library, signature, *, encoding_mode):

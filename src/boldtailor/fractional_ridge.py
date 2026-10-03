@@ -2,7 +2,11 @@
 
 import numpy as np
 
-from boldtailor._fractional_ridge import fraction_grid
+from boldtailor._fractional_ridge import (  # public re-exports
+    NORM_BASIS,
+    fraction_grid,
+    regularization,
+)
 from boldtailor.ridge_results import FractionSelection
 
 

@@ -11,7 +11,7 @@ from types import MappingProxyType
 import numpy as np
 
 from boldtailor._fit_diagnostics import DIAGNOSTIC_NOISE_MODEL
-from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._hrf_design import HRF_NORMALIZATION  # public re-export
 
 ContrastWeights = Mapping[str, float]
 ContrastValue = str | ContrastWeights

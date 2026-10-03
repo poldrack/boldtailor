@@ -9,7 +9,7 @@ import pandas as pd
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._hrf_design import HRF_NORMALIZATION, hrf_metadata
-from boldtailor._single_trial_fit import fit_trial_run, r_squared
+from boldtailor._single_trial_fit import fit_trial_run, r_squared  # r_squared: public
 from boldtailor._fractional_ridge import (
     regularization,
     fit_fraction_run,

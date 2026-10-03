@@ -9,7 +9,8 @@ from boldtailor._fit_lifecycle import fit_operation
 from boldtailor._hrf_cv import (
     MIN_ONSET,
     OVERSAMPLING,
-    prepare_runs,
+    prepare_runs,  # public re-export
+    subset_runs,  # public re-export
     signal_statistics,
     loro_scores,
     choose_eligible,
