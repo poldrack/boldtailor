@@ -13,7 +13,12 @@ from boldtailor._fractional_ridge import (  # public re-exports
 )
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.ridge_results import CandidateScores, FractionSelection, paired_scores
+from boldtailor.ridge_results import (
+    CandidateScores,
+    FractionSelection,
+    paired_scores,
+    scoring_mask,
+)
 
 
 def select_ridge_fractions(
@@ -39,15 +44,15 @@ def select_ridge_fractions(
     scores = np.asarray(candidate_r2, dtype=float)
     if scores.ndim != 2 or scores.shape[0] != len(grid):
         raise ValueError("candidate_r2 must have one row per fraction")
-    mask = np.isfinite(scores).all(axis=0)
-    if feature_mask is not None:
-        requested = np.asarray(feature_mask)
-        if requested.shape != mask.shape or requested.dtype.kind != "b":
-            raise ValueError("feature_mask must be a matching boolean feature array")
-        mask &= requested
+    mask = scoring_mask(scores, feature_mask)
     order = np.argsort(grid)[::-1]
     grid = tuple(grid[i] for i in order)
-    values = scores[order][:, mask]
+    return _choose_fractions(grid, scores[order], mask)
+
+
+def _choose_fractions(grid, scores, mask):
+    """Per-feature winners over a descending grid; ties keep the larger f."""
+    values = scores[:, mask]
     selected = np.full(scores.shape[1], np.nan)
     best = selected.copy()
     indices = np.full(scores.shape[1], -1, dtype=int)

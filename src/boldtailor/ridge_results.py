@@ -115,3 +115,14 @@ def paired_scores(scores, grid, *, kind, grid_name):
     if grid is None:
         raise TypeError(f"{grid_name} is required with an array of candidate scores")
     return scores, grid
+
+
+def scoring_mask(scores, feature_mask):
+    """Features finite at every candidate, restricted by an optional mask."""
+    mask = np.isfinite(scores).all(axis=0)
+    if feature_mask is not None:
+        requested = np.asarray(feature_mask)
+        if requested.shape != mask.shape or requested.dtype.kind != "b":
+            raise ValueError("feature_mask must be a matching boolean feature array")
+        mask &= requested
+    return mask

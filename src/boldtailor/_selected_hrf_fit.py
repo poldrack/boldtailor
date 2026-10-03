@@ -160,9 +160,6 @@ def fit_groups(
             _fit_run(run, y, selection.hrf_indices, alpha, r, digest, fractions)
             for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
         ]
-        total = sum(f.total_ss for f in fits)
-        full = r_squared(sum(f.full_sse for f in fits), total)
-        null = r_squared(sum(f.nuisance_sse for f in fits), total)
         activity = _fit_activity(
             data, selection, labels, alpha, assignment, digest, fractions
         )
@@ -172,25 +169,31 @@ def fit_groups(
                 data.provenance.metadata_fingerprint, activity
             ),
         )
-        return SingleTrialResult(
-            run_betas=tuple(f.betas for f in fits),
-            _trial_table=trials,
-            design=SelectedTrialDesign(
-                hrf_indices=selection.hrf_indices,
-                design_fingerprint=activity["design_fingerprint"],
-                selection_provenance=selection.provenance,
-                _rebuild=_rebuilder(runs, selection.hrf_indices),
-            ),
-            run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
-            run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
-            full_r2=full,
-            nuisance_r2=null,
-            delta_r2=full - null,
-            _diagnostics=tuple(d for f in fits for d in f.diagnostics),
-            ridge_alpha=alpha,
-            provenance=provenance,
-            ridge_fraction=fractions,
-            run_ridge_alphas=(
-                None if fractions is None else tuple(f.alphas for f in fits)
-            ),
+        design = SelectedTrialDesign(
+            hrf_indices=selection.hrf_indices,
+            design_fingerprint=activity["design_fingerprint"],
+            selection_provenance=selection.provenance,
+            _rebuild=_rebuilder(runs, selection.hrf_indices),
         )
+        return _result(fits, trials, design, alpha, fractions, provenance)
+
+
+def _result(fits, trials, design, alpha, fractions, provenance):
+    total = sum(f.total_ss for f in fits)
+    full = r_squared(sum(f.full_sse for f in fits), total)
+    null = r_squared(sum(f.nuisance_sse for f in fits), total)
+    return SingleTrialResult(
+        run_betas=tuple(f.betas for f in fits),
+        _trial_table=trials,
+        design=design,
+        run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
+        run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
+        full_r2=full,
+        nuisance_r2=null,
+        delta_r2=full - null,
+        _diagnostics=tuple(d for f in fits for d in f.diagnostics),
+        ridge_alpha=alpha,
+        provenance=provenance,
+        ridge_fraction=fractions,
+        run_ridge_alphas=(None if fractions is None else tuple(f.alphas for f in fits)),
+    )

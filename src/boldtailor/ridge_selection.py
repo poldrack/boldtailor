@@ -10,7 +10,12 @@ from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_library import HrfLibrary
-from boldtailor.ridge_results import CandidateScores, RidgeSelection, paired_scores
+from boldtailor.ridge_results import (
+    CandidateScores,
+    RidgeSelection,
+    paired_scores,
+    scoring_mask,
+)
 
 
 def _alpha_grid(alphas):
@@ -18,6 +23,13 @@ def _alpha_grid(alphas):
     if not grid or len(set(grid)) != len(grid):
         raise ValueError("alphas must be a nonempty grid of distinct penalties")
     return grid
+
+
+def _validate_percentile(percentile):
+    if not is_real(percentile) or not np.isfinite(percentile):
+        raise ValueError("percentile must be a finite number from 0 to 100")
+    if not 0 <= percentile <= 100:
+        raise ValueError("percentile must be a finite number from 0 to 100")
 
 
 def select_ridge_penalty(
@@ -34,8 +46,7 @@ def select_ridge_penalty(
 
     Only features finite for every candidate enter the common mask. Negative
     scores are valid. Objective ties within ``TIE_TOLERANCE`` prefer the smaller
-    penalty.
-    ``at_boundary`` is True when the winner is the smallest or largest alpha
+    penalty. ``at_boundary`` is True when the winner is the smallest or largest alpha
     (always True for a one-point grid).
     """
     candidate_r2, alphas = paired_scores(
@@ -45,18 +56,8 @@ def select_ridge_penalty(
     scores = np.asarray(candidate_r2, dtype=float)
     if scores.ndim != 2 or scores.shape[0] != len(grid):
         raise ValueError("candidate_r2 must have one row per alpha")
-    if (
-        not is_real(percentile)
-        or not np.isfinite(percentile)
-        or not 0 <= percentile <= 100
-    ):
-        raise ValueError("percentile must be a finite number from 0 to 100")
-    mask = np.isfinite(scores).all(axis=0)
-    if feature_mask is not None:
-        requested = np.asarray(feature_mask)
-        if requested.shape != mask.shape or requested.dtype.kind != "b":
-            raise ValueError("feature_mask must be a matching boolean feature array")
-        mask &= requested
+    _validate_percentile(percentile)
+    mask = scoring_mask(scores, feature_mask)
     if not mask.any():
         raise ValueError("No features are eligible for every ridge candidate")
     order = np.argsort(grid)
