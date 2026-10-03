@@ -7,6 +7,8 @@ model or change the inputs. Scientific choices remain in the notebook.
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 import numpy as np
+
+from boldtailor.hrf_library import PARAMETER_NAMES
 import pandas as pd
 
 from boldtailor.reliability import library_indices
@@ -94,7 +96,7 @@ def _selected_parameters(library, ids, names):
 
 def parameter_agreement(library, odd_ids, even_ids):
     """Compare selected parameters at grayordinates defined in both halves."""
-    names = [c for c in library.parameter_table if c not in ("hrf_id", "kind")]
+    names = [*PARAMETER_NAMES, "peak_time"]  # the 2 x 4 panel grid
     odd = _selected_parameters(library, odd_ids, names)
     even = _selected_parameters(library, even_ids, names)
     agreement = []

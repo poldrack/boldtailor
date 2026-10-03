@@ -384,13 +384,7 @@ def test_notebook_executes_full_workflow_and_exports_reusable_artifacts(
         sep="\t",
         float_precision="round_trip",
     )
-    from boldtailor.hrf_library import PARAMETER_NAMES
-
-    restored = HrfLibrary.from_parameters(
-        saved_table.loc[
-            saved_table.kind == "double_gamma", list(PARAMETER_NAMES)
-        ].to_numpy()
-    )
+    restored = HrfLibrary.from_table(saved_table)
     assert restored.fingerprint == metadata["library_fingerprint"]
     np.testing.assert_array_equal(restored.curves, curves)
     assert metadata["noise_model"] == "ols"

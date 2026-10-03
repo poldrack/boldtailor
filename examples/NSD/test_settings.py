@@ -16,12 +16,12 @@ def config(tmp_path, monkeypatch):
     return dict(bids_root=str(tmp_path / "bids"), output_root=str(tmp_path / "out"))
 
 
-def test_default_settings_use_the_approved_sobol_library(config):
+def test_default_settings_use_the_default_library(config):
     settings = resolve_settings(config)
     library = build_hrf_library(settings)
-    assert len(library.candidates) == 513
+    assert len(library.candidates) == 533  # canonical + 512 timing + 20 GLMsingle
     assert settings["hrf_seed"] == 0
-    assert library.fingerprint == hrf_library.sobol_hrf_library().fingerprint
+    assert library.fingerprint == hrf_library.default_hrf_library().fingerprint
     assert settings["hrf_selection_rt"] is True
 
 
@@ -31,10 +31,15 @@ def test_configured_paths_are_user_expanded(config):
 
 
 def test_sobol_settings_set_size_and_seed(config):
-    settings = resolve_settings({**config, "hrf_n_samples": 8, "hrf_seed": 11})
+    settings = resolve_settings(
+        {**config, "hrf_library": "sobol", "hrf_n_samples": 8, "hrf_seed": 11}
+    )
     library = build_hrf_library(settings)
     assert len(library.candidates) == 9
     assert library.fingerprint == hrf_library.sobol_hrf_library(8, seed=11).fingerprint
+    settings = resolve_settings({**config, "hrf_n_samples": 8, "hrf_seed": 11})
+    expected = hrf_library.default_hrf_library(8, seed=11).fingerprint
+    assert build_hrf_library(settings).fingerprint == expected
 
 
 def test_library_can_reproduce_the_grid_or_use_custom_rows(config):

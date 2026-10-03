@@ -2,7 +2,12 @@
 
 from collections.abc import Mapping
 
-from boldtailor.hrf_library import HrfLibrary, expanded_hrf_library, sobol_hrf_library
+from boldtailor.hrf_library import (
+    HrfLibrary,
+    default_hrf_library,
+    expanded_hrf_library,
+    sobol_hrf_library,
+)
 from .notebook_paths import notebook_paths
 
 RIDGE_MODES = ("fractional_cv", "cv", "fixed", "off")
@@ -19,7 +24,7 @@ DEFAULTS = dict(
     ridge_alphas=[0.0, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
     ridge_percentile=90.0,
     ridge_alpha=0.1,  # Used only in fixed mode.
-    hrf_library="sobol",
+    hrf_library="default",  # timing-space Sobol + GLMsingle; "sobol" or "expanded"
     hrf_n_samples=512,
     hrf_seed=0,
     hrf_parameters=None,  # Optional custom rows override the library choice.
@@ -57,14 +62,17 @@ def resolve_settings(config: Mapping) -> dict:
 
 
 def build_hrf_library(settings):
-    """Custom parameter rows, else the Sobol or the expanded grid library."""
+    """Custom parameter rows, else the default, Sobol, or expanded grid library."""
     if settings["hrf_parameters"] is not None:
         return HrfLibrary.from_parameters(settings["hrf_parameters"])
+    size, seed = settings["hrf_n_samples"], settings["hrf_seed"]
+    if settings["hrf_library"] == "default":
+        return default_hrf_library(size, seed=seed)
     if settings["hrf_library"] == "sobol":
-        return sobol_hrf_library(settings["hrf_n_samples"], seed=settings["hrf_seed"])
+        return sobol_hrf_library(size, seed=seed)
     if settings["hrf_library"] == "expanded":
         return expanded_hrf_library()
-    raise ValueError("hrf_library must be 'sobol' or 'expanded'")
+    raise ValueError("hrf_library must be 'default', 'sobol', or 'expanded'")
 
 
 def beta_penalties(settings):

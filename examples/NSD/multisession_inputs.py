@@ -7,7 +7,7 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 
-from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
+from boldtailor.hrf_library import HrfLibrary
 from boldtailor.cifti import read_scalar
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
 from boldtailor.reliability import library_indices
@@ -67,9 +67,7 @@ def summary_paths(output, subject, session, estimators):
 
 def _library(paths, metadata):
     table = pd.read_csv(paths["parameters"], sep="\t", float_precision="round_trip")
-    library = HrfLibrary.from_parameters(
-        table.loc[table.kind == "double_gamma", list(PARAMETER_NAMES)].to_numpy()
-    )
+    library = HrfLibrary.from_table(table)
     with np.load(paths["curves"], allow_pickle=False) as archive:
         same = np.array_equal(library.curves, archive["curves"]) and np.array_equal(
             library.times, archive["times"]

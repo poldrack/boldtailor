@@ -9,7 +9,7 @@ import pandas as pd
 
 from boldtailor.cifti import spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
-from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
+from boldtailor.hrf_library import HrfLibrary
 from .session_hrf_cache import read_selection
 from .workflow_outputs import _input_artifacts, _metadata, _stem
 from .workflow_inputs import _trimmed_sources, make_blocks, selection_task_model
@@ -21,9 +21,7 @@ def _same_library(root, stem, library):
         sep="\t",
         float_precision="round_trip",
     )
-    recovered = HrfLibrary.from_parameters(
-        table.loc[table.kind == "double_gamma", list(PARAMETER_NAMES)].to_numpy()
-    )
+    recovered = HrfLibrary.from_table(table)
     with np.load(
         root / f"{stem}_desc-notebookHRF_library.npz", allow_pickle=False
     ) as curves:
