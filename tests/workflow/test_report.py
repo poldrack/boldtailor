@@ -1,8 +1,9 @@
 """The HTML report is self-contained and covers every stage."""
 
+import base64
 import shlex
-import warnings
 from html.parser import HTMLParser
+from io import BytesIO
 
 import matplotlib
 import pandas as pd
@@ -47,6 +48,12 @@ def _render(settings, **overrides):
     return report.render_report(settings, **{**EMPTY, **overrides})
 
 
+def _png(figure):
+    with BytesIO() as stream:
+        figure.savefig(stream, format="png")
+        return stream.getvalue()
+
+
 def _section_text(html, name):
     start = html.index(f'<section id="{name}">')
     return html[start : html.index("</section>", start)]
@@ -57,10 +64,11 @@ def test_report_has_a_section_per_stage_embedded_figures_and_a_manifest(
 ):
     fig, ax = plt.subplots()
     ax.plot([0, 1])
+    png = _png(fig)
     html = _render(
         bids_settings,
         glm_summary=pd.DataFrame({"model": ["CanonicalGLM"], "median": [0.1]}),
-        figures={"Design": fig},
+        figures={"Design": png},
         skipped=[("reliability", "only one odd run")],
         manifest=[
             (
@@ -83,19 +91,16 @@ def test_report_has_a_section_per_stage_embedded_figures_and_a_manifest(
         "files",
     ]
     assert parser.images == 1
+    assert base64.b64encode(png).decode("ascii") in html, "embeds the given PNG"
     assert "only one odd run" in html and "a.dscalar.nii" in html
     assert "CanonicalGLM" in html
     assert "<link" not in html and "<script src" not in html
 
 
-def test_embed_figure_does_not_warn(recwarn):
-    fig, ax = plt.subplots()
-    ax.plot([0, 1])
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        tag = report.embed_figure(fig)
-    plt.close(fig)
-    assert tag.startswith('<img alt="figure" src="data:image/png;base64,')
+def test_embed_png_wraps_encoded_bytes_without_rendering():
+    tag = report.embed_png(b"\x89PNG fake")
+    encoded = base64.b64encode(b"\x89PNG fake").decode("ascii")
+    assert tag == f'<img alt="figure" src="data:image/png;base64,{encoded}">'
 
 
 def test_command_line_always_names_the_dataset_and_omits_defaults(bids_settings):
@@ -186,3 +191,28 @@ def test_skipped_stage_section_names_the_reason(bids_settings):
     assert "Skipped: no usable runs." in section
     assert "<table" not in section
     assert "Stage disabled." not in html
+
+
+def test_report_shows_inputs_hrf_reliability_and_ridge_tables(bids_settings):
+    html = _render(
+        bids_settings,
+        run_summary=pd.DataFrame({"run": ["run-01"], "retained_scans": [95]}),
+        confounds=["trans_x", "cosine00"],
+        library_table=pd.DataFrame({"hrf_id": [0], "peak_time": [5.0]}),
+        selected_hrfs=pd.DataFrame({"hrf_id": [3], "selected_peak_time": [6.5]}),
+        curve_reliability=pd.DataFrame({"comparison": ["Odd vs even"]}),
+        encoding=pd.DataFrame({"split": ["odd_to_even"], "median_r2": [0.2]}),
+        ridge_boundary=pd.DataFrame({"mode": ["Optimized"], "boundary_share": [0.1]}),
+    )
+    inputs = _section_text(html, "inputs")
+    assert "retained_scans" in inputs and "trans_x, cosine00" in inputs
+    assert "peak_time" in inputs
+    assert "selected_peak_time" in _section_text(html, "glms")
+    assert "Odd vs even" in _section_text(html, "reliability")
+    betas = _section_text(html, "betas")
+    assert "odd_to_even" in betas and "boundary_share" in betas
+
+
+def test_report_lists_notes_in_the_inputs_section(bids_settings):
+    html = _render(bids_settings, notes=["trial_type is not binary 0/1"])
+    assert "trial_type is not binary 0/1" in _section_text(html, "inputs")

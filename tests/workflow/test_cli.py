@@ -66,13 +66,30 @@ def test_parser_builds_settings_with_defaults_and_overrides(four_runs):
 
 def test_dry_run_prints_the_plan_and_exits_zero(four_runs, capsys):
     root, _ = four_runs
-    assert cli.main(_argv(root, "--dry-run", "--hrf-library", "canonical")) == 0
+    argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
+    assert cli.main(argv) == 0
     out = capsys.readouterr().out
     assert (
         "run-04" in out
         and "response_time" in out
-        and "boldtailor_hrf-canonical_ridge-fractionalcv" in out
+        and "boldtailor_hrf-canonical_ridge-off" in out
     )
+
+
+def test_dry_run_exits_with_the_code_the_run_would(four_runs, tmp_path, capsys):
+    root, _ = four_runs
+    # four runs: two odd and two even, too few for the default ridge CV
+    assert cli.main(_argv(root, "--dry-run", "--hrf-library", "canonical")) == 2
+    captured = capsys.readouterr()
+    plan = json.loads(captured.out)
+    assert "three odd and three even" in plan["problems"][0]["message"]
+    assert "three odd and three even" in captured.err
+    assert cli.main(_quick(root, tmp_path, "--skip-stage", "betas")) == 0
+    capsys.readouterr()
+    assert cli.main(_quick(root, tmp_path, "--dry-run")) == 1
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["problems"][0]["kind"] == "existing_results"
+    assert "existing_results" in captured.err
 
 
 def test_settings_errors_exit_one_with_one_line(four_runs, capsys):

@@ -1,5 +1,6 @@
 """run_workflow executes the enabled stages, skips what it cannot do, and writes the derivative."""
 
+import base64
 import json
 
 import matplotlib.pyplot as plt
@@ -64,6 +65,27 @@ def test_full_run_writes_every_stage_and_the_report(
     )
     assert (settings.output_dir / "dataset_description.json").exists()
     assert not any("notebook" in n for n in names)
+    _assert_report_tables(result.report_path.read_text())
+    png = (
+        _func(settings) / "sub-07_ses-nsd10_task-nsdcore_desc-Library_plot.png"
+    ).read_bytes()
+    assert base64.b64encode(png).decode("ascii") in result.report_path.read_text()
+
+
+def _section(html, name):
+    start = html.index(f'<section id="{name}">')
+    return html[start : html.index("</section>", start)]
+
+
+def _assert_report_tables(html):
+    inputs_section = _section(html, "inputs")
+    assert "retained_scans" in inputs_section and "a_comp_cor_00" in inputs_section
+    assert "peak_time" in inputs_section and "hrf_id" in inputs_section
+    assert "selected_peak_time" in _section(html, "glms")
+    assert "Odd vs even" in _section(html, "reliability")
+    betas = _section(html, "betas")
+    assert "odd_to_even" in betas and "median_encoding_r2" in betas
+    assert "boundary_fraction" in betas
 
 
 def test_disabled_stages_write_nothing_of_their_own(four_runs, settings_for, tmp_path):
@@ -167,6 +189,25 @@ def test_second_run_into_the_same_output_stops_before_loading(
         )
     )
     assert again.paths
+
+
+def test_describe_inputs_reports_the_problems_a_run_would_hit(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    out = tmp_path / "out"
+    info = workflow_run.describe_inputs(
+        settings_for(root, output_dir=out, hrf_library="canonical")
+    )
+    assert [p["kind"] for p in info["problems"]] == ["input"]
+    assert "three odd and three even" in info["problems"][0]["message"]
+    quick = dict(output_dir=out, hrf_library="canonical", ridge_mode="off")
+    assert workflow_run.describe_inputs(settings_for(root, **quick))["problems"] == []
+    workflow_run.run_workflow(settings_for(root, stages=frozenset({"glms"}), **quick))
+    info = workflow_run.describe_inputs(settings_for(root, **quick))
+    assert [p["kind"] for p in info["problems"]] == ["existing_results"]
+    info = workflow_run.describe_inputs(settings_for(root, task="other", **quick))
+    assert info["problems"][0]["kind"] == "input" and "runs" not in info
 
 
 def test_describe_inputs_reports_runs_model_and_output(
