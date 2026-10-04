@@ -31,6 +31,11 @@ MODEL = ModelSpec(contrasts={"task": "task"}, confounds=BASELINE, drift_model=No
 # per-fold Gaussian-mixture threshold made them pass. Task 6 replaced the
 # procedure with the GLMsingle-aligned one (full-data HRFs, ON-OFF R² pool,
 # single pool, median performance, pcstop); the checks were rerun unchanged.
+# Under Task 6 the no-benefit tests failed (pcstop chose 6 PCs on independent
+# noise) and were strict xfail. Task 7 added the predeclared F-test
+# significance gate (default settings); rerun once unchanged, the gate rejects
+# k*=6 (m=1 of n=10, binomial p=0.40) and the recovery data keep k*=1 (m=6 of
+# n=6), so the xfail markers were removed.
 
 
 def denoise(dataset):
@@ -160,24 +165,12 @@ def no_benefit():
     return make_validation_dataset("no_benefit")
 
 
-NO_BENEFIT_FAILS = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Task 6 outcome: GLMsingle's pcstop rule has no absolute floor, so "
-        "chance gains of ~2e-4 in median held-out R² on independent noise "
-        "choose 6 PCs (fixture and default libraries); not retuned"
-    ),
-)
-
-
-@NO_BENEFIT_FAILS
 def test_without_shared_noise_zero_components_are_chosen(no_benefit):
     # Requirement change (Task 6): score_tolerance was replaced by GLMsingle's
     # pcstop rule, so "zero wins or ties" is now "the rule chooses zero".
     assert denoise(no_benefit).n_components == 0
 
 
-@NO_BENEFIT_FAILS
 def test_without_shared_noise_the_default_library_also_chooses_zero(no_benefit):
     result = select_denoising(no_benefit.training, task_model=TaskModel())
     assert result.n_components == 0
