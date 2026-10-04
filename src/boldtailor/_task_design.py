@@ -13,7 +13,7 @@ from boldtailor._hrf_design import (
     resolve_hrf,
     scale_event_amplitudes,
 )
-from boldtailor.model import TaskModel
+from boldtailor.model import TaskModel, level_name
 
 
 def _numeric(events, column, run):
@@ -25,7 +25,7 @@ def _numeric(events, column, run):
         raise ValueError(f"run {run}: modulator {column!r} must be numeric") from error
 
 
-def _modulator_amplitudes(events, modulator, run):
+def _numeric_amplitudes(events, modulator, run):
     values = _numeric(events, modulator.column, run)
     observed = np.isfinite(values)
     if not observed.any():
@@ -40,6 +40,48 @@ def _modulator_amplitudes(events, modulator, run):
     if modulator.missing == "indicator" and not observed.all():
         columns[modulator.indicator_name] = (~observed).astype(float)
     return columns
+
+
+def categorical_names(values, modulator):
+    """Canonical level per trial (None when missing), checked against the declared levels."""
+    names = [level_name(v) for v in values]
+    unknown = sorted({n for n in names if n is not None and n not in modulator.levels})
+    if unknown:
+        raise ValueError(
+            f"{modulator.column!r} values {unknown} are not levels {list(modulator.levels)}"
+        )
+    if modulator.missing == "error" and None in names:
+        raise ValueError(f"{modulator.column!r} has missing values")
+    absent = [lv for lv in modulator.levels if lv not in names]
+    if absent:
+        raise ValueError(f"no {modulator.column!r} trials at level(s) {absent}")
+    return names
+
+
+def _categorical_amplitudes(events, modulator, run):
+    if modulator.column not in events:
+        raise ValueError(
+            f"run {run}: events lack modulator column {modulator.column!r}"
+        )
+    try:
+        names = categorical_names(events[modulator.column], modulator)
+    except ValueError as error:
+        raise ValueError(f"run {run}: {error}") from error
+    columns = {
+        f"{modulator.column}[{lv}]": np.array([n == lv for n in names], dtype=float)
+        for lv in modulator.levels
+        if lv != modulator.reference
+    }
+    observed = np.array([n is not None for n in names])
+    if modulator.missing == "indicator" and not observed.all():
+        columns[modulator.indicator_name] = (~observed).astype(float)
+    return columns
+
+
+def _modulator_amplitudes(events, modulator, run):
+    if modulator.kind == "categorical":
+        return _categorical_amplitudes(events, modulator, run)
+    return _numeric_amplitudes(events, modulator, run)
 
 
 def expand_events(events, task_model, run=0):
