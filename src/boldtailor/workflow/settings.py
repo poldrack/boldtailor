@@ -42,7 +42,21 @@ def resolve_fmriprep_dir(bids_dir):
     return candidates[0]
 
 
-_MODULATOR_SYNTAX = "COLUMN[:indicator|categorical|reference=LEVEL,...]"
+_MODULATOR_SYNTAX = (
+    "COLUMN[:OPTION[,OPTION...]] with OPTION indicator, categorical, or reference=LEVEL"
+)
+
+
+def check_modulator_expressible(mod):
+    """Raise ValueError if ``--modulator`` syntax cannot spell ``mod``."""
+    if ":" in mod.column:
+        raise ValueError(f"modulator column {mod.column!r} contains ':'")
+    reference = mod.reference
+    if reference is not None and ("," in reference or ":" in reference):
+        raise ValueError(
+            f"modulator reference {reference!r} contains ',' or ':', which "
+            "--modulator cannot express"
+        )
 
 
 def _modulator_options(text, options):
@@ -71,6 +85,13 @@ def parse_modulator(text):
         kind="categorical" if "categorical" in values else "numeric",
         reference=values.get("reference"),
     )
+
+
+def _check_expressible(mod):
+    try:
+        check_modulator_expressible(mod)
+    except ValueError as error:
+        raise ValueError(f"modulators: {error}") from None
 
 
 def _nested(path, other):
@@ -204,6 +225,8 @@ class WorkflowSettings:
         mods = tuple(self.modulators)
         if any(not isinstance(m, Modulator) for m in mods):
             raise ValueError("modulators must be Modulator instances or None")
+        for mod in mods:
+            _check_expressible(mod)
         self._set("modulators", mods)
 
     def _validate_hrf(self):
