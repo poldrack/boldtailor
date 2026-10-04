@@ -303,3 +303,57 @@ def test_loading_errors_become_input_errors(four_runs, settings_for, tmp_path):
     for call in (workflow_run.describe_inputs, workflow_run.run_workflow):
         with pytest.raises(inputs.InputError, match="cosine"):
             call(settings)
+
+
+def test_missing_explicit_surface_mesh_stops_before_any_fitting(
+    four_runs, settings_for, tmp_path, monkeypatch
+):
+    root, _ = four_runs
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("HRF selection ran before the mesh check")
+
+    monkeypatch.setattr(workflow_run.analysis, "select_hrfs", refuse)
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "out",
+        hrf_library="canonical",
+        ridge_mode="off",
+        surface_maps=True,
+        surface_meshes={"left": tmp_path / "l.gii", "right": tmp_path / "r.gii"},
+    )
+    with pytest.raises(inputs.InputError, match="l.gii"):
+        workflow_run.run_workflow(settings)
+
+
+@pytest.mark.parametrize("copies", [0, 2])
+def test_missing_or_ambiguous_meshes_skip_surface_figures_with_a_note(
+    four_runs, settings_for, tmp_path, copies
+):
+    root, prep = four_runs
+    for session in range(copies):
+        anat = prep / "sub-07" / f"ses-{session}" / "anat"
+        anat.mkdir(parents=True)
+        for hemi in "LR":
+            name = f"sub-07_ses-{session}_hemi-{hemi}_space-fsLR_den-32k_midthickness.surf.gii"
+            (anat / name).write_text("")
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "out",
+        hrf_library="canonical",
+        ridge_mode="off",
+        stages=frozenset({"glms"}),
+        surface_maps=True,
+    )
+    result = workflow_run.run_workflow(settings)
+    assert not any("Surface" in p.name for p in result.paths)
+    metadata = json.loads(
+        (
+            _func(settings)
+            / "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json"
+        ).read_text()
+    )
+    notes = " ".join(metadata["notes"])
+    assert "surface" in notes
+    assert ("multiple" in notes) == bool(copies)
+    assert "surface" in result.report_path.read_text()

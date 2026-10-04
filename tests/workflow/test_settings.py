@@ -157,3 +157,22 @@ def test_output_dir_overlap_is_checked_on_resolved_paths(bids):
     alias.symlink_to(bids / "derivatives" / "fmriprep-25.2.5")
     with pytest.raises(ValueError, match="output_dir"):
         required(bids, output_dir=alias)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(ridge_fractions=()),
+        dict(ridge_fractions=(0.5, 0.5)),
+        dict(ridge_fractions=(0.0, 1.0)),
+        dict(ridge_fractions=(0.5, 1.5)),
+        dict(ridge_fractions=(float("nan"),)),
+        dict(ridge_alphas=()),
+        dict(ridge_alphas=(1.0, 1.0)),
+        dict(ridge_alphas=(-1.0, 1.0)),
+        dict(ridge_alphas=(float("inf"),)),
+    ],
+)
+def test_ridge_grids_are_validated(bids, kwargs):
+    with pytest.raises(ValueError, match=next(iter(kwargs))):
+        required(bids, **kwargs)

@@ -749,3 +749,51 @@ def test_control_sibling_shares_the_destination_prefix_and_is_identifiable(tmp_p
     assert len(matches) == 2
     assert [is_control_directory(path) for path in matches] == [False, True]
     assert [path for path in matches if not is_control_directory(path)] == [destination]
+
+
+def test_keep_existing_paths_are_written_only_when_absent(tmp_path):
+    destination = tmp_path / "derivatives"
+    first = publish_artifact_set(
+        destination,
+        (Artifact("shared.json", b"one"), Artifact("a.bin", b"a")),
+        keep_existing=["shared.json"],
+    )
+    assert destination / "shared.json" in first
+    second = publish_artifact_set(
+        destination,
+        (Artifact("shared.json", b"two"), Artifact("b.bin", b"b")),
+        keep_existing=["shared.json"],
+    )
+    assert (destination / "shared.json").read_bytes() == b"one"
+    assert set(second) == {destination / "b.bin"}
+    _assert_no_transaction_debris(destination)
+
+
+def test_keep_existing_is_decided_while_holding_the_lock(tmp_path, monkeypatch):
+    import boldtailor.publication as publication
+
+    destination = tmp_path / "derivatives"
+    original = publication.FileLock
+
+    class RacingLock:
+        """Another writer publishes the shared file just before we get the lock."""
+
+        def __init__(self, *args, **kwargs):
+            self.lock = original(*args, **kwargs)
+
+        def __enter__(self):
+            destination.mkdir(exist_ok=True)
+            (destination / "shared.json").write_bytes(b"other writer")
+            return self.lock.__enter__()
+
+        def __exit__(self, *exc):
+            return self.lock.__exit__(*exc)
+
+    monkeypatch.setattr(publication, "FileLock", RacingLock)
+    published = publish_artifact_set(
+        destination,
+        (Artifact("shared.json", b"mine"), Artifact("a.bin", b"a")),
+        keep_existing=["shared.json"],
+    )
+    assert set(published) == {destination / "a.bin"}
+    assert (destination / "shared.json").read_bytes() == b"other writer"

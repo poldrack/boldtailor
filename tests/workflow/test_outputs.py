@@ -742,3 +742,45 @@ def test_metadata_records_undefined_bound_fractions_as_null(four_runs, settings_
     rows = json.loads(json.dumps(published, allow_nan=False))["hrf_boundary_summary"]
     assert rows and all(r["n_custom"] == 0 for r in rows)
     assert all(r["fraction_flagged"] is None for r in rows)
+
+
+def test_two_sessions_publish_into_one_output_dir_under_error(
+    four_runs, settings_for, tmp_path
+):
+    from tests.workflow.synthetic_bids import copy_task
+
+    root, prep = four_runs
+    copy_task(root, prep, "other")
+    out = tmp_path / "out"
+    first = _save_inputs_only(settings_for(root, output_dir=out))
+    second = _save_inputs_only(settings_for(root, task="other", output_dir=out))
+    assert out / "dataset_description.json" in first
+    assert out / "dataset_description.json" not in second
+    assert any("task-other" in p.name for p in second)
+
+
+def test_publication_waits_long_for_the_writer_lock(
+    four_runs, settings_for, tmp_path, monkeypatch
+):
+    seen = {}
+    original = outputs.publish_artifact_set
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(outputs, "publish_artifact_set", spy)
+    root, _ = four_runs
+    _save_inputs_only(settings_for(root, output_dir=tmp_path / "out"))
+    assert seen["lock_timeout"] >= 3600
+    assert seen["keep_existing"] == ("dataset_description.json",)
+
+
+def test_check_output_sees_an_existing_root_report(four_runs, settings_for, tmp_path):
+    root, _ = four_runs
+    settings = settings_for(root, output_dir=tmp_path / "out")
+    report = tmp_path / "out" / "sub-07_ses-nsd10_task-nsdcore_report.html"
+    report.parent.mkdir(parents=True)
+    report.write_text("<html></html>")
+    with pytest.raises(FileExistsError, match="report.html"):
+        outputs.check_output(settings)

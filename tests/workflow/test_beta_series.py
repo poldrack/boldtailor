@@ -1,6 +1,7 @@
 """CV beta series, trial predictors, tuning provenance and BetaModel assembly."""
 
 from dataclasses import replace
+import logging
 
 import nibabel as nib
 import numpy as np
@@ -712,3 +713,10 @@ def test_fixed_ridge_model_uses_the_setting_alpha(
     )
     assert models["CanonicalTrialRidge"].fit["ridge_alpha"] == 0.5
     assert models["CanonicalTrialOLS"].fit["ridge_alpha"] == 0.0
+
+
+def test_ridge_cv_progress_goes_to_the_log_not_stdout(session, capsys, caplog):
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    fit_alpha(session, None)
+    assert capsys.readouterr().out == ""
+    assert any("Ridge CV" in r.getMessage() for r in caplog.records)

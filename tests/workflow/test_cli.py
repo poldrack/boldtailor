@@ -1,6 +1,7 @@
 """boldtailor run: argument parsing, dry run, exit codes."""
 
 import json
+import logging
 import shlex
 
 import pytest
@@ -267,3 +268,29 @@ def test_errors_during_fitting_propagate_with_a_traceback(
     monkeypatch.setattr(workflow_run.analysis, "fit_glms", fail)
     with pytest.raises(ValueError, match="numerical failure inside fitting"):
         cli.main(_quick(root=four_runs[0], tmp_path=tmp_path))
+
+
+def _boldtailor_info(caplog):
+    return [
+        r
+        for r in caplog.records
+        if r.name.startswith("boldtailor") and r.levelno == logging.INFO
+    ]
+
+
+def test_run_logs_progress_unless_quiet(four_runs, tmp_path, caplog):
+    root, _ = four_runs
+    assert cli.main(_quick(root, tmp_path, "--skip-stage", "betas")) == 0
+    assert _boldtailor_info(caplog)
+    caplog.clear()
+    quiet = _quick(root, tmp_path, "--skip-stage", "betas", "--quiet")
+    assert cli.main([*quiet, "--existing-results", "overwrite"]) == 0
+    assert not _boldtailor_info(caplog)
+
+
+def test_missing_surface_mesh_exits_two(four_runs, tmp_path, capsys):
+    root, _ = four_runs
+    argv = [a for a in _quick(root, tmp_path) if a != "--no-surface-maps"]
+    mesh = ("--surface-mesh", f"left={tmp_path / 'l.gii'}")
+    assert cli.main([*argv, *mesh, "--surface-mesh", f"right={tmp_path}/r.gii"]) == 2
+    assert "l.gii" in capsys.readouterr().err

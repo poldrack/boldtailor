@@ -190,3 +190,12 @@ def face_house_events(table):
 
 def task_only_events(table):
     return table.drop(columns=["response_time", "trial_type"])
+
+
+def copy_task(root, prep, task):
+    """Duplicate every nsdcore run as another task of the same session."""
+    for directory in (root, prep):
+        func = directory / "sub-07/ses-nsd10/func"
+        for source in list(func.glob("*task-nsdcore*")):
+            target = source.with_name(source.name.replace("nsdcore", task))
+            target.write_bytes(source.read_bytes())
