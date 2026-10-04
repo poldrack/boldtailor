@@ -784,3 +784,17 @@ def test_check_output_sees_an_existing_root_report(four_runs, settings_for, tmp_
     report.write_text("<html></html>")
     with pytest.raises(FileExistsError, match="report.html"):
         outputs.check_output(settings)
+
+
+def test_check_output_message_stays_short_for_many_files(
+    four_runs, settings_for, tmp_path
+):
+    root, _ = four_runs
+    func = tmp_path / "out" / "sub-07" / "ses-nsd10" / "func"
+    func.mkdir(parents=True)
+    for i in range(8):
+        (func / f"sub-07_ses-nsd10_task-nsdcore_desc-M{i}_plot.png").write_text("x")
+    with pytest.raises(FileExistsError) as raised:
+        outputs.check_output(settings_for(root, output_dir=tmp_path / "out"))
+    message = str(raised.value)
+    assert message.count("_plot.png") == 5 and "8 files" in message
