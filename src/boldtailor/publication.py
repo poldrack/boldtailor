@@ -73,14 +73,20 @@ def publish_artifact_set(
     source_paths: Iterable[str | os.PathLike[str]] = (),
     overwrite: bool = False,
     lock_timeout: float = 30.0,
+    keep_existing: Iterable[str] = (),
 ) -> tuple[Path, ...]:
     """Publish a file set under one writer lock, rolling back on failure.
+
+    Paths in ``keep_existing`` (shared files such as a dataset description)
+    are written only if absent once the lock is held; an existing file there
+    is left untouched and omitted from the returned paths.
 
     Lock, staging, backups, and the failure ledger live in the sibling
     ``<destination>.boldtailor/`` directory, not in the dataset. Concurrent
     readers may observe a partially replaced set.
     """
     requested = _prepare_artifacts(artifacts)
+    keep = frozenset(keep_existing)
     _validate_lock_timeout(lock_timeout)
     root = _resolve_destination(destination)
     control = root.with_name(root.name + _CONTROL_SUFFIX)
@@ -90,11 +96,22 @@ def publish_artifact_set(
     control.mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(control / "lock", timeout=lock_timeout):
-            return _publish_locked(root, control, requested, overwrite=overwrite)
+            wanted = _unless_kept(root, requested, keep)
+            return _publish_locked(root, control, wanted, overwrite=overwrite)
     except Timeout as error:
         _record_failure(control, str(uuid4()), error)
         message = f"publication lock timed out for destination {root}"
         raise PublicationError(message) from error
+
+
+def _unless_kept(
+    destination: Path, artifacts: tuple[Artifact, ...], keep: frozenset[str]
+) -> tuple[Artifact, ...]:
+    return tuple(
+        artifact
+        for artifact in artifacts
+        if artifact.path not in keep or not os.path.lexists(destination / artifact.path)
+    )
 
 
 def _publish_locked(

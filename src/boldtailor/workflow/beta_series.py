@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
+import logging
 from numbers import Integral, Real
 from uuid import uuid4
 
@@ -40,6 +41,8 @@ from boldtailor.workflow import inputs
 from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.workflow.files import odd_even_parity
 from boldtailor.workflow.inputs import _trimmed_sources, load_block
+
+log = logging.getLogger("boldtailor.workflow")
 
 
 def _numeric_predictors(run, columns):
@@ -524,7 +527,7 @@ def fit_cv_beta_series(
     )
     mode = "canonical" if library is None else "optimized"
     for scope, train in (*halves.items(), ("all", list(range(len(runs))))):
-        print(f"Ridge CV ({mode}, {scope}): tuning {len(train)} runs", flush=True)
+        log.info("Ridge CV (%s, %s): tuning %d runs", mode, scope, len(train))
         selected = _tune(
             [runs[i] for i in train],
             root,
@@ -569,7 +572,7 @@ def fit_cv_beta_series(
             if fractional
             else f"selected alpha={alpha:g}"
         )
-        print(f"Ridge CV ({mode}, {scope}): {description}", flush=True)
+        log.info("Ridge CV (%s, %s): %s", mode, scope, description)
     result["final"] = _final_fit(
         runs,
         root,

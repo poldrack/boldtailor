@@ -67,6 +67,7 @@ class _State:
     figures: dict = field(default_factory=dict)
     skipped: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    meshes: dict | None = None
 
     @property
     def brain(self):
@@ -121,6 +122,8 @@ def _load(settings):
             block_size=settings.block_size,
             max_grayordinates=settings.max_grayordinates,
         )
+    notes = list(notes)
+    meshes = _find_meshes(settings, notes)
     library = settings.build_library()
     log.info("Loaded %d runs; %d HRF candidates", len(runs), len(library.candidates))
     return _State(
@@ -129,8 +132,29 @@ def _load(settings):
         task_model=task_model,
         library=library,
         blocks=blocks,
-        notes=list(notes),
+        notes=notes,
+        meshes=meshes,
     )
+
+
+def _find_meshes(settings, notes):
+    """Meshes for surface figures; a missing explicit mesh is an input error."""
+    if not settings.surface_maps:
+        return None
+    try:
+        meshes = surfaces.find_surface_meshes(
+            settings.fmriprep_dir, settings.subject, paths=settings.surface_meshes
+        )
+    except FileNotFoundError as error:
+        raise inputs.InputError(f"surface mesh not found: {error}") from error
+    except ValueError as error:
+        meshes, reason = None, str(error)
+    else:
+        reason = "no fsLR 32k midthickness meshes found"
+    if meshes is None:
+        notes.append(f"Skipped surface figures: {reason}")
+        log.info("Skipping surface figures: %s", reason)
+    return meshes
 
 
 def _splits_possible(runs, minimum=2):
@@ -261,19 +285,12 @@ def _summaries_stage(state):
 
 def _surface_figures(state):
     """Cortical maps, only when requested and the subject's meshes are found."""
-    settings = state.settings
-    if not settings.surface_maps:
-        return
-    meshes = surfaces.find_surface_meshes(
-        settings.fmriprep_dir, settings.subject, paths=settings.surface_meshes
-    )
-    if meshes is None:
-        log.info("No fsLR surface meshes found; skipping surface figures")
+    if state.meshes is None:
         return
     for name, maps, statistic in _surface_maps(state):
         if maps:
             state.figures[name] = surfaces.surface_figure(
-                maps, state.brain, meshes, statistic=statistic
+                maps, state.brain, state.meshes, statistic=statistic
             )
 
 

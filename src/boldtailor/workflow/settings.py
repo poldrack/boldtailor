@@ -1,5 +1,6 @@
 """Resolved, validated settings for one workflow run; the CLI, stages, writer and metadata share it."""
 
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
@@ -80,6 +81,26 @@ def _check_bool(value, name):
     if not isinstance(value, bool):
         raise ValueError(f"{name} must be a boolean")
     return value
+
+
+def _fraction(value):
+    return 0 < value <= 1
+
+
+def _penalty(value):
+    return math.isfinite(value) and value >= 0
+
+
+def _check_grid(values, name, accept, wanted):
+    """A non-empty grid of distinct real values, each accepted by ``accept``."""
+    grid = tuple(values)
+    valid = grid and all(is_real(v) for v in grid)
+    grid = tuple(float(v) for v in grid) if valid else grid
+    if not valid or len(set(grid)) != len(grid) or not all(map(accept, grid)):
+        raise ValueError(
+            f"{name} must be non-empty, distinct and {wanted}, not {list(values)}"
+        )
+    return grid
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -172,8 +193,16 @@ class WorkflowSettings:
 
     def _validate_ridge(self):
         _check_choice(self.ridge_mode, "ridge_mode", RIDGE_MODES)
-        self._set("ridge_fractions", tuple(float(f) for f in self.ridge_fractions))
-        self._set("ridge_alphas", tuple(float(a) for a in self.ridge_alphas))
+        self._set(
+            "ridge_fractions",
+            _check_grid(
+                self.ridge_fractions, "ridge_fractions", _fraction, "in (0, 1]"
+            ),
+        )
+        self._set(
+            "ridge_alphas",
+            _check_grid(self.ridge_alphas, "ridge_alphas", _penalty, "finite and >= 0"),
+        )
         if not is_real(self.ridge_percentile) or not 0 <= self.ridge_percentile <= 100:
             raise ValueError("ridge_percentile must lie in [0, 100]")
         fixed_bad = not is_real(self.ridge_alpha) or self.ridge_alpha <= 0

@@ -29,6 +29,7 @@ from boldtailor.workflow.artifacts import (
 from boldtailor.workflow.files import input_paths
 from boldtailor.workflow.inputs import run_summary, selection_task_model
 
+LOCK_TIMEOUT = 24 * 3600.0  # another session may hold the writer lock for long
 R2_NAMES = ["full_r2", "confounds_r2", "task_delta_r2"]
 SELECTION_NAMES = ["hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2"]
 PREDICTION_NAMES = ["selected_test_r2", "canonical_test_r2", "delta_test_r2"]
@@ -70,7 +71,8 @@ def check_output(settings):
     """Refuse to replace this subject/session/task's outputs unless told to."""
     if settings.existing_results == "overwrite":
         return None
-    existing = _session_files(settings)
+    report = settings.output_dir / report_name(settings)
+    existing = _session_files(settings) + ([report] if report.is_file() else [])
     if existing:
         names = ", ".join(sorted(p.name for p in existing))
         raise FileExistsError(
@@ -1081,15 +1083,12 @@ def workflow_artifacts(
     return artifacts + [json_artifact(metadata_name(settings), settings_file)]
 
 
-def _root_artifacts(settings, report_html):
-    """The report, plus the dataset description unless another session wrote it."""
-    artifacts = (
+def _root_artifacts(report_html, settings):
+    """The report and the dataset description (kept if another session wrote it)."""
+    report = (
         [] if report_html is None else [Artifact(report_name(settings), report_html)]
     )
-    description = settings.output_dir / "dataset_description.json"
-    if settings.existing_results == "overwrite" or not description.exists():
-        artifacts.append(dataset_description("boldtailor"))
-    return artifacts
+    return [*report, dataset_description("boldtailor")]
 
 
 def publish_workflow(settings, runs, artifacts, report_html):
@@ -1099,9 +1098,11 @@ def publish_workflow(settings, runs, artifacts, report_html):
     sources = [p for r in runs for p in input_paths(r.inputs)]
     paths = publish_artifact_set(
         settings.output_dir,
-        [*artifacts, *_root_artifacts(settings, report_html)],
+        [*artifacts, *_root_artifacts(report_html, settings)],
         source_paths=sources,
         overwrite=overwrite,
+        lock_timeout=LOCK_TIMEOUT,
+        keep_existing=() if overwrite else ("dataset_description.json",),
     )
     if overwrite:
         _remove_stale(settings, listed, paths, sources)

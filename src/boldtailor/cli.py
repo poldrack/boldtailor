@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -109,6 +110,9 @@ def _add_execution(run):
     group.add_argument(
         "--dry-run", action="store_true", help="print the resolved plan and exit"
     )
+    group.add_argument(
+        "--quiet", action="store_true", help="log warnings only, not progress"
+    )
 
 
 def build_parser():
@@ -167,9 +171,19 @@ def settings_from_args(args):
     )
 
 
+def _configure_logging(quiet):
+    """Workflow progress to stderr; package events stay at warnings only."""
+    level = logging.WARNING if quiet else logging.INFO
+    logging.basicConfig(
+        level=logging.WARNING, stream=sys.stderr, format="%(asctime)s %(message)s"
+    )
+    logging.getLogger("boldtailor.workflow").setLevel(level)
+
+
 def _run(args, settings):
     from boldtailor.workflow import run as workflow_run
 
+    _configure_logging(args.quiet)
     if args.dry_run:
         plan = dict(
             settings=settings.to_dict(), **workflow_run.describe_inputs(settings)
