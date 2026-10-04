@@ -431,8 +431,8 @@ GLMsingle's authors have not reviewed or endorsed Boldtailor.
 select_denoising(data, *, task_model=TaskModel(), library=None,
                  counts=(0, 1, ..., 10), pool_r2_threshold="auto",
                  pcstop=1.05, significance_gate=True, gate_alpha=0.05,
-                 gate_binomial_alpha=0.05, feature_signature=None,
-                 run_labels=None) -> DenoisingResult
+                 gate_binomial_alpha=0.05, gate_noise_model="ar1",
+                 feature_signature=None, run_labels=None) -> DenoisingResult
 with_denoising(data, result, *, feature_signature=None) -> AnalysisData
 ```
 
@@ -479,7 +479,7 @@ count is chosen by GLMsingle's `pcstop` rule. The selection activity is named
 
 `significance_gate` (a bool, default `True`) applies an F-test gate that is a
 Boldtailor addition, not part of GLMsingle. If pcstop chose `k* > 0`, each
-feature pcstop scored gets an in-sample OLS F-test on all runs comparing the
+feature pcstop scored gets an in-sample F-test on all runs comparing the
 reduced model (shared task regressors with frozen HRFs, plus each run's
 baseline confounds, intercept, and missing-value indicators) with the full
 model (plus each run's first `k*` PCs). `df1 = rank(full) - rank(reduced)`
@@ -493,10 +493,17 @@ strictly between 0 and 1. Features whose stacked design is rank deficient,
 has `df2 <= 0`, or gains no PC columns (`df1 = 0`), and scoring features with
 a numerically zero target in any run (not scored by pcstop), are excluded
 from `n` (with none left, `binomial_p` is NaN). `significance_gate=False`
-returns the pcstop count. The OLS F-tests are anti-conservative under
-autocorrelated noise, and the binomial test treats features as independent.
-The F-test measures variance explained by the PCs, not task-prediction
-benefit, so PCs of independent autocorrelated noise can pass it (see the user
+returns the pcstop count. `gate_noise_model` is `"ar1"` (default) or
+`"ols"`. With `"ar1"` (a Boldtailor addition following Nilearn's first-level
+`noise_model="ar1"`), both fits are prewhitened: per run and feature the
+lag-1 coefficient is Nilearn's Yule-Walker estimate from the full model's OLS
+residuals in that run, truncated to 1/100 bins as in Nilearn's `run_glm`,
+and that run's BOLD and all design columns are whitened with
+`nilearn.glm.ARModel` before the stacked refits (same `df1`, `df2`). With
+`"ols"` the F-tests are unwhitened and anti-conservative under
+autocorrelated noise. AR(1) may under-whiten higher-order autocorrelation,
+and the binomial test treats features as independent. The F-test measures
+variance explained by the PCs, not task-prediction benefit (see the user
 guide). The selection activity records the gate under `significance_gate`.
 
 `with_denoising` checks content identity before it changes anything: run count
@@ -536,9 +543,11 @@ From `boldtailor.denoising_results`:
   Arrays are read-only and tables are copies. Scores are selection
   statistics, not independent performance estimates.
 - `SignificanceGate` holds `enabled`, `alpha`, `binomial_alpha`,
-  `pcstop_count`, `n_components`, `decision` (`"kept"`, `"rejected"`,
+  `noise_model` (`"ar1"` or `"ols"`), `pcstop_count`, `n_components`, `decision` (`"kept"`, `"rejected"`,
   `"skipped_zero_count"`, `"disabled"`), per-feature `f_statistic`,
-  `p_value`, `df1`, `df2` (NaN where not tested), the `tested` and
+  `p_value`, `df1`, `df2` (NaN where not tested), `ar_coefficients` (runs x
+  features, the binned lag-1 coefficients used; NaN where not tested or
+  with `"ols"`), the `tested` and
   `excluded` masks, `exclusions` (`(hrf_index, n_features, reason)`), `m`,
   `n`, `binomial_p` (NaN when the binomial test was not run), and the
   property `n_excluded`.

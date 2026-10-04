@@ -686,7 +686,7 @@ fixed order: this is sequential tuning, not joint optimization.
    improves on it. Unavailable counts are skipped.
 8. Significance gate (`significance_gate=True` by default; a Boldtailor
    addition, not part of GLMsingle). If pcstop chose `k* > 0`, every feature
-   pcstop scored is fit in-sample on all runs by OLS, with its frozen HRF, under
+   pcstop scored is fit in-sample on all runs, with its frozen HRF, under
    two nested models: reduced (the task regressors, shared across runs, plus
    each run's baseline confounds, intercept, and missing-value indicators)
    and full (reduced plus each run's first `k*` PCs as run-specific columns).
@@ -696,7 +696,19 @@ fixed order: this is sequential tuning, not joint optimization.
    of the `n` tested features have `p < gate_alpha` (default 0.05), `k*` is
    kept only if a one-sided binomial test of `m` out of `n` against
    `gate_alpha` gives `p < gate_binomial_alpha` (default 0.05); otherwise
-   zero PCs are chosen. Features whose stacked design is rank deficient, has
+   zero PCs are chosen.
+   By default (`gate_noise_model="ar1"`) both fits are AR(1) prewhitened, a
+   Boldtailor addition that follows Nilearn's first-level
+   `noise_model="ar1"` as far as the pooled multi-run design allows: per run
+   and feature, the lag-1 coefficient is estimated by Nilearn's Yule-Walker
+   estimator from the full model's OLS residuals in that run and truncated
+   to Nilearn's 1/100 bins; that run's BOLD and all of its design columns
+   (task, baseline confounds, intercept, indicators, PCs) are whitened by
+   Nilearn's `ARModel` (`x[t] - rho * x[t-1]`, first scan unscaled); and
+   both models are refit on the stacked whitened runs. Whitening is
+   invertible, so `df1` and `df2` are unchanged. `gate_noise_model="ols"`
+   skips the whitening.
+   Features whose stacked design is rank deficient, has
    no residual degrees of freedom, or gains no PC columns (`df1 = 0`), and
    scoring features with a numerically zero target in any run (which pcstop
    does not score), are excluded from `n` and listed in the diagnostics. With
@@ -721,7 +733,9 @@ instead of warning (see below). (f) The significance gate is not part of
 GLMsingle. It was added because the pcstop rule is relative and has no
 absolute floor: in the predeclared validation it chose 6 PCs on independent
 noise from median R² gains of about 2e-4. GLMsingle's beta-consistency
-criterion, which needs repeats, may behave differently.
+criterion, which needs repeats, may behave differently. Prewhitening the
+gate's F-tests is a further Boldtailor addition: without it the gate kept
+PCs of independent autocorrelated noise (see the caveats below).
 (g) GLMsingle's pool also requires `bright` features (mean intensity above
 10% of the 99th percentile); that criterion is dropped because the core is
 anatomy-agnostic and never infers anatomy from intensities.
@@ -738,20 +752,31 @@ divided by 100.
 by the PCs in the scoring features, not whether removing them improves task
 prediction. The two differ: the leading PCs of independent, autocorrelated
 noise span its low-frequency directions, which also carry much of each
-feature's own autocorrelated noise. In an illustrative probe
-(20k features, 12 runs, no shared noise; not a calibration), white noise was
-rejected (4.6-4.9% of features at `p < 0.05`), but independent AR(1)
-noise with coefficient 0.5 was kept (97.5-100% of features at `p < 0.05`,
-binomial p near 0). So a kept count does not show that the PCs are shared
-noise. The F-tests use OLS without prewhitening, so they are anti-conservative
-under autocorrelated noise: fMRI residuals are autocorrelated, and more
-features pass `gate_alpha` than the nominal rate would suggest. The binomial
-test treats features as independent, which is optimistic for spatially
-correlated features. Both make the gate lenient: it is meant to stop PCs that
-help no more than chance, not to certify a benefit. With few tested features
-the decision is coarse: with n = 6 and the default levels, one feature with
-`p < 0.05` gives binomial p = 0.26 (rejected) and two give 0.033 (kept). The
-tests are in-sample on the same runs that chose the count.
+feature's own autocorrelated noise. Unwhitened OLS F-tests
+(`gate_noise_model="ols"`) are anti-conservative under autocorrelated noise:
+in an illustrative probe (20k features, 12 runs, no shared noise; not a
+calibration), the OLS gate rejected white noise (4.6-4.9% of features at
+`p < 0.05`) but kept independent AR(1) noise with coefficient 0.5
+(97.5-100% of features at `p < 0.05`, binomial p near 0). That is why the
+default gate prewhitens (`gate_noise_model="ar1"`); on the predeclared
+independent AR(0.5) dataset it rejected PCs that the OLS gate kept (see
+the validation outcome). Caveats that remain with prewhitening:
+
+- The tests are in-sample, on the same runs that chose the count.
+- AR(1) may under-whiten: fMRI noise often has higher-order
+  autocorrelation that a single lag-1 coefficient does not remove. The
+  lag-1 estimate from short runs, after a fit with many regressors, is also
+  biased toward zero, and the 1/100 binning truncates toward zero. On the
+  AR(0.5) dataset the per-run median estimates were 0.27-0.38. Some
+  anti-conservatism can therefore remain.
+- The binomial test treats features as independent, which is optimistic for
+  spatially correlated features.
+- With few tested features the decision is coarse: with n = 6 and the
+  default levels, one feature with `p < 0.05` gives binomial p = 0.26
+  (rejected) and two give 0.033 (kept).
+
+So a kept count does not show that the PCs are shared noise. The gate is
+meant to stop PCs that help no more than chance, not to certify a benefit.
 
 **Missing values.** A task model with `Modulator(..., missing="indicator")`
 adds a `missing_<column>` regressor in runs that need one. When counts are
@@ -778,10 +803,13 @@ to select on.
   array per run. `n_components` is the count after the gate; `pcstop_count`
   is the count pcstop chose.
 - `significance_gate`, a `SignificanceGate` with the settings (`enabled`,
-  `alpha`, `binomial_alpha`), `pcstop_count`, `n_components`, `decision`
+  `alpha`, `binomial_alpha`, `noise_model`), `pcstop_count`, `n_components`,
+  `decision`
   (`"kept"`, `"rejected"`, `"skipped_zero_count"`, or `"disabled"`),
   per-feature `f_statistic`, `p_value`, `df1`, and `df2` (NaN where not
-  tested), the `tested` and `excluded` masks, `exclusions` (HRF index,
+  tested), `ar_coefficients` (runs x features: the binned lag-1
+  coefficients used for prewhitening; NaN where not tested or with
+  `"ols"`), the `tested` and `excluded` masks, `exclusions` (HRF index,
   number of features, reason), `m`, `n`, and `binomial_p`.
 - `onoff_r2`, `noise_pool`, `scoring_mask`, `scoring_fallback`, and `scored`
   (the scoring mask minus zero-target features).
@@ -832,11 +860,27 @@ pcstop chose 1 PC and all 6 scoring features had `p < 0.05` (binomial
 p = 1.6e-8), so the gate kept it. These are two synthetic datasets, not a
 calibration of the gate.
 
+The gate was then made AR(1) prewhitened by default, with criteria declared
+before the run: a new no-benefit dataset (seed 20261006, the layout of the
+white-noise one, but each feature's noise an independent AR(0.5) process with
+no shared component) must choose zero PCs, the white-noise no-benefit data
+must still choose zero with both libraries, and the recovery data must still
+choose a positive count and pass all four checks. Rerun once, all of them
+pass. On the AR(0.5) data pcstop chose 4 PCs; with prewhitening 1 of 12
+scoring features had `p < 0.05` (binomial p = 0.46), so the gate chose 0,
+while the OLS gate (`gate_noise_model="ols"`, reported for information) had
+8 of 12 (binomial p = 1.6e-8) and would have kept 4. On the white-noise data
+the prewhitened gate again found 1 of 10 (binomial p = 0.40) with both
+libraries, and on the recovery data 6 of 6 (binomial p = 1.6e-8), keeping
+1 PC. These are three synthetic datasets, not a calibration.
+
 **Provenance.** The selection records the task model, library, ON-OFF R²,
 threshold rule, pool and scoring masks, fallback, HRF assignments, per-count
-`perf` and `curve`, `pcstop`, the significance gate (settings, `pcstop_count`,
-decision, `m`, `n`, binomial p-value, exclusions, and fingerprints of the F
-and p values), PC fingerprints, baseline confounds, and folds.
+`perf` and `curve`, `pcstop`, the significance gate (settings, the noise
+model and its AR(1) estimation and bins, per-run minimum, median, and maximum
+lag-1 coefficients over tested features, `pcstop_count`, decision, `m`, `n`,
+binomial p-value, exclusions, and fingerprints of the F and p values and the
+coefficients), PC fingerprints, baseline confounds, and folds.
 `with_denoising()` checks that `data` is the analysis the result was selected
 on: same runs in the same order, time grids, signals in feature order,
 baseline confounds, and events. It rejects applying a result twice and

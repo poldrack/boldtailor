@@ -84,23 +84,30 @@ Deviations, each with its reason:
   equal.
 - **Significance gate.** This gate is not part of GLMsingle. By default
   (`significance_gate=True`) the pcstop count `k*` is kept only if adding
-  each run's first `k*` PCs passes per-feature F-tests: in-sample OLS fits on
-  all runs, nested models with and without the PCs, frozen HRFs. More
+  each run's first `k*` PCs passes per-feature F-tests: in-sample fits on
+  all runs, nested models with and without the PCs, frozen HRFs. By default
+  (`gate_noise_model="ar1"`, also a Boldtailor addition) the fits are AR(1)
+  prewhitened per run and feature, following Nilearn's first-level
+  `noise_model="ar1"` (Yule-Walker lag-1 coefficient from the full model's
+  OLS residuals, 1/100 bins, `ARModel` whitening of each run's BOLD and all
+  design columns); `gate_noise_model="ols"` skips it. More
   scoring features must have `p < gate_alpha` (0.05) than chance allows,
   by a one-sided binomial test at `gate_binomial_alpha` (0.05); otherwise
   zero PCs are chosen. The reason: pcstop is relative and has no absolute
   floor, so with time-series scoring it chose 6 PCs on independent noise in
-  the predeclared validation. The F-tests are anti-conservative under
-  autocorrelated noise (OLS, no prewhitening), and the binomial test treats
-  features as independent, which is optimistic for correlated features; the
-  gate is deliberately lenient. The F-test measures variance explained by the
+  the predeclared validation. The F-test measures variance explained by the
   PCs in the scoring features, not task-prediction benefit, and the leading
   PCs of independent autocorrelated noise span its low-frequency directions.
-  In an illustrative probe (20k features, 12 runs, no shared noise; not a
-  calibration) white noise was rejected (4.6-4.9% of features at `p < 0.05`)
-  but independent AR(1) noise with coefficient 0.5 was kept (97.5-100% of
-  features at `p < 0.05`, binomial p near 0). With few tested features the
-  decision is coarse: with n = 6, one feature can flip it.
+  Unwhitened OLS F-tests are anti-conservative under autocorrelated noise:
+  in an illustrative probe (20k features, 12 runs, no shared noise; not a
+  calibration) the OLS gate rejected white noise (4.6-4.9% of features at
+  `p < 0.05`) but kept independent AR(1) noise with coefficient 0.5
+  (97.5-100% of features at `p < 0.05`, binomial p near 0); hence the
+  prewhitening. Remaining caveats: the tests are in-sample; AR(1) may
+  under-whiten higher-order autocorrelation (and short-run lag-1 estimates
+  are biased toward zero); the binomial test treats features as independent,
+  which is optimistic for correlated features; and with few tested features
+  the decision is coarse: with n = 6, one feature can flip it.
   `significance_gate=False` gives GLMsingle's pcstop-only choice.
 
 Boldtailor's stage is not run by default or in the NSD example, and it is
@@ -111,7 +118,10 @@ repository establish implementation behavior only: with shared noise one PC
 was chosen, the gate kept it, and coefficient and outer-run recovery improved;
 with independent noise only, pcstop chose 6 PCs on chance gains of about 2e-4
 in median R², and the gate rejected them (1 of 10 features with `p < 0.05`),
-so zero PCs were chosen. Without the gate this check failed. See the
+so zero PCs were chosen. Without the gate this check failed. On a further
+predeclared dataset with independent AR(0.5) noise and no shared component,
+pcstop chose 4 PCs; the prewhitened gate rejected them (1 of 12 features),
+whereas the OLS gate would have kept them (8 of 12). See the
 [user guide](user-guide.md#task-guided-denoising).
 [GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
 [GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)
