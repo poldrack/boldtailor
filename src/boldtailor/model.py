@@ -26,29 +26,50 @@ _MISSING_POLICIES = ("error", "indicator")
 
 
 _KINDS = ("numeric", "categorical")
-_MISSING_TEXT = frozenset({"", "n/a"})
+_MISSING_TEXT = frozenset({"", "n/a", "nan"})
 
 
 def level_name(value: object) -> str | None:
-    """Canonical string for one categorical value, or None when it is missing."""
-    if value is None:
-        return None
+    """Canonical string for one categorical value, or None when it is missing.
+
+    Numbers and strings that parse as numbers share one form (1, 1.0 and "1.0"
+    all become "1"), so a level written differently across runs stays one
+    level. NaN, None, "" and "n/a" are missing; infinities and booleans are
+    rejected with a ValueError rather than silently becoming levels or gaps.
+    """
     if isinstance(value, str):
         text = value.strip()
-        return None if text.lower() in _MISSING_TEXT else text
-    if is_real(value):
-        number = float(value)
-        if not np.isfinite(number):
+        if text.lower() in _MISSING_TEXT:
             return None
-        return str(int(number)) if number.is_integer() else repr(number)
+        number = _parse_number(text)
+        return text if number is None else _number_name(number)
+    if value is None:
+        return None
+    if is_real(value):
+        return _number_name(float(value))
     raise ValueError(f"categorical value {value!r} must be a string or a number")
 
 
-def _sorted_levels(levels):
+def _parse_number(text: str) -> float | None:
     try:
-        return tuple(sorted(levels, key=float))
+        return float(text)
     except ValueError:
-        return tuple(sorted(levels))
+        return None
+
+
+def _number_name(number: float) -> str | None:
+    if np.isnan(number):
+        return None
+    if np.isinf(number):
+        raise ValueError(f"categorical value {number!r} must be finite")
+    return str(int(number)) if number.is_integer() else repr(number)
+
+
+def _sorted_levels(levels):
+    """Numeric order when every level is a number, else lexical order."""
+    if all(_parse_number(level) is not None for level in levels):
+        return tuple(sorted(levels, key=float))
+    return tuple(sorted(levels))
 
 
 @dataclass(frozen=True)
