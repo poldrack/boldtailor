@@ -120,6 +120,10 @@ def test_missing_bids_dir_is_an_error(tmp_path):
             Modulator("trial_type", kind="categorical", reference="face"),
         ),
         (
+            "c:categorical,reference=a=b",
+            Modulator("c", kind="categorical", reference="a=b"),
+        ),
+        (
             "cond:indicator,categorical",
             Modulator("cond", kind="categorical", missing="indicator"),
         ),
@@ -139,6 +143,7 @@ def test_parse_modulator_options(text, expected):
         "rt:reference=a",
         "rt:categorical,reference=",
         "rt:a:b",
+        "rt:indicator,",
     ],
 )
 def test_parse_modulator_rejects_bad_options(bad):
@@ -151,6 +156,19 @@ def test_modulator_text_rejects_unexpressible_reference(level):
     mod = Modulator("cond", kind="categorical", reference=level)
     with pytest.raises(ValueError, match="modulator reference"):
         modulator_text(mod)
+
+
+@pytest.mark.parametrize(
+    "mod",
+    [
+        Modulator("c", kind="categorical", reference="a,b"),
+        Modulator("c", kind="categorical", reference="a:b"),
+        Modulator("a:b"),
+    ],
+)
+def test_settings_reject_modulators_the_cli_cannot_express(bids, mod):
+    with pytest.raises(ValueError, match="modulators"):
+        required(bids, modulators=(mod,))
 
 
 @pytest.mark.parametrize(
