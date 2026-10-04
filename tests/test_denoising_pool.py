@@ -33,7 +33,7 @@ def selection(fixture):
 
 
 def with_scores(selection, scores, indices=None):
-    indices = selection.hrf_indices if indices is None else indices
+    indices = np.zeros(len(scores), int) if indices is None else indices
     return replace(selection, cv_r2=np.asarray(scores, float), hrf_indices=indices)
 
 
@@ -46,8 +46,8 @@ def oracle_normalized_pool(y, confounds):
     return residual[:, keep] / norms[keep]
 
 
-def projector(basis):
-    q = orth(basis)
+def projector(basis, rcond=None):
+    q = orth(basis, rcond=rcond)
     return q @ q.T
 
 
@@ -222,7 +222,9 @@ def test_rank_two_oracle_span_orthonormal_and_nuisance_orthogonal(rank_two):
     np.testing.assert_allclose(c.T @ c, np.eye(2), atol=1e-12)
     nuisance = np.column_stack([confounds, np.ones(len(y))])
     np.testing.assert_allclose(nuisance.T @ c, 0, atol=1e-10)
-    np.testing.assert_allclose(projector(c), projector(normalized), atol=1e-10)
+    oracle = projector(normalized, rcond=1e-9)  # roundoff of tiny columns
+    assert np.linalg.matrix_rank(oracle) == 2
+    np.testing.assert_allclose(projector(c), oracle, atol=1e-10)
 
 
 def test_singular_values_are_those_of_the_normalized_projected_pool(rank_two):
