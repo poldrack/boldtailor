@@ -106,8 +106,12 @@ def test_missing_sessions_run_the_package_workflow_with_overwrite(
         _copy_saved_session(root, sessions[0], settings.session)
 
     monkeypatch.setattr(multisession_workflow, "run_workflow", run_workflow)
+    # Inputs live outside the output root: outputs may never overlap them.
+    bids = root.parent / f"{root.name}_bids"
+    prep = bids / "derivatives" / "fmriprep"
+    prep.mkdir(parents=True)
     config = dict(
-        bids_root=str(root), fmriprep_root=str(root), output_root=str(root), n_jobs=1
+        bids_root=str(bids), fmriprep_root=str(prep), output_root=str(root), n_jobs=1
     )
     status = multisession_workflow.ensure_session_outputs(
         config, [*sessions, "ses-nsd99"], estimators=["OLS"]
@@ -120,7 +124,7 @@ def test_missing_sessions_run_the_package_workflow_with_overwrite(
         "ses-nsd99",
         "nsdcore",
     )
-    assert settings.bids_dir == settings.output_dir == root
+    assert settings.bids_dir == bids and settings.output_dir == root
     assert settings.surface_maps is False
     assert settings.existing_results == "overwrite"
     assert settings.n_jobs == 1
