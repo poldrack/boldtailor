@@ -520,3 +520,46 @@ the gate, its parameters, that OLS F-tests are anti-conservative under
 autocorrelated noise (the user's lenient-threshold, OLS choice), and that the
 binomial test treats features as independent (optimistic for correlated
 features); state it as a deviation from GLMsingle with the reason.
+
+## Amendment (2026-10-04, fourth): AR(1) prewhitening for the gate
+
+The final whole-branch review showed the OLS F-test gate keeps nearly any
+count on independent autocorrelated noise (97.5-100% of features p < 0.05
+under AR(0.5) noise with no shared component), because leading PCs of
+autocorrelated noise span low-frequency directions. The user chose AR(1)
+prewhitening.
+
+## Task 8: AR(1)-prewhitened F-test gate
+
+**Rule (binding).** Replace the gate's OLS F-test with an AR(1)-prewhitened
+one, following Nilearn's first-level AR(1) convention as closely as the
+pooled multi-run design allows and reusing Nilearn's AR estimation helpers
+where possible (no hand-rolled Yule-Walker if Nilearn provides it):
+per run and feature, estimate the lag-1 autocorrelation from the full
+model's OLS residuals (Nilearn bins/rounds the estimate; follow its binning
+if reusing its helper), whiten that run's data and all design columns
+(task, run nuisance, indicators, PCs) with the AR(1) whitening transform,
+then compute the nested F-test on the stacked whitened models exactly as
+before (same df definitions). Add `gate_noise_model: str = "ar1"`
+(`"ols"` keeps the previous behaviour); validate; record the noise model and
+per-run rho summaries in the gate diagnostics and provenance.
+
+**Tests (RED first).** Independent oracle: whiten with an explicitly
+constructed AR(1) transform (e.g. Cholesky/Prais-Winsten built from the
+estimated rho) and fit with separate `np.linalg.lstsq`, compare F/p; whitened
+white-noise data leaves results close to OLS.
+
+**Validation (predeclared here, before running).** Keep seeds and effect
+sizes of Task 4's datasets unchanged. Add one new no-benefit dataset, seed
+20261006, with the same layout as the seed-20261005 no-benefit dataset except
+that each feature's noise is an independent AR(1) process with coefficient
+0.5 (no shared component). Criteria with the default gate (ar1): (1) the
+AR(0.5) no-benefit dataset chooses 0 components; (2) the white-noise
+no-benefit dataset (test and default library) still chooses 0; (3) the
+shared-noise recovery dataset still chooses a positive count and passes all
+four recovery checks. Also report (not a pass/fail criterion) the gate with
+`gate_noise_model="ols"` on the AR(0.5) dataset. If a criterion fails,
+record it xfail-strict and report; never retune. Update docs: the gate now
+prewhitens by default; replace the I2 caveat with the AR(1) behaviour and
+the remaining caveats (in-sample, AR(1) may under-whiten higher-order
+autocorrelation, binomial independence optimism, small-n coarseness).
