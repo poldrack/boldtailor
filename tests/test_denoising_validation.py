@@ -298,3 +298,40 @@ def test_gate_module_is_described_as_a_boldtailor_addition():
     docstring = Path("src/boldtailor/_denoising_gate.py").read_text().split('"""')[1]
     assert "Boldtailor addition" in docstring
     assert "not part of GLMsingle" in docstring
+
+
+def denoising_doc_sections():
+    guide = Path("docs/user-guide.md").read_text().split("## Task-guided denoising")[1]
+    guide = guide.split("\n## ", 1)[0]
+    comparison = Path("docs/glmsingle-comparison.md").read_text()
+    comparison = comparison.split("## Data-derived noise regressors", 1)[1]
+    return guide, comparison.split("\n## ", 1)[0]
+
+
+def test_docs_state_what_the_gate_measures():
+    """The F-test measures PC variance explained; AR(1) noise can pass it."""
+    for text in denoising_doc_sections():
+        for phrase in ("variance explained", "AR(1)", "illustrative", "n = 6"):
+            assert phrase in text, phrase
+
+
+def test_docs_list_the_remaining_pool_deviations():
+    for text in denoising_doc_sections():
+        for phrase in (
+            "bright",
+            "defined HRF",
+            "subsample",
+            "0.5",
+            "percent",
+            "divided by 100",
+        ):
+            assert phrase in text, phrase
+
+
+def test_denoising_docs_say_per_feature_not_voxelwise():
+    texts = list(denoising_doc_sections())
+    for module in ("denoising", "_denoising_gate"):
+        source = Path(f"src/boldtailor/{module}.py").read_text()
+        texts.append(source.split('"""', 2)[1])
+    for text in texts:
+        assert "voxelwise" not in text.lower()
