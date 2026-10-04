@@ -734,13 +734,13 @@ is raised; GLMsingle warns and continues.
 fixed `pool_r2_threshold` copied from GLMsingle's `brainR2` must be
 divided by 100.
 
-**Significance gate caveats.** The gate's F-tests measure the variance
-explained by the PCs in the scoring features, not whether removing them
-improves task prediction. The two differ: the leading PCs of independent,
-autocorrelated noise span its low-frequency directions, which
-also carry much of each feature's own autocorrelated noise. In an illustrative
-probe (20k features, 12 runs, no shared noise; not a calibration), white
-noise was rejected (4.6-4.9% of features at `p < 0.05`), but independent AR(1)
+**Significance gate caveats.** The F-tests measure the variance explained
+by the PCs in the scoring features, not whether removing them improves task
+prediction. The two differ: the leading PCs of independent, autocorrelated
+noise span its low-frequency directions, which also carry much of each
+feature's own autocorrelated noise. In an illustrative probe
+(20k features, 12 runs, no shared noise; not a calibration), white noise was
+rejected (4.6-4.9% of features at `p < 0.05`), but independent AR(1)
 noise with coefficient 0.5 was kept (97.5-100% of features at `p < 0.05`,
 binomial p near 0). So a kept count does not show that the PCs are shared
 noise. The F-tests use OLS without prewhitening, so they are anti-conservative
