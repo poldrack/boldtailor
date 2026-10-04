@@ -411,6 +411,72 @@ level; `task` is the reference-level response. `kind="numeric"` takes neither
 value (`1`, `"1"`, `1.0` give `"1"`) or `None` for a missing value (`n/a`, `""`,
 NaN) and raises `ValueError` for infinities and booleans.
 
+## Task-guided denoising
+
+From `boldtailor.denoising` (opt-in; see the
+[user guide](user-guide.md#task-guided-denoising)):
+
+```text
+select_denoising(data, *, brain_mask, task_model=TaskModel(), library=None,
+                 counts=(0, 1, 2, 4, 6, 8, 10), pool_r2_threshold=0.0,
+                 score_tolerance=0.001, feature_signature=None,
+                 run_labels=None) -> DenoisingResult
+with_denoising(data, result, *, feature_signature=None) -> AnalysisData
+```
+
+`select_denoising` needs at least three runs. `brain_mask` is a required
+Boolean vector with one entry per feature. `counts` must contain 0, be
+nonnegative integers (not Booleans), and is sorted and deduplicated.
+`pool_r2_threshold` must be finite. `score_tolerance` must be finite and
+nonnegative. `library=None` uses `default_hrf_library()`. Every input is
+validated before any fitting.
+
+The function chooses one PC count by leave-one-run-out held-out task
+prediction. HRFs come from training-only `select_hrfs`, and the pool and
+scoring masks are frozen across counts. It then rebuilds the pool and
+per-run PCs from all runs. The pool statistic is the winning HRF's
+leave-one-run-out task-model R², with missing-value indicators projected out
+of the held-out denominator as well as the prediction. Without indicators it
+equals `cv_r2`. The selection activity is named `denoising_selection`.
+
+`with_denoising` checks content identity before it changes anything: run count
+and order, features, rows, time grids, signals, baseline confounds, and events.
+`feature_signature` must equal `result.feature_signature`. Re-application and
+column-name collisions raise. It returns new `AnalysisData` in which each run's
+confounds are the original columns followed by `denoise_pc_000`, ...
+(`component_names(count)`, prefix `COMPONENT_PREFIX`). Signals, events, and
+timing are unchanged. Each run's confounds `SourceRef` (signal when there are
+no confounds) gains a `denoising_augmentation` annotation, which holds
+`selection_execution_id`, `component_fingerprints`, and `n_components`. The
+other source fields are unchanged, so downstream analysis ids distinguish
+augmentations. Provenance gains a `denoising_augmentation` activity.
+
+From `boldtailor.denoising_results`:
+
+- `DenoisingResult` holds:
+  - the choice: `n_components`, `counts`, `pool_r2_threshold`, `score_tolerance`
+  - the final all-run masks and statistic: `noise_pool`, `scoring_mask`,
+    `pool_r2`
+  - `initial_selection` (`HrfSelectionResult`)
+  - `run_components`, one `(scans, n_components)` array per run
+  - `components` (`PcaDiagnostics`)
+  - `folds` (`DenoisingFold` per held-out run)
+  - `run_labels`, `feature_signature`, `source_identity`, and `provenance`
+  - the properties `candidate_scores` (`count`, `eligible`, `mean_r2`,
+    `reason`), `fold_scores` (`validation_run`, `count`, `eligible`, `reason`,
+    `mean_r2`, `n_scored`, `n_zero_target`), `component_names`,
+    `selection_cv_r2`, and `initial_hrf_indices`
+
+  Arrays are read-only and tables are copies. Scores are selection
+  statistics, not independent performance estimates.
+- `DenoisingFold` holds `validation_run`, `training_runs`, `pool`, `scoring`,
+  `scored`, `zero_target`, `pool_r2`, `hrf_indices`, and `components`. Every
+  field is computed from that fold's training runs, except the held-out
+  scoring flags.
+- `PcaDiagnostics` holds `run_labels`, `pool_size`, `ranks`,
+  `singular_values`, `rank_tolerances`, and `retained_columns`. `table()`
+  returns one row per run.
+
 ## Source records and saving
 
 From `boldtailor.provenance`:

@@ -18,7 +18,7 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 | HRF library | Default `default_hrf_library()`: canonical SPM, 512 timing-space Sobol double-gamma candidates, and GLMsingle's 20 empirical HRFs; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
 | Command line | `boldtailor run --bids-dir ... --subject ... --session ... --task ...` runs the whole NSD-style workflow and writes a BIDS derivative with an HTML report | A MATLAB or Python function call, `GLMestimatesingletrial`, with options passed as a struct or dict |
 | HRF selection | Predict each omitted run using task-model amplitudes learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
-| Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
+| Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators. Optional `select_denoising()` appends run-wise PCs of a task-guided noise pool (task-model R² at or below 0.0), with the count chosen by held-out task prediction | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
 | Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |
 | Cross-validation target | HRFs: nuisance-adjusted task-model time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
 | Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
@@ -28,6 +28,27 @@ cross-validation criterion. This distinction is explicit in the
 [GLMsingle FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#why-isn-t-the-hrf-selection-cross-validated).
 Boldtailor's selection and final fitting procedures are described in the
 [user guide](user-guide.md#selecting-an-hrf-for-each-location).
+
+## Data-derived noise regressors
+
+Boldtailor has an optional, task-guided pool, `select_denoising()`, that
+borrows GLMdenoise's structure. It finds a noise pool, computes temporal PCs
+of that pool in each run, and chooses one PC count by cross-validation. The
+scoring criteria are different from GLMsingle's. Boldtailor defines its pool
+by the time-series task-model R² of an initial training-only HRF selection
+(threshold 0.0 by default). It chooses the count by held-out task-model
+prediction against a target that is fixed across counts. GLMsingle defines
+its pool by ON–OFF R² and chooses the count by its own cross-validation
+criterion. Boldtailor's stage is not run by default or in the NSD example,
+and it is tuned sequentially: HRFs and the pool are frozen while counts are
+compared. Pool refinement, voxelwise counts, and threshold tuning are not
+implemented.
+No matched comparison with GLMsingle's denoising has been run. Synthetic checks in
+this repository establish implementation behavior only, and they include a
+predeclared case where the threshold-0 pool nearly collapses under shared
+noise. See the [user guide](user-guide.md#task-guided-denoising).
+[GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
+[GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)
 
 ## What repeated conditions mean
 
