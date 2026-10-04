@@ -313,7 +313,7 @@ def _assert_metadata(files, library_config, curves):
             p for p in files if p.name.endswith("_desc-boldtailor_metadata.json")
         ).read_text()
     )
-    assert metadata["regressors"] == ["task", "response_time", "trial_type"]
+    assert metadata["regressors"] == ["task", "response_time", "trial_type[1]"]
     assert metadata["retained_scans"] == [95, 94, 93, 95]
     assert metadata["library_candidates"] == 5
     for name, value in library_config.items():

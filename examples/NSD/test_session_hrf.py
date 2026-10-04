@@ -321,7 +321,7 @@ def test_rt_switch_changes_request_identity_and_cache_metadata(
     metadata = json.loads(without[0].cache_path.read_text())
     without_rt = selection_task_model(detect_task_model([events]), False)
     assert metadata["request"]["task_model"] == without_rt.to_dict()
-    assert metadata["request"]["task_model"]["regressors"] == ["task", "trial_type"]
+    assert metadata["request"]["task_model"]["regressors"] == ["task", "trial_type[1]"]
     assert np.isfinite(without[0].maps[0, :3]).all()
 
 
