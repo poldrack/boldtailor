@@ -799,7 +799,7 @@ def _ridge_metadata(settings, task_model, beta_models):
         percentile=settings.ridge_percentile,
         percentile_role=definition.get("percentile_role", "selection_objective"),
         fraction_norm_basis=definition.get("fraction_norm_basis"),
-        encoding_predictors=["task", *[m.column for m in task_model.modulators]],
+        encoding_predictors=list(task_model.regressor_names),
         task="Pooled training beta mean, used as the prediction reference level",
         outer_splits="odd_to_even_and_even_to_odd",
         final_fit="Separate all-run tuning and refit; final RT correlations are descriptive",

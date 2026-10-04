@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.data import from_arrays
-from boldtailor.model import ModelSpec, Modulator, TaskModel
+from boldtailor._task_design import categorical_names
+from boldtailor.model import ModelSpec, Modulator, TaskModel, level_name
 from boldtailor.workflow.files import (
     discover_runs,
     load_runs,
@@ -21,49 +22,66 @@ class InputError(ValueError):
     """Inputs are missing or malformed; the CLI maps this to exit code 2."""
 
 
-TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
-_AUTOMATIC = (("response_time", "indicator"), ("trial_type", "error"))
+TRIAL_TYPE_NOTE = "trial_type has fewer than two levels; not used as a modulator"
 
 
-def _binary(table):
-    values = pd.to_numeric(table["trial_type"], errors="coerce").to_numpy(float)
-    return bool(np.isin(values, [0, 1]).all())
+def observed_levels(tables, column):
+    """Canonical non-missing level names of ``column`` across every table."""
+    names = {level_name(v) for table in tables for v in table[column]}
+    names.discard(None)
+    return names
 
 
-def _detectable(column, tables):
-    """Present in every run; trial_type must also be numeric 0/1 throughout."""
-    if not all(column in t.columns for t in tables):
-        return False
-    return column != "trial_type" or all(_binary(t) for t in tables)
+def _everywhere(column, tables):
+    return bool(tables) and all(column in t.columns for t in tables)
+
+
+def _automatic(tables):
+    modulators = []
+    if _everywhere("response_time", tables):
+        modulators.append(Modulator("response_time", missing="indicator"))
+    if _everywhere("trial_type", tables):
+        levels = observed_levels(tables, "trial_type")
+        if len(levels) >= 2:
+            modulators.append(
+                Modulator("trial_type", kind="categorical", levels=tuple(levels))
+            )
+    return tuple(modulators)
+
+
+def _resolved(modulator, tables):
+    if modulator.resolved:
+        return modulator
+    try:
+        return modulator.with_levels(observed_levels(tables, modulator.column))
+    except ValueError as error:
+        raise InputError(f"modulator {modulator.column!r}: {error}") from error
 
 
 def detect_task_model(events_tables, modulators=None, labels=None):
     """The task model from event columns, or explicit modulators checked per run.
 
-    Detection takes ``response_time`` and a binary 0/1 ``trial_type``; ``labels``
-    (BIDS run labels) name the run in errors.
+    Detection takes ``response_time`` and a categorical ``trial_type`` with at
+    least two levels; unresolved categorical modulators take their levels from
+    every run. ``labels`` (BIDS run labels) name the run in errors.
     """
     tables = list(events_tables)
     if modulators is None:
-        modulators = tuple(
-            Modulator(column, missing=missing)
-            for column, missing in _AUTOMATIC
-            if _detectable(column, tables)
-        )
+        modulators = _automatic(tables)
     labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
     for label, table in zip(labels, tables, strict=True):
         missing = [m.column for m in modulators if m.column not in table.columns]
         if missing:
             raise InputError(f"{label} events lack modulator column(s) {missing}")
-    return TaskModel(tuple(modulators))
+    return TaskModel(tuple(_resolved(m, tables) for m in modulators))
 
 
 def task_model_notes(events_tables, modulators=None):
     """Why automatic detection left out a column that every run has."""
     tables = list(events_tables)
-    present = all("trial_type" in t.columns for t in tables)
-    if modulators is None and present and not _detectable("trial_type", tables):
-        return [TRIAL_TYPE_NOTE]
+    if modulators is None and _everywhere("trial_type", tables):
+        if len(observed_levels(tables, "trial_type")) < 2:
+            return [TRIAL_TYPE_NOTE]
     return []
 
 
@@ -103,19 +121,28 @@ def _columns(task_model):
     return {m.column for m in task_model.modulators}
 
 
+def _check_response_time(events):
+    rt = _numeric_column(events, "response_time")
+    if not (np.isfinite(rt) & (rt > 0)).any():
+        raise ValueError(
+            "response_time needs positive finite observations for the RT effect"
+        )
+
+
 def validate_glm_events(events, task_model):
-    """Require an observed positive RT and both binary trial_type codes, if modeled."""
-    columns = _columns(task_model)
-    if "response_time" in columns:
-        rt = _numeric_column(events, "response_time")
-        if not (np.isfinite(rt) & (rt > 0)).any():
-            raise ValueError(
-                "response_time needs positive finite observations for the RT effect"
-            )
-    if "trial_type" in columns:
-        trial_type = _numeric_column(events, "trial_type")
-        if not np.isfinite(trial_type).all() or set(trial_type) != {0, 1}:
-            raise ValueError("trial_type must contain both binary codes 0 and 1")
+    """Require an observed positive RT and every categorical level, if modeled.
+
+    Other numeric modulators must parse as numbers.
+    """
+    for modulator in task_model.modulators:
+        if modulator.column not in events:
+            raise ValueError(f"Missing {modulator.column}")
+        if modulator.kind == "categorical":
+            categorical_names(events[modulator.column], modulator)
+        elif modulator.column == "response_time":
+            _check_response_time(events)
+        else:
+            _numeric_column(events, modulator.column)
 
 
 def _missing_nonpositive_rt(events):
@@ -253,7 +280,12 @@ def make_blocks(runs, *, block_size=4096, max_grayordinates=None):
     return blocks
 
 
-def _run_row(run, columns):
+def _level_counts(run, modulator):
+    names = [level_name(v) for v in run.events[modulator.column]]
+    return {f"n_{modulator.column}_{lv}": names.count(lv) for lv in modulator.levels}
+
+
+def _run_row(run, task_model):
     row = dict(
         run=run.label,
         trials=len(run.events),
@@ -262,14 +294,13 @@ def _run_row(run, columns):
         dropped_scans=len(run.retained_frames) and int(run.retained_frames[0]),
         first_frame_seconds=run.frame_times[0],
     )
-    if "response_time" in columns:
+    if "response_time" in _columns(task_model):
         row["mean_rt_seconds"] = run.events.response_time.mean()
-    if "trial_type" in columns:
-        row["type_0"] = int((run.events.trial_type == 0).sum())
-        row["type_1"] = int((run.events.trial_type == 1).sum())
+    for modulator in task_model.modulators:
+        if modulator.kind == "categorical":
+            row.update(_level_counts(run, modulator))
     return row
 
 
 def run_summary(runs, task_model):
-    columns = _columns(task_model)
-    return pd.DataFrame([_run_row(r, columns) for r in runs])
+    return pd.DataFrame([_run_row(r, task_model) for r in runs])
