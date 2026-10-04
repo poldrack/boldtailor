@@ -452,3 +452,55 @@ def test_missing_or_ambiguous_meshes_skip_surface_figures_with_a_note(
     assert "surface" in notes
     assert ("multiple" in notes) == bool(copies)
     assert "surface" in result.report_path.read_text()
+
+
+def _predictor_table(result):
+    path = next(p for p in result.paths if p.name.endswith("_predictors.tsv"))
+    return pd.read_csv(path, sep="\t")
+
+
+def test_fractional_cv_tunes_with_categorical_trial_type_indicators(
+    six_run_dataset, settings_for, tmp_path
+):
+    from tests.workflow.synthetic_bids import rewrite_events
+
+    root, _ = six_run_dataset
+    rewrite_events(root, _three_level_events)
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "out",
+        hrf_library="canonical",
+        ridge_mode="fractional_cv",
+        ridge_fractions=(0.4, 1.0),
+        block_size=4,
+    )
+    columns = _predictor_table(workflow_run.run_workflow(settings)).columns
+    assert {"trial_type[house]", "trial_type[scrambled face]"} <= set(columns)
+
+
+def test_cv_ridge_with_categorical_indicator_missing_row(
+    six_run_dataset, settings_for, tmp_path
+):
+    from boldtailor.model import Modulator
+    from tests.workflow.synthetic_bids import rewrite_events
+
+    def with_gap(table):
+        table = _three_level_events(table).astype({"trial_type": object})
+        table.loc[0, "trial_type"] = "n/a"
+        return table
+
+    root, _ = six_run_dataset
+    rewrite_events(root, with_gap)
+    settings = settings_for(
+        root,
+        output_dir=tmp_path / "out",
+        hrf_library="canonical",
+        ridge_mode="cv",
+        ridge_alphas=(0.1, 1.0),
+        block_size=4,
+        modulators=(Modulator("trial_type", kind="categorical", missing="indicator"),),
+    )
+    table = _predictor_table(workflow_run.run_workflow(settings))
+    assert "trial_type[house]" in table.columns
+    assert table["trial_type[house]"].isna().sum() >= 1
+    assert not table.usable.all()

@@ -291,3 +291,65 @@ def test_no_modulators_means_a_task_only_model(four_runs, settings_for):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root, modulators=()))
     assert inputs.detect_task_model([r.events for r in runs], ()) == TaskModel()
+
+
+REMEDY = "--modulator trial_type:categorical,indicator"
+
+
+def test_auto_trial_type_with_missing_rows_names_run_count_and_remedy(
+    four_runs, settings_for
+):
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.loc[[0, 1], "trial_type"] = np.nan
+    table.to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError) as raised:
+        inputs.load_session(settings_for(root))
+    message = str(raised.value)
+    assert "run-02" in message and "2 missing" in message
+    assert REMEDY in message and "--no-modulators" in message
+
+
+def test_auto_trial_type_blocked_design_gets_the_remedy(four_runs, settings_for):
+    root, _ = four_runs
+    for number, label in ((1, "a"), (2, "b")):
+        path = next(root.rglob(f"*run-0{number}_events.tsv"))
+        table = pd.read_csv(path, sep="\t")
+        table.assign(trial_type=label).to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match="no 'trial_type' trials") as raised:
+        inputs.load_session(settings_for(root))
+    assert REMEDY in str(raised.value)
+
+
+def test_explicit_modulators_get_no_automatic_detection_hint(four_runs, settings_for):
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.loc[0, "trial_type"] = np.nan
+    table.to_csv(path, sep="\t", index=False)
+    settings = settings_for(
+        root, modulators=(Modulator("trial_type", kind="categorical"),)
+    )
+    with pytest.raises(inputs.InputError) as raised:
+        inputs.load_session(settings)
+    assert "detected automatically" not in str(raised.value)
+
+
+def test_boolean_trial_type_error_names_run_and_column(four_runs, settings_for):
+    root, _ = four_runs
+    path = next(root.rglob("*run-03_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.assign(trial_type=[True, False] * 3).to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match="run-03.*trial_type"):
+        inputs.load_session(settings_for(root))
+
+
+def test_numeric_trial_type_on_strings_suggests_categorical(four_runs, settings_for):
+    root, _ = four_runs
+    from tests.workflow.synthetic_bids import face_house_events, rewrite_events
+
+    rewrite_events(root, face_house_events)
+    settings = settings_for(root, modulators=(Modulator("trial_type"),))
+    with pytest.raises(inputs.InputError, match="numeric.*:categorical"):
+        inputs.load_session(settings)

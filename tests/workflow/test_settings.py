@@ -243,3 +243,9 @@ def test_output_dir_overlap_is_checked_on_resolved_paths(bids):
 def test_ridge_grids_are_validated(bids, kwargs):
     with pytest.raises(ValueError, match=next(iter(kwargs))):
         required(bids, **kwargs)
+
+
+def test_settings_reject_resolved_categorical_modulators(bids):
+    mod = Modulator("cond", kind="categorical", levels=("a", "b"))
+    with pytest.raises(ValueError, match="modulators.*levels.*events"):
+        required(bids, modulators=(mod,))
