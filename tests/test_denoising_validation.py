@@ -275,3 +275,33 @@ def test_glmsingle_attribution_ships_and_is_cited():
         docstring = source.split('"""', 2)[1]
         assert "LICENSES/GLMsingle-BSD-3-Clause.txt" in docstring, module
         assert "10.7554/eLife.77599" in docstring, module
+
+
+def test_docs_describe_the_significance_gate():
+    """Task 7: the gate, its settings, OLS/binomial caveats, and the deviation."""
+    guide = Path("docs/user-guide.md").read_text().split("## Task-guided denoising")[1]
+    guide = guide.split("\n## ", 1)[0]
+    api = Path("docs/api.md").read_text().split("## Task-guided denoising", 1)[1]
+    api = api.split("\n## ", 1)[0]
+    comparison = Path("docs/glmsingle-comparison.md").read_text()
+    for text in (guide, api, comparison):
+        for phrase in (
+            "significance_gate",
+            "gate_alpha",
+            "gate_binomial_alpha",
+            "F-test",
+            "binomial",
+        ):
+            assert phrase in text, phrase
+    for text in (guide, comparison):
+        for phrase in ("autocorrelated", "anti-conservative", "independent"):
+            assert phrase in text, phrase
+        assert "not part of GLMsingle" in text
+    for phrase in ("pcstop_count", "SignificanceGate", "decision"):
+        assert phrase in api, phrase
+
+
+def test_gate_module_is_described_as_a_boldtailor_addition():
+    docstring = Path("src/boldtailor/_denoising_gate.py").read_text().split('"""')[1]
+    assert "Boldtailor addition" in docstring
+    assert "not part of GLMsingle" in docstring
