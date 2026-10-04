@@ -22,7 +22,7 @@ from boldtailor.fit import fit
 from boldtailor.hrf_library import default_hrf_library
 from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.model import Modulator, ModelSpec, TaskModel
-from tests.denoising_fixtures import TR, make_denoising_fixture
+from tests.denoising_fixtures import RT_MODEL, TR, make_denoising_fixture
 
 COUNTS = (0, 1, 2, 4)
 LABELS = ("sesA", "sesB", "sesC", "sesD")
@@ -537,13 +537,13 @@ def changed_signal(data):
 
 
 def changed_confounds(data):
-    confounds = data.confounds
+    confounds = list(data.confounds)
     confounds[1] = confounds[1].assign(motion_x=confounds[1].motion_x * 1.01)
     return rebuild(data, confounds=confounds)
 
 
 def changed_events(data):
-    events = data.events
+    events = list(data.events)
     events[0].loc[0, "response_time"] += 0.05
     return rebuild(data, events=events)
 
@@ -598,52 +598,53 @@ def test_augmentation_requires_a_result_and_data(fixture, result):
 # ---- downstream fitting --------------------------------------------------------------
 
 
-def test_fit_on_augmented_data_matches_explicitly_appended_pcs(
-    fixture, result, augmented
-):
-    saved = snapshot(fixture.data)
-    names = list(result.component_names)
-    model = ModelSpec(
-        contrasts={"task": "dummy"},
+@pytest.fixture(scope="module")
+def typed(fixture):
+    """The fixture with an explicit trial_type, as conventional fitting expects."""
+    events = [e.assign(trial_type="task") for e in fixture.data.events]
+    return rebuild(fixture.data, events=events)
+
+
+def appended(data, columns):
+    confounds = [
+        frame.assign(**dict(zip(names, values.T)))
+        for frame, (names, values) in zip(data.confounds, columns)
+    ]
+    return from_arrays(
+        list(data.signals), list(data.events), tr=TR, confounds=confounds
+    )
+
+
+def conventional(names=(), task_model=RT_MODEL):
+    return ModelSpec(
+        contrasts={"task": "task"},
         confounds=("motion_x", "drift", "cosine", *names),
         drift_model=None,
+        task_model=task_model,
     )
-    manual_confounds = [
-        frame.assign(
-            **{
-                name: column
-                for name, column in zip(
-                    names,
-                    oracle_pcs(fixture.data, run, result.noise_pool, len(names)).T,
-                )
-            }
-        )
-        for run, frame in enumerate(fixture.data.confounds)
+
+
+def test_fit_on_augmented_data_matches_explicitly_appended_pcs(fixture, typed):
+    saved = snapshot(typed)
+    result = run_selection(fixture, typed)
+    augmented = with_denoising(typed, result)
+    names = list(result.component_names)
+    assert names
+    oracle = [
+        (names, oracle_pcs(typed, run, result.noise_pool, len(names)))
+        for run in range(typed.n_runs)
     ]
-    manual = from_arrays(
-        list(fixture.data.signals),
-        list(fixture.data.events),
-        tr=TR,
-        confounds=manual_confounds,
-    )
-    denoised = fit(augmented, model)
-    expected = fit(manual, model)
+    denoised = fit(augmented, conventional(names))
+    expected = fit(appended(typed, oracle), conventional(names))
     np.testing.assert_allclose(
         denoised.effect("task"), expected.effect("task"), rtol=1e-7, atol=1e-9
     )
     np.testing.assert_allclose(
         denoised.variance("task"), expected.variance("task"), rtol=1e-6, atol=1e-12
     )
-    baseline = fit(
-        fixture.data,
-        ModelSpec(
-            contrasts={"task": "dummy"},
-            confounds=("motion_x", "drift", "cosine"),
-            drift_model=None,
-        ),
-    )
+    baseline = fit(typed, conventional())
     assert not np.allclose(baseline.effect("task"), denoised.effect("task"))
-    assert_snapshot(fixture.data, saved)
+    assert_snapshot(typed, saved)
 
 
 def test_augmented_data_supports_reselection_of_hrfs(fixture, augmented):
@@ -653,12 +654,25 @@ def test_augmented_data_supports_reselection_of_hrfs(fixture, augmented):
     assert selection.hrf_indices.shape == (fixture.data.n_features,)
 
 
-def test_default_library_resolves_to_the_package_default(fixture):
+def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
+    import boldtailor.denoising as denoising
+
+    # The real default library is slow to fit here; the resolver must be the
+    # package default, and None must go through it.
+    assert denoising.default_hrf_library is default_hrf_library
+    calls = []
+
+    def stand_in():
+        calls.append(True)
+        return fixture.library
+
+    monkeypatch.setattr(denoising, "default_hrf_library", stand_in)
     result = select_denoising(
         fixture.data,
         brain_mask=fixture.brain_mask,
         task_model=fixture.task_model,
         counts=(0, 1),
     )
+    assert calls
     activity = last_activity(result.provenance)
-    assert activity["library_fingerprint"] == default_hrf_library().fingerprint
+    assert activity["library_fingerprint"] == fixture.library.fingerprint
