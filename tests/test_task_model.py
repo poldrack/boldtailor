@@ -218,3 +218,58 @@ def test_to_dict_and_fingerprint_record_kind_levels_and_reference():
     assert TaskModel((cat,)).fingerprint != TaskModel((other,)).fingerprint
     assert not TaskModel((cat,)).is_subset_of(TaskModel((other,)))
     assert Modulator(**cat.to_dict()) == cat
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("1.0", "1"),
+        ("2.50", "2.5"),
+        (" 3 ", "3"),
+        ("-0", "0"),
+        ("1e2", "100"),
+        ("nan", None),
+        ("NaN", None),
+        (" NAN ", None),
+        ("face", "face"),
+        ("1a", "1a"),
+    ],
+)
+def test_level_name_canonicalises_numeric_strings(value, expected):
+    assert level_name(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "inf",
+        "-inf",
+        "Infinity",
+        "-INFINITY",
+        float("inf"),
+        float("-inf"),
+        np.float64("inf"),
+    ],
+)
+def test_level_name_rejects_infinite_values(value):
+    with pytest.raises(ValueError, match="must be finite"):
+        level_name(value)
+
+
+@pytest.mark.parametrize("value", [True, False, np.bool_(True)])
+def test_level_name_rejects_booleans(value):
+    with pytest.raises(ValueError, match="categorical value"):
+        level_name(value)
+
+
+def test_one_level_written_three_ways_is_one_level():
+    mod = Modulator("cond", kind="categorical", levels=(1, 2))
+    assert Modulator("cond", kind="categorical", levels=("1", "2.0")) == mod
+    with pytest.raises(ValueError, match="distinct"):
+        Modulator("cond", kind="categorical", levels=(1, "1", 1.0))
+
+
+def test_mixed_numeric_and_text_levels_sort_lexically():
+    mod = Modulator("cond", kind="categorical", levels=("10", "b", "2", "a"))
+    assert mod.levels == ("10", "2", "a", "b")
+    assert mod.reference == "10"
