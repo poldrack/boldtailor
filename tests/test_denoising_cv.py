@@ -31,6 +31,9 @@ from boldtailor.model import Modulator, TaskModel
 from tests.denoising_fixtures import TR, _trial_responses, make_denoising_fixture
 
 COUNTS = (0, 1, 2, 4)
+# Separates noise (training CV R² <= 0.08 in every variant and fold, because
+# in-sample indicator profiling biases scores upward) from task (>= 0.3).
+THRESHOLD = 0.15
 MISSING_RT = TaskModel((Modulator("response_time", missing="indicator"),))
 CATEGORICAL = TaskModel(
     (
@@ -158,10 +161,19 @@ def oracle_training(data, validation, library, task_model, brain_mask, threshold
     return train, selection, pool, scoring, analysis_components(subset, pool)
 
 
-def oracle_fold(data, validation, library, task_model, brain_mask, counts, zero=()):
+def oracle_fold(
+    data,
+    validation,
+    library,
+    task_model,
+    brain_mask,
+    counts,
+    zero=(),
+    threshold=THRESHOLD,
+):
     """Per count: feature R², coefficients, target energies, fold mean."""
     train, selection, pool, scoring, comps = oracle_training(
-        data, validation, library, task_model, brain_mask, 0.0
+        data, validation, library, task_model, brain_mask, threshold
     )
     n, k = data.n_features, len(task_model.regressor_names)
     results = {}
@@ -189,7 +201,7 @@ def conservative_choice(counts, scores, tolerance):
     return min(c for c, s in zip(counts, scores) if s >= best - tolerance)
 
 
-def fold(data, validation, fixture, task_model, threshold=0.0, mask=None):
+def fold(data, validation, fixture, task_model, threshold=THRESHOLD, mask=None):
     return prepare_fold(
         data,
         validation,
@@ -259,7 +271,7 @@ def test_fold_selection_masks_and_pcs_come_from_training_runs(fixture):
     data, model = fixture.data, fixture.task_model
     result = fold(data, 2, fixture, model)
     train, selection, pool, scoring, comps = oracle_training(
-        data, 2, fixture.library, model, fixture.brain_mask, 0.0
+        data, 2, fixture.library, model, fixture.brain_mask, THRESHOLD
     )
     assert result.validation_run == 2 and result.training_runs == tuple(train)
     np.testing.assert_array_equal(result.selection.hrf_indices, selection.hrf_indices)
@@ -367,7 +379,7 @@ def test_component_count_selection_aggregates_equal_weight_folds(fixture):
         task_model=model,
         library=fixture.library,
         counts=(4, 0, 2, 1),
-        threshold=0.0,
+        threshold=THRESHOLD,
         tolerance=0.001,
     )
     folds = [
@@ -402,7 +414,7 @@ def test_selection_requires_three_runs(fixture):
             task_model=fixture.task_model,
             library=fixture.library,
             counts=COUNTS,
-            threshold=0.0,
+            threshold=THRESHOLD,
             tolerance=0.001,
         )
 
@@ -521,7 +533,7 @@ def test_count_without_positive_residual_df_is_unavailable_in_every_fold(fixture
         task_model=model,
         library=fixture.library,
         counts=(0, dof_limit),
-        threshold=0.0,
+        threshold=THRESHOLD,
         tolerance=0.0,
     )
     assert list(chosen.scores["eligible"]) == [True, False]
