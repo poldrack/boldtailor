@@ -7,7 +7,6 @@ from pathlib import Path
 import re
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from boldtailor.diagnostics import one_sample_t
