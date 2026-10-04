@@ -430,7 +430,8 @@ GLMsingle's authors have not reviewed or endorsed Boldtailor.
 ```text
 select_denoising(data, *, task_model=TaskModel(), library=None,
                  counts=(0, 1, ..., 10), pool_r2_threshold="auto",
-                 pcstop=1.05, feature_signature=None,
+                 pcstop=1.05, significance_gate=True, gate_alpha=0.05,
+                 gate_binomial_alpha=0.05, feature_signature=None,
                  run_labels=None) -> DenoisingResult
 with_denoising(data, result, *, feature_signature=None) -> AnalysisData
 ```
@@ -471,6 +472,25 @@ folds and the median over scored features is the count's performance. The
 count is chosen by GLMsingle's `pcstop` rule. The selection activity is named
 `denoising_selection`.
 
+`significance_gate` (a bool, default `True`) applies an F-test gate that is a
+Boldtailor addition, not part of GLMsingle. If pcstop chose `k* > 0`, each
+scoring feature gets an in-sample OLS F-test on all runs comparing the
+reduced model (shared task regressors with frozen HRFs, plus each run's
+baseline confounds, intercept, and missing-value indicators) with the full
+model (plus each run's first `k*` PCs). `df1 = rank(full) - rank(reduced)`
+and `df2 = scans - rank(full)` use the existing rank tolerances, and
+`p = scipy.stats.f.sf(F, df1, df2)`. With `m` of `n` tested features at
+`p < gate_alpha`, `k*` is kept when
+`scipy.stats.binomtest(m, n, gate_alpha, alternative="greater").pvalue <
+gate_binomial_alpha`; otherwise the count is 0. With no testable feature the
+count is 0. `gate_alpha` and `gate_binomial_alpha` must be finite numbers
+strictly between 0 and 1. Features whose stacked design is rank deficient,
+has `df2 <= 0`, or has a numerically zero target in every run are excluded
+from `n`. `significance_gate=False` returns the pcstop count. The OLS F-tests
+are anti-conservative under autocorrelated noise, and the binomial test
+treats features as independent. The selection activity records the gate
+under `significance_gate`.
+
 `with_denoising` checks content identity before it changes anything: run count
 and order, features, rows, time grids, signals, baseline confounds, and events.
 `feature_signature` must equal `result.feature_signature`. Re-application and
@@ -486,8 +506,9 @@ augmentations. Provenance gains a `denoising_augmentation` activity.
 From `boldtailor.denoising_results`:
 
 - `DenoisingResult` holds:
-  - the choice: `n_components`, `counts`, `pool_r2_threshold` (the setting),
-    `pcstop`
+  - the choice: `n_components` (after the gate), `pcstop_count` (pcstop's
+    choice), `counts`, `pool_r2_threshold` (the setting), `pcstop`
+  - `significance_gate` (`SignificanceGate`)
   - the threshold: `noise_pool_threshold` and `noise_pool_mixture`
     (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`, `tail`,
     `n_values`, `n_fitted`, `converged`, `n_iter`, `to_dict()`; `None` for a
@@ -506,6 +527,13 @@ From `boldtailor.denoising_results`:
 
   Arrays are read-only and tables are copies. Scores are selection
   statistics, not independent performance estimates.
+- `SignificanceGate` holds `enabled`, `alpha`, `binomial_alpha`,
+  `pcstop_count`, `n_components`, `decision` (`"kept"`, `"rejected"`,
+  `"skipped_zero_count"`, `"disabled"`), per-feature `f_statistic`,
+  `p_value`, `df1`, `df2` (NaN where not tested), the `tested` and
+  `excluded` masks, `exclusions` (`(hrf_index, n_features, reason)`), `m`,
+  `n`, `binomial_p` (NaN when the binomial test was not run), and the
+  property `n_excluded`.
 - `DenoisingFold` holds `validation_run`, `training_runs`, `zero_target`, and
   `target_energy` (NaN for unscored features).
 - `PcaDiagnostics` holds `run_labels`, `pool_size`, `ranks`,

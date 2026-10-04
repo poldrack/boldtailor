@@ -59,6 +59,49 @@ class PcaDiagnostics:
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
+class SignificanceGate:
+    """Boldtailor's F-test gate on the pcstop count (not part of GLMsingle).
+
+    For each tested scoring feature, ``f_statistic``/``p_value`` compare
+    in-sample OLS fits on all runs without and with the first
+    ``pcstop_count`` PCs of every run (``df1``, ``df2`` its degrees of
+    freedom). ``m`` of the ``n`` tested features have ``p < alpha``; the
+    count is kept when the one-sided binomial p-value ``binomial_p`` is below
+    ``binomial_alpha``. ``excluded`` features (rank-deficient designs,
+    nonpositive residual degrees of freedom, or zero targets) are not in
+    ``n``; ``exclusions`` lists ``(hrf_index, n_features, reason)``.
+    ``decision`` is ``"kept"``, ``"rejected"``, ``"skipped_zero_count"``,
+    or ``"disabled"``; untested values are NaN.
+    """
+
+    enabled: bool
+    alpha: float
+    binomial_alpha: float
+    pcstop_count: int
+    n_components: int
+    decision: str
+    f_statistic: np.ndarray
+    p_value: np.ndarray
+    df1: np.ndarray
+    df2: np.ndarray
+    tested: np.ndarray
+    excluded: np.ndarray
+    exclusions: tuple[tuple[int, int, str], ...]
+    m: int
+    n: int
+    binomial_p: float
+
+    def __post_init__(self):
+        own_fields(self, ("tested", "excluded"), dtype=bool)
+        own_fields(self, ("f_statistic", "p_value", "df1", "df2"))
+        rebind(self, exclusions=tuple(tuple(e) for e in self.exclusions))
+
+    @property
+    def n_excluded(self) -> int:
+        return int(self.excluded.sum())
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
 class DenoisingFold:
     """One count-selection fold: its runs and the held-out targets.
 
@@ -90,10 +133,14 @@ class DenoisingResult:
     setting (``"auto"`` or a float) and ``noise_pool_mixture`` the mixture
     fit when automatic. ``initial_selection`` holds the frozen full-data
     HRFs. ``perf``/``curve`` are the per-count median performance and its
-    gain over zero PCs (NaN when unavailable).
+    gain over zero PCs (NaN when unavailable). ``pcstop_count`` is the
+    count GLMsingle's pcstop rule chose and ``n_components`` the count kept
+    by Boldtailor's ``significance_gate`` (equal when the gate is disabled).
     """
 
     n_components: int
+    pcstop_count: int
+    significance_gate: SignificanceGate
     counts: tuple[int, ...]
     pool_r2_threshold: float | str
     pcstop: float
@@ -143,6 +190,7 @@ class DenoisingResult:
                 "n_components must be a candidate count and match every "
                 "run_components array"
             )
+        self._validate_gate()
         for label, comps, run in zip(
             self.run_labels, self.run_components, self.source_identity
         ):
@@ -151,6 +199,19 @@ class DenoisingResult:
                     f"run_components for run '{label}' has {comps.shape[0]} rows; "
                     f"the run has {run.n_scans} scans"
                 )
+
+    def _validate_gate(self):
+        gate = self.significance_gate
+        if (
+            not isinstance(gate, SignificanceGate)
+            or gate.n_components != self.n_components
+            or gate.pcstop_count != self.pcstop_count
+            or self.pcstop_count not in self.counts
+        ):
+            raise ValueError(
+                "significance_gate must record pcstop_count (a candidate count) "
+                "and the gated n_components"
+            )
 
     @property
     def candidate_scores(self) -> pd.DataFrame:

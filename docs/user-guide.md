@@ -592,7 +592,8 @@ provenance through its dedicated cache/import helpers.
 GLMdenoise stage. It finds a noise pool of features that a canonical task
 regressor predicts poorly (ON-OFF R²), computes temporal principal components
 (PCs) of that pool in each run, and chooses one PC count by held-out task
-prediction with GLMsingle's `pcstop` rule. `with_denoising()` appends the chosen
+prediction with GLMsingle's `pcstop` rule, followed by a significance gate
+that Boldtailor adds. `with_denoising()` appends the chosen
 PCs to each run's confounds, so ordinary HRF selection and fitting can use
 them. Nothing else in the package calls it, and no defaults change.
 
@@ -683,7 +684,24 @@ fixed order: this is sequential tuning, not joint optimization.
    first count where `best * pcstop >= max(curve)`, and choose the count that
    holds that best. Zero is always a candidate and is chosen when no count
    improves on it. Unavailable counts are skipped.
-8. The returned pool and PCs are the single full-data ones; the selected
+8. Significance gate (`significance_gate=True` by default; a Boldtailor
+   addition, not part of GLMsingle). If pcstop chose `k* > 0`, every scoring
+   feature is fit in-sample on all runs by OLS, with its frozen HRF, under
+   two nested models: reduced (the task regressors, shared across runs, plus
+   each run's baseline confounds, intercept, and missing-value indicators)
+   and full (reduced plus each run's first `k*` PCs as run-specific columns).
+   Each feature gets an F-test,
+   `F = ((SSE_r - SSE_f) / df1) / (SSE_f / df2)` with
+   `df1 = rank(full) - rank(reduced)` and `df2 = scans - rank(full)`. If `m`
+   of the `n` tested features have `p < gate_alpha` (default 0.05), `k*` is
+   kept only if a one-sided binomial test of `m` out of `n` against
+   `gate_alpha` gives `p < gate_binomial_alpha` (default 0.05); otherwise
+   zero PCs are chosen. Features whose stacked design is rank deficient, has
+   no residual degrees of freedom, or has a numerically zero target in every
+   run are excluded from `n` and listed in the diagnostics. With
+   `significance_gate=False` the pcstop count is returned unchanged, as in
+   GLMsingle.
+9. The returned pool and PCs are the single full-data ones; the selected
    prefix is returned per run. The pool is not refined after PCs are added.
    After augmentation, rerun `select_hrfs` and fit as in the example.
 
@@ -698,7 +716,19 @@ never contains the candidate PCs. (d) The count walk matches GLMsingle's
 `select_noise_regressors` except for a 64-eps roundoff slack that keeps
 numerically equal values equal.
 (e) The mixture fit uses a fixed `random_state` and records convergence
-instead of warning (see below).
+instead of warning (see below). (f) The significance gate is not part of
+GLMsingle. It was added because the pcstop rule is relative and has no
+absolute floor: in the predeclared validation it chose 6 PCs on independent
+noise from median R² gains of about 2e-4. GLMsingle's beta-consistency
+criterion, which needs repeats, may behave differently.
+
+**Significance gate caveats.** The F-tests use OLS without prewhitening, so
+they are anti-conservative under autocorrelated noise: fMRI residuals are
+autocorrelated, and more features pass `gate_alpha` than the nominal rate
+would suggest. The binomial test treats features as independent, which is
+optimistic for spatially correlated features. Both make the gate lenient: it
+is meant to stop PCs that help no more than chance, not to certify a benefit.
+The tests are in-sample on the same runs that chose the count.
 
 **Missing values.** A task model with `Modulator(..., missing="indicator")`
 adds a `missing_<column>` regressor in runs that need one. When counts are
@@ -722,7 +752,14 @@ to select on.
 **Reading the result.** `DenoisingResult` exposes:
 
 - `n_components` and `run_components`, one read-only `(scans, n_components)`
-  array per run.
+  array per run. `n_components` is the count after the gate; `pcstop_count`
+  is the count pcstop chose.
+- `significance_gate`, a `SignificanceGate` with the settings (`enabled`,
+  `alpha`, `binomial_alpha`), `pcstop_count`, `n_components`, `decision`
+  (`"kept"`, `"rejected"`, `"skipped_zero_count"`, or `"disabled"`),
+  per-feature `f_statistic`, `p_value`, `df1`, and `df2` (NaN where not
+  tested), the `tested` and `excluded` masks, `exclusions` (HRF index,
+  number of features, reason), `m`, `n`, and `binomial_p`.
 - `onoff_r2`, `noise_pool`, `scoring_mask`, `scoring_fallback`, and `scored`
   (the scoring mask minus zero-target features).
 - `noise_pool_threshold` and `noise_pool_mixture` (the fitted threshold and
@@ -759,13 +796,23 @@ outer-run betas all improved. Without shared noise (independent white noise
 only), the check that zero PCs are chosen **fails**: the median held-out R²
 gains of the positive counts are at most about 2e-4, but the pcstop rule has
 no absolute floor, so it chose 6 PCs, with the test library and with the
-default library. These checks are recorded as expected failures, not tuned
-away. On noise-only data the rule can therefore add a few PCs whose effect on
-prediction is negligible; inspect `curve` before relying on the choice.
+default library. Those checks were recorded as expected failures, not tuned
+away. The significance gate was then added, with its validation criteria
+declared before it was run: the no-benefit data must choose zero PCs with
+both libraries, and the recovery data must still choose a positive count and
+pass all four recovery checks. Rerun once with the same seeds and the
+default gate settings, all of them pass. On the no-benefit data pcstop still
+chose 6 PCs, but only 1 of 10 scoring features had `p < 0.05` (binomial
+p = 0.40), so the gate chose 0 with both libraries. On the recovery data
+pcstop chose 1 PC and all 6 scoring features had `p < 0.05` (binomial
+p = 1.6e-8), so the gate kept it. These are two synthetic datasets, not a
+calibration of the gate.
 
 **Provenance.** The selection records the task model, library, ON-OFF R²,
 threshold rule, pool and scoring masks, fallback, HRF assignments, per-count
-`perf` and `curve`, `pcstop`, PC fingerprints, baseline confounds, and folds.
+`perf` and `curve`, `pcstop`, the significance gate (settings, `pcstop_count`,
+decision, `m`, `n`, binomial p-value, exclusions, and fingerprints of the F
+and p values), PC fingerprints, baseline confounds, and folds.
 `with_denoising()` checks that `data` is the analysis the result was selected
 on: same runs in the same order, time grids, signals in feature order,
 baseline confounds, and events. It rejects applying a result twice and

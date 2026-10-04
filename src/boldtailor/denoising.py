@@ -7,7 +7,9 @@ confounds plus intercept as nuisance; GLMsingle uses polynomials); pools
 features below GLMsingle's Gaussian-mixture tail threshold (by default) and
 scores features above it (the 100 best when none passes); extracts run-wise
 PCs of that single pool; and chooses one PC count with GLMsingle's pcstop
-rule over the median of fold-pooled held-out R². Counts are scored by
+rule over the median of fold-pooled held-out R², then (a Boldtailor
+addition, not part of GLMsingle) keeps that count only if the PCs pass a
+voxelwise OLS F-test gate with a binomial test across features. Counts are scored by
 leave-one-run-out time-series prediction against a fixed target, because
 repeated conditions are not assumed. Every input feature is a candidate: the
 core is anatomy-agnostic. ``with_denoising`` appends the chosen PCs to the
@@ -40,6 +42,7 @@ from boldtailor._denoising_cv import (
     validate_counts,
     validate_pcstop,
 )
+from boldtailor._denoising_gate import apply_gate, validate_gate
 from boldtailor._denoising_identity import check_identity, run_identities
 from boldtailor._denoising_pool import (
     analysis_components,
@@ -85,6 +88,7 @@ class _Settings:
     counts: tuple[int, ...]
     threshold: float | str
     pcstop: float
+    gate: tuple[bool, float, float]
     feature_signature: str | None
 
 
@@ -98,16 +102,20 @@ def _check_models(task_model, library, signature):
 
 
 def _settings(data, task_model, library, grid, signature):
-    """Validate everything before any fitting; ``grid`` is (counts, r2, pcstop)."""
+    """Validate everything before any fitting.
+
+    ``grid`` is (counts, r2 threshold, pcstop, (gate, alpha, binomial alpha)).
+    """
     _check_data(data)
     _check_models(task_model, library, signature)
-    counts, threshold, pcstop = grid
+    counts, threshold, pcstop, gate = grid
     return _Settings(
         task_model=task_model,
         library=library,
         counts=validate_counts(counts),
         threshold=validate_threshold(threshold),
         pcstop=validate_pcstop(pcstop),
+        gate=validate_gate(*gate),
         feature_signature=signature,
     )
 
@@ -152,8 +160,9 @@ def _pool(data, labels, settings):
 
 
 def _count_selection(data, labels, settings, pool):
+    """pcstop's count, then Boldtailor's significance gate on it."""
     selection, _, masks, components = pool
-    return select_component_count(
+    count = select_component_count(
         data,
         hrf_indices=selection.hrf_indices,
         components=components,
@@ -164,6 +173,15 @@ def _count_selection(data, labels, settings, pool):
         pcstop=settings.pcstop,
         run_labels=labels,
     )
+    enabled, alpha, binomial_alpha = settings.gate
+    gate = apply_gate(
+        count.setup,
+        count.n_components,
+        enabled=enabled,
+        alpha=alpha,
+        binomial_alpha=binomial_alpha,
+    )
+    return count, gate
 
 
 # ---- result parts ----------------------------------------------------------------------
@@ -225,6 +243,28 @@ def _floats(values):
     return [None if not np.isfinite(v) else float(v) for v in values]
 
 
+def _gate_record(gate):
+    return dict(
+        enabled=gate.enabled,
+        test="ols_nested_f_in_sample_all_runs",
+        aggregate="one_sided_binomial_over_tested_features",
+        gate_alpha=gate.alpha,
+        gate_binomial_alpha=gate.binomial_alpha,
+        pcstop_count=gate.pcstop_count,
+        n_components=gate.n_components,
+        decision=gate.decision,
+        m=gate.m,
+        n=gate.n,
+        n_excluded=gate.n_excluded,
+        binomial_p=_floats([gate.binomial_p])[0],
+        f_statistic_fingerprint=_digest(gate.f_statistic, "<f8"),
+        p_value_fingerprint=_digest(gate.p_value, "<f8"),
+        exclusions=[
+            dict(hrf_index=h, n_features=n, reason=r) for h, n, r in gate.exclusions
+        ],
+    )
+
+
 def _pool_records(settings, statistic, masks, scored):
     rule = "fixed" if masks.mixture is None else masks.mixture.to_dict()["method"]
     return dict(
@@ -263,9 +303,10 @@ def _count_records(settings, count):
     )
 
 
-def _selection_activity(context, pool, count, prefixes):
+def _selection_activity(context, pool, selected, prefixes):
     data, labels, settings = context
     selection, statistic, masks, _ = pool
+    count, gate = selected
     task_model, library = settings.task_model, settings.library
     return dict(
         name="denoising_selection",
@@ -280,6 +321,7 @@ def _selection_activity(context, pool, count, prefixes):
         n_components=prefixes[0].shape[1],
         **_pool_records(settings, statistic, masks, count.setup.scored),
         **_count_records(settings, count),
+        significance_gate=_gate_record(gate),
         initial_hrf_assignment_fingerprint=_digest(selection.hrf_indices, "<i8"),
         initial_selection=identity_activity(selection.provenance),
         component_fingerprints=[_digest(p, "<f8") for p in prefixes],
@@ -298,19 +340,22 @@ def _provenance(operation, record, activity):
 
 def _select(operation, data, labels, settings):
     pool = _pool(data, labels, settings)
-    count = _count_selection(data, labels, settings, pool)
-    return _assemble(operation, (data, labels, settings), pool, count)
+    selected = _count_selection(data, labels, settings, pool)
+    return _assemble(operation, (data, labels, settings), pool, selected)
 
 
-def _assemble(operation, context, pool, count):
+def _assemble(operation, context, pool, selected):
     data, labels, settings = context
     selection, statistic, masks, components = pool
+    count, gate = selected
     # An eligible count is supported by every run (each run trains some fold).
-    prefixes = tuple(c.prefix(count.n_components) for c in components)
+    prefixes = tuple(c.prefix(gate.n_components) for c in components)
     scores, fold_scores = _public_tables(count)
-    activity = _selection_activity(context, pool, count, prefixes)
+    activity = _selection_activity(context, pool, selected, prefixes)
     return DenoisingResult(
-        n_components=count.n_components,
+        n_components=gate.n_components,
+        pcstop_count=count.n_components,
+        significance_gate=gate,
         counts=count.counts,
         pool_r2_threshold=settings.threshold,
         pcstop=settings.pcstop,
@@ -342,6 +387,9 @@ def select_denoising(
     counts: tuple[int, ...] = tuple(range(11)),
     pool_r2_threshold: float | str = "auto",
     pcstop: float = 1.05,
+    significance_gate: bool = True,
+    gate_alpha: float = 0.05,
+    gate_binomial_alpha: float = 0.05,
     feature_signature: str | None = None,
     run_labels: Sequence[str] | None = None,
 ) -> DenoisingResult:
@@ -358,9 +406,17 @@ def select_denoising(
     ``pcstop`` rule (``>= 1``). Positive counts that any fold cannot support
     are unavailable; zero always remains. Scores are selection statistics,
     not independent performance estimates.
+
+    ``significance_gate`` (a Boldtailor addition, not part of GLMsingle)
+    then keeps the pcstop count only if adding those PCs passes per-feature
+    in-sample OLS F-tests (``p < gate_alpha``) in more scoring features than
+    chance, by a one-sided binomial test at ``gate_binomial_alpha``;
+    otherwise zero PCs are chosen. ``significance_gate=False`` reproduces
+    GLMsingle's pcstop-only choice.
     """
     library = default_hrf_library() if library is None else library
-    grid = (counts, pool_r2_threshold, pcstop)
+    gate = (significance_gate, gate_alpha, gate_binomial_alpha)
+    grid = (counts, pool_r2_threshold, pcstop, gate)
     settings = _settings(data, task_model, library, grid, feature_signature)
     labels = run_labels_for(data, run_labels)
     _check_runs(data, labels, settings)
