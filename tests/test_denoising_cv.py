@@ -10,7 +10,6 @@ under test is used to derive an expected value.
 """
 
 import numpy as np
-import pandas as pd
 import pytest
 from scipy.linalg import block_diag
 
@@ -28,7 +27,7 @@ from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays
 from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.model import Modulator, TaskModel
-from tests.denoising_fixtures import TR, _trial_responses, make_denoising_fixture
+from tests.denoising_fixtures import _trial_responses, make_denoising_fixture
 
 COUNTS = (0, 1, 2, 4)
 # Separates noise (training CV R² <= 0.08 in every variant and fold, because
@@ -492,7 +491,7 @@ def test_count_beyond_pool_rank_is_unavailable_not_capped(fixture):
     ranks = [c.rank for c in result.components]
     too_many = max(ranks) + 1
     score = score_count(result, too_many)
-    assert f"exceeds pool PCA rank" in score.reason
+    assert "exceeds pool PCA rank" in score.reason
     assert np.isnan(score.mean_r2)
 
 
