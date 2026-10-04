@@ -425,8 +425,10 @@ the analysis record, with optional draft BIDS provenance files.
 
 `boldtailor.publication.Artifact(path, payload)` describes a file to
 save. `publish_artifact_set(destination, artifacts, *, source_paths=(),
-overwrite=False, lock_timeout=30.0)` returns the saved
-paths. Files are replaced individually under a writer lock; publication is
+overwrite=False, lock_timeout=30.0, keep_existing=())` returns the saved
+paths. Paths listed in `keep_existing` (shared files such as a
+`dataset_description.json`) are written only if absent once the lock is held;
+an existing file there is kept and left out of the returned paths. Files are replaced individually under a writer lock; publication is
 not an atomic snapshot for concurrent readers. Existing files are protected by
 default; `source_paths` protects inputs from accidental replacement. Promotion
 failures raise `PublicationError`; invalid arguments and preflight collisions
@@ -503,13 +505,15 @@ front end.
 | --- | --- | --- |
 | `WorkflowSettings` | `boldtailor.workflow.settings` | Frozen, validated settings (paths, HRF library, ridge mode, stages, `existing_results`); `to_dict()` is the JSON form |
 | `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`paths`, `report_path`, `skipped`, `task_model`) |
-| `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model) without fitting; backs `--dry-run` |
+| `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model, notes) and the `problems` a run would hit (`existing_results` or `input`), without fitting; backs `--dry-run` |
 | `load_session(settings)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events |
-| `detect_task_model(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | `response_time`, `trial_type`, or explicit modulators to a `TaskModel` |
+| `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.workflow.inputs` | `response_time`, a binary 0/1 `trial_type`, or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors |
+| `task_model_notes(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | Why detection left out a column every run has (a non-binary `trial_type`) |
 | `fit_beta_models(runs, root, blocks, settings, library, selections, task_model)` | `boldtailor.workflow.beta_series` | Canonical and selected-HRF trial models (OLS plus the configured ridge mode) over feature blocks |
 | `BetaModel` | `boldtailor.workflow.beta_series` | One beta model: name, HRF, estimator, fit, and (tuned ridge) tuning and outer-split evaluation |
 | `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |
-| `render_report(settings, **sections)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded figures and the equivalent command line |
+| `render_report(settings, **sections)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded PNG figures (bytes) and the equivalent command line |
+| `selected_hrfs`, `encoding_scores`, `ridge_boundary`, `input_tables` | `boldtailor.workflow.summaries` | Report tables built from in-memory results |
 | `build_parser`, `settings_from_args`, `main` | `boldtailor.cli` | Argument parser, args to `WorkflowSettings`, and the `boldtailor` entry point (returns the exit code) |
 
 See the [user guide](user-guide.md#running-the-full-workflow) for flags, outputs,

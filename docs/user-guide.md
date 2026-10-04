@@ -636,8 +636,11 @@ and BOLD sidecars), then publishes a BIDS derivative and an HTML report:
 uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
 ```
 
-Add `--dry-run` to print the resolved plan (runs, detected task model, output
-directory, stages) as JSON without fitting. The same analysis is available from
+Add `--dry-run` to print the resolved plan (runs, detected task model, notes,
+output directory, stages, and any `problems`) as JSON without fitting. Each
+problem is also printed on stderr, and the dry run exits with the code the real
+run would (see below).
+Progress is logged to stderr with timestamps; `--quiet` keeps only warnings. The same analysis is available from
 Python as `WorkflowSettings` and `run_workflow` (see the
 [API reference](api.md#session-workflow-and-command-line)).
 
@@ -649,9 +652,10 @@ Flags are grouped as in `boldtailor run --help`.
 | --- | --- | --- |
 | inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject and session labels such as `sub-01`, `ses-nsd01` |
 | inputs | `--fmriprep-dir` | fMRIPrep derivatives (found under `<bids-dir>/derivatives/fmriprep*`) |
-| inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`) |
+| inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`); may not be the BIDS root or overlap the fMRIPrep directory |
 | inputs | `--space` | Only `fsLR-91k` |
 | inputs | `--modulator COLUMN[:indicator]` | Task modulator; repeat to list several (detected, see below) |
+| inputs | `--no-modulators` | Fit the task regressor alone; excludes `--modulator` |
 | HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
 | HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sobol candidates and seed (512, 0) |
 | HRF selection | `--no-rt-in-hrf-selection` | Select HRFs from the task regressor only, without RT modulators |
@@ -665,20 +669,37 @@ Flags are grouped as in `boldtailor run --help`.
 | execution | `--n-jobs`, `--block-size`, `--max-grayordinates` | Workers (4), grayordinates per block (4096), and an optional cap for quick tests |
 | execution | `--existing-results` | `error` or `overwrite` (`error`) |
 | execution | `--dry-run` | Print the plan and exit |
+| execution | `--quiet` | Log warnings only, not progress |
 
-The default output directory name records the analysis, for example
-`derivatives/boldtailor_hrf-default512s0_ridge-fractionalcv`. Different
-libraries or ridge modes therefore never collide.
+The default output directory name records the analysis as
+`boldtailor_hrf-<library>_ridge-<mode>`. For `default` and `sobol` the library
+part is `<library><n>s<seed>` (candidates and seed, for example
+`default512s0`); `expanded` and `canonical` appear as is. The ridge part is
+`fractionalcv`, `cv`, `off`, or `fixed<alpha>` (for example `fixed0.1`). For
+example `derivatives/boldtailor_hrf-default512s0_ridge-fractionalcv`. Different
+libraries, seeds, or ridge modes therefore never collide.
 
 ### Modulators
 
 If every run's events file has a `response_time` column, the task model is
-`Modulator("response_time", missing="indicator")`. If every run has a binary
-0/1 `trial_type` column, it is `Modulator("trial_type")`. With neither, the model
-is task-only. Passing `--modulator` replaces detection: give a column name, or
-`COLUMN:indicator` to code missing values with an indicator regressor, for
-example `--modulator response_time:indicator --modulator trial_type`. Modulators
-are never centered. A named column missing from any run is an input error.
+`Modulator("response_time", missing="indicator")`. A `trial_type` column is
+used, as `Modulator("trial_type")`, only when every run's values are numeric 0
+or 1. Otherwise (for example `face`/`house` labels) it is left out and the dry
+run, settings file (`notes`), and report say "trial_type is not binary 0/1; not
+used as a modulator". With neither column, the model is task-only.
+`--no-modulators` always fits the task regressor alone. Passing `--modulator`
+replaces detection: give a column name, or `COLUMN:indicator` to code missing
+values with an indicator regressor, for example
+`--modulator response_time:indicator --modulator trial_type`. An explicit
+`trial_type` must hold both codes 0 and 1 in every run; the error names the
+run (for example `run-02`). Modulators are never centered. A named column
+missing from any run is an input error.
+
+Ridge cross-validation (`--ridge-mode fractional_cv` or `cv`, with the `betas`
+stage) needs at least three odd and three even runs and at least one
+modulator, because it scores how well trial modulators predict held-out betas.
+Otherwise the command stops before fitting; use `--ridge-mode off` or `fixed`,
+or `--skip-stage betas`.
 
 ### Stages
 
@@ -712,23 +733,40 @@ Files follow BIDS derivative naming under
 ### Report
 
 `<output_dir>/<sub>_<ses>_task-<task>_report.html` is a single self-contained
-file: the equivalent command line, settings, runs and task model, HRF library,
-GLM, reliability, and beta summaries, embedded figures (including cortical maps
-when fsLR meshes are found), skipped stages with reasons, and a list of every
-output file with its provenance.
+file: the equivalent command line, settings, the run summary table, confound
+names, task model and notes, the first rows of the HRF library, GLM summaries,
+the most often selected HRFs with their peak times, HRF reliability (parameter
+agreement and full-curve correlations), ridge tuning, outer encoding scores and
+the share of ridge choices at a grid endpoint, activation and RT summaries,
+embedded figures (including cortical maps when fsLR meshes are found), skipped
+stages with reasons, and a list of every output file with its provenance.
+Missing or ambiguous automatically found meshes skip the cortical figures with
+a note; an explicit `--surface-mesh` path that does not exist is an input
+error before fitting.
 
 ### Existing results and exit codes
 
 By default (`--existing-results error`) the command stops before loading any
-data if any `<sub>_<ses>_task-<task>_*` file already exists in the output
-directory. With `overwrite`, it replaces that subject/session/task set and
-removes stale files from the earlier run; other sessions are untouched.
+data if any `<sub>_<ses>_task-<task>_*` file already exists in the session's
+`func` directory, or the root report exists. With `overwrite`, it replaces the
+files it writes and removes stale files only if the earlier run listed them in
+the `artifacts` field of its `desc-boldtailor_metadata.json`; files boldtailor
+did not write, run inputs, and other sessions are never touched. Sessions
+publishing into one output directory share its `dataset_description.json`;
+the first writes it, later ones keep it.
+
+All results are held in memory until the single publication at the end, so
+memory grows with the number of runs, grayordinates, and trials.
 
 | Exit code | Meaning |
 | --- | --- |
 | 0 | Success |
 | 1 | Usage or settings error, including invalid choices such as `--ridge-mode lasso`; one line on stderr |
-| 2 | Input discovery or loading error: missing events or CIFTI files, a modulator column absent from a run, or ridge cross-validation with fewer than three odd and three even runs |
+| 1 | Existing outputs under `--existing-results error` |
+| 2 | Input discovery, loading, or validation error: missing events, CIFTI files, or an explicit surface mesh; malformed confounds or nonsteady flags; a modulator column absent from a run; or ridge cross-validation with fewer than three odd and three even runs or without a modulator |
+
+Errors raised while fitting are not input errors; they propagate with a
+traceback.
 
 ## Common problems
 
@@ -738,7 +776,7 @@ removes stale files from the earlier run; other sessions are untouched.
 | A design is rank deficient | Duplicate/overlapping trial regressors, redundant task columns, or too many regressors for the run length |
 | Timing or trial support is rejected | Onset units, acquisition offset, run boundaries, and whether each event has a sampled response |
 | R² or HRF parameters are NaN | A constant signal, no variance after nuisance adjustment, or unavailable split evaluation; inspect metadata |
-| An output file already exists | Choose a new output directory for the example rather than overwriting a previous analysis |
+| An output file already exists | Choose a new output directory, or pass `--existing-results overwrite` to replace this subject/session/task's earlier boldtailor results |
 | Parallel fitting uses too much RAM | Reduce `--n-jobs` or `--block-size`; final beta arrays also occupy memory |
 
 ### Fractional-ridge default migration (2026-09-28)

@@ -170,7 +170,7 @@ def load_runs(inputs):
     """Load runs in BIDS run order; every run must share one BrainModel axis."""
     runs = sorted((_raw_run(item) for item in inputs), key=lambda run: run.number)
     if len({r.number for r in runs}) != len(runs):
-        raise ValueError("NSD run numbers must be unique")
+        raise ValueError("BIDS run numbers must be unique")
     brain = runs[0].image.header.get_axis(1)
     if any(r.image.header.get_axis(1) != brain for r in runs):
         raise ValueError("All runs must have identical grayordinate BrainModel axes")

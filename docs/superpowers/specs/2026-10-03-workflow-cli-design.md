@@ -28,8 +28,9 @@ covers every stage; no code in the package imports from `examples`.
   ridge-mode output paths become one, the settings dictionary becomes a
   dataclass, result reuse is dropped, output descriptors are renamed.
 - Modulators default to `response_time` (missing indicator) and `trial_type`
-  when those event columns exist; `--modulator` replaces the whole set. No
-  contrast or confound-selection flags.
+  when those event columns exist (`trial_type` only when numeric 0/1 in every
+  run, R12); `--modulator` replaces the whole set and `--no-modulators` fits
+  the task regressor alone. No contrast or confound-selection flags.
 - Regressor centering is removed from the package. Every modulator is
   uncentered. This leaves R², ΔR² and the HRF selection scores unchanged and
   changes only the meaning of the `task` contrast (response at modulator value
@@ -123,10 +124,16 @@ volumes, event validation, sidecar-corrected frame times, and a check that all
 runs share one grayordinate axis.
 
 Modulator detection: with `modulators=None`, `response_time` present →
-`Modulator("response_time", missing="indicator")`; `trial_type` present →
-`Modulator("trial_type")`; neither → task regressor alone. Columns named in
-`--modulator` must exist in every run's events; a missing column is an input
-error naming the run.
+`Modulator("response_time", missing="indicator")`; `trial_type` present with
+numeric 0/1 values in every run → `Modulator("trial_type")`; neither → task
+regressor alone. A `trial_type` that is not binary 0/1 (for example string
+labels) is left out, and the dry run, the settings file (`notes`) and the
+report's inputs section say "trial_type is not binary 0/1; not used as a
+modulator" (ruling R12). `modulators=()` (`--no-modulators`) is task-only.
+Columns named in `--modulator` must exist in every run's events; a missing
+column is an input error naming the run. An explicit `trial_type` keeps the
+strict check (both codes 0 and 1 in every run), and its error names the BIDS
+run label. Ridge cross-validation needs at least one modulator (ruling R13).
 
 The GLM `ModelSpec` has one contrast per task regressor, OLS noise, no extra
 drift, canonical SPM for the canonical model, and the detected or given task
@@ -211,7 +218,7 @@ subject/session outputs in one publication transaction.
 ```
 boldtailor run --bids-dir DIR --subject sub-07 --session ses-nsd10 --task nsdcore
     [--fmriprep-dir DIR] [--output-dir DIR] [--space fsLR-91k]
-    [--modulator COLUMN[:indicator] ...]
+    [--modulator COLUMN[:indicator] ... | --no-modulators]
     [--hrf-library default|sobol|expanded|canonical] [--hrf-n-samples 512] [--hrf-seed 0]
     [--no-rt-in-hrf-selection]
     [--ridge-mode fractional_cv|cv|fixed|off] [--ridge-alpha X]
@@ -220,11 +227,16 @@ boldtailor run --bids-dir DIR --subject sub-07 --session ses-nsd10 --task nsdcor
     [--skip-stage {reliability,betas,summaries} ...]
     [--no-surface-maps] [--surface-mesh left=PATH right=PATH]
     [--n-jobs 4] [--block-size 4096] [--max-grayordinates N]
-    [--existing-results error|overwrite] [--dry-run]
+    [--existing-results error|overwrite] [--dry-run] [--quiet]
 ```
 
 `--dry-run` prints the resolved settings, discovered runs, detected task
-model and output directory, then exits 0 without fitting. Exit codes: 0
+model, notes, output directory and the `problems` a run would hit, then exits
+with the code the real run would, without fitting. `--quiet` limits the
+stderr progress log to warnings. With `--existing-results overwrite` only
+files listed in the previous settings file's `artifacts` are removed when
+stale; `output_dir` may not be `bids_dir` or overlap the fMRIPrep directory
+(ruling R14). Exit codes: 0
 success; 1 usage or settings error (one line on stderr); 2 input discovery or
 loading error listing what was missing. The console script is declared in
 `pyproject.toml` as `boldtailor = "boldtailor.cli:main"`; `main(argv=None)`
