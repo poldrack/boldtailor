@@ -74,12 +74,17 @@ def check_output(settings):
     report = settings.output_dir / report_name(settings)
     existing = _session_files(settings) + ([report] if report.is_file() else [])
     if existing:
-        names = ", ".join(sorted(p.name for p in existing))
         raise FileExistsError(
-            f"existing files in {settings.output_dir} ({names}); set "
+            f"existing files in {settings.output_dir} ({_names(existing)}); set "
             "existing_results to overwrite, or choose a new output_dir"
         )
     return None
+
+
+def _names(paths, shown=5):
+    names = sorted(p.name for p in paths)
+    more = f", ... {len(names)} files" if len(names) > shown else ""
+    return ", ".join(names[:shown]) + more
 
 
 def metadata_name(settings):
