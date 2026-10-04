@@ -32,6 +32,7 @@ https://doi.org/10.7554/eLife.77599
 from dataclasses import dataclass
 
 import numpy as np
+import scipy.linalg
 
 from boldtailor._arrays import own_fields, readonly_array
 from boldtailor._hrf_cv import pooled_amplitude, prepare_runs
@@ -278,11 +279,24 @@ def _signed(u):
     return u * np.where(peaks < 0, -1.0, 1.0)
 
 
+def _svd(matrix):
+    """Reduced SVD; falls back to LAPACK gesvd when gesdd does not converge.
+
+    gesdd (NumPy's driver) can fail on well-conditioned input with some
+    LAPACK builds; gesvd is slower but more robust and gives the same
+    decomposition.
+    """
+    try:
+        return np.linalg.svd(matrix, full_matrices=False)
+    except np.linalg.LinAlgError:
+        return scipy.linalg.svd(matrix, full_matrices=False, lapack_driver="gesvd")
+
+
 def run_components(signal, confounds, pool) -> RunComponents:
     """Normalized pool PCA for one run; ``confounds`` excludes the intercept."""
     pool = validate_feature_mask(pool, np.shape(signal)[1], name="pool")
     normalized, amplification = _projected_pool(signal, confounds, pool)
-    u, s, _ = np.linalg.svd(normalized, full_matrices=False)
+    u, s, _ = _svd(normalized)
     tolerance = _rank_tolerance(normalized, amplification)
     rank = int(np.sum(s > tolerance))
     return RunComponents(
