@@ -42,11 +42,35 @@ def resolve_fmriprep_dir(bids_dir):
     return candidates[0]
 
 
+_MODULATOR_SYNTAX = "COLUMN[:indicator|categorical|reference=LEVEL,...]"
+
+
+def _modulator_options(text, options):
+    seen, values = set(), {}
+    for option in options:
+        key, _, value = option.partition("=")
+        if key in seen or key not in ("indicator", "categorical", "reference"):
+            raise ValueError(f"modulator must be {_MODULATOR_SYNTAX}, not {text!r}")
+        if (key == "reference") != bool(value):
+            raise ValueError(f"modulator must be {_MODULATOR_SYNTAX}, not {text!r}")
+        seen.add(key)
+        values[key] = value
+    if "reference" in values and "categorical" not in values:
+        raise ValueError(f"modulator reference needs categorical, not {text!r}")
+    return values
+
+
 def parse_modulator(text):
-    parts = str(text).split(":")
-    if not parts[0] or len(parts) > 2 or (len(parts) == 2 and parts[1] != "indicator"):
-        raise ValueError(f"modulator must be COLUMN or COLUMN:indicator, not {text!r}")
-    return Modulator(parts[0], missing="indicator" if len(parts) == 2 else "error")
+    column, sep, rest = str(text).partition(":")
+    if not column or ":" in rest or (sep and not rest):
+        raise ValueError(f"modulator must be {_MODULATOR_SYNTAX}, not {text!r}")
+    values = _modulator_options(text, rest.split(",") if rest else [])
+    return Modulator(
+        column,
+        missing="indicator" if "indicator" in values else "error",
+        kind="categorical" if "categorical" in values else "numeric",
+        reference=values.get("reference"),
+    )
 
 
 def _nested(path, other):

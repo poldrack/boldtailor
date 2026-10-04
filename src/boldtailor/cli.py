@@ -61,9 +61,10 @@ def _add_inputs(run):
         "--modulator",
         action="append",
         type=parse_modulator,
-        metavar="COLUMN[:indicator]",
-        help="task modulator; repeat to list all; default detects response_time "
-        "and a binary 0/1 trial_type",
+        metavar="COLUMN[:OPTIONS]",
+        help="task modulator; OPTIONS is a comma list of indicator, categorical, "
+        "reference=LEVEL; repeat to list all; default detects response_time "
+        "and a categorical trial_type",
     )
     exclusive.add_argument(
         "--no-modulators",

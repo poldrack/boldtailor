@@ -86,13 +86,31 @@ def _path_flags(settings):
     return flags
 
 
+def modulator_text(mod):
+    """The ``--modulator`` argument that ``parse_modulator`` maps back to ``mod``."""
+    options = ["indicator"] if mod.missing == "indicator" else []
+    if mod.kind == "categorical":
+        options.append("categorical")
+        if mod.reference is not None:
+            options.append(_reference_option(mod.reference))
+    return mod.column + (":" + ",".join(options) if options else "")
+
+
+def _reference_option(reference):
+    if "," in reference or ":" in reference:
+        raise ValueError(
+            f"modulator reference {reference!r} contains ',' or ':', which "
+            "--modulator cannot express"
+        )
+    return f"reference={reference}"
+
+
 def _modulator_flags(settings):
     if settings.modulators == ():
         return ["--no-modulators"]
     flags = []
     for mod in settings.modulators or ():
-        text = mod.column + (":indicator" if mod.missing == "indicator" else "")
-        flags += _quoted("--modulator", text)
+        flags += _quoted("--modulator", modulator_text(mod))
     return flags
 
 
