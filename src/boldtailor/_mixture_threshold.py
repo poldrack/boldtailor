@@ -13,6 +13,16 @@ Deviations, recorded in ``to_dict()``: ``random_state=0`` and a seeded
 subsample make the result reproducible; convergence warnings are captured
 and recorded (``converged``, ``n_iter``) instead of printed; failures raise
 ``ValueError`` rather than asserting.
+
+This module reimplements procedures from GLMsingle
+(https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
+distributed under the BSD 3-Clause License; see
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
+disclaimer. It is an independent reimplementation, not a copy of GLMsingle
+code. Follows GLMsingle's findtailthreshold and robustrange. Reference: Prince,
+J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
+Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
+eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
 """
 
 from dataclasses import asdict, dataclass

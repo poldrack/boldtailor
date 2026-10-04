@@ -9,6 +9,17 @@ each pool threshold is GLMsingle's two-component Gaussian-mixture tail
 threshold, fitted separately in every fold and for the final pool. The pool is not iterated after adding PCs.
 ``with_denoising`` appends those PCs to the baseline confounds of the same
 analysis for ordinary HRF selection and fitting.
+
+This module reimplements procedures from GLMsingle
+(https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
+distributed under the BSD 3-Clause License; see
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
+disclaimer. It is an independent reimplementation, not a copy of GLMsingle
+code. Follows the GLMdenoise stage of GLMsingle (noise pool, run-wise PCs,
+cross-validated PC count, select_noise_regressors). Reference: Prince, J.S.,
+Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
+Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
+eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
 """
 
 from collections.abc import Sequence

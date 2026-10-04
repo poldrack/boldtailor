@@ -31,6 +31,16 @@ Boldtailor's selection and final fitting procedures are described in the
 
 ## Data-derived noise regressors
 
+**Attribution.** The denoising procedure follows GLMsingle's GLMdenoise
+stage (Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J.,
+Kay, K.N. (2022). Improving the accuracy of single-trial fMRI response
+estimates using GLMsingle. *eLife*, 11, e77599.
+[doi:10.7554/eLife.77599](https://doi.org/10.7554/eLife.77599)), with the
+deviations listed below. It is an independent reimplementation;
+GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
+3-Clause License, reproduced in `LICENSES/GLMsingle-BSD-3-Clause.txt`.
+GLMsingle's authors have not reviewed or endorsed Boldtailor.
+
 Boldtailor has an optional, task-guided pool, `select_denoising()`, that
 borrows GLMdenoise's structure. It finds a noise pool, computes temporal PCs
 of that pool in each run, and chooses one PC count by cross-validation. The

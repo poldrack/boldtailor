@@ -232,3 +232,23 @@ def test_docs_describe_denoising_contract_and_limits():
     comparison = Path("docs/glmsingle-comparison.md").read_text()
     assert "select_denoising" in comparison and "optional" in comparison
     assert "task-guided" in comparison
+
+
+def test_glmsingle_attribution_ships_and_is_cited():
+    """BSD 3-Clause notice is kept and the GLMsingle paper is cited."""
+    notice = Path("LICENSES/GLMsingle-BSD-3-Clause.txt").read_text()
+    assert "Copyright (c) 2021, Kendrick Kay" in notice
+    for path in ("docs/user-guide.md", "docs/api.md", "docs/glmsingle-comparison.md"):
+        text = Path(path).read_text()
+        assert "10.7554/eLife.77599" in text and "e77599" in text, path
+        assert "LICENSES/GLMsingle-BSD-3-Clause.txt" in text, path
+    for module in (
+        "_mixture_threshold",
+        "_denoising_pool",
+        "_denoising_cv",
+        "denoising",
+    ):
+        source = Path(f"src/boldtailor/{module}.py").read_text()
+        docstring = source.split('"""', 2)[1]
+        assert "LICENSES/GLMsingle-BSD-3-Clause.txt" in docstring, module
+        assert "10.7554/eLife.77599" in docstring, module

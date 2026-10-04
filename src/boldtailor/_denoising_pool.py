@@ -10,6 +10,17 @@ statistic over the eligible features (see :mod:`boldtailor._mixture_threshold`).
 Pool time series are projected off the run's baseline
 confounds plus intercept, numerically zero columns are discarded, and the rest
 are scaled to unit L2 norm before a reduced SVD.
+
+This module reimplements procedures from GLMsingle
+(https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
+distributed under the BSD 3-Clause License; see
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
+disclaimer. It is an independent reimplementation, not a copy of GLMsingle
+code. Follows the GLMdenoise noise-pool/PC procedure used by GLMsingle (ON-OFF
+R² noise pool, run-wise temporal PCs of the pool). Reference: Prince, J.S.,
+Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
+Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
+eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
 """
 
 from dataclasses import dataclass

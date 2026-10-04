@@ -595,6 +595,16 @@ PC count by held-out task prediction. `with_denoising()` appends the chosen
 PCs to each run's confounds, so ordinary HRF selection and fitting can use
 them. Nothing else in the package calls it, and no defaults change.
 
+**Attribution.** The denoising procedure follows GLMsingle's GLMdenoise
+stage (Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J.,
+Kay, K.N. (2022). Improving the accuracy of single-trial fMRI response
+estimates using GLMsingle. *eLife*, 11, e77599.
+[doi:10.7554/eLife.77599](https://doi.org/10.7554/eLife.77599)), with the
+deviations listed in this section. It is an independent reimplementation;
+GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
+3-Clause License, reproduced in `LICENSES/GLMsingle-BSD-3-Clause.txt`.
+GLMsingle's authors have not reviewed or endorsed Boldtailor.
+
 ```python
 from dataclasses import replace
 from boldtailor.denoising import select_denoising, with_denoising

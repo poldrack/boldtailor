@@ -10,6 +10,17 @@ PCs, so the target, denominator, and scored features are identical for every
 count. Indicator coefficients are profiled on held-out BOLD, so this is
 conditional task prediction, and the aggregate is a selection statistic, not
 an independent performance estimate.
+
+This module reimplements procedures from GLMsingle
+(https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
+distributed under the BSD 3-Clause License; see
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
+disclaimer. It is an independent reimplementation, not a copy of GLMsingle
+code. Follows GLMsingle's select_noise_regressors stopping rule (pcstop) and
+the GLMdenoise cross-validated choice of the PC count. Reference: Prince, J.S.,
+Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
+Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
+eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
 """
 
 from dataclasses import dataclass, field
