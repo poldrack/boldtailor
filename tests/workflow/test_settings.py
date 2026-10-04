@@ -126,7 +126,9 @@ def test_round_trip_through_dict_and_library_builder(bids):
         stages=frozenset({"glms"}),
     )
     values = settings.to_dict()
-    assert values["modulators"] == [{"column": "response_time", "missing": "indicator"}]
+    assert values["modulators"] == [
+        {"column": "response_time", "missing": "indicator", "kind": "numeric"}
+    ]
     assert values["stages"] == ["glms"]
     assert WorkflowSettings.from_dict(values) == settings
     assert (

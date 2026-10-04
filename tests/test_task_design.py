@@ -77,6 +77,7 @@ def test_modulator_has_no_center_option():
     assert Modulator("response_time").to_dict() == {
         "column": "response_time",
         "missing": "error",
+        "kind": "numeric",
     }
 
 
