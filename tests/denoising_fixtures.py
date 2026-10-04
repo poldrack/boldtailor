@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.signal import lfilter
 
 from boldtailor._hrf_design import convolve_events
 from boldtailor.data import AnalysisData, from_arrays
@@ -151,8 +152,13 @@ def make_denoising_fixture(seed=20261003):
 # amplitudes; `noise` features carry no task response. With `shared_noise`,
 # two AR(1) latent series per run (not in the baseline confounds) load on every
 # feature; without it, every feature has only independent white noise.
+# Task 8 (predeclared before its first run): `no_benefit_ar1` has the layout
+# of `no_benefit`, except that each feature's white noise is replaced by an
+# independent stationary AR(1) process with coefficient 0.5 whose innovations
+# are the same N(0, VALIDATION_WHITE_SD) draws (no shared component).
 
-VALIDATION_SEEDS = dict(recovery=20261004, no_benefit=20261005)
+VALIDATION_SEEDS = dict(recovery=20261004, no_benefit=20261005, no_benefit_ar1=20261006)
+VALIDATION_AR_COEFFICIENT = 0.5
 VALIDATION_LENGTHS = (90, 96, 84, 102, 92)
 VALIDATION_AMPLITUDES = np.linspace(1.0, 3.0, 10)
 VALIDATION_NOISE_FEATURES = 30
@@ -178,7 +184,17 @@ def _validation_confounds(length):
     )
 
 
-def _validation_run(rng, length, library, shared_noise):
+def _feature_noise(rng, length, n, kind):
+    """White noise, or (``no_benefit_ar1``) independent stationary AR(1) noise."""
+    noise = rng.normal(scale=VALIDATION_WHITE_SD, size=(length, n))
+    if kind != "no_benefit_ar1":
+        return noise
+    phi = VALIDATION_AR_COEFFICIENT
+    noise[0] /= np.sqrt(1.0 - phi**2)
+    return lfilter([1.0], [1.0, -phi], noise, axis=0)
+
+
+def _validation_run(rng, length, library, kind):
     times = TR * np.arange(length)
     events = _events(rng, length)[["onset", "duration"]].assign(trial_type="task")
     regressor = _trial_responses(events, times, library.candidates[0]).sum(axis=1)
@@ -187,9 +203,9 @@ def _validation_run(rng, length, library, shared_noise):
     task_signal = np.zeros((length, n))
     task_signal[:, :n_task] = np.outer(regressor, VALIDATION_AMPLITUDES)
     confounds = _validation_confounds(length)
-    y = rng.normal(scale=VALIDATION_WHITE_SD, size=(length, n))
+    y = _feature_noise(rng, length, n, kind)
     y += confounds.to_numpy() @ rng.normal(scale=0.5, size=(2, n))
-    if shared_noise:
+    if kind == "recovery":
         latents = np.column_stack(
             [_latent(rng, length) for _ in range(VALIDATION_LATENTS)]
         )
@@ -211,8 +227,7 @@ def make_validation_dataset(kind):
     rng = np.random.default_rng(VALIDATION_SEEDS[kind])
     library = fixture_library()
     runs = [
-        _validation_run(rng, length, library, kind == "recovery")
-        for length in VALIDATION_LENGTHS
+        _validation_run(rng, length, library, kind) for length in VALIDATION_LENGTHS
     ]
     n_task = len(VALIDATION_AMPLITUDES)
     return ValidationDataset(

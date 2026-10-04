@@ -35,7 +35,10 @@ MODEL = ModelSpec(contrasts={"task": "task"}, confounds=BASELINE, drift_model=No
 # noise) and were strict xfail. Task 7 added the predeclared F-test
 # significance gate (default settings); rerun once unchanged, the gate rejects
 # k*=6 (m=1 of n=10, binomial p=0.40) and the recovery data keep k*=1 (m=6 of
-# n=6), so the xfail markers were removed.
+# n=6), so the xfail markers were removed. Task 8 made the gate AR(1)
+# prewhitened by default (gate_noise_model="ar1") and added the predeclared
+# independent-AR(0.5) no-benefit dataset (seed 20261006); the checks above
+# and below were rerun unchanged with the default gate.
 
 
 def denoise(dataset):
@@ -176,6 +179,38 @@ def test_without_shared_noise_the_default_library_also_chooses_zero(no_benefit):
     assert result.n_components == 0
 
 
+@pytest.fixture(scope="module")
+def no_benefit_ar1():
+    return make_validation_dataset("no_benefit_ar1")
+
+
+def test_independent_autocorrelated_noise_chooses_zero_components(no_benefit_ar1):
+    """Task 8 criterion (1): independent AR(0.5) noise, default (ar1) gate."""
+    result = denoise(no_benefit_ar1)
+    assert result.significance_gate.noise_model == "ar1"
+    assert result.n_components == 0
+
+
+def lag1_after_baseline(data, run, features):
+    """Median lag-1 autocorrelation of features after removing the confounds."""
+    confounds = data.confounds[run].to_numpy()
+    nuisance = np.column_stack([confounds, np.ones(len(confounds))])
+    y = data.signals[run][:, features]
+    e = y - nuisance @ np.linalg.lstsq(nuisance, y, rcond=None)[0]
+    return np.median([np.corrcoef(c[:-1], c[1:])[0, 1] for c in e.T])
+
+
+def test_ar1_validation_noise_is_independent_ar05(no_benefit_ar1, no_benefit):
+    """The AR dataset keeps the no-benefit layout; its noise is AR(0.5)."""
+    a, b = no_benefit_ar1.training, no_benefit.training
+    assert [len(t) for t in a.frame_times] == [len(t) for t in b.frame_times]
+    assert a.n_features == b.n_features
+    noise = np.arange(len(no_benefit.amplitudes), a.n_features)
+    for run in range(a.n_runs):
+        assert 0.35 < lag1_after_baseline(a, run, noise) < 0.6
+        assert abs(lag1_after_baseline(b, run, noise)) < 0.15
+
+
 # ---- documentation example -------------------------------------------------------
 
 
@@ -294,10 +329,36 @@ def test_docs_describe_the_significance_gate():
         assert phrase in api, phrase
 
 
+def test_docs_describe_the_prewhitened_gate():
+    """Task 8: AR(1) prewhitening by default and the remaining caveats."""
+    guide, comparison = denoising_doc_sections()
+    api = Path("docs/api.md").read_text().split("## Task-guided denoising", 1)[1]
+    api = api.split("\n## ", 1)[0]
+    for text in (guide, comparison, api):
+        for phrase in ("gate_noise_model", "prewhiten", "Nilearn", "ar1"):
+            assert phrase in text, phrase
+    for text in (guide, comparison):
+        for phrase in (
+            "Boldtailor addition",
+            "in-sample",
+            "under-whiten",
+            "higher-order",
+            "independent",
+            "AR(0.5)",
+        ):
+            assert phrase in text, phrase
+        assert "use OLS without prewhitening" not in text
+        assert "OLS, no prewhitening" not in text
+    for phrase in ("ar_coefficients", "noise_model"):
+        assert phrase in api, phrase
+
+
 def test_gate_module_is_described_as_a_boldtailor_addition():
     docstring = Path("src/boldtailor/_denoising_gate.py").read_text().split('"""')[1]
     assert "Boldtailor addition" in docstring
     assert "not part of GLMsingle" in docstring
+    for phrase in ("prewhiten", "Nilearn", "_yule_walker"):
+        assert phrase in docstring, phrase
 
 
 def denoising_doc_sections():

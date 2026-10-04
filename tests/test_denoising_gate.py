@@ -1,11 +1,16 @@
 """F-test significance gate on the pcstop count, against independent oracles.
 
 The gate is a Boldtailor addition (not part of GLMsingle). For each scoring
-feature the oracle fits two nested OLS models in-sample on all runs by
-separate ``np.linalg.lstsq`` calls on stacked designs: task columns shared
-across runs next to block-diagonal run nuisances [confounds, 1, indicators]
-(reduced) and [confounds, 1, indicators, first k PCs] (full). Degrees of
-freedom come from ``np.linalg.matrix_rank``, p-values from
+feature the oracle fits two nested models in-sample on all runs by separate
+``np.linalg.lstsq`` calls on stacked designs: task columns shared across runs
+next to block-diagonal run nuisances [confounds, 1, indicators] (reduced) and
+[confounds, 1, indicators, first k PCs] (full). With ``noise_model="ar1"``
+(Task 8) each run's lag-1 autocorrelation is estimated per feature from the
+full OLS fit's residuals by the explicit Yule-Walker ratio, truncated to
+Nilearn's 1/100 bins, and the stacked data and both designs are multiplied
+by an explicitly built block-diagonal AR(1) whitening matrix (identity minus
+rho on the subdiagonal; first scan unscaled, as Nilearn's ``ARModel``).
+Degrees of freedom come from ``np.linalg.matrix_rank``, p-values from
 ``scipy.stats.f.sf``, and the decision from ``scipy.stats.binomtest``.
 """
 
@@ -17,12 +22,19 @@ import numpy as np
 import pytest
 from scipy import stats
 from scipy.linalg import block_diag
+from nilearn.glm.first_level import run_glm
 
 from boldtailor._denoising_cv import prepare_scoring, select_component_count
-from boldtailor._denoising_gate import apply_gate, validate_gate
+from boldtailor._denoising_gate import (
+    apply_gate,
+    ar1_coefficients,
+    validate_gate,
+    validate_noise_model,
+)
 from boldtailor._denoising_pool import RunComponents, run_components
 from boldtailor.denoising import select_denoising
 from boldtailor.denoising_results import SignificanceGate
+from boldtailor.data import from_arrays
 from tests.denoising_fixtures import make_denoising_fixture
 from tests.test_denoising_cv import (
     MISSING_RT,
@@ -68,8 +80,11 @@ def pcstop_count(fixture, base):
     ).n_components
 
 
+NOISE_MODELS = ("ols", "ar1")
+
+
 def gate(setup, count, **options):
-    settings = dict(enabled=True, alpha=ALPHA, binomial_alpha=ALPHA)
+    settings = dict(enabled=True, alpha=ALPHA, binomial_alpha=ALPHA, noise_model="ar1")
     settings.update(options)
     return apply_gate(setup, count, **settings)
 
@@ -95,30 +110,91 @@ def stacked(data, comps, features, candidate, count, model):
     )
 
 
-def sse(design, y):
+def residuals(design, y):
     beta = np.linalg.lstsq(design, y, rcond=None)[0]
-    return np.sum((y - design @ beta) ** 2, axis=0)
+    return y - design @ beta
 
 
-def oracle_f(data, comps, features, candidate, count, model):
+def sse(design, y):
+    return np.sum(residuals(design, y) ** 2, axis=0)
+
+
+def yule_walker_ar1(e):
+    """Order-1 Yule-Walker estimate, Nilearn's normalization, written out."""
+    e = e - e.mean()
+    n = len(e)
+    return (e[:-1] @ e[1:] / (n - 1)) / (e @ e / n)
+
+
+def nilearn_bin(rho, bins=100):
+    return np.trunc(rho * bins) / bins
+
+
+def ar1_matrix(n, rho):
+    """Nilearn's AR(1) whitening as a matrix: first scan unscaled."""
+    return np.eye(n) - rho * np.eye(n, k=-1)
+
+
+def run_slices(data):
+    stops = np.cumsum([len(t) for t in data.frame_times])
+    return [slice(stop - len(t), stop) for stop, t in zip(stops, data.frame_times)]
+
+
+def oracle_rhos(data, full, y):
+    """(runs, features): binned lag-1 coefficients of the full OLS residuals."""
+    e = residuals(full, y)
+    return np.array(
+        [
+            [nilearn_bin(yule_walker_ar1(e[s, j])) for j in range(y.shape[1])]
+            for s in run_slices(data)
+        ]
+    )
+
+
+def whitened_f(data, reduced, full, y, rho):
+    """Per-feature F after block-diagonal AR(1) whitening of data and designs."""
+    out = []
+    for j in range(y.shape[1]):
+        w = block_diag(
+            *[ar1_matrix(len(t), r) for t, r in zip(data.frame_times, rho[:, j])]
+        )
+        wr, wf, wy = w @ reduced, w @ full, w @ y[:, j]
+        rank_r, rank_f = np.linalg.matrix_rank(wr), np.linalg.matrix_rank(wf)
+        df1, df2 = rank_f - rank_r, len(wy) - rank_f
+        out.append(((sse(wr, wy) - sse(wf, wy)) / df1) / (sse(wf, wy) / df2))
+    return np.array(out)
+
+
+def oracle_f(data, comps, features, candidate, count, model, noise_model="ols"):
     reduced, full, y = stacked(data, comps, features, candidate, count, model)
     rank_r, rank_f = np.linalg.matrix_rank(reduced), np.linalg.matrix_rank(full)
     df1, df2 = rank_f - rank_r, len(y) - rank_f
-    sse_r, sse_f = sse(reduced, y), sse(full, y)
-    f = ((sse_r - sse_f) / df1) / (sse_f / df2)
-    return f, stats.f.sf(f, df1, df2), df1, df2
+    if noise_model == "ar1":
+        rho = oracle_rhos(data, full, y)
+        f = whitened_f(data, reduced, full, y, rho)
+    else:
+        rho = np.full((data.n_runs, len(features)), np.nan)
+        sse_r, sse_f = sse(reduced, y), sse(full, y)
+        f = ((sse_r - sse_f) / df1) / (sse_f / df2)
+    return f, stats.f.sf(f, df1, df2), df1, df2, rho
 
 
-def oracle_gate(data, inputs, library, model, count, scoring, indices=None):
+def oracle_gate(
+    data, inputs, library, model, count, scoring, indices=None, noise_model="ols"
+):
     selection, _, comps = inputs
     ids = selection.hrf_indices if indices is None else indices
     n = data.n_features
     out = {key: np.full(n, np.nan) for key in ("f", "p", "df1", "df2")}
+    out["rho"] = np.full((data.n_runs, n), np.nan)
     for hrf in np.unique(ids[scoring]):
         features = np.flatnonzero(scoring & (ids == hrf))
-        values = oracle_f(data, comps, features, library.candidates[hrf], count, model)
+        values = oracle_f(
+            data, comps, features, library.candidates[hrf], count, model, noise_model
+        )
         for key, value in zip(("f", "p", "df1", "df2"), values):
             out[key][features] = value
+        out["rho"][:, features] = values[4]
     return out
 
 
@@ -149,6 +225,17 @@ def test_gate_alpha_strings_are_rejected():
         validate_gate(True, "0.05", 0.05)
 
 
+@pytest.mark.parametrize("value", NOISE_MODELS)
+def test_gate_noise_models_are_accepted(value):
+    assert validate_noise_model(value) == value
+
+
+@pytest.mark.parametrize("value", ["AR1", "ar2", "ar(1)", "", None, 1, True])
+def test_unknown_gate_noise_models_are_rejected(value):
+    with pytest.raises(ValueError, match="gate_noise_model"):
+        validate_noise_model(value)
+
+
 # ---- per-feature F-tests -------------------------------------------------------------
 
 
@@ -167,12 +254,24 @@ def variant_setups(fixture):
     return out
 
 
+@pytest.mark.parametrize("noise_model", NOISE_MODELS)
 @pytest.mark.parametrize("name", VARIANTS)
 @pytest.mark.parametrize("count", (1, 2, 4))
-def test_f_statistics_match_the_stacked_oracle(fixture, variant_setups, name, count):
+def test_f_statistics_match_the_stacked_oracle(
+    fixture, variant_setups, name, count, noise_model
+):
     data, model, inputs, setup = variant_setups[name]
-    want = oracle_gate(data, inputs, fixture.library, model, count, setup.scoring)
-    result = gate(setup, count)
+    want = oracle_gate(
+        data,
+        inputs,
+        fixture.library,
+        model,
+        count,
+        setup.scoring,
+        noise_model=noise_model,
+    )
+    result = gate(setup, count, noise_model=noise_model)
+    assert result.noise_model == noise_model
     tested = setup.scoring
     np.testing.assert_array_equal(result.tested, tested)
     assert not result.excluded.any()
@@ -186,6 +285,91 @@ def test_f_statistics_match_the_stacked_oracle(fixture, variant_setups, name, co
     )
     for array in (result.f_statistic, result.p_value, result.df1, result.df2):
         assert np.isnan(array[~tested]).all()
+    rho = result.ar_coefficients
+    assert rho.shape == (data.n_runs, data.n_features)
+    np.testing.assert_array_equal(rho[:, tested], want["rho"][:, tested])
+    assert np.isnan(rho[:, ~tested]).all()
+
+
+# ---- AR(1) prewhitening ------------------------------------------------------------
+
+
+def test_ar1_coefficients_follow_nilearn_run_glm():
+    """Yule-Walker on OLS residuals, truncated to 1/100 bins, as in run_glm."""
+    rng = np.random.default_rng(5)
+    n = 120
+    design = np.column_stack([np.ones(n), rng.normal(size=(n, 2))])
+    noise = rng.normal(size=(n, 30))
+    for t in range(1, n):
+        noise[t] += np.linspace(-0.6, 0.8, 30) * noise[t - 1]
+    y = design @ rng.normal(size=(3, 30)) + noise
+    labels, _ = run_glm(y, design, noise_model="ar1")
+    got = ar1_coefficients(residuals(design, y))
+    np.testing.assert_array_equal(got, [float(label) for label in labels])
+
+
+def test_rho_is_estimated_separately_for_each_run(base):
+    _, setup = base
+    result = gate(setup, 2)
+    rho = result.ar_coefficients[:, result.tested]
+    assert np.all(np.abs(rho) < 1)
+    assert not np.all(rho == rho[:1])
+
+
+def test_zero_coefficients_reproduce_the_ols_gate(base, monkeypatch):
+    import boldtailor._denoising_gate as module
+
+    _, setup = base
+    ols = gate(setup, 2, noise_model="ols")
+    monkeypatch.setattr(module, "ar1_coefficients", lambda e: np.zeros(e.shape[1]))
+    ar1 = gate(setup, 2)
+    tested = ols.tested
+    np.testing.assert_array_equal(ar1.tested, tested)
+    np.testing.assert_allclose(
+        ar1.f_statistic[tested], ols.f_statistic[tested], rtol=1e-9
+    )
+    assert np.all(ar1.ar_coefficients[:, tested] == 0)
+
+
+def test_ols_gate_records_no_coefficients(base):
+    _, setup = base
+    result = gate(setup, 2, noise_model="ols")
+    assert result.noise_model == "ols"
+    assert np.isnan(result.ar_coefficients).all()
+
+
+@pytest.fixture(scope="module")
+def white_setup(fixture, base):
+    """White-noise BOLD (no task, no shared noise) and white-noise PCs."""
+    inputs, _ = base
+    selection, masks, _ = inputs
+    rng = np.random.default_rng(23)
+    data = fixture.data
+    signals = [100.0 + rng.normal(size=s.shape) for s in data.signals]
+    white = from_arrays(
+        signals,
+        list(data.events),
+        frame_times=list(data.frame_times),
+        confounds=list(data.confounds),
+    )
+    return prepare_scoring(
+        white,
+        hrf_indices=selection.hrf_indices,
+        components=white_noise_components(white),
+        scoring=masks.scoring,
+        task_model=fixture.task_model,
+        library=fixture.library,
+    )
+
+
+def test_whitening_white_noise_stays_close_to_ols(white_setup):
+    ar1 = gate(white_setup, 2)
+    ols = gate(white_setup, 2, noise_model="ols")
+    tested = ar1.tested
+    assert np.all(np.abs(ar1.ar_coefficients[:, tested]) < 0.35)
+    ratio = np.log(ar1.f_statistic[tested] / ols.f_statistic[tested])
+    assert np.median(np.abs(ratio)) < 0.2
+    assert ar1.decision == ols.decision
 
 
 def test_binomial_decision_matches_scipy(base, pcstop_count):
@@ -321,11 +505,14 @@ def two_hrf_setup(fixture, base):
     return indices, comps, setup
 
 
-def test_rank_deficient_features_are_excluded_from_n(fixture, base, two_hrf_setup):
+@pytest.mark.parametrize("noise_model", NOISE_MODELS)
+def test_rank_deficient_features_are_excluded_from_n(
+    fixture, base, two_hrf_setup, noise_model
+):
     inputs, _ = base
     _, masks, _ = inputs
     indices, comps, setup = two_hrf_setup
-    result = gate(setup, 2)
+    result = gate(setup, 2, noise_model=noise_model)
     deficient = masks.scoring & (indices == 1)
     assert deficient.sum() == 2
     np.testing.assert_array_equal(result.excluded, deficient)
@@ -357,12 +544,15 @@ def test_rank_deficient_features_are_excluded_from_n(fixture, base, two_hrf_setu
         2,
         masks.scoring & ~deficient,
         indices,
+        noise_model=noise_model,
     )
     tested = result.tested
     np.testing.assert_allclose(result.f_statistic[tested], want["f"][tested], rtol=1e-6)
+    assert np.isnan(result.ar_coefficients[:, deficient]).all()
 
 
-def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base):
+@pytest.mark.parametrize("noise_model", NOISE_MODELS)
+def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base, noise_model):
     # Features 0 and 7 are in the baseline span in every run; feature 1 in
     # run 3 only. pcstop scores neither, so the gate must not test them.
     inputs, _ = base
@@ -376,7 +566,7 @@ def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base):
     zero[[0, 1, 7]] = True
     assert setup.scoring[zero].all()
     np.testing.assert_array_equal(setup.scored, setup.scoring & ~zero)
-    result = gate(setup, 2)
+    result = gate(setup, 2, noise_model=noise_model)
     np.testing.assert_array_equal(result.tested, setup.scored)
     np.testing.assert_array_equal(result.excluded, zero)
     assert result.n == int(setup.scored.sum())
@@ -386,7 +576,13 @@ def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base):
     for array in (result.f_statistic, result.p_value, result.df1, result.df2):
         assert np.isnan(array[zero]).all()
     want = oracle_gate(
-        data, inputs, fixture.library, fixture.task_model, 2, setup.scored
+        data,
+        inputs,
+        fixture.library,
+        fixture.task_model,
+        2,
+        setup.scored,
+        noise_model=noise_model,
     )
     tested = result.tested
     np.testing.assert_allclose(
@@ -473,6 +669,7 @@ def test_gate_arrays_are_read_only_and_the_result_is_frozen(base, pcstop_count):
         result.df2,
         result.tested,
         result.excluded,
+        result.ar_coefficients,
     ):
         assert not array.flags.writeable
     with pytest.raises(FrozenInstanceError):
@@ -500,6 +697,7 @@ def test_gate_defaults_are_declared_in_the_signature():
     assert parameters["significance_gate"].default is True
     assert parameters["gate_alpha"].default == 0.05
     assert parameters["gate_binomial_alpha"].default == 0.05
+    assert parameters["gate_noise_model"].default == "ar1"
 
 
 @pytest.mark.parametrize(
@@ -512,6 +710,8 @@ def test_gate_defaults_are_declared_in_the_signature():
         (dict(gate_binomial_alpha=-0.5), "gate_binomial_alpha"),
         (dict(gate_binomial_alpha=np.inf), "gate_binomial_alpha"),
         (dict(gate_binomial_alpha=True), "gate_binomial_alpha"),
+        (dict(gate_noise_model="ar2"), "gate_noise_model"),
+        (dict(gate_noise_model=None), "gate_noise_model"),
     ],
 )
 def test_select_denoising_validates_gate_settings(fixture, options, match):
@@ -531,7 +731,17 @@ def test_result_records_pcstop_and_gated_counts(base, pcstop_count, result):
     assert recorded.binomial_p == want.binomial_p
     np.testing.assert_array_equal(recorded.f_statistic, want.f_statistic)
     np.testing.assert_array_equal(recorded.p_value, want.p_value)
+    np.testing.assert_array_equal(recorded.ar_coefficients, want.ar_coefficients)
     assert recorded.alpha == ALPHA and recorded.binomial_alpha == ALPHA
+    assert recorded.noise_model == "ar1"
+
+
+def test_ols_noise_model_reaches_the_gate(fixture, base, pcstop_count):
+    _, setup = base
+    ols = run_selection(fixture, gate_noise_model="ols")
+    want = gate(setup, pcstop_count, noise_model="ols")
+    assert ols.significance_gate.noise_model == "ols"
+    np.testing.assert_array_equal(ols.significance_gate.p_value, want.p_value)
 
 
 def test_disabled_gate_reproduces_pcstop_only_selection(fixture, pcstop_count):
@@ -555,6 +765,21 @@ def digest(array, dtype="<f8"):
     return sha256(np.ascontiguousarray(array, dtype=dtype).tobytes()).hexdigest()
 
 
+def rho_summary(recorded, labels):
+    rows = []
+    for label, rho in zip(labels, recorded.ar_coefficients):
+        values = rho[recorded.tested]
+        rows.append(
+            dict(
+                run=label,
+                min=float(values.min()),
+                median=float(np.median(values)),
+                max=float(values.max()),
+            )
+        )
+    return rows
+
+
 def test_provenance_records_the_gate(result):
     activity = result.provenance.to_dict()["activities"][-1]
     recorded = result.significance_gate
@@ -562,7 +787,12 @@ def test_provenance_records_the_gate(result):
     assert activity["n_components"] == result.n_components
     assert activity["significance_gate"] == dict(
         enabled=True,
-        test="ols_nested_f_in_sample_all_runs",
+        test="ar1_prewhitened_nested_f_in_sample_all_runs",
+        noise_model="ar1",
+        ar1_estimate="yule_walker_full_model_ols_residuals_per_run_and_feature",
+        ar1_bins=100,
+        ar_coefficient_summary=rho_summary(recorded, result.run_labels),
+        ar_coefficient_fingerprint=digest(recorded.ar_coefficients),
         aggregate="one_sided_binomial_over_tested_features",
         gate_alpha=ALPHA,
         gate_binomial_alpha=ALPHA,
@@ -577,6 +807,15 @@ def test_provenance_records_the_gate(result):
         p_value_fingerprint=digest(recorded.p_value),
         exclusions=[],
     )
+
+
+def test_provenance_records_the_ols_gate(fixture):
+    ols = run_selection(fixture, gate_noise_model="ols")
+    record = ols.provenance.to_dict()["activities"][-1]["significance_gate"]
+    assert record["test"] == "ols_nested_f_in_sample_all_runs"
+    assert record["noise_model"] == "ols"
+    assert record["ar1_estimate"] is None and record["ar1_bins"] is None
+    assert record["ar_coefficient_summary"] is None
 
 
 def test_result_rejects_an_inconsistent_gate(result):
