@@ -468,3 +468,55 @@ API, GLMsingle comparison) to describe the GLMsingle-aligned procedure, each
 deviation with its reason (confounds vs polynomials; time-series scoring
 because repeats are not assumed; fixed scoring target), the anatomy-agnostic
 core, and the validation outcome.
+
+## Amendment (2026-10-04, third): voxelwise F-test gate
+
+Task 6's predeclared no-benefit validation failed: GLMsingle's `pcstop` rule
+(difference of medians, relative stop, no floor) chose positive counts on
+independent noise from chance gains of ~2e-4. The user chose to keep
+`pcstop` for choosing the count and add a significance gate, as a documented
+deviation from GLMsingle (which scores by beta consistency over repeats and
+has no such gate).
+
+## Task 7: F-test significance gate on the chosen count
+
+**Rule (binding).** Let `k*` be the count chosen by `pcstop`. If `k* == 0`,
+the result is 0. Otherwise, for every scoring feature, fit in-sample on all
+runs by OLS (user choice: no prewhitening) two nested models with the frozen
+HRFs:
+- reduced: the task design (all task-model regressors) plus each run's
+  baseline confounds and intercept (and missing-value indicators, as in the
+  existing designs);
+- full: reduced plus the first `k*` PCs of every run as run-specific columns.
+
+Per feature, `F = ((SSE_r - SSE_f) / df1) / (SSE_f / df2)` with `df1 = rank(full)
+- rank(reduced)` and `df2 = N - rank(full)` (N = total scans), using the
+existing rank tolerances; `p = scipy.stats.f.sf(F, df1, df2)`. Let `m` be the
+number of scoring features with `p < gate_alpha` (default 0.05) out of `n`
+features. Keep `k*` only if `scipy.stats.binomtest(m, n, gate_alpha,
+alternative="greater").pvalue < gate_binomial_alpha` (default 0.05);
+otherwise choose 0. Features whose designs are rank-deficient or have
+`df2 <= 0` are excluded from `n` and counted in diagnostics.
+
+**API.** `select_denoising(..., significance_gate: bool = True, gate_alpha:
+float = 0.05, gate_binomial_alpha: float = 0.05)`; validate (finite, in (0,
+1)); `significance_gate=False` reproduces GLMsingle's pcstop-only behaviour.
+`DenoisingResult` records the pcstop count, the gated count, per-feature F
+and p, m, n, the binomial p-value, the decision, and parameters; provenance
+too.
+
+**Tests (RED first).** Independent oracle: per-feature F via two separate
+`np.linalg.lstsq` fits on stacked designs and `scipy.stats.f.sf`; binomial
+decision via `scipy.stats.binomtest`; cases: shared-noise data keeps `k*`;
+independent noise rejects; `k* == 0` skips the gate; gate disabled returns
+`k*`; invalid parameters raise; rank-deficient features excluded.
+Validation with predeclared criteria (declared here, before running):
+Task 4's no-benefit dataset (seed 20261005, both the test library and the
+default library) must choose 0 components; the shared-noise recovery dataset
+(seed 20261004) must still choose a positive count and pass all four recovery
+checks. Remove xfail markers only if these pass honestly; otherwise keep them
+xfail-strict and report. Update docs (user guide, API, GLMsingle comparison):
+the gate, its parameters, that OLS F-tests are anti-conservative under
+autocorrelated noise (the user's lenient-threshold, OLS choice), and that the
+binomial test treats features as independent (optimistic for correlated
+features); state it as a deviation from GLMsingle with the reason.
