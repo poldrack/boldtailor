@@ -37,8 +37,8 @@ of that pool in each run, and chooses one PC count by cross-validation. The
 scoring criteria are different from GLMsingle's. Boldtailor defines its pool
 by the time-series task-model R² of an initial training-only HRF selection
 (threshold chosen by default with GLMsingle's two-component Gaussian-mixture
-`findtailthreshold` rule, fitted per fold; a fixed value is optional). It chooses the count by held-out task-model
-prediction against a target that is fixed across counts. GLMsingle defines
+`findtailthreshold` rule, fitted per fold; a fixed value is optional). It
+chooses the count by held-out task-model prediction against a target that is fixed across counts. GLMsingle defines
 its pool by ON–OFF R² and chooses the count by its own cross-validation
 criterion. Boldtailor's stage is not run by default or in the NSD example,
 and it is tuned sequentially: HRFs and the pool are frozen while counts are
@@ -46,7 +46,7 @@ compared. Pool refinement and voxelwise counts are not implemented.
 No matched comparison with GLMsingle's denoising has been run. Synthetic checks in
 this repository establish implementation behavior only. In a predeclared
 shared-noise case the fixed threshold 0.0 pool nearly collapsed; the default
-mixture threshold recovers it (see the user guide). See the [user guide](user-guide.md#task-guided-denoising).
+mixture threshold recovers it. See the [user guide](user-guide.md#task-guided-denoising).
 [GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
 [GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)
 

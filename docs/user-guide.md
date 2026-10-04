@@ -639,8 +639,8 @@ not joint optimization.
    task-prediction R² over those training runs. The noise pool is the in-brain
    features scoring at or below the pool threshold. By default
    (`pool_r2_threshold="auto"`) it is fitted to this fold's training statistic
-   with GLMsingle's two-component Gaussian-mixture rule; a number fixes it. The scoring
-   mask is the in-brain features scoring above it. Both masks are frozen
+   with GLMsingle's two-component Gaussian-mixture rule; a number fixes it.
+   The scoring mask is the in-brain features scoring above it. Both masks are frozen
    across counts, and so are the HRFs.
 3. In each training run, the pool's time series are projected off the
    baseline confounds and intercept. Numerically zero columns are dropped, the
@@ -718,8 +718,13 @@ bias. On the same predeclared data it gave fold pools of 31-34 features (the
 30 noise features plus up to 4 of the weakest task features), one PC was
 chosen, and training coefficients, outer-run task prediction, and outer-run
 betas all improved (`tests/test_denoising_validation.py`). In the matched
-check without shared noise, zero PCs were chosen. A degenerate mixture
-raises; pass a number to use a fixed threshold. Inspect
+check without shared noise, zero PCs were chosen. The rule follows
+GLMsingle's `findtailthreshold` (raw values, `reg_covar=0`, a 500-point
+`robustrange` grid, the right-end tail component). It differs only in a
+fixed `random_state` and seeded subsample, and in recording convergence
+(`converged`, `n_iter` in the mixture record) instead of warning. A
+degenerate or failed fit raises an error naming the runs; pass a number to
+use a fixed threshold. Inspect
 `noise_pool.sum()`, the fold pool sizes, and `candidate_scores` before relying
 on the choice.
 

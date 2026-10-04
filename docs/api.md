@@ -427,15 +427,21 @@ with_denoising(data, result, *, feature_signature=None) -> AnalysisData
 `select_denoising` needs at least three runs. `brain_mask` is a required
 Boolean vector with one entry per feature. `counts` must contain 0, be
 nonnegative integers (not Booleans), and is sorted and deduplicated.
-`pool_r2_threshold` is `"auto"` or a finite number. `"auto"` fits a
-two-component `sklearn.mixture.GaussianMixture` to the pool statistic of the
-in-brain features with a defined HRF (z-scored; `random_state=0`, 3
-initialisations, `tol=1e-10`) and uses the rightmost point where the
-lower-mean component's posterior falls through 0.5 (GLMsingle's
-`findtailthreshold` rule), separately in every fold and for the final pool.
-Fewer than two distinct values, or no crossing, raise naming the fold or
-final runs; there is no fallback. A number is applied as a fixed threshold. `score_tolerance` must be finite and
-nonnegative. `library=None` uses `default_hrf_library()`. Every input is
+`pool_r2_threshold` is `"auto"` or a finite number. `"auto"` applies
+GLMsingle's `findtailthreshold` rule, separately in every fold and for the
+final pool, to the raw pool statistic of the in-brain features with a
+defined HRF. It fits a two-component `sklearn.mixture.GaussianMixture`
+(`tol=1e-10`, `reg_covar=0`, 3 initialisations) to at most 1,000,000
+values. It evaluates posteriors on 500 points over GLMsingle's
+`robustrange`, widened to include both means. The threshold is the
+rightmost point where the posterior of the component dominating the right
+end is at most 0.5. Deviations from GLMsingle: `random_state=0` and a
+seeded subsample make the result reproducible, and convergence warnings
+are suppressed but recorded (`converged`, `n_iter`). Fewer than two
+distinct values, a failed fit, or no crossing raise an error that names
+the fold or final runs and suggests a fixed threshold; there is no
+fallback. A number is applied as a fixed threshold. `score_tolerance` must
+be finite and nonnegative. `library=None` uses `default_hrf_library()`. Every input is
 validated before any fitting.
 
 The function chooses one PC count by leave-one-run-out held-out task
@@ -464,8 +470,8 @@ From `boldtailor.denoising_results`:
   - the choice: `n_components`, `counts`, `pool_r2_threshold` (the setting),
     `score_tolerance`
   - the final threshold: `noise_pool_threshold` and `noise_pool_mixture`
-    (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`,
-    `n_values`, `to_dict()`; `None` for a fixed threshold). Each
+    (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`, `tail`,
+    `n_values`, `n_fitted`, `converged`, `n_iter`, `to_dict()`; `None` for a fixed threshold). Each
     `DenoisingFold` has `pool_threshold` and `pool_mixture`, and
     `fold_scores` has `pool_r2_threshold`, `pool_size`, and `scoring_size`
   - the final all-run masks and statistic: `noise_pool`, `scoring_mask`,
