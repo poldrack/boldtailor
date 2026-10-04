@@ -34,7 +34,7 @@ def test_public_module_reexports_the_implementation(public, name, origin):
 
 
 ANNOTATED = ["hrf_selection", "_hrf_glm", "_selected_hrf_fit", "ridge_selection"]
-ANNOTATED += ["fractional_ridge"]
+ANNOTATED += ["fractional_ridge", "denoising"]
 
 
 @pytest.mark.parametrize("module_name", ANNOTATED)
