@@ -28,8 +28,8 @@ covers every stage; no code in the package imports from `examples`.
   ridge-mode output paths become one, the settings dictionary becomes a
   dataclass, result reuse is dropped, output descriptors are renamed.
 - Modulators default to `response_time` (missing indicator) and `trial_type`
-  when those event columns exist (`trial_type` only when numeric 0/1 in every
-  run, R12); `--modulator` replaces the whole set and `--no-modulators` fits
+  when those event columns exist (`trial_type` as a categorical modulator when it has two
+  or more levels; categorical rule supersedes R12); `--modulator` replaces the whole set and `--no-modulators` fits
   the task regressor alone. No contrast or confound-selection flags.
 - Regressor centering is removed from the package. Every modulator is
   uncentered. This leaves R², ΔR² and the HRF selection scores unchanged and
@@ -124,16 +124,19 @@ volumes, event validation, sidecar-corrected frame times, and a check that all
 runs share one grayordinate axis.
 
 Modulator detection: with `modulators=None`, `response_time` present →
-`Modulator("response_time", missing="indicator")`; `trial_type` present with
-numeric 0/1 values in every run → `Modulator("trial_type")`; neither → task
-regressor alone. A `trial_type` that is not binary 0/1 (for example string
-labels) is left out, and the dry run, the settings file (`notes`) and the
-report's inputs section say "trial_type is not binary 0/1; not used as a
-modulator" (ruling R12). `modulators=()` (`--no-modulators`) is task-only.
-Columns named in `--modulator` must exist in every run's events; a missing
-column is an input error naming the run. An explicit `trial_type` keeps the
-strict check (both codes 0 and 1 in every run), and its error names the BIDS
-run label. Ridge cross-validation needs at least one modulator (ruling R13).
+`Modulator("response_time", missing="indicator")`; `trial_type` present in every
+run with two or more levels (union across runs) →
+`Modulator("trial_type", kind="categorical", levels=...)`, reference-coded:
+`task` is the reference-level response and each `trial_type[<level>]` indicator
+is that level minus the reference (default reference: first sorted level). A
+`trial_type` with fewer than two levels is left out, and the dry run, settings
+file (`notes`) and report say "trial_type has fewer than two levels; not used
+as a modulator". This replaces the earlier binary-0/1 rule (ruling R12); a 0/1
+column is now `trial_type[1]`. Every level, including the reference, must occur
+in every run (input error, exit 2, naming the run). `modulators=()`
+(`--no-modulators`) is task-only. Columns named in `--modulator` must exist in
+every run's events; a missing column is an input error naming the run. See
+`2026-10-04-categorical-modulators-design.md`. Ridge cross-validation needs at least one modulator (ruling R13).
 
 The GLM `ModelSpec` has one contrast per task regressor, OLS noise, no extra
 drift, canonical SPM for the canonical model, and the detected or given task
@@ -218,7 +221,7 @@ subject/session outputs in one publication transaction.
 ```
 boldtailor run --bids-dir DIR --subject sub-07 --session ses-nsd10 --task nsdcore
     [--fmriprep-dir DIR] [--output-dir DIR] [--space fsLR-91k]
-    [--modulator COLUMN[:indicator] ... | --no-modulators]
+    [--modulator COLUMN[:OPTION[,OPTION...]] ... | --no-modulators]
     [--hrf-library default|sobol|expanded|canonical] [--hrf-n-samples 512] [--hrf-seed 0]
     [--no-rt-in-hrf-selection]
     [--ridge-mode fractional_cv|cv|fixed|off] [--ridge-alpha X]

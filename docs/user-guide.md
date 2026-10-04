@@ -506,12 +506,13 @@ from boldtailor.model import Modulator, TaskModel
 
 task_model = TaskModel((
     Modulator("response_time", missing="indicator"),
-    Modulator("trial_type"),
+    Modulator("trial_type", kind="categorical"),
 ))
 selection = select_hrfs(multi_run_data, library=library, task_model=task_model)
 ```
 
-Each modulator names a numeric column of the raw per-trial events.
+Each modulator names a column of the raw per-trial events: numeric by default,
+or discrete with `kind="categorical"` (see Modulators under the command line).
 Modulators are not centered; the `task` contrast is the response at modulator
 value zero, and R², ΔR², and HRF selection are unchanged by this choice.
 `missing="indicator"` gives
@@ -654,7 +655,7 @@ Flags are grouped as in `boldtailor run --help`.
 | inputs | `--fmriprep-dir` | fMRIPrep derivatives (found under `<bids-dir>/derivatives/fmriprep*`) |
 | inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`); may not be the BIDS root or overlap the fMRIPrep directory |
 | inputs | `--space` | Only `fsLR-91k` |
-| inputs | `--modulator COLUMN[:indicator]` | Task modulator; repeat to list several (detected, see below) |
+| inputs | `--modulator COLUMN[:OPTION[,OPTION...]]` | Task modulator with OPTION `indicator`, `categorical`, or `reference=LEVEL`; repeat to list several (detected, see below) |
 | inputs | `--no-modulators` | Fit the task regressor alone; excludes `--modulator` |
 | HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
 | HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sobol candidates and seed (512, 0) |
@@ -682,18 +683,59 @@ libraries, seeds, or ridge modes therefore never collide.
 ### Modulators
 
 If every run's events file has a `response_time` column, the task model is
-`Modulator("response_time", missing="indicator")`. A `trial_type` column is
-used, as `Modulator("trial_type")`, only when every run's values are numeric 0
-or 1. Otherwise (for example `face`/`house` labels) it is left out and the dry
-run, settings file (`notes`), and report say "trial_type is not binary 0/1; not
-used as a modulator". With neither column, the model is task-only.
-`--no-modulators` always fits the task regressor alone. Passing `--modulator`
-replaces detection: give a column name, or `COLUMN:indicator` to code missing
-values with an indicator regressor, for example
-`--modulator response_time:indicator --modulator trial_type`. An explicit
-`trial_type` must hold both codes 0 and 1 in every run; the error names the
-run (for example `run-02`). Modulators are never centered. A named column
-missing from any run is an input error.
+`Modulator("response_time", missing="indicator")`. A `trial_type` column with
+two or more distinct values across runs becomes a categorical modulator (see
+below), whether its values are strings (`face`/`house`) or numbers. A
+`trial_type` with fewer than two levels is left out, and the dry run, settings
+file (`notes`), and report say "trial_type has fewer than two levels; not used
+as a modulator". With neither column, the model is task-only. `--no-modulators`
+always fits the task regressor alone. Modulators are never centered.
+
+Passing `--modulator` replaces detection. The syntax is
+`--modulator COLUMN[:OPTION[,OPTION...]]`, where `OPTION` is `indicator` (code
+missing values with a `missing_<column>` regressor), `categorical` (expand the
+column into level indicators), or `reference=LEVEL` (choose the reference
+level; requires `categorical`). Examples:
+
+```
+--modulator response_time:indicator
+--modulator trial_type:categorical,reference=face
+--modulator condition:categorical,indicator
+```
+
+Unknown or repeated options, `reference` without `categorical`, a reference
+containing `,` or `:`, and a column name containing `:` are settings errors
+(exit 1). A named column missing from any run is an input error.
+
+#### Categorical modulators
+
+A categorical column with k levels adds k - 1 indicator regressors and the
+`task` regressor is kept (reference coding). `task` is the response to the
+reference level; each indicator, named `<column>[<level>]`, is that level's
+response minus the reference. Binary 0/1 columns follow the same rule: a
+`trial_type` of 0 and 1 gives the regressor `trial_type[1]`. This is a
+behaviour change from earlier releases, which used a binary 0/1 `trial_type`
+as a numeric modulator named `trial_type`.
+
+- Levels are canonicalised as text: `1`, `"1"`, and `1.0` are one level `"1"`.
+  `n/a`, empty, and NaN are missing values; infinite values and booleans are
+  rejected.
+- Levels are sorted numerically when every level is numeric, otherwise
+  lexically. The default reference is the first sorted level; override it with
+  `reference=LEVEL`.
+- Every level, including the reference, must occur in every run. A run that
+  lacks one is rejected before fitting with an input error (exit 2) naming the
+  run, for example `run-02`. A value outside the declared levels is also an
+  error.
+- Missing values are an error by default. With the `indicator` option, a
+  single `missing_<column>` regressor is added and those trials are 0 on every
+  level indicator.
+- The run summary has one `n_<column>_<level>` trial-count column per level
+  (for example `n_trial_type_face`), and the output metadata lists each
+  categorical modulator (levels, reference) under `categorical_modulators`.
+
+In Python, use `Modulator("trial_type", kind="categorical", reference="face")`;
+see the [API reference](api.md).
 
 Ridge cross-validation (`--ridge-mode fractional_cv` or `cv`, with the `betas`
 stage) needs at least three odd and three even runs and at least one
@@ -777,6 +819,7 @@ traceback.
 | Timing or trial support is rejected | Onset units, acquisition offset, run boundaries, and whether each event has a sampled response |
 | R² or HRF parameters are NaN | A constant signal, no variance after nuisance adjustment, or unavailable split evaluation; inspect metadata |
 | An output file already exists | Choose a new output directory, or pass `--existing-results overwrite` to replace this subject/session/task's earlier boldtailor results |
+| A run lacks a level of a categorical modulator (exit 2) | Every level, including the reference, must occur in every run; drop the level or fix the events, or choose another column |
 | Parallel fitting uses too much RAM | Reduce `--n-jobs` or `--block-size`; final beta arrays also occupy memory |
 
 ### Fractional-ridge default migration (2026-09-28)

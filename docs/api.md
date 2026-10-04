@@ -398,9 +398,18 @@ index row 0 where earlier releases returned a one-dimensional array. Selection p
 `task_model_fingerprint`, `task_regressors`, `profiled_regressors`,
 `min_onset`, and `oversampling`.
 
-From `boldtailor.model`: `Modulator(column, missing="error")` and
-`TaskModel(modulators=())`, with `regressor_names`, `profiled_names`,
+From `boldtailor.model`: `Modulator(column, missing="error", kind="numeric",
+levels=None, reference=None)` and `TaskModel(modulators=())`, with `regressor_names`, `profiled_names`,
 `fingerprint`, and `to_dict()`.
+
+A `Modulator` with `kind="categorical"` is reference-coded: `levels` (at least
+two distinct values, canonicalised with `level_name` and sorted numerically
+when all are numeric, else lexically) and `reference` (default: the first
+level). It contributes one 0/1 regressor `<column>[<level>]` per non-reference
+level; `task` is the reference-level response. `kind="numeric"` takes neither
+`levels` nor `reference`. `level_name(value)` returns the canonical text of one
+value (`1`, `"1"`, `1.0` give `"1"`) or `None` for a missing value (`n/a`, `""`,
+NaN) and raises `ValueError` for infinities and booleans.
 
 ## Source records and saving
 
@@ -507,8 +516,8 @@ front end.
 | `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`paths`, `report_path`, `skipped`, `task_model`) |
 | `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model, notes) and the `problems` a run would hit (`existing_results` or `input`), without fitting; backs `--dry-run` |
 | `load_session(settings)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events |
-| `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.workflow.inputs` | `response_time`, a binary 0/1 `trial_type`, or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors |
-| `task_model_notes(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | Why detection left out a column every run has (a non-binary `trial_type`) |
+| `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.workflow.inputs` | `response_time`, a categorical `trial_type` (two or more levels), or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors |
+| `task_model_notes(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | Why detection left out a column every run has (a `trial_type` with fewer than two levels) |
 | `fit_beta_models(runs, root, blocks, settings, library, selections, task_model)` | `boldtailor.workflow.beta_series` | Canonical and selected-HRF trial models (OLS plus the configured ridge mode) over feature blocks |
 | `BetaModel` | `boldtailor.workflow.beta_series` | One beta model: name, HRF, estimator, fit, and (tuned ridge) tuning and outer-split evaluation |
 | `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |
