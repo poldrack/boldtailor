@@ -556,3 +556,21 @@ def test_analysis_components_are_per_run_and_recover_latent(fixture, statistic):
         assert abs(np.corrcoef(first, target)[0, 1]) > 0.95
         expected = run_components(signal, frame, masks.pool)
         np.testing.assert_array_equal(comp.components, expected.components)
+
+
+def test_svd_convergence_failure_falls_back_to_gesvd(rank_two, monkeypatch):
+    """gesdd can fail on well-conditioned input (macOS Accelerate, 84 x 299)."""
+    signal, confounds, pool = rank_two[:3]
+    reference = run_components(signal, confounds, pool)
+
+    def failing_svd(*args, **kwargs):
+        raise np.linalg.LinAlgError("SVD did not converge")
+
+    monkeypatch.setattr(np.linalg, "svd", failing_svd)
+    fallback = run_components(signal, confounds, pool)
+    assert fallback.rank == reference.rank
+    assert fallback.rank_tolerance == reference.rank_tolerance
+    np.testing.assert_allclose(
+        fallback.singular_values, reference.singular_values, atol=1e-12
+    )
+    np.testing.assert_allclose(fallback.components, reference.components, atol=1e-10)
