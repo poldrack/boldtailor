@@ -16,6 +16,7 @@ dependencies = [
   "nilearn>=0.14.0,<0.15",
   "numpy",
   "pandas",
+  "scikit-learn>=1.8.0",
   "scipy>=1.18.0",
 ]
 

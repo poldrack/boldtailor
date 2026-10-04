@@ -81,6 +81,7 @@ dependencies = [
     { name = "nilearn" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scikit-learn" },
     { name = "scipy" },
 ]
 
@@ -103,6 +104,7 @@ requires-dist = [
     { name = "nilearn", specifier = ">=0.14.0,<0.15" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "scipy", specifier = ">=1.18.0" },
 ]
 
