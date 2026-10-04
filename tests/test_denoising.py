@@ -263,7 +263,7 @@ def test_fold_diagnostics_record_training_masks_and_hrfs(fixture, result):
     for v, fold in enumerate(result.folds):
         labels = result.run_labels
         assert fold.validation_run == labels[v]
-        assert fold.training_runs == tuple(l for i, l in enumerate(labels) if i != v)
+        assert fold.training_runs == tuple(x for i, x in enumerate(labels) if i != v)
         training = subset_runs(fixture.data, [i for i in range(4) if i != v])
         selection = select_hrfs(
             training, library=fixture.library, task_model=fixture.task_model
