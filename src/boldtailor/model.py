@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from types import MappingProxyType
 
@@ -25,28 +25,122 @@ _RESERVED_TASK_COLUMNS = frozenset({"task", "constant", "onset", "duration"})
 _MISSING_POLICIES = ("error", "indicator")
 
 
+_KINDS = ("numeric", "categorical")
+_MISSING_TEXT = frozenset({"", "n/a"})
+
+
+def level_name(value: object) -> str | None:
+    """Canonical string for one categorical value, or None when it is missing."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return None if text.lower() in _MISSING_TEXT else text
+    if is_real(value):
+        number = float(value)
+        if not np.isfinite(number):
+            return None
+        return str(int(number)) if number.is_integer() else repr(number)
+    raise ValueError(f"categorical value {value!r} must be a string or a number")
+
+
+def _sorted_levels(levels):
+    try:
+        return tuple(sorted(levels, key=float))
+    except ValueError:
+        return tuple(sorted(levels))
+
+
 @dataclass(frozen=True)
 class Modulator:
-    """One parametric task regressor derived from a raw events column.
+    """One task regressor family derived from a raw events column.
 
-    Values enter uncentered, so the task regressor is the response at modulator
-    value zero.
+    Numeric modulators enter uncentered, so the task regressor is the response
+    at modulator value zero. Categorical modulators add one 0/1 indicator per
+    non-reference level, so the task regressor is the reference-level response.
     """
 
     column: str
     missing: str = "error"
+    kind: str = "numeric"
+    levels: tuple[str, ...] | None = None
+    reference: str | None = None
 
     def __post_init__(self) -> None:
         _validate_modulator_column(self.column)
         if self.missing not in _MISSING_POLICIES:
             raise ValueError("modulator missing policy must be 'error' or 'indicator'")
+        if self.kind not in _KINDS:
+            raise ValueError("modulator kind must be 'numeric' or 'categorical'")
+        if self.kind == "numeric":
+            if self.levels is not None or self.reference is not None:
+                raise ValueError(
+                    "levels and reference apply only to categorical modulators"
+                )
+            return
+        self._set_reference(self._reference_name())
+        if self.levels is not None:
+            self._resolve_levels()
+
+    def _reference_name(self):
+        if self.reference is None:
+            return None
+        name = level_name(self.reference)
+        if name is None:
+            raise ValueError(
+                f"modulator {self.column!r} reference must be a nonmissing level"
+            )
+        return name
+
+    def _set_reference(self, name):
+        object.__setattr__(self, "reference", name)
+
+    def _resolve_levels(self):
+        names = [level_name(v) for v in self.levels]
+        if any(n is None for n in names):
+            raise ValueError(f"modulator {self.column!r} levels must be nonmissing")
+        if len(set(names)) != len(names):
+            raise ValueError(f"modulator {self.column!r} levels must be distinct")
+        if len(names) < 2:
+            raise ValueError(
+                f"categorical modulator {self.column!r} needs at least two levels"
+            )
+        levels = _sorted_levels(names)
+        if self.reference is not None and self.reference not in levels:
+            raise ValueError(
+                f"reference {self.reference!r} is not a level of {self.column!r}: "
+                f"{list(levels)}"
+            )
+        object.__setattr__(self, "levels", levels)
+        self._set_reference(self.reference or levels[0])
+
+    @property
+    def resolved(self) -> bool:
+        return self.kind == "numeric" or self.levels is not None
+
+    def with_levels(self, values) -> "Modulator":
+        return replace(self, levels=tuple(values))
+
+    @property
+    def regressor_names(self) -> tuple[str, ...]:
+        if self.kind == "numeric":
+            return (self.column,)
+        if self.levels is None:
+            raise ValueError(f"categorical modulator {self.column!r} has no levels yet")
+        return tuple(
+            f"{self.column}[{lv}]" for lv in self.levels if lv != self.reference
+        )
 
     @property
     def indicator_name(self) -> str:
         return f"missing_{self.column}"
 
     def to_dict(self) -> dict[str, object]:
-        return {"column": self.column, "missing": self.missing}
+        values = {"column": self.column, "missing": self.missing, "kind": self.kind}
+        if self.kind == "categorical":
+            values["levels"] = None if self.levels is None else list(self.levels)
+            values["reference"] = self.reference
+        return values
 
 
 @dataclass(frozen=True)
@@ -62,11 +156,16 @@ class TaskModel:
         columns = [m.column for m in modulators]
         if len(set(columns)) != len(columns):
             raise ValueError("modulator columns must be unique")
+        if any(not m.resolved for m in modulators):
+            raise ValueError("categorical modulators need levels before fitting")
+        names = [n for m in modulators for n in m.regressor_names]
+        if len(set(names)) != len(names) or "task" in names:
+            raise ValueError("task-model regressor names must be unique")
         object.__setattr__(self, "modulators", modulators)
 
     @property
     def regressor_names(self) -> tuple[str, ...]:
-        return ("task", *(m.column for m in self.modulators))
+        return ("task", *(n for m in self.modulators for n in m.regressor_names))
 
     @property
     def profiled_names(self) -> tuple[str, ...]:
