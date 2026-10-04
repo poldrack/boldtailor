@@ -23,6 +23,7 @@ from boldtailor._denoising_pool import (
     RunComponents,
     analysis_components,
     pool_masks,
+    pool_statistic,
     validate_feature_mask,
     validate_threshold,
 )
@@ -99,6 +100,7 @@ class FoldSetup:
     validation_run: int
     training_runs: tuple[int, ...]
     selection: HrfSelectionResult
+    pool_statistic: np.ndarray
     masks: PoolMasks
     components: tuple[RunComponents, ...]
     scored: np.ndarray
@@ -109,7 +111,7 @@ class FoldSetup:
 
     def __post_init__(self):
         own_fields(self, ("scored", "zero_target"), dtype=bool)
-        own_fields(self, ("target_energy",))
+        own_fields(self, ("target_energy", "pool_statistic"))
         own_tuples(self, ("training_runs", "components", "groups"))
 
 
@@ -165,18 +167,18 @@ def _target_summary(groups, n_features):
     return zero, energy
 
 
-def _training_selection(data, train, library, task_model):
+def _training_selection(training, train, data, library, task_model):
     labels = run_labels_for(data, None)
     return select_hrfs(
-        subset_runs(data, train),
+        training,
         library=library,
         task_model=task_model,
         run_labels=[labels[r] for r in train],
     )
 
 
-def _checked_masks(selection, brain_mask, threshold, validation_run):
-    masks = pool_masks(selection, brain_mask, threshold)
+def _checked_masks(selection, statistic, brain_mask, threshold, validation_run):
+    masks = pool_masks(selection, brain_mask, threshold, statistic=statistic)
     if masks.scoring_size == 0:
         raise ValueError(
             f"{_NO_TASK_SIGNAL}: the fold holding out run {validation_run} "
@@ -190,9 +192,11 @@ def prepare_fold(
 ) -> FoldSetup:
     """Select HRFs, masks, and PCs from training runs; cache projected terms."""
     train = _training_runs(data, validation_run)
-    selection = _training_selection(data, train, library, task_model)
-    masks = _checked_masks(selection, brain_mask, threshold, validation_run)
-    components = analysis_components(subset_runs(data, train), masks.pool)
+    training = subset_runs(data, train)
+    selection = _training_selection(training, train, data, library, task_model)
+    statistic = pool_statistic(training, selection)
+    masks = _checked_masks(selection, statistic, brain_mask, threshold, validation_run)
+    components = analysis_components(training, masks.pool)
     runs = prepare_runs(data, library, task_model)
     split = (train, validation_run)
     groups = _hrf_groups(data, runs, split, selection, masks.scoring)
@@ -207,6 +211,7 @@ def prepare_fold(
         validation_run=validation_run,
         training_runs=train,
         selection=selection,
+        pool_statistic=statistic,
         masks=masks,
         components=components,
         scored=scored,
