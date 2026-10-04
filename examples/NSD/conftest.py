@@ -119,7 +119,7 @@ def saved_sessions(tmp_path):
         meta = dict(
             settings=dict(subject="sub-07", session=session, ridge_mode="off"),
             library_fingerprint=library.fingerprint,
-            regressors=["task", "response_time", "trial_type"],
+            regressors=["task", "response_time", "trial_type[1]"],
         )
         artifacts = [
             json_artifact(base + "_desc-boldtailor_metadata.json", meta),
@@ -159,7 +159,7 @@ def saved_sessions(tmp_path):
                     [0.1 * (i + 1 + shift), -0.2 * (i + 1 + shift), np.nan],
                     [99, -99, np.nan],
                 ],
-                ["task", "response_time", "trial_type"],
+                ["task", "response_time", "trial_type[1]"],
             )
             add(
                 prefix + "TrialOLS",

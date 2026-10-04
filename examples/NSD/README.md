@@ -77,8 +77,9 @@ orthogonalization:
 - `task`: unit amplitude for every presentation.
 - `response_time`: positive finite seconds, uncentered; unavailable RTs receive
   zero modulation.
-- `trial_type`: binary codes 0/1, uncentered; the coefficient is type 1 minus
-  type 0, controlling for RT, and the task coefficient is the response on
+- `trial_type[1]`: reference-coded indicator for the binary `trial_type` events
+  column (0 is the reference level); the coefficient is type 1 minus type 0,
+  controlling for RT, and the task coefficient is the response on
   trial_type 0 trials.
 - `missing_response_time`: one for nonfinite or nonpositive RT, zero otherwise;
   included only in runs with unavailable RTs and convolved with the same HRF.
@@ -89,7 +90,7 @@ task coefficient is the response on trial_type 0 trials at zero RT
 modulation (modulators are uncentered). Runs with no observed RT cannot estimate an RT effect
 and are rejected. Complete runs retain their original three-predictor design.
 The indicator is saved in the event tables and design matrices; contrast maps
-remain task, RT, and trial type. Conventional task ΔR² includes the indicator's
+remain task, RT, and `trial_type[1]`. Conventional task ΔR² includes the indicator's
 contribution. HRF selection and beta estimation retain all trials; RT scoring
 continues to exclude unavailable RTs.
 
