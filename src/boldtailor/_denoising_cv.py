@@ -150,14 +150,13 @@ def _run_terms(run, hrf_id, y, label):
             f"run '{label}': HRF {hrf_id} task design is invalid: {reason}"
         )
     block = run.block(hrf_id)
-    raw = run.task_design(hrf_id)[list(run.task_model.regressor_names)].to_numpy()
     projected = y - run.q @ (run.q.T @ y)
     projected -= block.qp @ (block.qp.T @ projected)
     # Numerical zero only, as in HRF selection: no weak-signal threshold.
     tolerance = np.linalg.norm(y, axis=0) * len(y) * _EPS
     zero = np.linalg.norm(projected, axis=0) <= tolerance
     rank = run.q.shape[1] + block.qp.shape[1]
-    return _Terms(block.x, raw, projected, block.qp, rank, zero)
+    return _Terms(block.x, block.raw, projected, block.qp, rank, zero)
 
 
 def _hrf_groups(data, runs, labels, indices, scoring):

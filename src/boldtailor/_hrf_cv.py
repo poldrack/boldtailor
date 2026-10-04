@@ -19,7 +19,7 @@ from boldtailor._task_design import expand_events, task_columns
 from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
 
-_Block = namedtuple("_Block", ["x", "qp", "a"])
+_Block = namedtuple("_Block", ["x", "qp", "a", "raw"])
 
 
 def _basis(columns):
@@ -85,10 +85,10 @@ class RunDesign:
         q = np.column_stack([self.q, qp])
         xr = x - q @ (q.T @ x)
         _check_task_rank(xr, x, len(self.times) - q.shape[1])
-        return _Block(xr, qp, xr.T @ xr)
+        return _Block(xr, qp, xr.T @ xr, x)
 
     def block(self, candidate_id):
-        """Projected task columns, profiled basis, and A; zeros when ineligible."""
+        """Projected and raw task columns, profiled basis, A; zeros if ineligible."""
         if candidate_id not in self._blocks:
             try:
                 self._blocks[candidate_id] = self._build(candidate_id)
@@ -97,7 +97,10 @@ class RunDesign:
                 self.eligibility[candidate_id] = (False, str(error))
                 empty = np.zeros((len(self.times), self.k))
                 self._blocks[candidate_id] = _Block(
-                    empty, np.zeros((len(self.times), 0)), np.zeros((self.k, self.k))
+                    empty,
+                    np.zeros((len(self.times), 0)),
+                    np.zeros((self.k, self.k)),
+                    empty,
                 )
         return self._blocks[candidate_id]
 
