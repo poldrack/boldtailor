@@ -93,12 +93,17 @@ def _check_inputs(data, indices, components, scoring):
 
 @dataclass(frozen=True)
 class _Terms:
-    """One run's task design and BOLD for one HRF, off baseline + indicators."""
+    """One run's task design and BOLD for one HRF, off baseline + indicators.
+
+    ``baseline`` (confounds plus intercept) and ``profiled`` (indicators) are
+    orthonormal bases of the nuisance span that ``x`` and ``y`` are off.
+    """
 
     x: np.ndarray
     raw: np.ndarray
     y: np.ndarray
     profiled: np.ndarray
+    baseline: np.ndarray
     nuisance_rank: int
     zero: np.ndarray
 
@@ -156,7 +161,7 @@ def _run_terms(run, hrf_id, y, label):
     tolerance = np.linalg.norm(y, axis=0) * len(y) * _EPS
     zero = np.linalg.norm(projected, axis=0) <= tolerance
     rank = run.q.shape[1] + block.qp.shape[1]
-    return _Terms(block.x, block.raw, projected, block.qp, rank, zero)
+    return _Terms(block.x, block.raw, projected, block.qp, run.q, rank, zero)
 
 
 def _hrf_groups(data, runs, labels, indices, scoring):

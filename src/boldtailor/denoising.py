@@ -9,7 +9,8 @@ scores features above it (the 100 best when none passes); extracts run-wise
 PCs of that single pool; and chooses one PC count with GLMsingle's pcstop
 rule over the median of fold-pooled held-out R², then (a Boldtailor
 addition, not part of GLMsingle) keeps that count only if the PCs pass a
-per-feature OLS F-test gate with a binomial test across features. Counts are
+per-feature F-test gate (AR(1) prewhitened by default) with a binomial test
+across features. Counts are
 scored by leave-one-run-out time-series prediction against a fixed target,
 because repeated conditions are not assumed. Every input feature is a
 candidate: the core is anatomy-agnostic. ``with_denoising`` appends the chosen PCs to the
@@ -42,7 +43,12 @@ from boldtailor._denoising_cv import (
     validate_counts,
     validate_pcstop,
 )
-from boldtailor._denoising_gate import apply_gate, validate_gate
+from boldtailor._denoising_gate import (
+    AR1_BINS,
+    apply_gate,
+    validate_gate,
+    validate_noise_model,
+)
 from boldtailor._denoising_identity import check_identity, run_identities
 from boldtailor._denoising_pool import (
     analysis_components,
@@ -88,7 +94,7 @@ class _Settings:
     counts: tuple[int, ...]
     threshold: float | str
     pcstop: float
-    gate: tuple[bool, float, float]
+    gate: tuple[bool, float, float, str]
     feature_signature: str | None
 
 
@@ -104,7 +110,8 @@ def _check_models(task_model, library, signature):
 def _settings(data, task_model, library, grid, signature):
     """Validate everything before any fitting.
 
-    ``grid`` is (counts, r2 threshold, pcstop, (gate, alpha, binomial alpha)).
+    ``grid`` is (counts, r2 threshold, pcstop, (gate, alpha, binomial alpha,
+    noise model)).
     """
     _check_data(data)
     _check_models(task_model, library, signature)
@@ -115,7 +122,7 @@ def _settings(data, task_model, library, grid, signature):
         counts=validate_counts(counts),
         threshold=validate_threshold(threshold),
         pcstop=validate_pcstop(pcstop),
-        gate=validate_gate(*gate),
+        gate=(*validate_gate(*gate[:3]), validate_noise_model(gate[3])),
         feature_signature=signature,
     )
 
@@ -173,13 +180,14 @@ def _count_selection(data, labels, settings, pool):
         pcstop=settings.pcstop,
         run_labels=labels,
     )
-    enabled, alpha, binomial_alpha = settings.gate
+    enabled, alpha, binomial_alpha, noise_model = settings.gate
     gate = apply_gate(
         count.setup,
         count.n_components,
         enabled=enabled,
         alpha=alpha,
         binomial_alpha=binomial_alpha,
+        noise_model=noise_model,
     )
     return count, gate
 
@@ -243,10 +251,44 @@ def _floats(values):
     return [None if not np.isfinite(v) else float(v) for v in values]
 
 
-def _gate_record(gate):
+def _rho_summary(gate, labels):
+    """Per run: min, median, and max lag-1 coefficient over tested features."""
+    if not gate.tested.any():
+        return []
+    return [
+        dict(
+            run=label,
+            min=float(rho.min()),
+            median=float(np.median(rho)),
+            max=float(rho.max()),
+        )
+        for label, rho in zip(labels, gate.ar_coefficients[:, gate.tested])
+    ]
+
+
+def _noise_model_record(gate, labels):
+    if gate.noise_model == "ols":
+        return dict(
+            test="ols_nested_f_in_sample_all_runs",
+            noise_model="ols",
+            ar1_estimate=None,
+            ar1_bins=None,
+            ar_coefficient_summary=None,
+        )
+    return dict(
+        test="ar1_prewhitened_nested_f_in_sample_all_runs",
+        noise_model="ar1",
+        ar1_estimate="yule_walker_full_model_ols_residuals_per_run_and_feature",
+        ar1_bins=AR1_BINS,
+        ar_coefficient_summary=_rho_summary(gate, labels),
+    )
+
+
+def _gate_record(gate, labels):
     return dict(
         enabled=gate.enabled,
-        test="ols_nested_f_in_sample_all_runs",
+        **_noise_model_record(gate, labels),
+        ar_coefficient_fingerprint=_digest(gate.ar_coefficients, "<f8"),
         aggregate="one_sided_binomial_over_tested_features",
         gate_alpha=gate.alpha,
         gate_binomial_alpha=gate.binomial_alpha,
@@ -321,7 +363,7 @@ def _selection_activity(context, pool, selected, prefixes):
         n_components=prefixes[0].shape[1],
         **_pool_records(settings, statistic, masks, count.setup.scored),
         **_count_records(settings, count),
-        significance_gate=_gate_record(gate),
+        significance_gate=_gate_record(gate, labels),
         initial_hrf_assignment_fingerprint=_digest(selection.hrf_indices, "<i8"),
         initial_selection=identity_activity(selection.provenance),
         component_fingerprints=[_digest(p, "<f8") for p in prefixes],
@@ -390,6 +432,7 @@ def select_denoising(
     significance_gate: bool = True,
     gate_alpha: float = 0.05,
     gate_binomial_alpha: float = 0.05,
+    gate_noise_model: str = "ar1",
     feature_signature: str | None = None,
     run_labels: Sequence[str] | None = None,
 ) -> DenoisingResult:
@@ -409,13 +452,15 @@ def select_denoising(
 
     ``significance_gate`` (a Boldtailor addition, not part of GLMsingle)
     then keeps the pcstop count only if adding those PCs passes per-feature
-    in-sample OLS F-tests (``p < gate_alpha``) in more scoring features than
+    in-sample F-tests (``p < gate_alpha``) in more scoring features than
     chance, by a one-sided binomial test at ``gate_binomial_alpha``;
-    otherwise zero PCs are chosen. ``significance_gate=False`` reproduces
-    GLMsingle's pcstop-only choice.
+    otherwise zero PCs are chosen. ``gate_noise_model="ar1"`` (default)
+    prewhitens each run's data and design with its own lag-1 coefficient per
+    feature, following Nilearn's AR(1) convention; ``"ols"`` does not.
+    ``significance_gate=False`` reproduces GLMsingle's pcstop-only choice.
     """
     library = default_hrf_library() if library is None else library
-    gate = (significance_gate, gate_alpha, gate_binomial_alpha)
+    gate = (significance_gate, gate_alpha, gate_binomial_alpha, gate_noise_model)
     grid = (counts, pool_r2_threshold, pcstop, gate)
     settings = _settings(data, task_model, library, grid, feature_signature)
     labels = run_labels_for(data, run_labels)

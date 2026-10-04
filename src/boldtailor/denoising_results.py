@@ -63,9 +63,11 @@ class SignificanceGate:
     """Boldtailor's F-test gate on the pcstop count (not part of GLMsingle).
 
     For each tested scoring feature, ``f_statistic``/``p_value`` compare
-    in-sample OLS fits on all runs without and with the first
-    ``pcstop_count`` PCs of every run (``df1``, ``df2`` its degrees of
-    freedom). ``m`` of the ``n`` tested features have ``p < alpha``; the
+    in-sample fits on all runs without and with the first ``pcstop_count``
+    PCs of every run (``df1``, ``df2`` its degrees of freedom). With
+    ``noise_model="ar1"`` both fits are AR(1) prewhitened per run, and
+    ``ar_coefficients`` (runs x features) holds the binned lag-1
+    coefficients used; with ``"ols"`` it is all NaN. ``m`` of the ``n`` tested features have ``p < alpha``; the
     count is kept when the one-sided binomial p-value ``binomial_p`` is below
     ``binomial_alpha``. ``excluded`` features (rank-deficient designs,
     nonpositive degrees of freedom, or a zero target in any run) are not in
@@ -77,6 +79,7 @@ class SignificanceGate:
     enabled: bool
     alpha: float
     binomial_alpha: float
+    noise_model: str
     pcstop_count: int
     n_components: int
     decision: str
@@ -86,6 +89,7 @@ class SignificanceGate:
     df2: np.ndarray
     tested: np.ndarray
     excluded: np.ndarray
+    ar_coefficients: np.ndarray
     exclusions: tuple[tuple[int, int, str], ...]
     m: int
     n: int
@@ -93,7 +97,7 @@ class SignificanceGate:
 
     def __post_init__(self):
         own_fields(self, ("tested", "excluded"), dtype=bool)
-        own_fields(self, ("f_statistic", "p_value", "df1", "df2"))
+        own_fields(self, ("f_statistic", "p_value", "df1", "df2", "ar_coefficients"))
         rebind(self, exclusions=tuple(tuple(e) for e in self.exclusions))
 
     @property
