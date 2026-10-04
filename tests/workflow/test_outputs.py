@@ -158,10 +158,7 @@ def test_ridge_artifacts_match_numeric_results(
         )
         assert not set(metadata["train_run_labels"]) & set(metadata["test_run_labels"])
         assert metadata["validation_target"] == "selected_penalty_regularized_betas"
-        assert metadata["predictor_names"] == [
-            "task",
-            *[m.column for m in task_model.modulators],
-        ]
+        assert metadata["predictor_names"] == list(task_model.regressor_names)
         coefficients = nib.load(
             _find(paths, f"desc-CanonicalRidgeCV{split}_stat-coefficients.")
         )
