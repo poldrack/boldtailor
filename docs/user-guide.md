@@ -685,8 +685,8 @@ fixed order: this is sequential tuning, not joint optimization.
    holds that best. Zero is always a candidate and is chosen when no count
    improves on it. Unavailable counts are skipped.
 8. Significance gate (`significance_gate=True` by default; a Boldtailor
-   addition, not part of GLMsingle). If pcstop chose `k* > 0`, every scoring
-   feature is fit in-sample on all runs by OLS, with its frozen HRF, under
+   addition, not part of GLMsingle). If pcstop chose `k* > 0`, every feature
+   pcstop scored is fit in-sample on all runs by OLS, with its frozen HRF, under
    two nested models: reduced (the task regressors, shared across runs, plus
    each run's baseline confounds, intercept, and missing-value indicators)
    and full (reduced plus each run's first `k*` PCs as run-specific columns).
@@ -697,8 +697,9 @@ fixed order: this is sequential tuning, not joint optimization.
    kept only if a one-sided binomial test of `m` out of `n` against
    `gate_alpha` gives `p < gate_binomial_alpha` (default 0.05); otherwise
    zero PCs are chosen. Features whose stacked design is rank deficient, has
-   no residual degrees of freedom, or has a numerically zero target in every
-   run are excluded from `n` and listed in the diagnostics. With
+   no residual degrees of freedom, or gains no PC columns (`df1 = 0`), and
+   scoring features with a numerically zero target in any run (which pcstop
+   does not score), are excluded from `n` and listed in the diagnostics. With
    `significance_gate=False` the pcstop count is returned unchanged, as in
    GLMsingle.
 9. The returned pool and PCs are the single full-data ones; the selected
@@ -721,14 +722,36 @@ GLMsingle. It was added because the pcstop rule is relative and has no
 absolute floor: in the predeclared validation it chose 6 PCs on independent
 noise from median R² gains of about 2e-4. GLMsingle's beta-consistency
 criterion, which needs repeats, may behave differently.
+(g) GLMsingle's pool also requires `bright` features (mean intensity above
+10% of the 99th percentile); that criterion is dropped because the core is
+anatomy-agnostic and never infers anatomy from intensities.
+(h) The best-100 fallback considers only features with a defined HRF.
+(i) `robustrange` runs on all finite ON-OFF R² values, while GLMsingle runs it
+on the mixture-fit subsample; this matters only above 1e6 values.
+(j) If the tail component's posterior never crosses 0.5 on the grid, an error
+is raised; GLMsingle warns and continues.
+(k) ON-OFF R² is a fraction in [0, 1]; GLMsingle reports it in percent, so a
+fixed `pool_r2_threshold` copied from GLMsingle's `brainR2` must be
+divided by 100.
 
-**Significance gate caveats.** The F-tests use OLS without prewhitening, so
-they are anti-conservative under autocorrelated noise: fMRI residuals are
-autocorrelated, and more features pass `gate_alpha` than the nominal rate
-would suggest. The binomial test treats features as independent, which is
-optimistic for spatially correlated features. Both make the gate lenient: it
-is meant to stop PCs that help no more than chance, not to certify a benefit.
-The tests are in-sample on the same runs that chose the count.
+**Significance gate caveats.** The gate's F-tests measure the variance
+explained by the PCs in the scoring features, not whether removing them
+improves task prediction. The two differ: the leading PCs of independent,
+autocorrelated noise span its low-frequency directions, which
+also carry much of each feature's own autocorrelated noise. In an illustrative
+probe (20k features, 12 runs, no shared noise; not a calibration), white
+noise was rejected (4.6-4.9% of features at `p < 0.05`), but independent AR(1)
+noise with coefficient 0.5 was kept (97.5-100% of features at `p < 0.05`,
+binomial p near 0). So a kept count does not show that the PCs are shared
+noise. The F-tests use OLS without prewhitening, so they are anti-conservative
+under autocorrelated noise: fMRI residuals are autocorrelated, and more
+features pass `gate_alpha` than the nominal rate would suggest. The binomial
+test treats features as independent, which is optimistic for spatially
+correlated features. Both make the gate lenient: it is meant to stop PCs that
+help no more than chance, not to certify a benefit. With few tested features
+the decision is coarse: with n = 6 and the default levels, one feature with
+`p < 0.05` gives binomial p = 0.26 (rejected) and two give 0.033 (kept). The
+tests are in-sample on the same runs that chose the count.
 
 **Missing values.** A task model with `Modulator(..., missing="indicator")`
 adds a `missing_<column>` regressor in runs that need one. When counts are
@@ -780,9 +803,10 @@ poorly, not that the feature has no neural activity.
 
 **Pool threshold.** The default `pool_r2_threshold="auto"` follows
 GLMsingle's `findtailthreshold` (raw values, `reg_covar=0`, a 500-point
-`robustrange` grid, the right-end tail component). It differs only in a fixed
-`random_state` and seeded subsample, and in recording convergence
-(`converged`, `n_iter` in the mixture record) instead of warning. A degenerate
+`robustrange` grid, the right-end tail component). It differs in a fixed
+`random_state` and seeded subsample, in recording convergence (`converged`,
+`n_iter` in the mixture record) instead of warning, and in deviations (i) to
+(k) above. A degenerate
 or failed fit raises an error naming the runs and suggesting a fixed
 `pool_r2_threshold`. Inspect `noise_pool.sum()`, `scoring_mask.sum()`, and
 `candidate_scores` before relying on the choice.

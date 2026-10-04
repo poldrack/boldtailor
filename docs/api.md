@@ -448,11 +448,16 @@ initialisations) to at most 1,000,000 values. It evaluates posteriors on 500
 points over GLMsingle's `robustrange`, widened to include both means. The
 threshold is the rightmost point where the posterior of the component
 dominating the right end is at most 0.5. Deviations from GLMsingle:
-`random_state=0` and a seeded subsample make the result reproducible, and
-convergence warnings are suppressed but recorded (`converged`, `n_iter`).
-Fewer than two distinct values, a failed fit, or no crossing raise an error
-that names the runs and suggests a fixed `pool_r2_threshold`; there is no
-fallback. A number is applied as a fixed threshold. `library=None` uses
+`random_state=0` and a seeded subsample make the result reproducible;
+convergence warnings are suppressed but recorded (`converged`, `n_iter`);
+`robustrange` uses all finite values (GLMsingle uses the subsample); and no
+crossing raises (GLMsingle warns). Fewer than two distinct values, a failed
+fit, or no crossing raise an error that names the runs and suggests a fixed
+`pool_r2_threshold`; there is no fallback. A number is applied as a fixed
+threshold. ON-OFF R² is a fraction, so a GLMsingle `brainR2` value (percent)
+must be divided by 100. GLMsingle's `bright` pool criterion is not applied,
+and the best-100 fallback considers only features with a defined HRF.
+`library=None` uses
 `default_hrf_library()`. Every input, and every run's design (errors name
 runs by label), is validated before any fitting.
 
@@ -474,7 +479,7 @@ count is chosen by GLMsingle's `pcstop` rule. The selection activity is named
 
 `significance_gate` (a bool, default `True`) applies an F-test gate that is a
 Boldtailor addition, not part of GLMsingle. If pcstop chose `k* > 0`, each
-scoring feature gets an in-sample OLS F-test on all runs comparing the
+feature pcstop scored gets an in-sample OLS F-test on all runs comparing the
 reduced model (shared task regressors with frozen HRFs, plus each run's
 baseline confounds, intercept, and missing-value indicators) with the full
 model (plus each run's first `k*` PCs). `df1 = rank(full) - rank(reduced)`
@@ -485,11 +490,14 @@ and `df2 = scans - rank(full)` use the existing rank tolerances, and
 gate_binomial_alpha`; otherwise the count is 0. With no testable feature the
 count is 0. `gate_alpha` and `gate_binomial_alpha` must be finite numbers
 strictly between 0 and 1. Features whose stacked design is rank deficient,
-has `df2 <= 0`, or has a numerically zero target in every run are excluded
-from `n`. `significance_gate=False` returns the pcstop count. The OLS F-tests
-are anti-conservative under autocorrelated noise, and the binomial test
-treats features as independent. The selection activity records the gate
-under `significance_gate`.
+has `df2 <= 0`, or gains no PC columns (`df1 = 0`), and scoring features with
+a numerically zero target in any run (not scored by pcstop), are excluded
+from `n` (with none left, `binomial_p` is NaN). `significance_gate=False`
+returns the pcstop count. The OLS F-tests are anti-conservative under
+autocorrelated noise, and the binomial test treats features as independent.
+The F-test measures variance explained by the PCs, not task-prediction
+benefit, so PCs of independent autocorrelated noise can pass it (see the user
+guide). The selection activity records the gate under `significance_gate`.
 
 `with_denoising` checks content identity before it changes anything: run count
 and order, features, rows, time grids, signals, baseline confounds, and events.

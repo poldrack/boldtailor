@@ -9,10 +9,10 @@ scores features above it (the 100 best when none passes); extracts run-wise
 PCs of that single pool; and chooses one PC count with GLMsingle's pcstop
 rule over the median of fold-pooled held-out R², then (a Boldtailor
 addition, not part of GLMsingle) keeps that count only if the PCs pass a
-voxelwise OLS F-test gate with a binomial test across features. Counts are scored by
-leave-one-run-out time-series prediction against a fixed target, because
-repeated conditions are not assumed. Every input feature is a candidate: the
-core is anatomy-agnostic. ``with_denoising`` appends the chosen PCs to the
+per-feature OLS F-test gate with a binomial test across features. Counts are
+scored by leave-one-run-out time-series prediction against a fixed target,
+because repeated conditions are not assumed. Every input feature is a
+candidate: the core is anatomy-agnostic. ``with_denoising`` appends the chosen PCs to the
 baseline confounds of the same analysis for ordinary HRF selection and
 fitting.
 

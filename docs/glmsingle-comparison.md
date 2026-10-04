@@ -66,6 +66,19 @@ Deviations, each with its reason:
   task-guided criterion uses the caller's task model, including modulators.
 - **Fixed target.** The held-out target never contains the candidate PCs, so
   more PCs cannot win by shrinking it.
+- **No brightness criterion.** GLMsingle's pool also requires `bright`
+  features (mean intensity above 10% of the 99th percentile). Boldtailor drops
+  it because the core is anatomy-agnostic and never infers anatomy from
+  intensities.
+- **Scoring fallback.** The best-100 fallback considers only features with a
+  defined HRF.
+- **Mixture threshold details.** `robustrange` runs on all finite ON-OFF R²
+  values, while GLMsingle runs it on the mixture-fit subsample (this matters
+  only above 1e6 values). If the tail component's posterior never crosses 0.5
+  on the grid, Boldtailor raises an error; GLMsingle warns and continues.
+- **R² units.** ON-OFF R² is a fraction in [0, 1]; GLMsingle reports it in
+  percent, so a fixed `pool_r2_threshold` copied from GLMsingle's `brainR2`
+  must be divided by 100.
 - **Stopping rule.** The walk matches GLMsingle's `select_noise_regressors`
   except for a 64-eps roundoff slack that keeps numerically equal values
   equal.
@@ -80,12 +93,19 @@ Deviations, each with its reason:
   the predeclared validation. The F-tests are anti-conservative under
   autocorrelated noise (OLS, no prewhitening), and the binomial test treats
   features as independent, which is optimistic for correlated features; the
-  gate is deliberately lenient. `significance_gate=False` gives GLMsingle's
-  pcstop-only choice.
+  gate is deliberately lenient. The F-test measures variance explained by the
+  PCs in the scoring features, not task-prediction benefit, and the leading
+  PCs of independent autocorrelated noise span its low-frequency directions.
+  In an illustrative probe (20k features, 12 runs, no shared noise; not a
+  calibration) white noise was rejected (4.6-4.9% of features at `p < 0.05`)
+  but independent AR(1) noise with coefficient 0.5 was kept (97.5-100% of
+  features at `p < 0.05`, binomial p near 0). With few tested features the
+  decision is coarse: with n = 6, one feature can flip it.
+  `significance_gate=False` gives GLMsingle's pcstop-only choice.
 
 Boldtailor's stage is not run by default or in the NSD example, and it is
 tuned sequentially: HRFs and the pool are frozen while counts are compared.
-Pool refinement and voxelwise counts are not implemented. No matched
+Pool refinement and per-feature counts are not implemented. No matched
 comparison with GLMsingle's denoising has been run. Synthetic checks in this
 repository establish implementation behavior only: with shared noise one PC
 was chosen, the gate kept it, and coefficient and outer-run recovery improved;
