@@ -113,8 +113,20 @@ class DenoisingResult:
     def _validate(self):
         if not isinstance(self.initial_selection, HrfSelectionResult):
             raise ValueError("initial_selection must be an HrfSelectionResult")
-        if len(self.run_components) != len(self.run_labels):
+        if (
+            not len(self.run_components)
+            == len(self.run_labels)
+            == len(self.source_identity)
+        ):
             raise ValueError("run_components must hold one array per run")
+        for label, comps, run in zip(
+            self.run_labels, self.run_components, self.source_identity
+        ):
+            if comps.shape[0] != run.n_scans:
+                raise ValueError(
+                    f"run_components for run '{label}' has {comps.shape[0]} rows; "
+                    f"the run has {run.n_scans} scans"
+                )
         if self.n_components not in self.counts or any(
             c.ndim != 2 or c.shape[1] != self.n_components for c in self.run_components
         ):

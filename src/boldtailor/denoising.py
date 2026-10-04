@@ -10,9 +10,8 @@ analysis for ordinary HRF selection and fitting.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
-import re
 
 import numpy as np
 import pandas as pd
@@ -40,9 +39,13 @@ from boldtailor.denoising_results import (
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import TaskModel
-from boldtailor.provenance import analysis_fingerprint, identity_activity
+from boldtailor.provenance import (
+    RunSources,
+    SourceRef,
+    analysis_fingerprint,
+    identity_activity,
+)
 
-_RUN_INDEX = re.compile(r"\brun (\d+)\b")
 _AUGMENTATION = "denoising_augmentation"
 
 
@@ -92,16 +95,6 @@ def _settings(data, brain_mask, task_model, library, grid, signature):
     )
 
 
-def _labelled(text, labels):
-    """Replace run indices in a message with the analysis run labels."""
-
-    def label(match):
-        index = int(match.group(1))
-        return f"run '{labels[index]}'" if index < len(labels) else match.group(0)
-
-    return _RUN_INDEX.sub(label, text)
-
-
 def _digest(values, dtype) -> str:
     return sha256(np.ascontiguousarray(values, dtype=dtype).tobytes()).hexdigest()
 
@@ -110,29 +103,23 @@ def _digest(values, dtype) -> str:
 
 
 def _count_selection(data, labels, settings):
-    try:
-        return select_component_count(
-            data,
-            brain_mask=settings.brain_mask,
-            task_model=settings.task_model,
-            library=settings.library,
-            counts=settings.counts,
-            threshold=settings.threshold,
-            tolerance=settings.tolerance,
-        )
-    except ValueError as error:
-        raise ValueError(_labelled(str(error), labels)) from error
+    return select_component_count(
+        data,
+        brain_mask=settings.brain_mask,
+        task_model=settings.task_model,
+        library=settings.library,
+        counts=settings.counts,
+        threshold=settings.threshold,
+        tolerance=settings.tolerance,
+        run_labels=labels,
+    )
 
 
-def _labelled_tables(selection, labels):
-    folds = selection.fold_scores.assign(
-        validation_run=[labels[v] for v in selection.fold_scores["validation_run"]],
-        reason=[_labelled(r, labels) for r in selection.fold_scores["reason"]],
-    )
-    scores = selection.scores.assign(
-        reason=[_labelled(r, labels) for r in selection.scores["reason"]]
-    )
-    return scores, folds
+def _public_tables(selection):
+    """Aggregate scores and per-fold scores keyed by the held-out run label."""
+    folds = selection.fold_scores.copy()
+    folds["validation_run"] = folds.pop("validation_label")
+    return selection.scores, folds
 
 
 def _diagnostics(components, labels, pool_size):
@@ -265,8 +252,8 @@ def _selection_activity(context, scores, folds, final):
     )
 
 
-def _provenance(operation, data, activity):
-    analysis_id = analysis_fingerprint(data.provenance.metadata_fingerprint, activity)
+def _provenance(operation, record, activity):
+    analysis_id = analysis_fingerprint(record.metadata_fingerprint, activity)
     return operation.provenance(activity, analysis_id=analysis_id)
 
 
@@ -282,7 +269,7 @@ def _assemble(operation, context, count):
     data, labels, settings = context
     selection, statistic, masks, components = _final_pool(data, labels, settings)
     prefixes = _final_prefixes(components, masks, count.n_components, labels)
-    scores, fold_scores = _labelled_tables(count, labels)
+    scores, fold_scores = _public_tables(count)
     folds = tuple(_fold_result(fold, labels) for fold in count.folds)
     activity = _selection_activity(context, scores, folds, (selection, masks, prefixes))
     return DenoisingResult(
@@ -302,7 +289,7 @@ def _assemble(operation, context, count):
         run_labels=labels,
         feature_signature=settings.feature_signature,
         source_identity=run_identities(data),
-        provenance=_provenance(operation, data, activity),
+        provenance=_provenance(operation, data.provenance, activity),
     )
 
 
@@ -389,6 +376,35 @@ def _augmentation_activity(result):
     )
 
 
+def _annotated(ref, mark):
+    values = ref.to_dict()
+    values["annotations"] = {**values.get("annotations", {}), _AUGMENTATION: mark}
+    return SourceRef.from_dict(values)
+
+
+def _annotated_run(sources, mark):
+    """Mark the confounds source (else the signal); file identity is kept."""
+    if sources.confounds is not None:
+        confounds = _annotated(sources.confounds, mark)
+        return RunSources(sources.signal, sources.events, confounds)
+    return RunSources(_annotated(sources.signal, mark), sources.events, None)
+
+
+def _annotated_record(data, result):
+    """Parent provenance whose sources identify the augmented confounds.
+
+    Downstream analysis ids derive from source metadata, so distinct
+    augmentations of the same files must not share it.
+    """
+    mark = dict(
+        selection_execution_id=result.provenance.execution_id,
+        component_fingerprints=[_digest(c, "<f8") for c in result.run_components],
+        n_components=result.n_components,
+    )
+    sources = tuple(_annotated_run(s, mark) for s in data.provenance.sources)
+    return replace(data.provenance, sources=sources)
+
+
 def with_denoising(
     data: AnalysisData,
     result: DenoisingResult,
@@ -401,13 +417,17 @@ def with_denoising(
     same order, time grids, signals (feature order), baseline confounds, and
     events, and a matching ``feature_signature``. Applying a result twice or
     colliding with existing confound names raises. Signals, events, timing,
-    and source records are preserved; provenance gains one activity. A
-    zero-count result adds no columns.
+    and source file identities are preserved. Each run's confounds source
+    (the signal source when there are no confounds) gains a
+    ``denoising_augmentation`` annotation, so downstream analysis ids differ
+    between augmentations, and provenance gains one activity. A zero-count
+    result adds no columns but is still recorded.
     """
     _check_application(data, result, feature_signature)
-    with fit_operation(_AUGMENTATION, data.provenance) as operation:
+    parent = _annotated_record(data, result)
+    with fit_operation(_AUGMENTATION, parent) as operation:
         confounds = _augmented_confounds(data, result)
-        provenance = _provenance(operation, data, _augmentation_activity(result))
+        provenance = _provenance(operation, parent, _augmentation_activity(result))
         return AnalysisData(
             _signals=data.signals,
             _events=data.events,
