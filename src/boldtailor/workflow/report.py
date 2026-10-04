@@ -179,6 +179,15 @@ def _settings_body(settings):
     return f"<table>{rows}</table><h3>Equivalent command line</h3><pre>{command}</pre>"
 
 
+def _categorical_items(task_model):
+    return [
+        f"<li>{html.escape(m.column)}: levels {html.escape(', '.join(m.levels))} "
+        f"(reference {html.escape(m.reference)})</li>"
+        for m in task_model.modulators
+        if m.kind == "categorical"
+    ]
+
+
 def _inputs_body(runs, task_model, library, notes=()):
     labels = html.escape(", ".join(r.label for r in runs))
     regressors = html.escape(", ".join(task_model.regressor_names))
@@ -186,6 +195,7 @@ def _inputs_body(runs, task_model, library, notes=()):
         f"<li>{len(runs)} runs: {labels}</li>",
         f"<li>Task regressors: {regressors}</li>",
     ]
+    items += _categorical_items(task_model)
     if library is not None:
         items.append(
             f"<li>HRF library: {len(library.candidates)} candidates, "

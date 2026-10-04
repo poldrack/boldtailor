@@ -870,13 +870,30 @@ def _rt_check(include_rt, has_rt, beta_models):
     return dict(rt_check=_rt_check_description(include_rt, tuned))
 
 
+_CATEGORICAL_CODING = (
+    "One 0/1 indicator per non-reference level, uncentered; each coefficient "
+    "is the level response minus the reference response"
+)
+
+
 def _task_model_description(task_model):
     columns = [m.column for m in task_model.modulators]
     modulated = f" modulated by {', '.join(columns)}" if columns else ""
     return (
         f"One task regressor per presentation{modulated}. Modulators are "
-        "uncentered; the task contrast is the response at modulator value zero."
+        "uncentered; the task contrast is the response at numeric modulator "
+        "value zero and at each categorical modulator's reference level."
     )
+
+
+def _categorical_prose(task_model):
+    return {
+        m.column: dict(
+            levels=list(m.levels), reference=m.reference, coding=_CATEGORICAL_CODING
+        )
+        for m in task_model.modulators
+        if m.kind == "categorical"
+    }
 
 
 def _response_time_prose():
@@ -898,15 +915,17 @@ def _model_prose(task_model):
     columns = {m.column for m in task_model.modulators}
     prose = dict(
         task_model_description=_task_model_description(task_model),
-        task="One unit per presentation; the response with every modulator and missing-value indicator at zero",
+        task=(
+            "One unit per presentation; the response with every numeric modulator "
+            "at zero, every categorical modulator at its reference level, and "
+            "every missing-value indicator at zero"
+        ),
     )
     if "response_time" in columns:
         prose.update(_response_time_prose())
-    if "trial_type" in columns:
-        prose["trial_type"] = (
-            "Binary codes 0/1, uncentered; the task coefficient is the response "
-            "on trial_type 0 trials"
-        )
+    categorical = _categorical_prose(task_model)
+    if categorical:
+        prose["categorical_modulators"] = categorical
     return prose
 
 
