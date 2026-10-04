@@ -374,7 +374,9 @@ def test_metadata_records_settings_runs_task_model_skips_and_report(selected):
 
 def test_metadata_prose_follows_the_task_model(four_runs, small_library, settings_for):
     root, _ = four_runs
-    settings = settings_for(root, modulators=(Modulator("trial_type"),))
+    settings = settings_for(
+        root, modulators=(Modulator("trial_type", kind="categorical"),)
+    )
     runs, model, _ = _session(settings)
     published = outputs.metadata(
         runs,
@@ -387,8 +389,13 @@ def test_metadata_prose_follows_the_task_model(four_runs, small_library, setting
         skipped=(),
         report=None,
     )
-    assert published["regressors"] == ["task", "trial_type"]
-    assert "trial_type" in published
+    assert published["regressors"] == ["task", "trial_type[1]"]
+    assert published["categorical_modulators"]["trial_type"] == {
+        "levels": ["0", "1"],
+        "reference": "0",
+        "coding": "One 0/1 indicator per non-reference level, uncentered; each coefficient is the level response minus the reference response",
+    }
+    assert "trial_type" not in published
     assert "response_time" not in published
     assert "response_time" not in published["task_model_description"]
     assert "missing_response_time" not in published

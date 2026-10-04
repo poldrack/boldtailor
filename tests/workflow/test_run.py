@@ -312,6 +312,42 @@ def test_string_trial_type_is_expanded_into_indicators(
     assert metadata["task_model"]["regressors"] == ["task", "trial_type[house]"]
 
 
+def _three_level_events(table):
+    labels = ["face", "house", "scrambled face"] * (len(table) // 3 + 1)
+    return table.assign(trial_type=labels[: len(table)])
+
+
+def test_string_trial_type_run_writes_indicator_maps_and_describes_them(
+    four_runs, settings_for, tmp_path
+):
+    import nibabel as nib
+
+    from tests.workflow.synthetic_bids import rewrite_events
+
+    root, _ = four_runs
+    rewrite_events(root, _three_level_events)
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    result = workflow_run.run_workflow(settings)
+    name = "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json"
+    meta = json.loads((_func(settings) / name).read_text())
+    expected = [
+        "task",
+        "response_time",
+        "trial_type[house]",
+        "trial_type[scrambled face]",
+    ]
+    assert meta["task_model"]["regressors"] == expected
+    assert meta["categorical_modulators"]["trial_type"]["reference"] == "face"
+    effects = next(
+        p for p in result.paths if "desc-OptimizedGLM_stat-effects" in p.name
+    )
+    assert list(nib.load(effects).header.get_axis(0).name) == expected
+    html = result.report_path.read_text()
+    assert "trial_type[scrambled face]" in html and "reference face" in html
+
+
 def test_run_missing_a_level_is_an_input_error_naming_the_run_once(
     four_runs, settings_for, tmp_path
 ):

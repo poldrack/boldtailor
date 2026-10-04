@@ -216,3 +216,9 @@ def test_report_shows_inputs_hrf_reliability_and_ridge_tables(bids_settings):
 def test_report_lists_notes_in_the_inputs_section(bids_settings):
     html = _render(bids_settings, notes=["trial_type is not binary 0/1"])
     assert "trial_type is not binary 0/1" in _section_text(html, "inputs")
+
+
+def test_report_lists_categorical_levels_and_reference_escaped(bids_settings):
+    model = TaskModel((Modulator("cond", kind="categorical", levels=("a<b", "c")),))
+    html = _render(bids_settings, task_model=model)
+    assert "cond: levels a&lt;b, c (reference a&lt;b)" in _section_text(html, "inputs")
