@@ -171,6 +171,7 @@ def test_report_command_line_round_trips_through_the_parser(four_runs, tmp_path)
         _argv(
             root,
             *("--modulator", "response_time:indicator", "--modulator", "trial_type"),
+            *("--modulator", "trial_type:categorical,reference=house"),
             *("--output-dir", str(tmp_path / "o"), "--hrf-library", "sobol"),
             *("--hrf-n-samples", "8", "--hrf-seed", "3"),
             *("--ridge-mode", "fixed", "--ridge-alpha", "0.5"),
@@ -186,6 +187,21 @@ def test_report_command_line_round_trips_through_the_parser(four_runs, tmp_path)
     tokens = shlex.split(report.command_line(settings))
     assert tokens[:2] == ["boldtailor", "run"]
     again = cli.settings_from_args(cli.build_parser().parse_args(tokens[1:]))
+    assert again == settings
+
+
+def test_categorical_modulator_flag_round_trips(four_runs):
+    root, _ = four_runs
+    args = cli.build_parser().parse_args(
+        _argv(root, "--modulator", "trial_type:categorical,reference=1,indicator")
+    )
+    settings = cli.settings_from_args(args)
+    assert settings.modulators == (
+        Modulator("trial_type", kind="categorical", reference="1", missing="indicator"),
+    )
+    again = cli.settings_from_args(
+        cli.build_parser().parse_args(shlex.split(report.command_line(settings))[1:])
+    )
     assert again == settings
 
 

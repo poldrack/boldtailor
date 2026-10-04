@@ -4,6 +4,7 @@ import pytest
 
 from boldtailor.hrf_library import default_hrf_library
 from boldtailor.model import Modulator
+from boldtailor.workflow.report import modulator_text
 from boldtailor.workflow.settings import (
     WorkflowSettings,
     parse_modulator,
@@ -108,14 +109,60 @@ def test_missing_bids_dir_is_an_error(tmp_path):
         )
 
 
-def test_parse_modulator_syntax():
-    assert parse_modulator("response_time:indicator") == Modulator(
-        "response_time", missing="indicator"
-    )
-    assert parse_modulator("trial_type") == Modulator("trial_type")
-    for bad in ("", "rt:centered", "rt:indicator:extra", ":indicator"):
-        with pytest.raises(ValueError, match="modulator"):
-            parse_modulator(bad)
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("trial_type", Modulator("trial_type")),
+        ("response_time:indicator", Modulator("response_time", missing="indicator")),
+        ("trial_type:categorical", Modulator("trial_type", kind="categorical")),
+        (
+            "trial_type:categorical,reference=face",
+            Modulator("trial_type", kind="categorical", reference="face"),
+        ),
+        (
+            "cond:indicator,categorical",
+            Modulator("cond", kind="categorical", missing="indicator"),
+        ),
+    ],
+)
+def test_parse_modulator_options(text, expected):
+    assert parse_modulator(text) == expected
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "",
+        ":indicator",
+        "rt:centered",
+        "rt:indicator,indicator",
+        "rt:reference=a",
+        "rt:categorical,reference=",
+        "rt:a:b",
+    ],
+)
+def test_parse_modulator_rejects_bad_options(bad):
+    with pytest.raises(ValueError, match="modulator"):
+        parse_modulator(bad)
+
+
+@pytest.mark.parametrize("level", ["a,b", "a:b"])
+def test_modulator_text_rejects_unexpressible_reference(level):
+    mod = Modulator("cond", kind="categorical", reference=level)
+    with pytest.raises(ValueError, match="modulator reference"):
+        modulator_text(mod)
+
+
+@pytest.mark.parametrize(
+    "mod",
+    [
+        Modulator("rt"),
+        Modulator("rt", missing="indicator"),
+        Modulator("cond", kind="categorical", reference="face", missing="indicator"),
+    ],
+)
+def test_modulator_text_inverts_parse_modulator(mod):
+    assert parse_modulator(modulator_text(mod)) == mod
 
 
 def test_round_trip_through_dict_and_library_builder(bids):
