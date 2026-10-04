@@ -87,6 +87,14 @@ def parse_modulator(text):
     )
 
 
+def _check_unresolved(mod):
+    if mod.kind == "categorical" and mod.levels is not None:
+        raise ValueError(
+            f"modulators: categorical modulator {mod.column!r} must not set "
+            "levels; they come from the events"
+        )
+
+
 def _check_expressible(mod):
     try:
         check_modulator_expressible(mod)
@@ -226,6 +234,7 @@ class WorkflowSettings:
         if any(not isinstance(m, Modulator) for m in mods):
             raise ValueError("modulators must be Modulator instances or None")
         for mod in mods:
+            _check_unresolved(mod)
             _check_expressible(mod)
         self._set("modulators", mods)
 

@@ -715,7 +715,9 @@ reference level; each indicator, named `<column>[<level>]`, is that level's
 response minus the reference. Binary 0/1 columns follow the same rule: a
 `trial_type` of 0 and 1 gives the regressor `trial_type[1]`. This is a
 behaviour change from earlier releases, which used a binary 0/1 `trial_type`
-as a numeric modulator named `trial_type`.
+as a numeric modulator named `trial_type`. An explicit `--modulator trial_type`
+is still numeric (regressor `trial_type`); `--modulator trial_type:categorical`
+gives the `trial_type[...]` indicators.
 
 - Levels are canonicalised as text: `1`, `"1"`, and `1.0` are one level `"1"`.
   `n/a`, empty, and NaN are missing values; infinite values and booleans are
@@ -819,7 +821,7 @@ traceback.
 | Timing or trial support is rejected | Onset units, acquisition offset, run boundaries, and whether each event has a sampled response |
 | R² or HRF parameters are NaN | A constant signal, no variance after nuisance adjustment, or unavailable split evaluation; inspect metadata |
 | An output file already exists | Choose a new output directory, or pass `--existing-results overwrite` to replace this subject/session/task's earlier boldtailor results |
-| A run lacks a level of a categorical modulator (exit 2) | Every level, including the reference, must occur in every run; drop the level or fix the events, or choose another column |
+| A run lacks a level of a categorical modulator (exit 2) | Every level, including the reference, must occur in every run; fix the events or choose another column. When `trial_type` was detected automatically, the error lists remedies: `--modulator trial_type:categorical,indicator` codes missing values (add `--modulator response_time:indicator` to keep RT), listing modulators without `trial_type` drops it, and `--no-modulators` fits a task-only model |
 | Parallel fitting uses too much RAM | Reduce `--n-jobs` or `--block-size`; final beta arrays also occupy memory |
 
 ### Fractional-ridge default migration (2026-09-28)

@@ -25,9 +25,19 @@ class InputError(ValueError):
 TRIAL_TYPE_NOTE = "trial_type has fewer than two levels; not used as a modulator"
 
 
-def observed_levels(tables, column):
+def _table_levels(table, column, label):
+    try:
+        return {level_name(v) for v in table[column]}
+    except ValueError as error:
+        raise InputError(f"{label}: {column!r}: {error}") from error
+
+
+def observed_levels(tables, column, labels=None):
     """Canonical non-missing level names of ``column`` across every table."""
-    names = {level_name(v) for table in tables for v in table[column]}
+    labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
+    names = set()
+    for table, label in zip(tables, labels, strict=True):
+        names |= _table_levels(table, column, label)
     names.discard(None)
     return names
 
@@ -36,12 +46,12 @@ def _everywhere(column, tables):
     return bool(tables) and all(column in t.columns for t in tables)
 
 
-def _automatic(tables):
+def _automatic(tables, labels):
     modulators = []
     if _everywhere("response_time", tables):
         modulators.append(Modulator("response_time", missing="indicator"))
     if _everywhere("trial_type", tables):
-        levels = observed_levels(tables, "trial_type")
+        levels = observed_levels(tables, "trial_type", labels)
         if len(levels) >= 2:
             modulators.append(
                 Modulator("trial_type", kind="categorical", levels=tuple(levels))
@@ -49,11 +59,12 @@ def _automatic(tables):
     return tuple(modulators)
 
 
-def _resolved(modulator, tables):
+def _resolved(modulator, tables, labels):
     if modulator.resolved:
         return modulator
     try:
-        return modulator.with_levels(observed_levels(tables, modulator.column))
+        levels = observed_levels(tables, modulator.column, labels)
+        return modulator.with_levels(levels)
     except ValueError as error:
         raise InputError(f"modulator {modulator.column!r}: {error}") from error
 
@@ -66,14 +77,14 @@ def detect_task_model(events_tables, modulators=None, labels=None):
     every run. ``labels`` (BIDS run labels) name the run in errors.
     """
     tables = list(events_tables)
-    if modulators is None:
-        modulators = _automatic(tables)
     labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
+    if modulators is None:
+        modulators = _automatic(tables, labels)
     for label, table in zip(labels, tables, strict=True):
         missing = [m.column for m in modulators if m.column not in table.columns]
         if missing:
             raise InputError(f"{label} events lack modulator column(s) {missing}")
-    return TaskModel(tuple(_resolved(m, tables) for m in modulators))
+    return TaskModel(tuple(_resolved(m, tables, labels) for m in modulators))
 
 
 def task_model_notes(events_tables, modulators=None):
@@ -114,7 +125,10 @@ def _numeric_column(events, name):
     try:
         return pd.to_numeric(events[name], errors="raise").to_numpy(float)
     except (TypeError, ValueError) as error:
-        raise ValueError(f"{name} must contain numeric values") from error
+        raise ValueError(
+            f"{name} must contain numeric values; for text levels use "
+            f"--modulator {name}:categorical"
+        ) from error
 
 
 def _columns(task_model):
@@ -168,11 +182,31 @@ def _checked(run, task_model):
     return flags.columns, retained, _missing_nonpositive_rt(run.events)
 
 
-def _trim(run, task_model):
+AUTOMATIC_HINT = (
+    "; trial_type was detected automatically: to code missing values pass "
+    "--modulator trial_type:categorical,indicator (add --modulator "
+    "response_time:indicator to keep RT), list modulators without trial_type, "
+    "or use --no-modulators"
+)
+
+
+def _categorical_failure(error, task_model):
+    return any(
+        m.kind == "categorical" and repr(m.column) in str(error)
+        for m in task_model.modulators
+    )
+
+
+def _trim(run, task_model, automatic=False):
     try:
         flags, retained, events = _checked(run, task_model)
     except ValueError as error:
-        raise InputError(f"{run.label}: {error}") from error
+        hint = (
+            AUTOMATIC_HINT
+            if automatic and _categorical_failure(error, task_model)
+            else ""
+        )
+        raise InputError(f"{run.label}: {error}{hint}") from error
     return WorkflowRun(
         run.inputs,
         run.image,
@@ -193,7 +227,8 @@ def load_session(settings, *, hrf_only=False):
         settings.modulators,
         labels=[r.label for r in raw_runs],
     )
-    runs = [_trim(run, task_model) for run in raw_runs]
+    automatic = settings.modulators is None
+    runs = [_trim(run, task_model, automatic) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise InputError("Retained confound names must match across runs")
     if len(runs) < 2:

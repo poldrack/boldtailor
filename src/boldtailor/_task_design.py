@@ -51,7 +51,9 @@ def categorical_names(values, modulator):
             f"{modulator.column!r} values {unknown} are not levels {list(modulator.levels)}"
         )
     if modulator.missing == "error" and None in names:
-        raise ValueError(f"{modulator.column!r} has missing values")
+        raise ValueError(
+            f"{modulator.column!r} has {names.count(None)} missing value(s)"
+        )
     absent = [lv for lv in modulator.levels if lv not in names]
     if absent:
         raise ValueError(f"no {modulator.column!r} trials at level(s) {absent}")
