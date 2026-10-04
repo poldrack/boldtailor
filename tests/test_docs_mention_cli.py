@@ -14,3 +14,10 @@ def test_readme_and_user_guide_document_boldtailor_run():
     assert (
         "WorkflowSettings" in api and "run_workflow" in api and "render_report" in api
     )
+
+
+def test_user_guide_documents_categorical_modulators():
+    guide = Path("docs/user-guide.md").read_text()
+    api = Path("docs/api.md").read_text()
+    assert "categorical" in guide and "reference=" in guide and "trial_type[" in guide
+    assert 'kind="categorical"' in api and "level_name" in api
