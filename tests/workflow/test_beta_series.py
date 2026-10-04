@@ -16,13 +16,20 @@ from boldtailor.fractional_ridge import (
     select_ridge_fractions,
 )
 from boldtailor.hrf_selection import select_hrfs
+from boldtailor.model import Modulator, TaskModel
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.trial_encoding import evaluate_trial_encoding
 from boldtailor.workflow import analysis, beta_series, inputs
 from tests.oracles import glm_run_sources
 
-ORDER = ["response_time", "trial_type"]
+ORDER = ["response_time", "trial_type[1]"]
+
+
+def encoded(events):
+    """The hand-built encoding predictors: RT and the trial_type[1] indicator."""
+    table = events[["response_time", "trial_type"]].astype(float)
+    return table.rename(columns={"trial_type": "trial_type[1]"})
 
 
 @pytest.fixture
@@ -90,7 +97,7 @@ def test_trial_predictors_follow_the_task_model(session):
     _, runs, model = session
     narrow = inputs.selection_task_model(model, False)
     tables = beta_series.trial_predictors(runs, narrow)
-    assert all(list(t.columns) == ["trial_type"] for t in tables)
+    assert all(list(t.columns) == ["trial_type[1]"] for t in tables)
 
 
 def test_trial_predictors_make_nonpositive_or_missing_rt_nan(session):
@@ -105,8 +112,6 @@ def test_trial_predictors_make_nonpositive_or_missing_rt_nan(session):
 
 
 def test_trial_predictors_leave_other_columns_untouched():
-    from boldtailor.model import Modulator, TaskModel
-
     events = pd.DataFrame(dict(effort=[-1.0, 0.0, 2.0]))
     run = type("Run", (), dict(label="run-01", events=events))()
     model = TaskModel((Modulator("effort"),))
@@ -131,6 +136,20 @@ def test_trial_predictors_reject_nonbinary_trial_type(session):
 # --- shared-alpha CV --------------------------------------------------------
 
 
+def test_trial_predictors_emit_indicator_columns_with_missing_as_nan(session):
+    _, runs, _ = session
+    mod = Modulator(
+        "trial_type", kind="categorical", levels=("0", "1"), missing="indicator"
+    )
+    first = runs[0].events.copy()
+    first.loc[first.index[0], "trial_type"] = np.nan
+    runs = [replace(runs[0], events=first), *runs[1:]]
+    tables = beta_series.trial_predictors(runs, TaskModel((mod,)))
+    assert list(tables[0].columns) == ["trial_type[1]"]
+    assert np.isnan(tables[0].iloc[0, 0])
+    assert set(tables[0].iloc[1:, 0]) <= {0.0, 1.0}
+
+
 @pytest.mark.parametrize("optimized", [False, True])
 def test_workflow_matches_whole_array_reference(session, cv_library, optimized):
     root, runs, model = session
@@ -143,7 +162,7 @@ def test_workflow_matches_whole_array_reference(session, cv_library, optimized):
     ):
         training = [runs[i] for i in indices]
         data = inputs.load_block(training, root, np.arange(4), model)
-        predictors = [r.events[ORDER] for r in training]
+        predictors = [encoded(r.events) for r in training]
         expected = score_ridge_candidates(
             data, predictors, library=library, alphas=[0.0, 0.1, 1.0]
         )
@@ -202,7 +221,7 @@ def test_workflow_matches_whole_array_reference(session, cv_library, optimized):
             )
         reference = evaluate_trial_encoding(
             fitted.run_betas,
-            [r.events[ORDER] for r in runs],
+            [encoded(r.events) for r in runs],
             train_runs=train,
             test_runs=test,
         )

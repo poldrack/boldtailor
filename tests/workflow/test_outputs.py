@@ -124,6 +124,22 @@ def test_ridge_artifacts_match_numeric_results(
     settings = settings_for(root, ridge_mode="cv", ridge_alphas=(0.0, 0.1))
     runs, task_model, brain, _, models = _beta_models(settings, cv_library)
     model = models["CanonicalTrialRidgeCV"]
+    described = outputs.metadata(
+        runs,
+        cv_library,
+        settings,
+        task_model,
+        beta_models=models,
+        activation=None,
+        selections=None,
+        skipped=(),
+        report=None,
+    )
+    assert described["ridge_cv"]["encoding_predictors"] == [
+        "task",
+        "response_time",
+        "trial_type[1]",
+    ]
     written = outputs.beta_model_artifacts(settings, brain, runs, model, cv_library)
     output = tmp_path / "published"
     sentinel = output / "old_fixed_ridge.txt"

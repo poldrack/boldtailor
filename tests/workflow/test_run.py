@@ -218,7 +218,11 @@ def test_describe_inputs_reports_runs_model_and_output(
         settings_for(root, output_dir=tmp_path / "out", hrf_library="canonical")
     )
     assert info["runs"] == ["run-01", "run-02", "run-03", "run-04"]
-    assert info["task_model"]["regressors"] == ["task", "response_time", "trial_type"]
+    assert info["task_model"]["regressors"] == [
+        "task",
+        "response_time",
+        "trial_type[1]",
+    ]
     assert (
         info["output_dir"] == str(tmp_path / "out") and info["library_candidates"] == 1
     )
@@ -284,10 +288,7 @@ def test_task_only_session_runs_without_rt_or_trial_type(
     assert metadata["task_model"]["regressors"] == ["task"]
 
 
-TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
-
-
-def test_string_trial_type_is_reported_and_left_out_of_the_model(
+def test_string_trial_type_is_expanded_into_indicators(
     four_runs, settings_for, tmp_path
 ):
     from tests.workflow.synthetic_bids import face_house_events, rewrite_events
@@ -298,17 +299,33 @@ def test_string_trial_type_is_reported_and_left_out_of_the_model(
         root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
     )
     info = workflow_run.describe_inputs(settings)
-    assert info["task_model"]["regressors"] == ["task"]
-    assert TRIAL_TYPE_NOTE in info["notes"]
-    result = workflow_run.run_workflow(settings)
-    assert TRIAL_TYPE_NOTE in result.report_path.read_text()
+    assert info["task_model"]["regressors"] == ["task", "trial_type[house]"]
+    assert info["task_model"]["modulators"][0]["levels"] == ["face", "house"]
+    assert not any("trial_type" in note for note in info["notes"])
+    workflow_run.run_workflow(settings)
     metadata = json.loads(
         (
             _func(settings)
             / "sub-07_ses-nsd10_task-nsdcore_desc-boldtailor_metadata.json"
         ).read_text()
     )
-    assert TRIAL_TYPE_NOTE in metadata["notes"]
+    assert metadata["task_model"]["regressors"] == ["task", "trial_type[house]"]
+
+
+def test_run_missing_a_level_is_an_input_error_naming_the_run_once(
+    four_runs, settings_for, tmp_path
+):
+    import pandas as pd
+
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    pd.read_csv(path, sep="\t").assign(trial_type=0).to_csv(path, sep="\t", index=False)
+    settings = settings_for(root, output_dir=tmp_path / "out", hrf_library="canonical")
+    with pytest.raises(inputs.InputError) as raised:
+        workflow_run.run_workflow(settings)
+    message = str(raised.value)
+    assert "run-02" in message and "'1'" in message
+    assert message.count("run") == 1
 
 
 def test_ridge_cv_without_modulators_stops_before_any_fitting(

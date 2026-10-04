@@ -8,17 +8,66 @@ from boldtailor.design import expand_events
 from boldtailor.model import Modulator, TaskModel
 from boldtailor.workflow import inputs
 
+TT = Modulator("trial_type", kind="categorical", levels=("0", "1"))
 
-def test_detection_uses_rt_and_trial_type_when_present(events):
+
+def test_detection_uses_rt_and_categorical_trial_type(events):
     model = inputs.detect_task_model([events, events])
-    assert model == TaskModel(
-        (Modulator("response_time", missing="indicator"), Modulator("trial_type"))
-    )
+    assert model == TaskModel((Modulator("response_time", missing="indicator"), TT))
+    assert model.regressor_names == ("task", "response_time", "trial_type[1]")
     without_rt = inputs.detect_task_model(
         [events.drop(columns="response_time"), events]
     )
-    assert without_rt == TaskModel((Modulator("trial_type"),))
+    assert without_rt == TaskModel((TT,))
     assert inputs.detect_task_model([events[["onset", "duration"]]]) == TaskModel()
+
+
+def test_string_and_mixed_dtype_trial_types_become_one_level_set(events):
+    words = events.assign(
+        trial_type=["face", "house", "scrambled"] * (len(events) // 3)
+    )
+    model = inputs.detect_task_model([words, words])
+    assert model.regressor_names[-2:] == ("trial_type[house]", "trial_type[scrambled]")
+    as_text = events.assign(trial_type=events.trial_type.astype(str))
+    assert (
+        inputs.detect_task_model([events, as_text]).regressor_names[-1]
+        == "trial_type[1]"
+    )
+
+
+def test_single_level_trial_type_is_left_out_with_a_note(events):
+    flat = events.assign(trial_type="face")
+    assert inputs.detect_task_model([flat]).regressor_names == ("task", "response_time")
+    assert inputs.task_model_notes([flat]) == [inputs.TRIAL_TYPE_NOTE]
+
+
+def test_explicit_categorical_resolves_levels_and_checks_reference(events):
+    wanted = (Modulator("trial_type", kind="categorical", reference="1"),)
+    model = inputs.detect_task_model([events, events], wanted)
+    assert model.regressor_names == ("task", "trial_type[0]")
+    bad = (Modulator("trial_type", kind="categorical", reference="7"),)
+    with pytest.raises(inputs.InputError, match="trial_type.*7"):
+        inputs.detect_task_model([events], bad)
+
+
+def test_run_missing_a_level_is_an_input_error_naming_the_run(four_runs, settings_for):
+    root, _ = four_runs
+    path = sorted((root / "sub-07" / "ses-nsd10" / "func").glob("*run-02_events.tsv"))[
+        0
+    ]
+    table = pd.read_csv(path, sep="\t")
+    table.assign(trial_type=0).to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match="run-02.*trial_type.*'1'"):
+        inputs.load_session(settings_for(root))
+
+
+def test_run_summary_counts_each_level(four_runs, settings_for):
+    root, _ = four_runs
+    runs = inputs.load_session(settings_for(root))
+    model = inputs.detect_task_model([r.events for r in runs])
+    summary = inputs.run_summary(runs, model)
+    assert {"n_trial_type_0", "n_trial_type_1"} <= set(summary.columns)
+    assert (summary.n_trial_type_0 + summary.n_trial_type_1 == summary.trials).all()
 
 
 def test_explicit_modulators_must_exist_in_every_run(events):
@@ -38,7 +87,7 @@ def test_load_session_detects_the_model_and_builds_the_glm(four_runs, settings_f
     assert (
         glm.task_model == model and glm.noise_model == "ols" and glm.drift_model is None
     )
-    assert set(glm.contrasts) == {"task", "response_time", "trial_type"}
+    assert set(glm.contrasts) == {"task", "response_time", "trial_type[1]"}
     assert list(inputs.run_summary(runs, model).columns)[:5] == [
         "run",
         "trials",
@@ -76,6 +125,15 @@ def test_invalid_glm_covariates_fail_explicitly(events, column, value):
     events.loc[0, column] = value
     with pytest.raises(ValueError, match=column):
         inputs.validate_glm_events(events, model)
+
+
+def test_run_without_the_declared_levels_is_an_input_error(four_runs, settings_for):
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.assign(trial_type=2).to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match=r"run-\d+.*trial_type"):
+        inputs.load_session(settings_for(root))
 
 
 @pytest.mark.parametrize("missing", [np.nan, np.inf, -np.inf, 0.0, -1.0])
@@ -153,7 +211,7 @@ def test_selection_task_model_switch_drops_only_rt(events):
     model = inputs.detect_task_model([events])
     assert inputs.selection_task_model(model, True) == model
     without_rt = inputs.selection_task_model(model, False)
-    assert without_rt == TaskModel((Modulator("trial_type"),))
+    assert without_rt == TaskModel((TT,))
     assert without_rt.is_subset_of(model)
     with pytest.raises(ValueError, match="include_rt"):
         inputs.selection_task_model(model, 1)
@@ -168,24 +226,30 @@ def test_missing_modulator_column_in_a_session_is_an_input_error(
         inputs.load_session(settings)
 
 
-TRIAL_TYPE_NOTE = "trial_type is not binary 0/1; not used as a modulator"
-
-
-@pytest.mark.parametrize(
-    "values", [["face", "house"] * 3, [0, 1, 2, 0, 1, 2], [0, 1, 0, 1, 0, None]]
-)
-def test_detection_skips_a_trial_type_that_is_not_binary(events, values):
-    other = events.assign(trial_type=values)
-    tables = [events, other]
-    model = inputs.detect_task_model(tables)
-    assert model == TaskModel((Modulator("response_time", missing="indicator"),))
-    assert inputs.task_model_notes(tables) == [TRIAL_TYPE_NOTE]
+def test_detection_takes_any_multilevel_trial_type_without_a_note(events):
+    for values in (["face", "house"] * 3, [0, 1, 2, 0, 1, 2]):
+        tables = [events, events.assign(trial_type=values)]
+        model = inputs.detect_task_model(tables)
+        assert model.modulators[-1].kind == "categorical"
+        assert inputs.task_model_notes(tables) == []
 
 
 def test_detection_keeps_binary_trial_type_written_as_text(events):
     text = events.assign(trial_type=events.trial_type.astype(str))
-    assert Modulator("trial_type") in inputs.detect_task_model([text]).modulators
+    assert TT in inputs.detect_task_model([text]).modulators
     assert inputs.task_model_notes([text]) == []
+
+
+def test_automatic_trial_type_with_missing_values_is_an_input_error(
+    four_runs, settings_for
+):
+    root, _ = four_runs
+    path = next(root.rglob("*run-02_events.tsv"))
+    table = pd.read_csv(path, sep="\t")
+    table.loc[0, "trial_type"] = np.nan
+    table.to_csv(path, sep="\t", index=False)
+    with pytest.raises(inputs.InputError, match="run-02.*trial_type.*missing"):
+        inputs.load_session(settings_for(root))
 
 
 def test_notes_are_only_for_automatic_detection(events):

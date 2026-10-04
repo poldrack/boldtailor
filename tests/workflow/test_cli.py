@@ -234,7 +234,7 @@ def test_overwrite_into_the_fmriprep_directory_is_refused(four_runs, capsys):
     assert bold and all(p.exists() for p in bold)
 
 
-def test_dry_run_with_string_trial_type_is_task_only(four_runs, capsys):
+def test_dry_run_with_string_trial_type_expands_indicators(four_runs, capsys):
     from tests.workflow.synthetic_bids import face_house_events, rewrite_events
 
     root, _ = four_runs
@@ -242,8 +242,9 @@ def test_dry_run_with_string_trial_type_is_task_only(four_runs, capsys):
     argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
     assert cli.main(argv) == 0
     plan = json.loads(capsys.readouterr().out)
-    assert plan["task_model"]["regressors"] == ["task"]
-    assert "trial_type is not binary 0/1; not used as a modulator" in plan["notes"]
+    assert plan["task_model"]["regressors"][-1:] == ["trial_type[house]"]
+    assert plan["task_model"]["modulators"][0]["levels"] == ["face", "house"]
+    assert "trial_type is not binary 0/1; not used as a modulator" not in plan["notes"]
 
 
 def test_no_modulators_fits_a_task_only_model(four_runs, capsys):
