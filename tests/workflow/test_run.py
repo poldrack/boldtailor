@@ -341,9 +341,10 @@ def test_loading_errors_become_input_errors(four_runs, settings_for, tmp_path):
     settings = settings_for(
         root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
     )
-    for call in (workflow_run.describe_inputs, workflow_run.run_workflow):
-        with pytest.raises(inputs.InputError, match="cosine"):
-            call(settings)
+    with pytest.raises(inputs.InputError, match="cosine"):
+        workflow_run.run_workflow(settings)
+    (problem,) = workflow_run.describe_inputs(settings)["problems"]
+    assert problem["kind"] == "input" and "cosine" in problem["message"]
 
 
 def test_missing_explicit_surface_mesh_stops_before_any_fitting(
