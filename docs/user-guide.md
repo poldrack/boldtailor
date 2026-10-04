@@ -588,10 +588,11 @@ provenance through its dedicated cache/import helpers.
 
 ## Task-guided denoising
 
-`select_denoising()` is an optional, opt-in stage modeled on GLMdenoise. It
-finds a noise pool of features that the task model predicts poorly, computes
-temporal principal components (PCs) of that pool in each run, and chooses one
-PC count by held-out task prediction. `with_denoising()` appends the chosen
+`select_denoising()` is an optional, opt-in stage that follows GLMsingle's
+GLMdenoise stage. It finds a noise pool of features that a canonical task
+regressor predicts poorly (ON-OFF R²), computes temporal principal components
+(PCs) of that pool in each run, and chooses one PC count by held-out task
+prediction with GLMsingle's `pcstop` rule. `with_denoising()` appends the chosen
 PCs to each run's confounds, so ordinary HRF selection and fitting can use
 them. Nothing else in the package calls it, and no defaults change.
 
@@ -611,9 +612,7 @@ from boldtailor.denoising import select_denoising, with_denoising
 from boldtailor.fit import fit
 from boldtailor.hrf_selection import select_hrfs
 
-denoising = select_denoising(
-    data, brain_mask=brain_mask, task_model=task_model, library=library
-)
+denoising = select_denoising(data, task_model=task_model, library=library)
 augmented = with_denoising(data, denoising)
 selection = select_hrfs(augmented, library=library, task_model=task_model)
 fitted_model = replace(
@@ -631,55 +630,81 @@ augmented data can be passed to `fit_selected_hrfs()` or the other single-trial
 fits.
 
 **Requirements.** `data` needs at least three runs, so every
-leave-one-run-out fold keeps two training runs for its initial HRF selection.
-`brain_mask` is required: a Boolean vector with one entry per feature, in
-feature order. Boldtailor never infers anatomy from signal intensities and
-never falls back to gray-matter, white-matter, or aCompCor masks. `library=None`
-uses `default_hrf_library()`, which is slow on small examples; pass a small
-library when testing. `run_labels=` names runs in messages and tables, and
+leave-one-run-out fold keeps two training runs. The core is anatomy-agnostic:
+it works on a features × time matrix, every input feature is a candidate,
+and there is no mask parameter. Restrict features (for example to a brain
+mask or to cortical grayordinates) before building the `AnalysisData`.
+Boldtailor never infers anatomy from signal intensities and never falls back
+to gray-matter, white-matter, or aCompCor masks. `library=None` uses
+`default_hrf_library()`, which is slow on small examples; pass a small library
+when testing. `run_labels=` names runs in messages and tables, and
 `feature_signature=` must match the one later passed to
 `with_denoising(..., feature_signature=...)`.
 
-**Sequential tuning.** The stages run in a fixed order: this is sequential tuning,
-not joint optimization.
+**Procedure.** The stages follow GLMsingle's GLMdenoise stage and run in a
+fixed order: this is sequential tuning, not joint optimization.
 
-1. For each held-out run, `select_hrfs` runs on the other runs with the baseline
-   confounds only. The held-out run's BOLD never enters this selection.
-2. Each feature's pool statistic is its winning HRF's leave-one-run-out
-   task-prediction R² over those training runs. The noise pool is the in-brain
-   features scoring at or below the pool threshold. By default
-   (`pool_r2_threshold="auto"`) it is fitted to this fold's training statistic
-   with GLMsingle's two-component Gaussian-mixture rule; a number fixes it.
-   The scoring mask is the in-brain features scoring above it. Both masks are frozen
-   across counts, and so are the HRFs.
-3. In each training run, the pool's time series are projected off the
-   baseline confounds and intercept. Numerically zero columns are dropped, the
-   rest are scaled to unit norm, and temporal PCs are taken by SVD. Rank uses
-   a tolerance that accounts for this normalization. Each PC's sign makes its
-   largest absolute entry positive.
-4. For each candidate count, shared task coefficients are fit on the training
-   runs. Each training run gets its own baseline, missing-value-indicator, and
-   PC coefficients. Those shared coefficients then predict the held-out run.
-5. The held-out target, its denominator, and the scored features are the same
-   for every count. The target is projected off the baseline confounds only,
-   never off candidate PCs, so more PCs cannot win by shrinking the target.
-   Fold means over the scoring mask are averaged with equal weight.
-6. The smallest count within `score_tolerance` (default 0.001 R²) of the best
-   mean is chosen. Zero is always a candidate, and ties go to fewer PCs. The
-   tolerance is a practical margin, not a significance test.
-7. The returned pool and PCs are rebuilt from an initial HRF selection on all
-   runs. The pool is not refined after PCs are added. After augmentation, rerun
-   `select_hrfs` and fit as in the example.
+1. HRFs are selected once with `select_hrfs` on all runs (baseline confounds,
+   the caller's task model and library), as GLMsingle selects HRFs before
+   GLMdenoise. They stay frozen for every fold and count.
+2. The pool statistic is GLMsingle's ON-OFF R²: one task regressor (every
+   trial with amplitude 1, whatever the task model's modulators) convolved
+   with the library's canonical HRF, one coefficient shared by all runs, and
+   each run's baseline confounds plus intercept as run-specific nuisance,
+   fit in-sample on all runs. Features with zero residual energy get NaN.
+3. By default (`pool_r2_threshold="auto"`) the threshold is GLMsingle's
+   two-component Gaussian-mixture tail threshold (`findtailthreshold`) of the
+   finite ON-OFF R² values; a number fixes it. The noise pool is the features
+   below the threshold; the scoring features are those above it with a
+   defined HRF. If none is above it, the best 100 features by ON-OFF R² are
+   scored (GLMsingle's fallback; `scoring_fallback` records it, and those
+   features may also be in the pool). Pool and scoring features are built
+   once, on all runs.
+4. In each run, the pool's time series are projected off the baseline
+   confounds and intercept. Numerically zero columns are dropped, the rest
+   are scaled to unit norm, and temporal PCs are taken by SVD. Rank uses a
+   tolerance that accounts for this normalization. Each PC's sign makes its
+   largest absolute entry positive. The default `counts` are 0 through 10
+   (GLMsingle's `n_pcs=10`).
+5. For each held-out run and count, shared task coefficients are fit on the
+   other runs, each with its own baseline, missing-value-indicator, and PC
+   coefficients, using the frozen HRFs. Those coefficients predict the
+   held-out run. The held-out run's BOLD never enters its fold's fit, and its
+   PCs never enter the fit or the target.
+6. The held-out target, its denominator, and the scored features are the same
+   for every count. The target is projected off the baseline confounds (and
+   indicators) only, never off candidate PCs, so more PCs cannot win by
+   shrinking the target. Each scored feature's errors are pooled across
+   folds, `r2 = 1 - sum(SSE) / sum(SST)`, and a count's performance is the
+   median of that R² over scored features (GLMsingle uses the median).
+7. The count follows GLMsingle's `select_noise_regressors` rule with
+   `pcstop=1.05`: with `curve = perf - perf[0 PCs]`, walk the available
+   counts in increasing order, track the best curve value so far, stop at the
+   first count where `best * pcstop >= max(curve)`, and choose the count that
+   holds that best. Zero is always a candidate and is chosen when no count
+   improves on it. Unavailable counts are skipped.
+8. The returned pool and PCs are the single full-data ones; the selected
+   prefix is returned per run. The pool is not refined after PCs are added.
+   After augmentation, rerun `select_hrfs` and fit as in the example.
+
+**Deviations from GLMsingle.** (a) Run nuisance is the analysis's baseline
+confounds plus an intercept, not GLMsingle's polynomial drift terms, because
+Boldtailor analyses carry their own confounds. (b) GLMsingle scores counts by
+cross-validated single-trial beta consistency across repeated conditions and
+skips GLMdenoise when conditions do not repeat. Most Boldtailor tasks have no
+repeats, so counts are scored by held-out time-series prediction, close to
+the original GLMdenoise. (c) The held-out target is fixed across counts: it
+never contains the candidate PCs. (d) GLMsingle's `select_noise_regressors`
+loop never chooses zero or the largest count; here both can be chosen.
+(e) The mixture fit uses a fixed `random_state` and records convergence
+instead of warning (see below).
 
 **Missing values.** A task model with `Modulator(..., missing="indicator")`
-adds a `missing_<column>` regressor in runs that need one. The pool statistic
-projects those indicator columns out of the held-out denominator as well as
-the prediction, so in-sample indicator profiling cannot inflate it. Without
-indicators, it equals `select_hrfs`'s `cv_r2`. When counts are scored, the
-indicator coefficients are fit on the held-out BOLD, as in HRF selection, so
-the count score is conditional task prediction. Because HRFs are frozen, this
-part does not depend on the PC count. Categorical modulators work the same
-way.
+adds a `missing_<column>` regressor in runs that need one. When counts are
+scored, the indicator coefficients are fit on the held-out BOLD, as in HRF
+selection, so the count score is conditional task prediction. Because HRFs
+are frozen, this part does not depend on the PC count. Categorical
+modulators work the same way. The ON-OFF R² ignores modulators.
 
 **Empty and rank-deficient pools.** An empty pool, or a pool with no signal
 outside the baseline nuisance span, makes every positive count unavailable.
@@ -688,58 +713,58 @@ if any training run in any fold has fewer PCs than it needs, if it would split
 a block of numerically tied singular values, or if it would leave a task
 design rank deficient. A count is never silently capped per run. Counts are
 compared on the same features in every fold, so a count that fails in one fold
-is excluded everywhere. An empty scoring mask, or held-out targets that are
-all zero, raises an error: there is no task signal to select on. If the final
-all-run pool cannot supply the chosen count, the call raises with the pool's
-size and ranks rather than returning a different count.
+is excluded everywhere; a feature whose held-out target is numerically zero
+in any run is dropped from scoring for every fold. An empty scoring set, or
+held-out targets that are all zero, raises an error: there is no task signal
+to select on.
 
 **Reading the result.** `DenoisingResult` exposes:
 
 - `n_components` and `run_components`, one read-only `(scans, n_components)`
   array per run.
-- `noise_pool`, `scoring_mask`, and `pool_r2` (the final pool statistic).
-- `initial_selection` and `selection_cv_r2`.
+- `onoff_r2`, `noise_pool`, `scoring_mask`, `scoring_fallback`, and `scored`
+  (the scoring mask minus zero-target features).
+- `noise_pool_threshold` and `noise_pool_mixture` (the fitted threshold and
+  mixture, or `None` for a fixed threshold).
+- `initial_selection` (the frozen HRFs) and `selection_cv_r2`.
 - `components.table()`, with per-run pool size, retained columns, rank, and
   rank tolerance. Singular values are in `components.singular_values`.
-- `candidate_scores`, with `count`, `eligible`, `mean_r2`, and `reason`.
-- `fold_scores`, with per-fold `mean_r2`, `pool_r2_threshold`, `pool_size`,
-  `scoring_size`, `n_scored`, and `n_zero_target`.
-- `noise_pool_threshold` and `noise_pool_mixture` (the final fitted
-  threshold and mixture), and each fold's `pool_threshold` and `pool_mixture`.
-- `folds`, with each fold's training-only masks, pool statistic, HRF indices,
-  and PCA diagnostics.
+- `candidate_scores`, with `count`, `eligible`, `perf`, `curve`, and
+  `reason`; `perf` and `curve` are also arrays on the result.
+- `fold_scores`, with per-fold `median_r2`, `n_scored`, `n_zero_target`, and
+  each fold's reason.
+- `folds`, with each fold's runs, zero targets, and target energies.
 
-The count scores and the pool statistic are selection statistics. They chose
-the count, so they are not independent performance estimates. A low pool
-statistic means this task model predicts the feature poorly, not that the
-feature has no neural activity.
+The count scores and the ON-OFF R² are selection statistics. They chose the
+pool and the count, so they are not independent performance estimates. A low
+ON-OFF R² means a single canonical-HRF task regressor predicts the feature
+poorly, not that the feature has no neural activity.
 
-**Pool threshold.** The pool statistic is the *winning* HRF's CV R², a
-maximum over library candidates, so it is biased upward for pure noise, and
-the bias grows with library size. A fixed threshold of 0.0 therefore puts
-most pure-noise features in the scoring mask, and with shared noise their
-scores rise and fall together. In Boldtailor's predeclared synthetic check
-(two shared noise series on every feature, 2-candidate library), 28 of 30
-pure-noise features scored above 0.0, the final pool held 2 features, and zero
-PCs were chosen. The default, `pool_r2_threshold="auto"`, instead fits
-GLMsingle's two-component Gaussian-mixture tail threshold to the statistic's
-own distribution in every fold and for the final pool, so it moves with that
-bias. On the same predeclared data it gave fold pools of 31-34 features (the
-30 noise features plus up to 4 of the weakest task features), one PC was
-chosen, and training coefficients, outer-run task prediction, and outer-run
-betas all improved (`tests/test_denoising_validation.py`). In the matched
-check without shared noise, zero PCs were chosen. The rule follows
+**Pool threshold.** The default `pool_r2_threshold="auto"` follows
 GLMsingle's `findtailthreshold` (raw values, `reg_covar=0`, a 500-point
-`robustrange` grid, the right-end tail component). It differs only in a
-fixed `random_state` and seeded subsample, and in recording convergence
-(`converged`, `n_iter` in the mixture record) instead of warning. A
-degenerate or failed fit raises an error naming the runs; pass a number to
-use a fixed threshold. Inspect
-`noise_pool.sum()`, the fold pool sizes, and `candidate_scores` before relying
-on the choice.
+`robustrange` grid, the right-end tail component). It differs only in a fixed
+`random_state` and seeded subsample, and in recording convergence
+(`converged`, `n_iter` in the mixture record) instead of warning. A degenerate
+or failed fit raises an error naming the runs and suggesting a fixed
+`pool_r2_threshold`. Inspect `noise_pool.sum()`, `scoring_mask.sum()`, and
+`candidate_scores` before relying on the choice.
 
-**Provenance.** The selection records the task model, library, masks, HRF
-assignments, PC fingerprints, baseline confounds, and folds.
+**Validation outcome.** The predeclared synthetic checks in
+`tests/test_denoising_validation.py` were rerun unchanged for this procedure
+(same seeds and effect sizes). With two shared noise series on every feature,
+the pool held the 30 noise features plus the 4 weakest task features, one PC
+was chosen, and training coefficients, outer-run task prediction, and
+outer-run betas all improved. Without shared noise (independent white noise
+only), the check that zero PCs are chosen **fails**: the median held-out R²
+gains of the positive counts are at most about 2e-4, but the pcstop rule has
+no absolute floor, so it chose 6 PCs, with the test library and with the
+default library. These checks are recorded as expected failures, not tuned
+away. On noise-only data the rule can therefore add a few PCs whose effect on
+prediction is negligible; inspect `curve` before relying on the choice.
+
+**Provenance.** The selection records the task model, library, ON-OFF R²,
+threshold rule, pool and scoring masks, fallback, HRF assignments, per-count
+`perf` and `curve`, `pcstop`, PC fingerprints, baseline confounds, and folds.
 `with_denoising()` checks that `data` is the analysis the result was selected
 on: same runs in the same order, time grids, signals in feature order,
 baseline confounds, and events. It rejects applying a result twice and
@@ -749,8 +774,9 @@ gains a `denoising_augmentation` annotation, and file identity fields are
 unchanged. As a result, downstream analysis ids differ between augmentations
 of the same files. A zero-count result adds no columns but is still recorded.
 
-**Independent evaluation.** To evaluate denoising, call `select_denoising()`
-on outer-training runs only, then freeze its count and noise pool before
+**Independent evaluation.** HRFs, the pool, and the count use every run they
+are given, so to evaluate denoising, call `select_denoising()` on
+outer-training runs only, then freeze its count and noise pool before
 touching any outer test run. Evaluating training-run task estimates against
 held-out runs needs no PCs from the test runs. To evaluate denoised betas in a
 test run, compute that run's PCs from the frozen pool: project it off the run's

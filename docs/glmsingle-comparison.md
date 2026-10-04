@@ -18,7 +18,7 @@ against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77
 | HRF library | Default `default_hrf_library()`: canonical SPM, 512 timing-space Sobol double-gamma candidates, and GLMsingle's 20 empirical HRFs; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
 | Command line | `boldtailor run --bids-dir ... --subject ... --session ... --task ...` runs the whole NSD-style workflow and writes a BIDS derivative with an HTML report | A MATLAB or Python function call, `GLMestimatesingletrial`, with options passed as a struct or dict |
 | HRF selection | Predict each omitted run using task-model amplitudes learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
-| Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators. Optional `select_denoising()` appends run-wise PCs of a task-guided noise pool (task-model R² at or below a Gaussian-mixture tail threshold by default), with the count chosen by held-out task prediction | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
+| Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators. Optional `select_denoising()` follows GLMdenoise: run-wise PCs of an ON-OFF R² noise pool (Gaussian-mixture tail threshold), with the count chosen by held-out task prediction and the `pcstop` rule | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
 | Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |
 | Cross-validation target | HRFs: nuisance-adjusted task-model time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
 | Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
@@ -41,22 +41,44 @@ GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
 3-Clause License, reproduced in `LICENSES/GLMsingle-BSD-3-Clause.txt`.
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
-Boldtailor has an optional, task-guided pool, `select_denoising()`, that
-borrows GLMdenoise's structure. It finds a noise pool, computes temporal PCs
-of that pool in each run, and chooses one PC count by cross-validation. The
-scoring criteria are different from GLMsingle's. Boldtailor defines its pool
-by the time-series task-model R² of an initial training-only HRF selection
-(threshold chosen by default with GLMsingle's two-component Gaussian-mixture
-`findtailthreshold` rule, fitted per fold; a fixed value is optional). It
-chooses the count by held-out task-model prediction against a target that is fixed across counts. GLMsingle defines
-its pool by ON–OFF R² and chooses the count by its own cross-validation
-criterion. Boldtailor's stage is not run by default or in the NSD example,
-and it is tuned sequentially: HRFs and the pool are frozen while counts are
-compared. Pool refinement and voxelwise counts are not implemented.
-No matched comparison with GLMsingle's denoising has been run. Synthetic checks in
-this repository establish implementation behavior only. In a predeclared
-shared-noise case the fixed threshold 0.0 pool nearly collapsed; the default
-mixture threshold recovers it. See the [user guide](user-guide.md#task-guided-denoising).
+Boldtailor has an optional stage, `select_denoising()`, that follows
+GLMsingle's GLMdenoise procedure as closely as Boldtailor's inputs allow. Like
+GLMsingle, it selects HRFs once on all runs and freezes them, defines the
+noise pool by ON-OFF R² (one canonical-HRF task regressor, a shared
+coefficient, in-sample on all runs) below the `findtailthreshold`
+Gaussian-mixture threshold, scores the features above that threshold (the
+best 100 when none passes), computes run-wise temporal PCs of that single
+pool, summarizes each count by the median over scored features, and stops
+with the `pcstop` rule of `select_noise_regressors` (default 1.05, counts
+0-10). The core is anatomy-agnostic: every input feature is a candidate and
+masking is left to the input step.
+
+Deviations, each with its reason:
+
+- **Nuisance.** Each run's baseline confounds plus an intercept replace
+  GLMsingle's polynomial drift terms, because Boldtailor analyses carry their
+  own confounds.
+- **Count scoring.** GLMsingle scores counts by cross-validated single-trial
+  beta consistency across repeated conditions and skips GLMdenoise when
+  conditions do not repeat. Boldtailor does not assume repeats, so it scores
+  counts by leave-one-run-out task-model time-series prediction (pooled
+  SSE/SST per feature across folds), close to the original GLMdenoise. Its
+  task-guided criterion uses the caller's task model, including modulators.
+- **Fixed target.** The held-out target never contains the candidate PCs, so
+  more PCs cannot win by shrinking it.
+- **Stopping rule edges.** GLMsingle's loop never returns zero or the largest
+  count; Boldtailor keeps zero as a candidate (chosen when nothing improves on
+  it) and allows the largest count.
+
+Boldtailor's stage is not run by default or in the NSD example, and it is
+tuned sequentially: HRFs and the pool are frozen while counts are compared.
+Pool refinement and voxelwise counts are not implemented. No matched
+comparison with GLMsingle's denoising has been run. Synthetic checks in this
+repository establish implementation behavior only: with shared noise one PC
+was chosen and coefficient and outer-run recovery improved; with independent
+noise only, the rule chose 6 PCs on chance gains of about 2e-4 in median R²
+(recorded as an expected failure). See the
+[user guide](user-guide.md#task-guided-denoising).
 [GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
 [GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)
 

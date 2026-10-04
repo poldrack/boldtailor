@@ -1,8 +1,9 @@
 """Owned results of task-guided denoising selection.
 
 Scores and fold diagnostics are selection statistics used to choose one PC
-count; they are not independent performance estimates. The final noise pool
-and components come from all supplied runs and are meant for final fitting.
+count; they are not independent performance estimates. HRFs, the noise pool,
+and its components come from all supplied runs (as in GLMsingle) and are
+meant for final fitting.
 """
 
 from dataclasses import dataclass
@@ -10,7 +11,13 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_array_tuples, own_fields, own_tuples, rebind
+from boldtailor._arrays import (
+    own_array_tuples,
+    own_fields,
+    own_tuples,
+    readonly_array,
+    rebind,
+)
 from boldtailor._denoising_identity import RunIdentity
 from boldtailor._mixture_threshold import MixtureThreshold
 from boldtailor.data import _owned_table
@@ -53,53 +60,50 @@ class PcaDiagnostics:
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class DenoisingFold:
-    """Training-only HRFs, masks, and PCA of one count-selection fold.
+    """One count-selection fold: its runs and the held-out targets.
 
-    ``pool_threshold`` is the threshold applied to ``pool_r2``; with
-    ``pool_r2_threshold="auto"`` it was fitted on this fold's training
-    statistic and ``pool_mixture`` holds the fit (else ``None``).
+    HRFs, the pool, its PCs, and the scoring features are full-data and
+    shared by every fold. ``zero_target`` marks numerically zero held-out
+    targets; ``target_energy`` is the held-out target energy (NaN for
+    unscored features).
     """
 
     validation_run: str
     training_runs: tuple[str, ...]
-    pool: np.ndarray
-    scoring: np.ndarray
-    scored: np.ndarray
     zero_target: np.ndarray
-    pool_r2: np.ndarray
-    hrf_indices: np.ndarray
-    pool_threshold: float
-    pool_mixture: MixtureThreshold | None
-    components: PcaDiagnostics
+    target_energy: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("pool", "scoring", "scored", "zero_target"), dtype=bool)
-        own_fields(self, ("pool_r2",))
-        own_fields(self, ("hrf_indices",), dtype=np.int64)
+        own_fields(self, ("zero_target",), dtype=bool)
+        own_fields(self, ("target_energy",))
         own_tuples(self, ("training_runs",))
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class DenoisingResult:
-    """Chosen PC count, final full-data pool and run PCs, and diagnostics.
+    """Chosen PC count, full-data pool and run PCs, and diagnostics.
 
-    ``pool_r2`` is the final initial selection's indicator-consistent
-    leave-one-run-out task-model R² that defined ``noise_pool``;
-    ``selection_cv_r2`` is the raw ``select_hrfs`` score.
-    ``pool_r2_threshold`` is the setting (``"auto"`` or a float);
-    ``noise_pool_threshold`` is the value applied to the final ``pool_r2``,
-    and ``noise_pool_mixture`` the final mixture fit when automatic.
+    ``onoff_r2`` is GLMsingle's ON-OFF R² that defined ``noise_pool`` (below
+    ``noise_pool_threshold``) and ``scoring_mask`` (above it, or the 100
+    best features when ``scoring_fallback``). ``scored`` is the scoring mask
+    minus features with a zero held-out target. ``pool_r2_threshold`` is the
+    setting (``"auto"`` or a float) and ``noise_pool_mixture`` the mixture
+    fit when automatic. ``initial_selection`` holds the frozen full-data
+    HRFs. ``perf``/``curve`` are the per-count median performance and its
+    gain over zero PCs (NaN when unavailable).
     """
 
     n_components: int
     counts: tuple[int, ...]
     pool_r2_threshold: float | str
-    score_tolerance: float
+    pcstop: float
     noise_pool_threshold: float
     noise_pool_mixture: MixtureThreshold | None
     noise_pool: np.ndarray
     scoring_mask: np.ndarray
-    pool_r2: np.ndarray
+    scoring_fallback: bool
+    scored: np.ndarray
+    onoff_r2: np.ndarray
     initial_selection: HrfSelectionResult
     run_components: tuple[np.ndarray, ...]
     components: PcaDiagnostics
@@ -112,8 +116,8 @@ class DenoisingResult:
     provenance: ProvenanceRecord
 
     def __post_init__(self):
-        own_fields(self, ("noise_pool", "scoring_mask"), dtype=bool)
-        own_fields(self, ("pool_r2",))
+        own_fields(self, ("noise_pool", "scoring_mask", "scored"), dtype=bool)
+        own_fields(self, ("onoff_r2",))
         own_array_tuples(self, ("run_components",))
         own_tuples(self, ("counts", "folds", "run_labels", "source_identity"))
         rebind(
@@ -132,6 +136,13 @@ class DenoisingResult:
             == len(self.source_identity)
         ):
             raise ValueError("run_components must hold one array per run")
+        if self.n_components not in self.counts or any(
+            c.ndim != 2 or c.shape[1] != self.n_components for c in self.run_components
+        ):
+            raise ValueError(
+                "n_components must be a candidate count and match every "
+                "run_components array"
+            )
         for label, comps, run in zip(
             self.run_labels, self.run_components, self.source_identity
         ):
@@ -140,23 +151,24 @@ class DenoisingResult:
                     f"run_components for run '{label}' has {comps.shape[0]} rows; "
                     f"the run has {run.n_scans} scans"
                 )
-        if self.n_components not in self.counts or any(
-            c.ndim != 2 or c.shape[1] != self.n_components for c in self.run_components
-        ):
-            raise ValueError(
-                "n_components must be a candidate count and match every "
-                "run_components array"
-            )
 
     @property
     def candidate_scores(self) -> pd.DataFrame:
-        """Per count: eligibility, equal-weight fold-mean R², and reasons."""
+        """Per count: eligibility, median performance, curve, and reasons."""
         return _owned_table(self._candidate_scores)
 
     @property
     def fold_scores(self) -> pd.DataFrame:
-        """Per fold and count: eligibility, reason, mean R², and feature counts."""
+        """Per fold and count: eligibility, reason, fold median R², sizes."""
         return _owned_table(self._fold_scores)
+
+    @property
+    def perf(self) -> np.ndarray:
+        return readonly_array(self._candidate_scores["perf"].to_numpy(dtype=float))
+
+    @property
+    def curve(self) -> np.ndarray:
+        return readonly_array(self._candidate_scores["curve"].to_numpy(dtype=float))
 
     @property
     def component_names(self) -> tuple[str, ...]:

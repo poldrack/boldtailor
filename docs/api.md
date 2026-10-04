@@ -428,40 +428,48 @@ GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
 ```text
-select_denoising(data, *, brain_mask, task_model=TaskModel(), library=None,
-                 counts=(0, 1, 2, 4, 6, 8, 10), pool_r2_threshold="auto",
-                 score_tolerance=0.001, feature_signature=None,
+select_denoising(data, *, task_model=TaskModel(), library=None,
+                 counts=(0, 1, ..., 10), pool_r2_threshold="auto",
+                 pcstop=1.05, feature_signature=None,
                  run_labels=None) -> DenoisingResult
 with_denoising(data, result, *, feature_signature=None) -> AnalysisData
 ```
 
-`select_denoising` needs at least three runs. `brain_mask` is a required
-Boolean vector with one entry per feature. `counts` must contain 0, be
-nonnegative integers (not Booleans), and is sorted and deduplicated.
-`pool_r2_threshold` is `"auto"` or a finite number. `"auto"` applies
-GLMsingle's `findtailthreshold` rule, separately in every fold and for the
-final pool, to the raw pool statistic of the in-brain features with a
-defined HRF. It fits a two-component `sklearn.mixture.GaussianMixture`
-(`tol=1e-10`, `reg_covar=0`, 3 initialisations) to at most 1,000,000
-values. It evaluates posteriors on 500 points over GLMsingle's
-`robustrange`, widened to include both means. The threshold is the
-rightmost point where the posterior of the component dominating the right
-end is at most 0.5. Deviations from GLMsingle: `random_state=0` and a
-seeded subsample make the result reproducible, and convergence warnings
-are suppressed but recorded (`converged`, `n_iter`). Fewer than two
-distinct values, a failed fit, or no crossing raise an error that names
-the fold or final runs and suggests a fixed threshold; there is no
-fallback. A number is applied as a fixed threshold. `score_tolerance` must
-be finite and nonnegative. `library=None` uses `default_hrf_library()`. Every input is
-validated before any fitting.
+`select_denoising` needs at least three runs. It is anatomy-agnostic: there
+is no mask parameter and every input feature is a candidate. `counts` must
+contain 0, be nonnegative integers (not Booleans), and is sorted and
+deduplicated; the default is 0 through 10. `pcstop` must be a finite number
+of at least 1. `pool_r2_threshold` is `"auto"` or a finite number. `"auto"`
+applies GLMsingle's `findtailthreshold` rule once, to the finite ON-OFF R²
+values of all features. It fits a two-component
+`sklearn.mixture.GaussianMixture` (`tol=1e-10`, `reg_covar=0`, 3
+initialisations) to at most 1,000,000 values. It evaluates posteriors on 500
+points over GLMsingle's `robustrange`, widened to include both means. The
+threshold is the rightmost point where the posterior of the component
+dominating the right end is at most 0.5. Deviations from GLMsingle:
+`random_state=0` and a seeded subsample make the result reproducible, and
+convergence warnings are suppressed but recorded (`converged`, `n_iter`).
+Fewer than two distinct values, a failed fit, or no crossing raise an error
+that names the runs and suggests a fixed `pool_r2_threshold`; there is no
+fallback. A number is applied as a fixed threshold. `library=None` uses
+`default_hrf_library()`. Every input, and every run's design (errors name
+runs by label), is validated before any fitting.
 
-The function chooses one PC count by leave-one-run-out held-out task
-prediction. HRFs come from training-only `select_hrfs`, and the pool and
-scoring masks are frozen across counts. It then rebuilds the pool and
-per-run PCs from all runs. The pool statistic is the winning HRF's
-leave-one-run-out task-model R², with missing-value indicators projected out
-of the held-out denominator as well as the prediction. Without indicators it
-equals `cv_r2`. The selection activity is named `denoising_selection`.
+The procedure follows GLMsingle's GLMdenoise stage (see the
+[user guide](user-guide.md#task-guided-denoising) for the steps and the
+deviations: baseline confounds instead of polynomials, time-series scoring
+because repeated conditions are not assumed, and a fixed scoring target).
+HRFs come from one `select_hrfs` call on all runs and are frozen. The pool
+statistic is GLMsingle's ON-OFF R² (one amplitude-1 task regressor with the
+library's canonical HRF, a coefficient shared across runs, each run's
+confounds plus intercept as nuisance). The pool is the features below the
+threshold; the scoring features are those above it with a defined HRF, or
+the best 100 when none passes. Run-wise PCs come from that single pool.
+Counts are scored by leave-one-run-out held-out task prediction against a
+target fixed across counts; each feature's SSE and SST are pooled across
+folds and the median over scored features is the count's performance. The
+count is chosen by GLMsingle's `pcstop` rule. The selection activity is named
+`denoising_selection`.
 
 `with_denoising` checks content identity before it changes anything: run count
 and order, features, rows, time grids, signals, baseline confounds, and events.
@@ -479,30 +487,27 @@ From `boldtailor.denoising_results`:
 
 - `DenoisingResult` holds:
   - the choice: `n_components`, `counts`, `pool_r2_threshold` (the setting),
-    `score_tolerance`
-  - the final threshold: `noise_pool_threshold` and `noise_pool_mixture`
+    `pcstop`
+  - the threshold: `noise_pool_threshold` and `noise_pool_mixture`
     (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`, `tail`,
-    `n_values`, `n_fitted`, `converged`, `n_iter`, `to_dict()`; `None` for a fixed threshold). Each
-    `DenoisingFold` has `pool_threshold` and `pool_mixture`, and
-    `fold_scores` has `pool_r2_threshold`, `pool_size`, and `scoring_size`
-  - the final all-run masks and statistic: `noise_pool`, `scoring_mask`,
-    `pool_r2`
-  - `initial_selection` (`HrfSelectionResult`)
+    `n_values`, `n_fitted`, `converged`, `n_iter`, `to_dict()`; `None` for a
+    fixed threshold)
+  - the full-data statistic and masks: `onoff_r2`, `noise_pool`,
+    `scoring_mask`, `scoring_fallback`, and `scored`
+  - `initial_selection` (`HrfSelectionResult`, the frozen HRFs)
   - `run_components`, one `(scans, n_components)` array per run
   - `components` (`PcaDiagnostics`)
   - `folds` (`DenoisingFold` per held-out run)
   - `run_labels`, `feature_signature`, `source_identity`, and `provenance`
-  - the properties `candidate_scores` (`count`, `eligible`, `mean_r2`,
-    `reason`), `fold_scores` (`validation_run`, `count`, `eligible`, `reason`,
-    `mean_r2`, `n_scored`, `n_zero_target`), `component_names`,
-    `selection_cv_r2`, and `initial_hrf_indices`
+  - the properties `candidate_scores` (`count`, `eligible`, `perf`, `curve`,
+    `reason`), `perf` and `curve` arrays, `fold_scores` (`validation_run`,
+    `count`, `eligible`, `reason`, `median_r2`, `n_scored`, `n_zero_target`),
+    `component_names`, `selection_cv_r2`, and `initial_hrf_indices`
 
   Arrays are read-only and tables are copies. Scores are selection
   statistics, not independent performance estimates.
-- `DenoisingFold` holds `validation_run`, `training_runs`, `pool`, `scoring`,
-  `scored`, `zero_target`, `pool_r2`, `hrf_indices`, and `components`. Every
-  field is computed from that fold's training runs, except the held-out
-  scoring flags.
+- `DenoisingFold` holds `validation_run`, `training_runs`, `zero_target`, and
+  `target_energy` (NaN for unscored features).
 - `PcaDiagnostics` holds `run_labels`, `pool_size`, `ranks`,
   `singular_values`, `rank_tolerances`, and `retained_columns`. `table()`
   returns one row per run.

@@ -164,16 +164,37 @@ def _validate_onsets(events, times):
         raise ValueError("onset has no supported sampled response")
 
 
-def prepare_runs(data, library, task_model=TaskModel()):
+def _run_inputs(events, times, confounds, task_model, r):
+    _validate_events(events, times, f"run-{r}")
+    _validate_onsets(events, times)
+    expanded = expand_events(events, task_model, r)
+    return expanded, _nuisance_matrix(confounds, len(times))
+
+
+def _labeled_inputs(events, times, confounds, task_model, label):
+    """As ``_run_inputs``, but every message leads with ``run '<label>'``."""
+    try:
+        _validate_events(events, times, label)
+        _validate_onsets(events, times)
+        nuisance = _nuisance_matrix(confounds, len(times))
+    except ValueError as error:
+        raise ValueError(f"run '{label}': {error}") from error
+    return expand_events(events, task_model, f"'{label}'"), nuisance
+
+
+def prepare_runs(data, library, task_model=TaskModel(), labels=None):
+    """Cached run designs; with ``labels``, design errors name runs by label."""
     runs = []
     for r, (events, times, confounds) in enumerate(
         zip(data.events, data.frame_times, data.confounds, strict=True)
     ):
         times = np.asarray(times, dtype=float)
-        _validate_events(events, times, f"run-{r}")
-        _validate_onsets(events, times)
-        expanded = expand_events(events, task_model, r)
-        nuisance = _nuisance_matrix(confounds, len(times))
+        if labels is None:
+            expanded, nuisance = _run_inputs(events, times, confounds, task_model, r)
+        else:
+            expanded, nuisance = _labeled_inputs(
+                events, times, confounds, task_model, labels[r]
+            )
         payloads = (
             np.asarray(
                 expanded[["onset", "duration", "modulation"]], dtype="<f8"

@@ -1,26 +1,38 @@
-"""Leave-one-run-out choice of a temporal-PC count by held-out task prediction.
+"""Leave-one-run-out scoring of temporal-PC counts and GLMsingle's pcstop rule.
 
-Each fold selects HRFs, the noise pool, and pool PCs from its training runs
-only. For every candidate count, shared task coefficients are fit across the
-training runs after projecting both the task design and BOLD off each run's
-baseline confounds, intercept, missing-value indicators (convolved with the
-frozen HRF), and that count's leading PCs. The held-out target is projected
-off its baseline confounds, intercept, and indicators only. It never contains
-PCs, so the target, denominator, and scored features are identical for every
-count. Indicator coefficients are profiled on held-out BOLD, so this is
-conditional task prediction, and the aggregate is a selection statistic, not
-an independent performance estimate.
+HRFs, the noise pool, its run-wise PCs, and the scoring features are
+full-data inputs, frozen for every fold and count (as GLMsingle selects HRFs
+and the pool once before GLMdenoise). For each held-out run and candidate
+count, shared task coefficients are fit across the training runs after
+projecting both the task design and BOLD off each training run's baseline
+confounds, intercept, missing-value indicators (convolved with the frozen
+HRF), and that run's leading PCs. The held-out run's BOLD never enters its
+fold's fit, and its PCs never enter the fit or the target: the target is
+projected off its baseline confounds, intercept, and indicators only, so the
+target, denominator, and scored features are identical for every count.
+
+Each scored feature's SSE and SST are pooled across folds,
+``r2_f(k) = 1 - sum SSE / sum SST``, and the performance of a count is the
+median of ``r2_f(k)`` over scored features (GLMsingle uses the median). The
+count follows GLMsingle's ``select_noise_regressors`` with ``pcstop``.
+Deviation, stated: GLMsingle scores counts by cross-validated single-trial
+beta consistency across repeated conditions (and disables denoising without
+repeats); repeats are not assumed here, so counts are scored by held-out
+time-series prediction, close to the original GLMdenoise. Indicator
+coefficients are profiled on held-out BOLD (conditional prediction), and the
+scores are selection statistics, not independent performance estimates.
 
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
-disclaimer. It is an independent reimplementation, not a copy of GLMsingle
-code. Follows GLMsingle's select_noise_regressors stopping rule (pcstop) and
-the GLMdenoise cross-validated choice of the PC count. Reference: Prince, J.S.,
-Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
-Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
-eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions,
+and disclaimer. It is an independent reimplementation, not a copy of
+GLMsingle code. Follows GLMsingle's select_noise_regressors stopping rule
+(pcstop) and the GLMdenoise cross-validated choice of the PC count.
+Reference: Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr,
+M.J., Kay, K.N. (2022). Improving the accuracy of single-trial fMRI response
+estimates using GLMsingle. eLife, 11, e77599.
+https://doi.org/10.7554/eLife.77599
 """
 
 from dataclasses import dataclass, field
@@ -29,32 +41,13 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import own_fields, own_tuples, rebind
-from boldtailor._denoising_pool import (
-    PoolMasks,
-    RunComponents,
-    analysis_components,
-    pool_masks,
-    pool_statistic,
-    validate_feature_mask,
-    validate_threshold,
-)
-from boldtailor._hrf_cv import (
-    _check_task_rank,
-    _validate_onsets,
-    pooled_amplitude,
-    prepare_runs,
-    subset_runs,
-)
+from boldtailor._denoising_pool import RunComponents, validate_feature_mask
+from boldtailor._hrf_cv import _check_task_rank, pooled_amplitude, prepare_runs
 from boldtailor._scalars import is_integer, is_real
-from boldtailor._single_trial_design import _nuisance_matrix, _validate_events
-from boldtailor._task_design import expand_events
 from boldtailor.data import _owned_table, run_labels_for
-from boldtailor.hrf_library import default_hrf_library
-from boldtailor.hrf_results import HrfSelectionResult
-from boldtailor.hrf_selection import select_hrfs
 
 _EPS = np.finfo(float).eps
-_NO_TASK_SIGNAL = "no supported task signal for component-count selection"
+NO_TASK_SIGNAL = "no supported task signal for component-count selection"
 
 
 # ---- validation ----------------------------------------------------------------
@@ -72,36 +65,30 @@ def validate_counts(counts) -> tuple[int, ...]:
     return tuple(sorted({int(c) for c in values}))
 
 
-def validate_tolerance(value, name="score_tolerance") -> float:
-    if not is_real(value) or not np.isfinite(value) or value < 0:
-        raise ValueError(f"{name} must be a finite nonnegative real number")
+def validate_pcstop(value) -> float:
+    """GLMsingle's ``pcstop``: a finite real number of at least 1."""
+    if not is_real(value) or not np.isfinite(value) or value < 1:
+        raise ValueError("pcstop must be a finite real number >= 1")
     return float(value)
 
 
-def _check_run_design(events, times, confounds, task_model, label):
-    name = f"run '{label}'"
-    try:
-        _validate_events(events, np.asarray(times, dtype=float), label)
-        _validate_onsets(events, times)
-        _nuisance_matrix(confounds, len(times))
-    except ValueError as error:
-        raise ValueError(f"{name}: {error}") from error
-    expand_events(events, task_model, f"'{label}'")  # messages lead with name
-
-
-def check_run_designs(data, task_model, labels) -> None:
-    """Per-run design inputs, as prepare_runs checks them, named by label.
-
-    Run subsets used in folds renumber runs, so design errors are caught
-    here on the full analysis, where each run has its own label.
-    """
-    for events, times, confounds, label in zip(
-        data.events, data.frame_times, data.confounds, labels, strict=True
+def _check_inputs(data, indices, components, scoring):
+    if indices.shape != (data.n_features,) or not np.issubdtype(
+        indices.dtype, np.integer
     ):
-        _check_run_design(events, times, confounds, task_model, label)
+        raise ValueError("hrf_indices must be an integer vector, one per feature")
+    if len(components) != data.n_runs or any(
+        not isinstance(c, RunComponents) or c.components.shape[0] != len(t)
+        for c, t in zip(components, data.frame_times)
+    ):
+        raise ValueError("components must hold one RunComponents per run")
+    if (scoring & (indices < 0)).any():
+        raise ValueError("scoring features need a defined HRF assignment")
+    if not scoring.any():
+        raise ValueError(f"{NO_TASK_SIGNAL}: the scoring set is empty")
 
 
-# ---- fold preparation ------------------------------------------------------------
+# ---- scoring setup -------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -118,29 +105,27 @@ class _Terms:
 
 @dataclass(frozen=True)
 class _HrfGroup:
-    """Scoring features sharing one frozen HRF: training and held-out terms."""
+    """Scoring features sharing one frozen HRF, with every run's terms."""
 
     hrf_id: int
     features: np.ndarray
-    train: tuple[_Terms, ...]
-    validation: _Terms
+    runs: tuple[_Terms, ...]
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
-class FoldSetup:
-    """Training-only HRFs, masks, and PCs plus held-out terms for one fold.
+class ScoringSetup:
+    """Frozen full-data inputs and cached projected terms for every run.
 
-    ``scored`` is the scoring mask minus held-out targets with numerically
-    zero energy (``zero_target``); both are fixed for every count.
+    ``zero_target`` (runs x features) marks numerically zero held-out
+    targets; ``scored`` is ``scoring`` minus features with a zero target in
+    any run, fixed for every fold and count. ``target_energy`` (runs x
+    features) is each held-out target's energy, NaN outside ``scored``.
     """
 
-    validation_run: int
-    training_runs: tuple[int, ...]
     run_labels: tuple[str, ...]
-    selection: HrfSelectionResult
-    pool_statistic: np.ndarray
-    masks: PoolMasks
+    hrf_indices: np.ndarray
     components: tuple[RunComponents, ...]
+    scoring: np.ndarray
     scored: np.ndarray
     zero_target: np.ndarray
     target_energy: np.ndarray
@@ -148,24 +133,22 @@ class FoldSetup:
     groups: tuple[_HrfGroup, ...] = field(repr=False)
 
     def __post_init__(self):
-        own_fields(self, ("scored", "zero_target"), dtype=bool)
-        own_fields(self, ("target_energy", "pool_statistic"))
-        own_tuples(self, ("training_runs", "run_labels", "components", "groups"))
+        own_fields(self, ("scoring", "scored", "zero_target"), dtype=bool)
+        own_fields(self, ("hrf_indices",), dtype=np.int64)
+        own_fields(self, ("target_energy",))
+        own_tuples(self, ("run_labels", "components", "groups"))
 
-
-def _training_runs(data, validation_run):
-    if not is_integer(validation_run) or not 0 <= validation_run < data.n_runs:
-        raise ValueError("validation_run must be a valid run index")
-    train = tuple(r for r in range(data.n_runs) if r != validation_run)
-    if len(train) < 2:
-        raise ValueError("each fold needs at least two training runs")
-    return train
+    @property
+    def n_runs(self) -> int:
+        return len(self.run_labels)
 
 
 def _run_terms(run, hrf_id, y, label):
     ok, reason = run.eligible(hrf_id)
     if not ok:
-        raise ValueError(f"{label}: HRF {hrf_id} task design is invalid: {reason}")
+        raise ValueError(
+            f"run '{label}': HRF {hrf_id} task design is invalid: {reason}"
+        )
     block = run.block(hrf_id)
     raw = run.task_design(hrf_id)[list(run.task_model.regressor_names)].to_numpy()
     projected = y - run.q @ (run.q.T @ y)
@@ -177,108 +160,68 @@ def _run_terms(run, hrf_id, y, label):
     return _Terms(block.x, raw, projected, block.qp, rank, zero)
 
 
-def _hrf_group(data, runs, split, hrf_id, features):
-    train, held_out, labels = split
-    terms = tuple(
-        _run_terms(
-            runs[r],
-            hrf_id,
-            data.signals[r][:, features],
-            f"training run '{labels[r]}'",
+def _hrf_groups(data, runs, labels, indices, scoring):
+    groups = []
+    for hrf_id in np.unique(indices[scoring]):
+        features = np.flatnonzero(scoring & (indices == hrf_id))
+        terms = tuple(
+            _run_terms(run, int(hrf_id), y[:, features], label)
+            for run, y, label in zip(runs, data.signals, labels)
         )
-        for r in train
-    )
-    y = data.signals[held_out][:, features]
-    label = f"held-out run '{labels[held_out]}'"
-    validation = _run_terms(runs[held_out], hrf_id, y, label)
-    return _HrfGroup(hrf_id, features, terms, validation)
+        groups.append(_HrfGroup(int(hrf_id), features, terms))
+    return tuple(groups)
 
 
-def _hrf_groups(data, runs, split, selection, scoring):
-    ids = selection.hrf_indices
-    return tuple(
-        _hrf_group(data, runs, split, int(h), np.flatnonzero(scoring & (ids == h)))
-        for h in np.unique(ids[scoring])
-    )
-
-
-def _target_summary(groups, n_features):
-    zero = np.zeros(n_features, dtype=bool)
-    energy = np.full(n_features, np.nan)
+def _target_summary(groups, n_runs, n_features):
+    zero = np.zeros((n_runs, n_features), dtype=bool)
+    energy = np.full((n_runs, n_features), np.nan)
     for group in groups:
-        zero[group.features] = group.validation.zero
-        energy[group.features] = np.sum(group.validation.y**2, axis=0)
+        for r, terms in enumerate(group.runs):
+            zero[r, group.features] = terms.zero
+            energy[r, group.features] = np.sum(terms.y**2, axis=0)
     return zero, energy
 
 
-def _training_selection(training, train, labels, library, task_model):
-    return select_hrfs(
-        training,
-        library=library,
-        task_model=task_model,
-        run_labels=[labels[r] for r in train],
-    )
-
-
-def _fold_context(labels, train, held_out):
-    training = ", ".join(f"'{labels[r]}'" for r in train)
-    return f"the fold holding out run '{held_out}' (training runs {training})"
-
-
-def _checked_masks(selection, statistic, brain_mask, threshold, context):
-    masks = pool_masks(
-        selection, brain_mask, threshold, statistic=statistic, context=context
-    )
-    if masks.scoring_size == 0:
+def _checked_scored(scoring, zero, labels):
+    scored = scoring & ~zero.any(axis=0)
+    if not scored.any():
+        runs = ", ".join(f"'{labels[r]}'" for r in np.flatnonzero(zero.any(axis=1)))
         raise ValueError(
-            f"{_NO_TASK_SIGNAL}: {context} "
-            f"has an empty scoring mask at threshold {masks.threshold}"
+            f"{NO_TASK_SIGNAL}: every scoring feature has a numerically zero "
+            f"held-out target in run(s) {runs}"
         )
-    return masks
+    return scored
 
 
-def prepare_fold(
+def prepare_scoring(
     data,
-    validation_run,
     *,
-    brain_mask,
+    hrf_indices,
+    components,
+    scoring,
     task_model,
     library,
-    threshold,
     run_labels=None,
-) -> FoldSetup:
-    """Select HRFs, masks, and PCs from training runs; cache projected terms.
+) -> ScoringSetup:
+    """Validate frozen inputs and cache every run's projected terms.
 
-    ``threshold`` is ``"auto"`` (mixture rule on the training statistic) or
-    a fixed float. Messages name runs by ``run_labels`` (default ``run-01``).
+    Messages name runs by ``run_labels`` (default ``run-01``, ...).
     """
     labels = run_labels_for(data, run_labels)
-    train = _training_runs(data, validation_run)
-    held_out = labels[validation_run]
-    training = subset_runs(data, train)
-    selection = _training_selection(training, train, labels, library, task_model)
-    statistic = pool_statistic(training, selection)
-    context = _fold_context(labels, train, held_out)
-    masks = _checked_masks(selection, statistic, brain_mask, threshold, context)
-    components = analysis_components(training, masks.pool)
-    runs = prepare_runs(data, library, task_model)
-    split = (train, validation_run, labels)
-    groups = _hrf_groups(data, runs, split, selection, masks.scoring)
-    zero, energy = _target_summary(groups, data.n_features)
-    scored = masks.scoring & ~zero
-    if not scored.any():
-        raise ValueError(
-            f"{_NO_TASK_SIGNAL}: held-out run '{held_out}' has no nonzero "
-            "target in the scoring mask"
-        )
-    return FoldSetup(
-        validation_run=validation_run,
-        training_runs=train,
+    indices = np.asarray(hrf_indices)
+    scoring = validate_feature_mask(scoring, data.n_features, name="scoring")
+    components = tuple(components)
+    _check_inputs(data, indices, components, scoring)
+    runs = prepare_runs(data, library, task_model, labels=labels)
+    groups = _hrf_groups(data, runs, labels, indices, scoring)
+    zero, energy = _target_summary(groups, data.n_runs, data.n_features)
+    scored = _checked_scored(scoring, zero, labels)
+    energy[:, ~scored] = np.nan
+    return ScoringSetup(
         run_labels=labels,
-        selection=selection,
-        pool_statistic=statistic,
-        masks=masks,
+        hrf_indices=indices,
         components=components,
+        scoring=scoring,
         scored=scored,
         zero_target=zero,
         target_energy=energy,
@@ -287,30 +230,7 @@ def prepare_fold(
     )
 
 
-# ---- scoring one count -------------------------------------------------------------
-
-
-@dataclass(frozen=True, kw_only=True, eq=False)
-class CountScore:
-    """Held-out R² of one count on one fold; NaN everywhere when unavailable."""
-
-    count: int
-    reason: str
-    mean_r2: float
-    feature_r2: np.ndarray
-    coefficients: np.ndarray
-    target_energy: np.ndarray
-
-    def __post_init__(self):
-        own_fields(self, ("feature_r2", "coefficients", "target_energy"))
-
-
-def _component_reason(fold, count):
-    for run, comps in zip(fold.training_runs, fold.components, strict=True):
-        reason = comps.unavailable_reason(count)
-        if reason:
-            return f"training run '{fold.run_labels[run]}': {reason}"
-    return ""
+# ---- per-run statistics for one count ---------------------------------------------
 
 
 def _extra_basis(pcs, profiled):
@@ -333,158 +253,223 @@ def _training_statistics(terms, pcs):
     return x.T @ x, x.T @ y
 
 
-def _group_coefficients(group, prefixes, run_labels):
-    """Shared task coefficients for one HRF group, or a reason they do not exist."""
-    a_sum, b_sum = 0.0, 0.0
-    for terms, pcs, run in zip(group.train, prefixes, run_labels, strict=True):
+def _run_statistics(setup, run, count):
+    """Per HRF group (A, B) for one run as a training run, or a reason."""
+    comps = setup.components[run]
+    reason = comps.unavailable_reason(count)
+    if reason:
+        return None, reason
+    pcs = comps.prefix(count)
+    stats = []
+    for group in setup.groups:
         try:
-            a, b = _training_statistics(terms, pcs)
+            stats.append(_training_statistics(group.runs[run], pcs))
         except ValueError as error:
-            return None, f"training run '{run}', HRF {group.hrf_id}: {error}"
-        a_sum, b_sum = a_sum + a, b_sum + b
-    amplitude, ok = pooled_amplitude(a_sum[None], b_sum[None])
-    if not ok[0]:
-        return None, f"HRF {group.hrf_id}: pooled task design is singular"
-    return amplitude[0], ""
+            return None, f"HRF {group.hrf_id}: {error}"
+    return stats, ""
 
 
-def _coefficients(fold, count):
-    prefixes = [c.prefix(count) for c in fold.components]
-    labels = [fold.run_labels[r] for r in fold.training_runs]
-    beta = np.full((fold.n_regressors, len(fold.scored)), np.nan)
-    for group in fold.groups:
-        values, reason = _group_coefficients(group, prefixes, labels)
-        if reason:
-            return None, reason
-        beta[:, group.features] = values
+# ---- one fold and one count -----------------------------------------------------------
+
+
+def _training_reason(setup, per_run, held_out):
+    for run, (_, reason) in enumerate(per_run):
+        if run != held_out and reason:
+            return f"training run '{setup.run_labels[run]}': {reason}"
+    return ""
+
+
+def _fold_coefficients(setup, per_run, held_out):
+    """Shared task coefficients from the training runs, or a reason."""
+    reason = _training_reason(setup, per_run, held_out)
+    if reason:
+        return None, reason
+    train = [stats for run, (stats, _) in enumerate(per_run) if run != held_out]
+    beta = np.full((setup.n_regressors, len(setup.scored)), np.nan)
+    for g, group in enumerate(setup.groups):
+        # Explicit sums avoid cancellation when one run has much larger energy.
+        a_sum = sum(stats[g][0] for stats in train)
+        b_sum = sum(stats[g][1] for stats in train)
+        amplitude, ok = pooled_amplitude(a_sum[None], b_sum[None])
+        if not ok[0]:
+            return None, f"HRF {group.hrf_id}: pooled task design is singular"
+        beta[:, group.features] = amplitude[0]
     return beta, ""
 
 
-def _heldout_r2(fold, beta):
-    r2 = np.full(len(fold.scored), np.nan)
-    for group in fold.groups:
-        held = group.validation
-        sse = np.sum((held.y - held.x @ beta[:, group.features]) ** 2, axis=0)
-        r2[group.features] = 1 - sse / np.sum(held.y**2, axis=0)
-    r2[~fold.scored] = np.nan
-    return r2
+def _heldout_sse(setup, held_out, beta):
+    sse = np.full(len(setup.scored), np.nan)
+    for group in setup.groups:
+        held = group.runs[held_out]
+        residual = held.y - held.x @ beta[:, group.features]
+        sse[group.features] = np.sum(residual**2, axis=0)
+    sse[~setup.scored] = np.nan
+    return sse
 
 
-def _count_score(fold, count, reason, beta=None):
-    n = len(fold.scored)
-    if beta is None:
-        beta = np.full((fold.n_regressors, n), np.nan)
-        r2, mean = np.full(n, np.nan), np.nan
-    else:
-        r2 = _heldout_r2(fold, beta)
-        mean = float(np.mean(r2[fold.scored]))
-    return CountScore(
-        count=count,
-        reason=reason,
-        mean_r2=mean,
-        feature_r2=r2,
-        coefficients=beta,
-        target_energy=fold.target_energy,
+@dataclass(frozen=True, kw_only=True, eq=False)
+class CountScore:
+    """Per-fold coefficients and errors, pooled feature R², and median perf.
+
+    Arrays are indexed by held-out run. ``perf`` and ``feature_r2`` are NaN
+    unless the count is available in every fold.
+    """
+
+    count: int
+    reason: str
+    fold_reasons: tuple[str, ...]
+    coefficients: np.ndarray
+    fold_sse: np.ndarray
+    fold_sst: np.ndarray
+    feature_r2: np.ndarray
+    perf: float
+
+    def __post_init__(self):
+        own_tuples(self, ("fold_reasons",))
+        own_fields(self, ("coefficients", "fold_sse", "fold_sst", "feature_r2"))
+
+    def fold_median(self, scored, held_out) -> float:
+        """Median held-out R² of one fold over ``scored`` (diagnostic)."""
+        sse, sst = self.fold_sse[held_out, scored], self.fold_sst[held_out, scored]
+        return float(np.median(1 - sse / sst))
+
+
+def _pooled(setup, sse, available):
+    r2 = np.full(len(setup.scored), np.nan)
+    if not available:
+        return r2, np.nan
+    scored = setup.scored
+    sst = setup.target_energy[:, scored].sum(axis=0)
+    r2[scored] = 1 - sse[:, scored].sum(axis=0) / sst
+    return r2, float(np.median(r2[scored]))
+
+
+def _aggregate_reason(setup, reasons):
+    return "; ".join(
+        f"fold holding out run '{label}': {reason}"
+        for label, reason in zip(setup.run_labels, reasons)
+        if reason
     )
 
 
-def score_count(fold: FoldSetup, count: int) -> CountScore:
-    """Fit shared coefficients with ``count`` PCs and score the fixed target.
+def score_count(setup: ScoringSetup, count: int) -> CountScore:
+    """Score one count in every fold; an invalid zero count raises.
 
-    A positive count is unavailable when any training run cannot supply that
-    many unique PCs or any projected task design loses rank or residual
-    degrees of freedom. An invalid zero count raises instead.
+    A positive count is unavailable in a fold when a training run cannot
+    supply that many unique PCs or a projected task design loses rank or
+    residual degrees of freedom; it must be available in every fold.
     """
-    reason = _component_reason(fold, count)
-    beta = None
-    if not reason:
-        beta, reason = _coefficients(fold, count)
+    per_run = [_run_statistics(setup, r, count) for r in range(setup.n_runs)]
+    shape = (setup.n_runs, len(setup.scored))
+    beta = np.full((setup.n_runs, setup.n_regressors, shape[1]), np.nan)
+    sse, reasons = np.full(shape, np.nan), []
+    for held_out in range(setup.n_runs):
+        values, reason = _fold_coefficients(setup, per_run, held_out)
+        reasons.append(reason)
+        if not reason:
+            beta[held_out] = values
+            sse[held_out] = _heldout_sse(setup, held_out, values)
+    reason = _aggregate_reason(setup, reasons)
     if reason and count == 0:
         raise ValueError(f"zero-component task design is invalid: {reason}")
-    return _count_score(fold, int(count), reason, None if reason else beta)
+    r2, perf = _pooled(setup, sse, not reason)
+    return CountScore(
+        count=int(count),
+        reason=reason,
+        fold_reasons=tuple(reasons),
+        coefficients=beta,
+        fold_sse=sse,
+        fold_sst=setup.target_energy,
+        feature_r2=r2,
+        perf=perf,
+    )
 
 
-# ---- aggregation and choice -------------------------------------------------------
+# ---- tables and choice -----------------------------------------------------------------
 
 
-def fold_score_table(folds, counts) -> pd.DataFrame:
-    """Per fold and count: eligibility, reason, fold-mean R², and fold masks.
-
-    Each fold's resolved pool threshold and pool/scoring sizes repeat on its
-    rows; with ``"auto"`` the threshold differs between folds.
-    """
+def fold_score_table(setup, scores) -> pd.DataFrame:
+    """Per fold and count: eligibility, reason, fold median R², and sizes."""
     rows = []
-    for fold in folds:
-        for count in counts:
-            score = score_count(fold, count)
+    for held_out, label in enumerate(setup.run_labels):
+        for score in scores:
+            reason = score.fold_reasons[held_out]
+            median = np.nan if reason else score.fold_median(setup.scored, held_out)
             rows.append(
                 dict(
-                    validation_run=fold.validation_run,
-                    validation_label=fold.run_labels[fold.validation_run],
-                    count=count,
-                    eligible=not score.reason,
-                    reason=score.reason,
-                    mean_r2=score.mean_r2,
-                    pool_r2_threshold=fold.masks.threshold,
-                    pool_size=fold.masks.pool_size,
-                    scoring_size=fold.masks.scoring_size,
-                    n_scored=int(fold.scored.sum()),
-                    n_zero_target=int(fold.zero_target.sum()),
+                    validation_run=held_out,
+                    validation_label=label,
+                    count=score.count,
+                    eligible=not reason,
+                    reason=reason,
+                    median_r2=median,
+                    n_scored=int(setup.scored.sum()),
+                    n_zero_target=int(setup.zero_target[held_out].sum()),
                 )
             )
     return pd.DataFrame(rows)
 
 
-def _aggregate_row(rows, count):
-    eligible = bool(rows["eligible"].all())
-    failed = rows[~rows["eligible"]]
-    reason = "; ".join(
-        f"fold holding out run '{v}': {r}"
-        for v, r in zip(failed["validation_label"], failed["reason"])
-    )
-    mean = float(rows["mean_r2"].mean()) if eligible else np.nan
-    return dict(count=count, eligible=eligible, mean_r2=mean, reason=reason)
-
-
-def aggregate_scores(fold_scores, counts) -> pd.DataFrame:
-    """Equal-weight mean of fold means; a count must be eligible in every fold."""
+def score_table(scores) -> pd.DataFrame:
+    """Per count: eligibility, median performance, curve, and reasons."""
+    perf = np.array([s.perf for s in scores])
+    zero = perf[[s.count for s in scores].index(0)]
     return pd.DataFrame(
-        [
-            _aggregate_row(fold_scores[fold_scores["count"] == count], count)
-            for count in counts
-        ]
+        dict(
+            count=[s.count for s in scores],
+            eligible=[not s.reason for s in scores],
+            perf=perf,
+            curve=perf - zero,
+            reason=[s.reason for s in scores],
+        )
     )
 
 
-def choose_count(counts, scores, tolerance) -> int:
-    """Smallest count within ``tolerance`` of the best finite aggregate score.
+def choose_count(counts, perf, pcstop) -> int:
+    """GLMsingle ``select_noise_regressors`` over the available counts.
 
-    NaN marks an unavailable count. A roundoff slack of 64 eps (as in HRF
-    choice) keeps numerically tied scores tied, so ties select fewer PCs.
+    With ``curve = perf - perf[0]``, walk counts in increasing order keeping
+    the best curve value so far and its count; stop at the first count where
+    ``best * pcstop >= max(curve)`` and return the count holding that best.
+    NaN marks an unavailable count (skipped). Zero is always a candidate,
+    and ``max(curve) <= 0`` chooses 0. A roundoff slack of 64 eps (as in HRF
+    choice) keeps numerically equal values equal. Unlike GLMsingle's loop,
+    zero and the largest count can both be chosen.
     """
-    counts, scores = tuple(counts), np.asarray(scores, dtype=float)
-    if len(scores) != len(counts):
+    counts, perf = tuple(counts), np.asarray(perf, dtype=float)
+    if len(perf) != len(counts):
         raise ValueError("choose_count needs one score per count")
-    finite = np.isfinite(scores)
-    if 0 not in counts or not finite[counts.index(0)]:
+    if 0 not in counts or not np.isfinite(perf[counts.index(0)]):
         raise ValueError("count zero must be a scored candidate")
-    best = float(scores[finite].max())
-    floor = best - tolerance - 64 * _EPS * max(1.0, abs(best))
-    return min(c for c, s, ok in zip(counts, scores, finite) if ok and s >= floor)
+    curve = perf - perf[counts.index(0)]
+    top = float(np.max(curve[np.isfinite(curve)]))
+    if top <= 0:
+        return 0
+    slack = 64 * _EPS * max(1.0, abs(top))
+    best, chosen = -np.inf, 0
+    for i in np.argsort(counts, kind="stable"):
+        if not np.isfinite(curve[i]):
+            continue
+        if curve[i] > best:
+            best, chosen = curve[i], counts[i]
+        if best * pcstop >= top - slack:
+            break
+    return chosen
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class CountSelection:
-    """Chosen count, the fold setups, and per-fold and aggregate score tables."""
+    """Chosen count, the scoring setup, per-count scores, and score tables."""
 
     n_components: int
     counts: tuple[int, ...]
-    folds: tuple[FoldSetup, ...]
+    setup: ScoringSetup
+    count_scores: tuple[CountScore, ...]
     fold_scores: pd.DataFrame
     scores: pd.DataFrame
 
     def __post_init__(self):
-        own_tuples(self, ("counts", "folds"))
+        own_tuples(self, ("counts", "count_scores"))
         rebind(
             self,
             fold_scores=_owned_table(self.fold_scores),
@@ -495,41 +480,35 @@ class CountSelection:
 def select_component_count(
     data,
     *,
-    brain_mask,
+    hrf_indices,
+    components,
+    scoring,
     task_model,
     library,
     counts,
-    threshold,
-    tolerance,
+    pcstop,
     run_labels=None,
 ) -> CountSelection:
-    """Leave-one-run-out PC-count choice; requires at least three runs."""
-    counts, tolerance = validate_counts(counts), validate_tolerance(tolerance)
-    threshold = validate_threshold(threshold)
+    """Leave-one-run-out PC-count choice by pcstop; requires three runs."""
+    counts, pcstop = validate_counts(counts), validate_pcstop(pcstop)
     if data.n_runs < 3:
         raise ValueError("component-count selection requires at least three runs")
-    brain_mask = validate_feature_mask(brain_mask, data.n_features)
-    library = default_hrf_library() if library is None else library
-    labels = run_labels_for(data, run_labels)
-    check_run_designs(data, task_model, labels)
-    folds = tuple(
-        prepare_fold(
-            data,
-            v,
-            brain_mask=brain_mask,
-            task_model=task_model,
-            library=library,
-            threshold=threshold,
-            run_labels=labels,
-        )
-        for v in range(data.n_runs)
+    setup = prepare_scoring(
+        data,
+        hrf_indices=hrf_indices,
+        components=components,
+        scoring=scoring,
+        task_model=task_model,
+        library=library,
+        run_labels=run_labels,
     )
-    fold_scores = fold_score_table(folds, counts)
-    scores = aggregate_scores(fold_scores, counts)
+    scores = tuple(score_count(setup, count) for count in counts)
+    table = score_table(scores)
     return CountSelection(
-        n_components=choose_count(counts, scores["mean_r2"], tolerance),
+        n_components=choose_count(counts, table["perf"], pcstop),
         counts=counts,
-        folds=folds,
-        fold_scores=fold_scores,
-        scores=scores,
+        setup=setup,
+        count_scores=scores,
+        fold_scores=fold_score_table(setup, scores),
+        scores=table,
     )

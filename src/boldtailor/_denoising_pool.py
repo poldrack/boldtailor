@@ -1,26 +1,32 @@
-"""Task-guided noise-pool masks and run-wise normalized pool PCA.
+"""GLMsingle ON-OFF R² noise pool, scoring features, and run-wise pool PCA.
 
-The pool is defined from a training HRF selection's time-series CV R² of each
-feature's winning HRF, with the held-out denominator projected off the same
-baseline confounds and missing-value indicators as the prediction (see
-:func:`pool_statistic`). A low score means weak prediction by the specified
-task model, not absence of neural activity. The threshold is fixed or, with
-``"auto"``, GLMsingle's two-component Gaussian-mixture tail threshold of the
-statistic over the eligible features (see :mod:`boldtailor._mixture_threshold`).
-Pool time series are projected off the run's baseline
-confounds plus intercept, numerically zero columns are discarded, and the rest
-are scaled to unit L2 norm before a reduced SVD.
+The pool statistic is GLMsingle's ON-OFF R²: one task regressor (every
+trial, amplitude 1) convolved with the library's canonical HRF (candidate
+0), a coefficient shared by all runs, and each run's baseline confounds plus
+intercept as run-specific nuisance, fit in-sample on all runs (GLMsingle
+uses polynomial drift terms; Boldtailor analyses carry confounds instead).
+It ignores the caller's modulators and HRF choices. Every input feature is a
+candidate: the core is anatomy-agnostic and takes no mask. The pool holds
+finite values below the threshold (GLMsingle ``badR2``), the scoring
+features finite values above it with a defined HRF (``pcR2cutoff``, same
+threshold), or the 100 best when none passes. The threshold is fixed or,
+with ``"auto"``, GLMsingle's two-component Gaussian-mixture tail threshold
+of the finite values (see :mod:`boldtailor._mixture_threshold`). Pool time
+series are projected off the run's baseline confounds plus intercept,
+numerically zero columns are discarded, and the rest are scaled to unit L2
+norm before a reduced SVD.
 
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
-disclaimer. It is an independent reimplementation, not a copy of GLMsingle
-code. Follows the GLMdenoise noise-pool/PC procedure used by GLMsingle (ON-OFF
-R² noise pool, run-wise temporal PCs of the pool). Reference: Prince, J.S.,
-Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
-Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
-eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions,
+and disclaimer. It is an independent reimplementation, not a copy of
+GLMsingle code. Follows the GLMdenoise noise-pool/PC procedure used by
+GLMsingle (ON-OFF R² noise pool, run-wise temporal PCs of the pool).
+Reference: Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr,
+M.J., Kay, K.N. (2022). Improving the accuracy of single-trial fMRI response
+estimates using GLMsingle. eLife, 11, e77599.
+https://doi.org/10.7554/eLife.77599
 """
 
 from dataclasses import dataclass
@@ -28,32 +34,79 @@ from dataclasses import dataclass
 import numpy as np
 
 from boldtailor._arrays import own_fields, readonly_array
-from boldtailor._hrf_cv import pooled_amplitude, prediction_loss, prepare_runs
+from boldtailor._hrf_cv import pooled_amplitude, prepare_runs
 from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
 from boldtailor._scalars import is_integer, is_real
 from boldtailor._single_trial_design import _nuisance_matrix
 from boldtailor._single_trial_fit import nuisance_span
-from boldtailor.hrf_results import HrfSelectionResult
+from boldtailor.data import run_labels_for
+from boldtailor.model import TaskModel
 
 _EPS = np.finfo(float).eps
+AUTO = "auto"
+FALLBACK_SIZE = 100  # GLMsingle scores its 100 best features when none passes
+CANONICAL = 0  # every HrfLibrary holds canonical SPM at candidate ID 0
+
+
+# ---- ON-OFF R² ------------------------------------------------------------------
+
+
+def _onoff_terms(run, y, label):
+    """Projected ON column, projected BOLD, and its energy for one run."""
+    ok, reason = run.eligible(CANONICAL)
+    if not ok:
+        raise ValueError(f"run '{label}': ON-OFF task design is invalid: {reason}")
+    yr = y - run.q @ (run.q.T @ y)
+    # Numerical zero only, as in HRF selection: no weak-signal threshold.
+    yr[:, np.linalg.norm(yr, axis=0) <= np.linalg.norm(y, axis=0) * len(y) * _EPS] = 0
+    return run.block(CANONICAL).x, yr
+
+
+def onoff_r2(data, library, *, run_labels=None) -> np.ndarray:
+    """GLMsingle ON-OFF R² per feature over all runs; NaN for zero energy.
+
+    ``1 - sum_r ||M_r y_r - M_r x_r b||^2 / sum_r ||M_r y_r||^2`` with ``M_r``
+    projecting off run r's confounds plus intercept and ``b`` shared.
+    """
+    labels = run_labels_for(data, run_labels)
+    runs = prepare_runs(data, library, TaskModel(), labels=labels)
+    terms = [_onoff_terms(*args) for args in zip(runs, data.signals, labels)]
+    a = sum(x.T @ x for x, _ in terms)
+    b = sum(x.T @ yr for x, yr in terms)
+    amplitude, ok = pooled_amplitude(a[None], b[None])
+    if not ok[0]:
+        raise ValueError("ON-OFF task design is singular across runs")
+    sse = sum(np.sum((yr - x @ amplitude[0]) ** 2, axis=0) for x, yr in terms)
+    sst = sum(np.sum(yr**2, axis=0) for _, yr in terms)
+    ratio = np.full(data.n_features, np.nan)
+    np.divide(sse, sst, out=ratio, where=sst > 0)
+    return readonly_array(1 - ratio)
+
+
+# ---- pool and scoring masks -----------------------------------------------------
 
 
 @dataclass(frozen=True, kw_only=True)
 class PoolMasks:
-    """Disjoint Boolean feature masks fixed for every candidate PC count.
+    """Pool and scoring feature masks fixed for every candidate PC count.
 
     ``mixture`` is the fitted mixture when the threshold was automatic.
+    ``fallback`` marks GLMsingle's best-100 scoring set, which may overlap
+    the pool; otherwise the masks are disjoint.
     """
 
     pool: np.ndarray
     scoring: np.ndarray
     threshold: float
     mixture: MixtureThreshold | None = None
+    fallback: bool = False
 
     def __post_init__(self):
         own_fields(self, ("pool", "scoring"), dtype=bool)
-        if self.pool.shape != self.scoring.shape or (self.pool & self.scoring).any():
-            raise ValueError("pool and scoring masks must be disjoint and aligned")
+        if self.pool.shape != self.scoring.shape:
+            raise ValueError("pool and scoring masks must be aligned")
+        if not self.fallback and (self.pool & self.scoring).any():
+            raise ValueError("pool and scoring masks must be disjoint")
 
     @property
     def pool_size(self) -> int:
@@ -62,9 +115,6 @@ class PoolMasks:
     @property
     def scoring_size(self) -> int:
         return int(self.scoring.sum())
-
-
-AUTO = "auto"
 
 
 def validate_threshold(value, name="pool_r2_threshold") -> float | str:
@@ -76,17 +126,12 @@ def validate_threshold(value, name="pool_r2_threshold") -> float | str:
     return float(value)
 
 
-def validate_feature_mask(mask, n_features, name="brain_mask") -> np.ndarray:
+def validate_feature_mask(mask, n_features, name="pool") -> np.ndarray:
     """Read-only copy of a Boolean vector with one entry per feature."""
     array = np.asarray(mask)
     if array.dtype != bool or array.shape != (n_features,):
         raise ValueError(f"{name} must be a Boolean vector of {n_features} features")
     return readonly_array(array, dtype=bool)
-
-
-def _check_selection(selection):
-    if not isinstance(selection, HrfSelectionResult):
-        raise ValueError("selection must be an HrfSelectionResult")
 
 
 def _validate_statistic(statistic, n_features):
@@ -109,89 +154,47 @@ def _mixture(values, context):
         ) from error
 
 
+def _best_features(scores, candidates):
+    """The ``FALLBACK_SIZE`` candidates with the highest scores."""
+    ranked = np.flatnonzero(candidates)[np.argsort(-scores[candidates], kind="stable")]
+    best = np.zeros(len(scores), dtype=bool)
+    best[ranked[:FALLBACK_SIZE]] = True
+    return best
+
+
 def pool_masks(
-    selection: HrfSelectionResult,
-    brain_mask: np.ndarray,
+    statistic: np.ndarray,
     threshold: float | str,
     *,
-    statistic: np.ndarray,
+    hrf_indices: np.ndarray,
     context: str = "the noise pool",
 ) -> PoolMasks:
-    """Pool: in-brain finite statistic <= threshold; scoring: > threshold.
+    """Pool: finite statistic < threshold; scoring: > threshold, HRF defined.
 
-    ``statistic`` is normally :func:`pool_statistic`. Features without a
-    defined HRF assignment belong to neither mask. With ``"auto"`` the
-    threshold is the mixture tail threshold of the statistic over exactly
-    those eligible features; a failed fit raises naming ``context``. Empty
-    masks are returned as such; callers decide whether they are fatal.
+    With ``"auto"`` the threshold is the mixture tail threshold of all finite
+    values; a failed fit raises naming ``context``. When no feature passes,
+    the 100 highest-scoring candidates are scored (``fallback``). An empty
+    pool or scoring set is returned as such; callers decide if it is fatal.
     """
-    _check_selection(selection)
     threshold = validate_threshold(threshold)
-    scores = _validate_statistic(statistic, len(selection.hrf_indices))
-    brain = validate_feature_mask(brain_mask, len(scores))
-    defined = brain & np.isfinite(scores) & (selection.hrf_indices >= 0)
-    mixture = _mixture(scores[defined], context) if threshold == AUTO else None
+    indices = np.asarray(hrf_indices)
+    scores = _validate_statistic(statistic, len(indices))
+    finite = np.isfinite(scores)
+    mixture = _mixture(scores[finite], context) if threshold == AUTO else None
     threshold = threshold if mixture is None else mixture.threshold
+    candidates = finite & (indices >= 0)
+    scoring = candidates & (scores > threshold)
+    fallback = not scoring.any()
     return PoolMasks(
-        pool=defined & (scores <= threshold),
-        scoring=defined & (scores > threshold),
+        pool=finite & (scores < threshold),
+        scoring=_best_features(scores, candidates) if fallback else scoring,
         threshold=threshold,
         mixture=mixture,
+        fallback=fallback,
     )
 
 
-def _run_statistics(run, hrf_id, y):
-    """A, B, and indicator-projected energy C for one run and HRF."""
-    block = run.block(hrf_id)
-    yr = y - run.q @ (run.q.T @ y)
-    # Numerical zero only, exactly as in HRF selection.
-    yr[:, np.linalg.norm(yr, axis=0) <= np.linalg.norm(y, axis=0) * len(y) * _EPS] = 0
-    residual = yr - block.qp @ (block.qp.T @ yr)
-    return block.a, block.x.T @ yr, np.sum(residual**2, axis=0)
-
-
-def _winner_cv_r2(runs, signals, hrf_id, features):
-    stats = [_run_statistics(r, hrf_id, y[:, features]) for r, y in zip(runs, signals)]
-    a, b, c = (np.array(values) for values in zip(*stats))
-    loss = np.zeros(len(features))
-    for held in range(len(runs)):
-        others = [r for r in range(len(runs)) if r != held]
-        amplitude, ok = pooled_amplitude(
-            a[others].sum(axis=0)[None], b[others].sum(axis=0)[None]
-        )
-        if not ok[0]:
-            return np.full(len(features), np.nan)
-        loss += prediction_loss(a[held][None], b[held][None], c[held][None], amplitude)[
-            0
-        ]
-    total = c.sum(axis=0)
-    statistic = np.full(len(features), np.nan)
-    np.divide(loss, total, out=statistic, where=total > 0)
-    return 1 - statistic
-
-
-def pool_statistic(data, selection: HrfSelectionResult) -> np.ndarray:
-    """LORO CV R² of each feature's selected HRF over ``data``'s runs.
-
-    Unlike ``selection.cv_r2`` (confound-only denominator), each held-out
-    run's energy is projected off its confounds, intercept, and the
-    missing-value indicators convolved with the same HRF, so in-sample
-    indicator profiling does not inflate the score. Without indicators the
-    two agree. ``data`` must be the runs ``selection`` was fit on; features
-    without an HRF get NaN.
-    """
-    _check_selection(selection)
-    if data.n_runs != len(selection.run_labels):
-        raise ValueError("data must have the runs the selection was fit on")
-    ids = np.asarray(selection.hrf_indices)
-    if len(ids) != data.n_features:
-        raise ValueError("data and selection must have the same features")
-    runs = prepare_runs(data, selection.library, selection.task_model)
-    statistic = np.full(data.n_features, np.nan)
-    for hrf_id in np.unique(ids[ids >= 0]):
-        features = np.flatnonzero(ids == hrf_id)
-        statistic[features] = _winner_cv_r2(runs, data.signals, int(hrf_id), features)
-    return readonly_array(statistic)
+# ---- normalized pool PCA ---------------------------------------------------------
 
 
 @dataclass(frozen=True, kw_only=True)

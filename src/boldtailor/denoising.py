@@ -1,25 +1,30 @@
-"""Opt-in task-guided denoising: choose a temporal-PC count, then append PCs.
+"""Opt-in task-guided denoising following GLMsingle's GLMdenoise stage.
 
-``select_denoising`` chooses one PC count by leave-one-run-out held-out task
-prediction (selection statistic, not a performance estimate). It then builds
-the noise pool from an initial HRF selection on all runs, scored by the
-indicator-consistent leave-one-run-out task-model R², and returns that
-pool's leading run-specific PCs. By default (``pool_r2_threshold="auto"``)
-each pool threshold is GLMsingle's two-component Gaussian-mixture tail
-threshold, fitted separately in every fold and for the final pool. The pool is not iterated after adding PCs.
-``with_denoising`` appends those PCs to the baseline confounds of the same
-analysis for ordinary HRF selection and fitting.
+``select_denoising`` follows GLMsingle with stated deviations. It selects
+per-feature HRFs once on all runs and freezes them; computes GLMsingle's
+ON-OFF R² (canonical HRF, one task regressor, shared coefficient, each run's
+confounds plus intercept as nuisance; GLMsingle uses polynomials); pools
+features below GLMsingle's Gaussian-mixture tail threshold (by default) and
+scores features above it (the 100 best when none passes); extracts run-wise
+PCs of that single pool; and chooses one PC count with GLMsingle's pcstop
+rule over the median of fold-pooled held-out R². Counts are scored by
+leave-one-run-out time-series prediction against a fixed target, because
+repeated conditions are not assumed. Every input feature is a candidate: the
+core is anatomy-agnostic. ``with_denoising`` appends the chosen PCs to the
+baseline confounds of the same analysis for ordinary HRF selection and
+fitting.
 
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
-disclaimer. It is an independent reimplementation, not a copy of GLMsingle
-code. Follows the GLMdenoise stage of GLMsingle (noise pool, run-wise PCs,
-cross-validated PC count, select_noise_regressors). Reference: Prince, J.S.,
-Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
-Improving the accuracy of single-trial fMRI response estimates using GLMsingle.
-eLife, 11, e77599. https://doi.org/10.7554/eLife.77599
+LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions,
+and disclaimer. It is an independent reimplementation, not a copy of
+GLMsingle code. Follows the GLMdenoise stage of GLMsingle (noise pool,
+run-wise PCs, cross-validated PC count, select_noise_regressors).
+Reference: Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr,
+M.J., Kay, K.N. (2022). Improving the accuracy of single-trial fMRI response
+estimates using GLMsingle. eLife, 11, e77599.
+https://doi.org/10.7554/eLife.77599
 """
 
 from collections.abc import Sequence
@@ -30,19 +35,20 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._denoising_cv import (
+    NO_TASK_SIGNAL,
     select_component_count,
     validate_counts,
-    validate_tolerance,
+    validate_pcstop,
 )
 from boldtailor._denoising_identity import check_identity, run_identities
 from boldtailor._denoising_pool import (
     analysis_components,
+    onoff_r2,
     pool_masks,
-    pool_statistic,
-    validate_feature_mask,
     validate_threshold,
 )
 from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._hrf_cv import prepare_runs
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.denoising_results import (
     DenoisingFold,
@@ -74,12 +80,11 @@ def _check_data(data):
 class _Settings:
     """Validated, owned selection settings."""
 
-    brain_mask: np.ndarray
     task_model: TaskModel
     library: HrfLibrary
     counts: tuple[int, ...]
     threshold: float | str
-    tolerance: float
+    pcstop: float
     feature_signature: str | None
 
 
@@ -92,47 +97,83 @@ def _check_models(task_model, library, signature):
         raise ValueError("feature_signature must be a nonempty string or None")
 
 
-def _settings(data, brain_mask, task_model, library, grid, signature):
-    """Validate everything before any fitting; ``grid`` is (counts, r2, tol)."""
+def _settings(data, task_model, library, grid, signature):
+    """Validate everything before any fitting; ``grid`` is (counts, r2, pcstop)."""
     _check_data(data)
     _check_models(task_model, library, signature)
-    counts, threshold, tolerance = grid
+    counts, threshold, pcstop = grid
     return _Settings(
-        brain_mask=validate_feature_mask(brain_mask, data.n_features),
         task_model=task_model,
         library=library,
         counts=validate_counts(counts),
         threshold=validate_threshold(threshold),
-        tolerance=validate_tolerance(tolerance),
+        pcstop=validate_pcstop(pcstop),
         feature_signature=signature,
     )
+
+
+def _check_runs(data, labels, settings):
+    """At least three runs; every run design valid, errors named by label."""
+    if data.n_runs < 3:
+        raise ValueError("denoising selection requires at least three runs")
+    prepare_runs(data, settings.library, settings.task_model, labels=labels)
+    prepare_runs(data, settings.library, TaskModel(), labels=labels)
 
 
 def _digest(values, dtype) -> str:
     return sha256(np.ascontiguousarray(values, dtype=dtype).tobytes()).hexdigest()
 
 
-# ---- count selection ----------------------------------------------------------------
+# ---- full-data HRFs, pool, and PCs ---------------------------------------------------
 
 
-def _count_selection(data, labels, settings):
+def _pool(data, labels, settings):
+    """Frozen full-data HRFs, ON-OFF R², masks, and run-wise pool PCs."""
+    selection = select_hrfs(
+        data,
+        library=settings.library,
+        task_model=settings.task_model,
+        run_labels=labels,
+        feature_signature=settings.feature_signature,
+    )
+    statistic = onoff_r2(data, settings.library, run_labels=labels)
+    runs = ", ".join(f"'{label}'" for label in labels)
+    masks = pool_masks(
+        statistic,
+        settings.threshold,
+        hrf_indices=selection.hrf_indices,
+        context=f"the noise pool (runs {runs})",
+    )
+    if masks.scoring_size == 0:
+        raise ValueError(
+            f"{NO_TASK_SIGNAL}: no feature has a finite ON-OFF R² and a defined HRF"
+        )
+    return selection, statistic, masks, analysis_components(data, masks.pool)
+
+
+def _count_selection(data, labels, settings, pool):
+    selection, _, masks, components = pool
     return select_component_count(
         data,
-        brain_mask=settings.brain_mask,
+        hrf_indices=selection.hrf_indices,
+        components=components,
+        scoring=masks.scoring,
         task_model=settings.task_model,
         library=settings.library,
         counts=settings.counts,
-        threshold=settings.threshold,
-        tolerance=settings.tolerance,
+        pcstop=settings.pcstop,
         run_labels=labels,
     )
 
 
-def _public_tables(selection):
+# ---- result parts ----------------------------------------------------------------------
+
+
+def _public_tables(count):
     """Aggregate scores and per-fold scores keyed by the held-out run label."""
-    folds = selection.fold_scores.copy()
+    folds = count.fold_scores.copy()
     folds["validation_run"] = folds.pop("validation_label")
-    return selection.scores, folds
+    return count.scores, folds
 
 
 def _diagnostics(components, labels, pool_size):
@@ -146,61 +187,17 @@ def _diagnostics(components, labels, pool_size):
     )
 
 
-def _fold_result(fold, labels):
-    training = tuple(labels[r] for r in fold.training_runs)
-    return DenoisingFold(
-        validation_run=labels[fold.validation_run],
-        training_runs=training,
-        pool=fold.masks.pool,
-        scoring=fold.masks.scoring,
-        scored=fold.scored,
-        zero_target=fold.zero_target,
-        pool_r2=fold.pool_statistic,
-        hrf_indices=fold.selection.hrf_indices,
-        pool_threshold=fold.masks.threshold,
-        pool_mixture=fold.masks.mixture,
-        components=_diagnostics(fold.components, training, fold.masks.pool_size),
+def _folds(setup):
+    labels = setup.run_labels
+    return tuple(
+        DenoisingFold(
+            validation_run=label,
+            training_runs=tuple(x for x in labels if x != label),
+            zero_target=setup.zero_target[v],
+            target_energy=setup.target_energy[v],
+        )
+        for v, label in enumerate(labels)
     )
-
-
-# ---- final full-data pool -------------------------------------------------------------
-
-
-def _final_pool(data, labels, settings):
-    """Initial selection, pool statistic, masks, and PCA from all runs."""
-    selection = select_hrfs(
-        data,
-        library=settings.library,
-        task_model=settings.task_model,
-        run_labels=labels,
-        feature_signature=settings.feature_signature,
-    )
-    statistic = pool_statistic(data, selection)
-    runs = ", ".join(f"'{label}'" for label in labels)
-    masks = pool_masks(
-        selection,
-        settings.brain_mask,
-        settings.threshold,
-        statistic=statistic,
-        context=f"the final full-data noise pool (runs {runs})",
-    )
-    return selection, statistic, masks, analysis_components(data, masks.pool)
-
-
-def _final_prefixes(components, masks, count, labels):
-    """Each run's leading ``count`` PCs; raises instead of changing the count."""
-    for label, comps in zip(labels, components, strict=True):
-        reason = comps.unavailable_reason(count)
-        if reason:
-            ranks = ", ".join(
-                f"run '{name}' rank {c.rank}" for name, c in zip(labels, components)
-            )
-            raise ValueError(
-                f"the final full-data noise pool ({masks.pool_size} feature(s); "
-                f"PCA {ranks}) cannot support the selected count {count}: "
-                f"run '{label}': {reason}"
-            )
-    return tuple(c.prefix(count) for c in components)
 
 
 # ---- provenance ---------------------------------------------------------------------------
@@ -217,34 +214,6 @@ def _baseline_confounds(data, labels):
     ]
 
 
-def _fold_identities(folds):
-    return dict(
-        folds=[
-            dict(train=list(f.training_runs), test=[f.validation_run]) for f in folds
-        ],
-        fold_hrf_assignment_fingerprints=[_digest(f.hrf_indices, "<i8") for f in folds],
-        fold_noise_pool_fingerprints=[_digest(f.pool, "|b1") for f in folds],
-        fold_scoring_mask_fingerprints=[_digest(f.scoring, "|b1") for f in folds],
-    )
-
-
-def _mixture_record(mixture):
-    return None if mixture is None else mixture.to_dict()
-
-
-def _threshold_records(settings, masks, folds):
-    rule = "fixed" if masks.mixture is None else masks.mixture.to_dict()["method"]
-    return dict(
-        pool_r2_threshold=settings.threshold,
-        pool_threshold_rule=rule,
-        noise_pool_threshold=masks.threshold,
-        noise_pool_mixture=_mixture_record(masks.mixture),
-        fold_pool_thresholds=[f.pool_threshold for f in folds],
-        fold_pool_mixtures=[_mixture_record(f.pool_mixture) for f in folds],
-        fold_pool_sizes=[int(f.pool.sum()) for f in folds],
-    )
-
-
 def _excluded_counts(scores):
     failed = scores[~scores["eligible"]]
     return [
@@ -252,9 +221,51 @@ def _excluded_counts(scores):
     ]
 
 
-def _selection_activity(context, scores, folds, final):
+def _floats(values):
+    return [None if not np.isfinite(v) else float(v) for v in values]
+
+
+def _pool_records(settings, statistic, masks, scored):
+    rule = "fixed" if masks.mixture is None else masks.mixture.to_dict()["method"]
+    return dict(
+        pool_statistic="glmsingle_onoff_r2",
+        pool_r2_threshold=settings.threshold,
+        pool_threshold_rule=rule,
+        noise_pool_threshold=masks.threshold,
+        noise_pool_mixture=None if masks.mixture is None else masks.mixture.to_dict(),
+        scoring_fallback=masks.fallback,
+        onoff_r2_fingerprint=_digest(statistic, "<f8"),
+        noise_pool_fingerprint=_digest(masks.pool, "|b1"),
+        noise_pool_size=masks.pool_size,
+        scoring_mask_fingerprint=_digest(masks.scoring, "|b1"),
+        scoring_mask_size=masks.scoring_size,
+        scored_fingerprint=_digest(scored, "|b1"),
+    )
+
+
+def _count_records(settings, count):
+    scores, labels = count.scores, count.setup.run_labels
+    return dict(
+        counts=list(settings.counts),
+        count_rule="glmsingle_pcstop",
+        pcstop=settings.pcstop,
+        performance="median_over_scored_features_of_fold_pooled_r2",
+        perf=_floats(scores["perf"]),
+        curve=_floats(scores["curve"]),
+        excluded_counts=_excluded_counts(scores),
+        score="heldout_task_prediction_r2_fixed_baseline_target",
+        conditional_prediction="missing-value indicators profiled on held-out BOLD",
+        selection_statistic=True,
+        folds=[
+            dict(train=[x for x in labels if x != label], test=[label])
+            for label in labels
+        ],
+    )
+
+
+def _selection_activity(context, pool, count, prefixes):
     data, labels, settings = context
-    selection, masks, prefixes = final
+    selection, statistic, masks, _ = pool
     task_model, library = settings.task_model, settings.library
     return dict(
         name="denoising_selection",
@@ -266,26 +277,14 @@ def _selection_activity(context, scores, folds, final):
         library_fingerprint=library.fingerprint,
         run_labels=list(labels),
         feature_signature=settings.feature_signature,
-        counts=list(settings.counts),
         n_components=prefixes[0].shape[1],
-        **_threshold_records(settings, masks, folds),
-        score_tolerance=settings.tolerance,
-        excluded_counts=_excluded_counts(scores),
-        pool_statistic="indicator_consistent_loro_task_model_r2",
-        score="heldout_task_prediction_r2_fixed_baseline_target",
-        count_rule="smallest count within score_tolerance of the best fold-mean R2",
-        conditional_prediction="missing-value indicators profiled on held-out BOLD",
-        selection_statistic=True,
-        brain_mask_fingerprint=_digest(settings.brain_mask, "|b1"),
-        noise_pool_fingerprint=_digest(masks.pool, "|b1"),
-        noise_pool_size=masks.pool_size,
-        scoring_mask_size=masks.scoring_size,
+        **_pool_records(settings, statistic, masks, count.setup.scored),
+        **_count_records(settings, count),
         initial_hrf_assignment_fingerprint=_digest(selection.hrf_indices, "<i8"),
         initial_selection=identity_activity(selection.provenance),
         component_fingerprints=[_digest(p, "<f8") for p in prefixes],
         baseline_confounds=_baseline_confounds(data, labels),
         data_identity=[identity.to_dict() for identity in run_identities(data)],
-        **_fold_identities(folds),
     )
 
 
@@ -298,31 +297,34 @@ def _provenance(operation, record, activity):
 
 
 def _select(operation, data, labels, settings):
-    count = _count_selection(data, labels, settings)
-    return _assemble(operation, (data, labels, settings), count)
+    pool = _pool(data, labels, settings)
+    count = _count_selection(data, labels, settings, pool)
+    return _assemble(operation, (data, labels, settings), pool, count)
 
 
-def _assemble(operation, context, count):
+def _assemble(operation, context, pool, count):
     data, labels, settings = context
-    selection, statistic, masks, components = _final_pool(data, labels, settings)
-    prefixes = _final_prefixes(components, masks, count.n_components, labels)
+    selection, statistic, masks, components = pool
+    # An eligible count is supported by every run (each run trains some fold).
+    prefixes = tuple(c.prefix(count.n_components) for c in components)
     scores, fold_scores = _public_tables(count)
-    folds = tuple(_fold_result(fold, labels) for fold in count.folds)
-    activity = _selection_activity(context, scores, folds, (selection, masks, prefixes))
+    activity = _selection_activity(context, pool, count, prefixes)
     return DenoisingResult(
         n_components=count.n_components,
         counts=count.counts,
         pool_r2_threshold=settings.threshold,
-        score_tolerance=settings.tolerance,
+        pcstop=settings.pcstop,
         noise_pool_threshold=masks.threshold,
         noise_pool_mixture=masks.mixture,
         noise_pool=masks.pool,
         scoring_mask=masks.scoring,
-        pool_r2=statistic,
+        scoring_fallback=masks.fallback,
+        scored=count.setup.scored,
+        onoff_r2=statistic,
         initial_selection=selection,
         run_components=prefixes,
         components=_diagnostics(components, labels, masks.pool_size),
-        folds=folds,
+        folds=_folds(count.setup),
         _candidate_scores=scores,
         _fold_scores=fold_scores,
         run_labels=labels,
@@ -335,31 +337,33 @@ def _assemble(operation, context, count):
 def select_denoising(
     data: AnalysisData,
     *,
-    brain_mask: np.ndarray,
     task_model: TaskModel = TaskModel(),
     library: HrfLibrary | None = None,
-    counts: tuple[int, ...] = (0, 1, 2, 4, 6, 8, 10),
+    counts: tuple[int, ...] = tuple(range(11)),
     pool_r2_threshold: float | str = "auto",
-    score_tolerance: float = 0.001,
+    pcstop: float = 1.05,
     feature_signature: str | None = None,
     run_labels: Sequence[str] | None = None,
 ) -> DenoisingResult:
-    """Choose a temporal-PC count by held-out task prediction; build final PCs.
+    """Choose a temporal-PC count as GLMsingle does; return full-data PCs.
 
-    Requires at least three runs and a caller-supplied Boolean ``brain_mask``
-    in feature order. Initial HRFs use baseline confounds only. Count scores
-    are selection statistics, not independent performance estimates.
-    ``pool_r2_threshold="auto"`` fits GLMsingle's two-component
-    Gaussian-mixture tail threshold to the pool statistic in every fold and
-    for the final pool; a degenerate fit raises (no fallback). A finite float
-    applies that fixed threshold everywhere. Positive
-    counts that any fold cannot support are unavailable; zero always remains.
-    Raises when the final full-data pool cannot support the chosen count.
+    Requires at least three runs. Every feature is a candidate (no mask).
+    HRFs are selected once on all runs with baseline confounds and frozen.
+    The pool is the features whose ON-OFF R² falls below
+    ``pool_r2_threshold`` (``"auto"``: GLMsingle's Gaussian-mixture tail
+    threshold; a degenerate fit raises suggesting a fixed value); features
+    above it are scored (the 100 best when none passes). Counts are scored by
+    leave-one-run-out held-out task prediction, pooled per feature across
+    folds, with the median over features, and chosen by GLMsingle's
+    ``pcstop`` rule (``>= 1``). Positive counts that any fold cannot support
+    are unavailable; zero always remains. Scores are selection statistics,
+    not independent performance estimates.
     """
     library = default_hrf_library() if library is None else library
-    grid = (counts, pool_r2_threshold, score_tolerance)
-    settings = _settings(data, brain_mask, task_model, library, grid, feature_signature)
+    grid = (counts, pool_r2_threshold, pcstop)
+    settings = _settings(data, task_model, library, grid, feature_signature)
     labels = run_labels_for(data, run_labels)
+    _check_runs(data, labels, settings)
     with fit_operation("denoising_selection", data.provenance) as operation:
         return _select(operation, data, labels, settings)
 
