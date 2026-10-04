@@ -145,3 +145,87 @@ def make_denoising_fixture(seed=20261003):
         trial_amplitudes=tuple(parts["amps"]),
         response_times=tuple(r.to_numpy() for r in parts["rts"]),
     )
+
+
+# ---- validation datasets ---------------------------------------------------------
+#
+# Predeclared before the validation tests were first run; never tuned afterward.
+# Five runs: the first four are given to selection, the fifth is the untouched
+# outer run. All features share HRF candidate 0. `task` features have known
+# amplitudes; `noise` features carry no task response. With `shared_noise`,
+# two AR(1) latent series per run (not in the baseline confounds) load on every
+# feature; without it, every feature has only independent white noise.
+
+VALIDATION_SEEDS = dict(recovery=20261004, no_benefit=20261005)
+VALIDATION_LENGTHS = (90, 96, 84, 102, 92)
+VALIDATION_AMPLITUDES = np.linspace(1.0, 3.0, 10)
+VALIDATION_NOISE_FEATURES = 30
+VALIDATION_LATENTS = 2
+VALIDATION_LOADING_RANGE = (1.0, 2.0)
+VALIDATION_WHITE_SD = 0.5
+
+
+@dataclass(frozen=True)
+class ValidationDataset:
+    training: AnalysisData
+    outer: AnalysisData
+    library: HrfLibrary
+    brain_mask: np.ndarray
+    task: np.ndarray
+    amplitudes: np.ndarray
+    outer_task_signal: np.ndarray
+
+
+def _validation_confounds(length):
+    t = np.arange(length)
+    return pd.DataFrame(
+        dict(drift=(t - t.mean()) / length, cosine=np.cos(np.pi * (t + 0.5) / length))
+    )
+
+
+def _validation_run(rng, length, library, shared_noise):
+    times = TR * np.arange(length)
+    events = _events(rng, length)[["onset", "duration"]].assign(trial_type="task")
+    regressor = _trial_responses(events, times, library.candidates[0]).sum(axis=1)
+    n_task = len(VALIDATION_AMPLITUDES)
+    n = n_task + VALIDATION_NOISE_FEATURES
+    task_signal = np.zeros((length, n))
+    task_signal[:, :n_task] = np.outer(regressor, VALIDATION_AMPLITUDES)
+    confounds = _validation_confounds(length)
+    y = rng.normal(scale=VALIDATION_WHITE_SD, size=(length, n))
+    y += confounds.to_numpy() @ rng.normal(scale=0.5, size=(2, n))
+    if shared_noise:
+        latents = np.column_stack(
+            [_latent(rng, length) for _ in range(VALIDATION_LATENTS)]
+        )
+        loadings = rng.uniform(*VALIDATION_LOADING_RANGE, size=(VALIDATION_LATENTS, n))
+        y += latents @ loadings
+    y += task_signal + rng.uniform(50.0, 150.0, size=n)
+    return y, events, times, confounds, task_signal
+
+
+def _runs_data(runs):
+    signals, events, times, confounds, _ = zip(*runs)
+    return from_arrays(
+        list(signals), list(events), frame_times=list(times), confounds=list(confounds)
+    )
+
+
+def make_validation_dataset(kind):
+    """Selection runs, an untouched outer run, and the known task coefficients."""
+    rng = np.random.default_rng(VALIDATION_SEEDS[kind])
+    library = fixture_library()
+    runs = [
+        _validation_run(rng, length, library, kind == "recovery")
+        for length in VALIDATION_LENGTHS
+    ]
+    n_task = len(VALIDATION_AMPLITUDES)
+    return ValidationDataset(
+        training=_runs_data(runs[:-1]),
+        outer=_runs_data(runs[-1:]),
+        library=library,
+        brain_mask=np.ones(n_task + VALIDATION_NOISE_FEATURES, dtype=bool),
+        task=np.arange(n_task),
+        amplitudes=VALIDATION_AMPLITUDES.copy(),
+        outer_task_signal=runs[-1][4],
+    )
