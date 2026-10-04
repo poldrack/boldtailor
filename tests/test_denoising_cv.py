@@ -9,6 +9,8 @@ runs and pool PCs from the (separately tested) pool module; no CV helper
 under test is used to derive an expected value.
 """
 
+import re
+
 import numpy as np
 import pytest
 from scipy.linalg import block_diag
@@ -735,7 +737,63 @@ def test_invalid_heldout_design_for_a_frozen_hrf_raises(fixture):
     events = [e.copy() for e in fixture.data.events]
     events[3]["response_time"] = 0.9  # task and RT columns become collinear
     data = rebuild(fixture.data, events=events)
+    # Requirement change (Task 3 review): messages name runs by label.
     with pytest.raises(
-        ValueError, match="held-out run 3: HRF .* task design is invalid"
+        ValueError, match="held-out run 'run-04': HRF .* task design is invalid"
     ):
         fold(data, 3, fixture, fixture.task_model)
+
+
+CV_LABELS = ("a1", "b2", "c3", "d4")
+
+
+def test_fold_messages_and_training_selection_use_run_labels(fixture):
+    result = prepare_fold(
+        fixture.data,
+        1,
+        brain_mask=fixture.brain_mask,
+        task_model=fixture.task_model,
+        library=fixture.library,
+        threshold=THRESHOLD,
+        run_labels=CV_LABELS,
+    )
+    assert result.selection.run_labels == ("a1", "c3", "d4")
+    assert score_count(result, 50).reason.startswith("training run 'a1': ")
+    chosen = select_component_count(
+        fixture.data,
+        brain_mask=fixture.brain_mask,
+        task_model=fixture.task_model,
+        library=fixture.library,
+        counts=(0, 50),
+        threshold=THRESHOLD,
+        tolerance=0.001,
+        run_labels=CV_LABELS,
+    )
+    per_fold = chosen.fold_scores
+    assert list(per_fold["validation_label"]) == [x for x in CV_LABELS for _ in (0, 50)]
+    reason = chosen.scores.set_index("count").loc[50, "reason"]
+    assert "fold holding out run 'b2': training run 'a1': " in reason
+    assert not re.search(r"\brun \d", reason)
+
+
+@pytest.mark.parametrize("broken", [0, 2, 3])
+def test_invalid_run_design_names_only_that_run(fixture, broken):
+    events = list(fixture.data.events)
+    events[broken] = events[broken].drop(columns="response_time")
+    data = rebuild(fixture.data, events=events)
+    with pytest.raises(ValueError) as error:
+        select_component_count(
+            data,
+            brain_mask=fixture.brain_mask,
+            task_model=fixture.task_model,
+            library=fixture.library,
+            counts=(0, 1),
+            threshold=THRESHOLD,
+            tolerance=0.001,
+            run_labels=CV_LABELS,
+        )
+    message = str(error.value)
+    assert f"run '{CV_LABELS[broken]}'" in message
+    others = [label for i, label in enumerate(CV_LABELS) if i != broken]
+    assert not any(label in message for label in others)
+    assert not re.search(r"\brun \d", message)

@@ -18,7 +18,7 @@ from boldtailor._denoising_pool import pool_masks, pool_statistic
 from boldtailor.data import AnalysisData, from_arrays
 from boldtailor.denoising import select_denoising, with_denoising
 from boldtailor.denoising_results import DenoisingResult
-from boldtailor.fit import fit
+from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_library import default_hrf_library
 from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.model import Modulator, ModelSpec, TaskModel
@@ -340,6 +340,9 @@ def test_zero_count_augmentation_preserves_numerical_inputs(fixture):
     assert activity["name"] == "denoising_augmentation"
     assert activity["n_components"] == 0
     assert activity["added_columns"] == []
+    assert_annotated_sources(
+        fixture.data.provenance.sources, augmented.provenance.sources, result
+    )
 
 
 def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
@@ -418,6 +421,8 @@ def test_result_rejects_inconsistent_components(result):
         replace(result, run_components=result.run_components[:2])
     with pytest.raises(ValueError, match="n_components"):
         replace(result, n_components=result.n_components + 1)
+    with pytest.raises(ValueError, match="rows"):
+        replace(result, run_components=tuple(c[:-1] for c in result.run_components))
 
 
 # ---- provenance -------------------------------------------------------------------
@@ -455,12 +460,43 @@ def test_selection_provenance_records_the_identity_of_every_choice(fixture, resu
     assert result.provenance.sources == fixture.data.provenance.sources
 
 
-def test_augmentation_extends_provenance_and_preserves_sources(
+FILE_FIELDS = ("role", "uri", "media_type", "byte_size", "modified_at", "sha256")
+
+
+def file_fields(ref):
+    return {name: getattr(ref, name) for name in FILE_FIELDS}
+
+
+def assert_annotated_sources(before, after, result, role="confounds"):
+    """File identity unchanged; one ref per run marks the augmentation (R6)."""
+    expected = dict(
+        selection_execution_id=result.provenance.execution_id,
+        component_fingerprints=[digest(c) for c in result.run_components],
+        n_components=result.n_components,
+    )
+    assert len(after) == len(before)
+    for old, new in zip(before, after):
+        for name in ("signal", "events", "confounds"):
+            old_ref, new_ref = getattr(old, name), getattr(new, name)
+            assert (old_ref is None) == (new_ref is None)
+            if old_ref is None:
+                continue
+            assert file_fields(new_ref) == file_fields(old_ref)
+            annotations = dict(new_ref.annotations)
+            if name == role:
+                marked = annotations.pop("denoising_augmentation")
+                assert dict(marked) == expected
+            assert annotations == dict(old_ref.annotations)
+
+
+def test_augmentation_extends_provenance_and_annotates_sources(
     fixture, result, augmented
 ):
+    # Requirement change (ruling R6): sources keep file identity but record
+    # the augmentation so downstream analysis ids differ.
     before = fixture.data.provenance
     after = augmented.provenance
-    assert after.sources == before.sources
+    assert_annotated_sources(before.sources, after.sources, result)
     assert len(after.activities) == len(before.activities) + 1
     activity = last_activity(after)
     assert activity["name"] == "denoising_augmentation"
@@ -676,3 +712,55 @@ def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
     assert calls
     activity = last_activity(result.provenance)
     assert activity["library_fingerprint"] == fixture.library.fingerprint
+
+
+def test_augmentation_without_confounds_annotates_the_signal_source(fixture):
+    data = from_arrays(list(fixture.data.signals), list(fixture.data.events), tr=TR)
+    result = run_selection(fixture, data, counts=(0, 1), score_tolerance=0.0)
+    augmented = with_denoising(data, result)
+    assert all(run.confounds is None for run in augmented.provenance.sources)
+    assert_annotated_sources(
+        data.provenance.sources, augmented.provenance.sources, result, "signal"
+    )
+
+
+@pytest.mark.parametrize("broken", [0, 2, 3])
+def test_invalid_run_is_named_by_its_own_label(fixture, broken):
+    events = list(fixture.data.events)
+    events[broken] = events[broken].drop(columns="response_time")
+    data = rebuild(fixture.data, events=events)
+    with pytest.raises(ValueError) as error:
+        run_selection(fixture, data, run_labels=LABELS)
+    message = str(error.value)
+    assert LABELS[broken] in message
+    assert not any(label in message for i, label in enumerate(LABELS) if i != broken)
+
+
+def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
+    fixture, typed, complete_sources
+):
+    data = from_arrays(
+        list(typed.signals),
+        list(typed.events),
+        tr=TR,
+        confounds=list(typed.confounds),
+        sources=complete_sources(typed.n_runs),
+    )
+    assert data.provenance.metadata_fingerprint is not None
+    narrow = fixture.brain_mask.copy()
+    narrow[fixture.groups["noise"][::2]] = False
+    options = dict(counts=(0, 1), score_tolerance=0.0)
+    first = run_selection(fixture, data, **options)
+    second = run_selection(fixture, data, brain_mask=narrow, **options)
+    assert first.n_components == second.n_components == 1
+    one, two = with_denoising(data, first), with_denoising(data, second)
+    model = conventional(first.component_names)
+    fit_one, fit_two = fit(one, model), fit(two, model)
+    ids = {
+        fit_one.provenance.analysis_fingerprint,
+        fit_two.provenance.analysis_fingerprint,
+    }
+    assert None not in ids and len(ids) == 2
+    task_delta_r2(one, model, fit_one)
+    with pytest.raises(ValueError, match="identity"):
+        task_delta_r2(two, model, fit_one)
