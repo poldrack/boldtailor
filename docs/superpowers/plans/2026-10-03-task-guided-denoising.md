@@ -326,3 +326,56 @@ existing modules unchanged unless a small shared helper is genuinely needed.
 The zero pool threshold, practical score tolerance, and sequential frozen-HRF
 search are explicit proposed choices for this bounded implementation. Their
 empirical sensitivity should be assessed before recommending universal defaults.
+
+## Amendment (2026-10-04): automatic pool threshold
+
+Task 4's predeclared shared-noise recovery check failed: with the fixed
+threshold 0.0, pure-noise features centre on a pool statistic of 0, so about
+half fall above it, and shared noise moves them together, emptying the pool.
+The user approved replacing the fixed threshold with GLMsingle's automatic
+tail threshold (`findtailthreshold`), using scikit-learn. This supersedes the
+"automatic R² threshold fitting" exclusion and the 0.0 default above.
+
+## Task 5: Automatic pool threshold by two-component Gaussian mixture
+
+**Rule (binding).** For a given pool statistic vector `s` (the R4
+indicator-consistent statistic) and brain mask, fit
+`sklearn.mixture.GaussianMixture(n_components=2)` to the finite values of `s`
+over `brain_mask & defined HRF`, with a fixed `random_state` and several
+initialisations (GLMsingle uses 3 restarts and tol 1e-10). The threshold is
+the rightmost point, on a fine grid spanning both component means and the
+data range, where the posterior probability of the lower-mean component falls
+to 0.5 (GLMsingle's "50/50 posterior" tail threshold). The pool is
+`brain_mask & finite & defined & s <= threshold`; the scoring mask is
+`... & s > threshold` (unchanged definitions, new threshold).
+
+- Apply the rule separately in every fold (training-run statistic only) and
+  for the final full-data pool; record each threshold in the fold table,
+  diagnostics, and provenance (method, n_components, random_state, means,
+  standard deviations, weights).
+- Public API: `select_denoising(..., pool_r2_threshold: float | str = "auto")`.
+  `"auto"` applies the mixture rule; a finite float keeps the fixed-threshold
+  behaviour for reproducibility and sensitivity analysis. Validate both.
+- Degenerate inputs: fewer than 2 distinct finite values, or a mixture whose
+  posterior never crosses 0.5 within the grid, raise a clear `ValueError`
+  naming the fold/run labels and suggesting a fixed `pool_r2_threshold`.
+  Do not silently fall back to 0.0. Existing empty-pool and empty-scoring
+  behaviour is unchanged.
+- Add scikit-learn as a runtime dependency with `uv add scikit-learn`.
+
+**Tests (RED first).**
+- Unit: a bimodal synthetic statistic (noise lump at 0 ± 0.02, task tail at
+  0.4 ± 0.1) yields a threshold strictly between the modes; the threshold is
+  invariant to a common shift of both modes by +0.05 (relative rule); results
+  are deterministic across calls; degenerate inputs raise; independent oracle:
+  compare against posteriors computed directly from the fitted
+  `GaussianMixture.predict_proba` on the grid (not by calling the production
+  helper).
+- Integration: on Task 4's predeclared shared-noise recovery dataset (same
+  seed 20261004 and effect sizes; do not retune), report the pool size per
+  fold and the recovery checks. Remove the xfail markers only if they now pass
+  honestly; if any still fail, keep them xfail-strict and record the result.
+  The no-benefit dataset must still pass.
+- Update docs (user guide, API, GLMsingle comparison) to describe the
+  automatic threshold, its GLMsingle provenance, the fixed-threshold option,
+  and the validation outcome.
