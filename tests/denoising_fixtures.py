@@ -29,7 +29,6 @@ class DenoisingFixture:
     data: AnalysisData
     library: HrfLibrary
     task_model: TaskModel
-    brain_mask: np.ndarray
     groups: dict[str, np.ndarray]
     latent: tuple[np.ndarray, ...]
     trial_amplitudes: tuple[np.ndarray, ...]
@@ -130,8 +129,6 @@ def make_denoising_fixture(seed=20261003):
             (y, events, confounds, latent, amplitudes, events.response_time),
         ):
             parts[key].append(value)
-    mask = np.ones(sum(GROUP_SIZES.values()), dtype=bool)
-    mask[groups["outside_task"]] = mask[groups["outside_noise"]] = False
     data = from_arrays(
         parts["signals"], parts["events"], tr=TR, confounds=parts["confounds"]
     )
@@ -139,7 +136,6 @@ def make_denoising_fixture(seed=20261003):
         data=data,
         library=library,
         task_model=RT_MODEL,
-        brain_mask=mask,
         groups=groups,
         latent=tuple(parts["latent"]),
         trial_amplitudes=tuple(parts["amps"]),
@@ -170,7 +166,6 @@ class ValidationDataset:
     training: AnalysisData
     outer: AnalysisData
     library: HrfLibrary
-    brain_mask: np.ndarray
     task: np.ndarray
     amplitudes: np.ndarray
     outer_task_signal: np.ndarray
@@ -224,7 +219,6 @@ def make_validation_dataset(kind):
         training=_runs_data(runs[:-1]),
         outer=_runs_data(runs[-1:]),
         library=library,
-        brain_mask=np.ones(n_task + VALIDATION_NOISE_FEATURES, dtype=bool),
         task=np.arange(n_task),
         amplitudes=VALIDATION_AMPLITUDES.copy(),
         outer_task_signal=runs[-1][4],

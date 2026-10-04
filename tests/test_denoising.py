@@ -7,6 +7,7 @@ on data whose PCs were appended by hand.
 
 from dataclasses import FrozenInstanceError
 from hashlib import sha256
+import inspect
 import re
 
 import numpy as np
@@ -14,7 +15,7 @@ import pandas as pd
 import pytest
 
 from boldtailor._denoising_cv import select_component_count
-from boldtailor._denoising_pool import pool_masks, pool_statistic
+from boldtailor._denoising_pool import analysis_components, onoff_r2, pool_masks
 from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor.data import AnalysisData, from_arrays
 from boldtailor.denoising import select_denoising, with_denoising
@@ -45,7 +46,6 @@ def fixture():
 
 def run_selection(fixture, data=None, **options):
     settings = dict(
-        brain_mask=fixture.brain_mask,
         task_model=fixture.task_model,
         library=fixture.library,
         counts=COUNTS,
@@ -62,6 +62,17 @@ def result(fixture):
 @pytest.fixture(scope="module")
 def augmented(fixture, result):
     return with_denoising(fixture.data, result)
+
+
+@pytest.fixture(scope="module")
+def full_data(fixture):
+    """Full-data HRFs, ON-OFF R², and auto masks computed independently."""
+    selection = select_hrfs(
+        fixture.data, library=fixture.library, task_model=fixture.task_model
+    )
+    statistic = onoff_r2(fixture.data, fixture.library)
+    masks = pool_masks(statistic, "auto", hrf_indices=selection.hrf_indices)
+    return selection, statistic, masks
 
 
 def rebuild(data, *, signals=None, events=None, confounds=None, frame_times=None):
@@ -132,8 +143,6 @@ def digest(array, dtype="<f8"):
 @pytest.mark.parametrize(
     "options,match",
     [
-        (dict(brain_mask=np.ones(26)), "brain_mask"),
-        (dict(brain_mask=np.ones(25, bool)), "brain_mask"),
         (dict(counts=(1, 2)), "counts"),
         (dict(counts=(0, True)), "counts"),
         (dict(counts=(0, -1)), "counts"),
@@ -142,8 +151,9 @@ def digest(array, dtype="<f8"):
         (dict(pool_r2_threshold=True), "pool_r2_threshold"),
         (dict(pool_r2_threshold="Auto"), "pool_r2_threshold"),
         (dict(pool_r2_threshold="0.1"), "pool_r2_threshold"),
-        (dict(score_tolerance=-0.1), "score_tolerance"),
-        (dict(score_tolerance=np.inf), "score_tolerance"),
+        (dict(pcstop=0.99), "pcstop"),
+        (dict(pcstop=np.inf), "pcstop"),
+        (dict(pcstop=True), "pcstop"),
         (dict(task_model="rt"), "task_model"),
         (dict(library="default"), "library"),
         (dict(feature_signature=""), "feature_signature"),
@@ -167,68 +177,76 @@ def test_selection_requires_three_runs(fixture):
         run_selection(fixture, data=subset_runs(fixture.data, [0, 1]))
 
 
+def test_selection_has_no_mask_parameter(fixture):
+    """Anatomy-agnostic core (ruling R9): every input feature is a candidate."""
+    parameters = inspect.signature(select_denoising).parameters
+    assert not any("mask" in name for name in parameters)
+    with pytest.raises(TypeError):
+        run_selection(fixture, brain_mask=np.ones(26, bool))
+
+
+def test_default_selection_settings_follow_glmsingle(fixture):
+    signature = inspect.signature(select_denoising)
+    assert signature.parameters["counts"].default == tuple(range(11))
+    assert signature.parameters["pool_r2_threshold"].default == "auto"
+    assert signature.parameters["pcstop"].default == 1.05
+    assert "score_tolerance" not in signature.parameters
+    assert signature.parameters["library"].default is None
+    assert signature.parameters["task_model"].default == TaskModel()
+
+
 # ---- count choice and final full-data result -----------------------------------
 
 
-def test_count_and_tables_follow_the_cross_validated_choice(fixture, result):
+def test_hrfs_pool_and_pcs_are_full_data_by_design(fixture, result, full_data):
+    selection, statistic, masks = full_data
+    np.testing.assert_array_equal(result.initial_hrf_indices, selection.hrf_indices)
+    np.testing.assert_array_equal(result.selection_cv_r2, selection.cv_r2)
+    np.testing.assert_array_equal(result.onoff_r2, statistic)
+    np.testing.assert_array_equal(result.noise_pool, masks.pool)
+    np.testing.assert_array_equal(result.scoring_mask, masks.scoring)
+    assert result.noise_pool_threshold == masks.threshold
+    assert result.noise_pool_mixture == masks.mixture
+    assert not result.scoring_fallback
+    groups = fixture.groups
+    expected = np.zeros(fixture.data.n_features, bool)
+    expected[np.r_[groups["noise"], groups["outside_noise"]]] = True
+    np.testing.assert_array_equal(result.noise_pool, expected)
+
+
+def test_count_and_tables_follow_the_cross_validated_choice(fixture, result, full_data):
+    selection, _, masks = full_data
     expected = select_component_count(
         fixture.data,
-        brain_mask=fixture.brain_mask,
+        hrf_indices=selection.hrf_indices,
+        components=analysis_components(fixture.data, masks.pool),
+        scoring=masks.scoring,
         task_model=fixture.task_model,
         library=fixture.library,
         counts=COUNTS,
-        threshold="auto",
-        tolerance=0.001,
+        pcstop=1.05,
     )
     assert isinstance(result, DenoisingResult)
     assert result.n_components == expected.n_components
     assert result.counts == COUNTS
-    assert result.pool_r2_threshold == "auto"
-    assert result.score_tolerance == 0.001
+    assert result.pool_r2_threshold == "auto" and result.pcstop == 1.05
     scores = result.candidate_scores
     assert list(scores["count"]) == list(COUNTS)
-    np.testing.assert_array_equal(scores["mean_r2"], expected.scores["mean_r2"])
+    np.testing.assert_array_equal(scores["perf"], expected.scores["perf"])
+    np.testing.assert_array_equal(scores["curve"], expected.scores["curve"])
     np.testing.assert_array_equal(scores["eligible"], expected.scores["eligible"])
+    np.testing.assert_array_equal(result.perf, expected.scores["perf"])
+    np.testing.assert_array_equal(result.curve, expected.scores["curve"])
+    np.testing.assert_array_equal(result.scored, expected.setup.scored)
     folds = result.fold_scores
-    np.testing.assert_array_equal(folds["mean_r2"], expected.fold_scores["mean_r2"])
+    np.testing.assert_array_equal(folds["median_r2"], expected.fold_scores["median_r2"])
     labels = [result.run_labels[v] for v in expected.fold_scores["validation_run"]]
     assert list(folds["validation_run"]) == labels
-
-
-def test_default_selection_settings_match_the_plan(fixture):
-    import inspect
-
-    signature = inspect.signature(select_denoising)
-    assert signature.parameters["counts"].default == (0, 1, 2, 4, 6, 8, 10)
-    assert signature.parameters["pool_r2_threshold"].default == "auto"
-    assert signature.parameters["score_tolerance"].default == 0.001
-    assert signature.parameters["library"].default is None
-    assert signature.parameters["task_model"].default == TaskModel()
 
 
 def test_selection_finds_a_positive_count_on_the_fixture(result):
     # Shared latent noise loads on the task features, so PCs help prediction.
     assert result.n_components >= 1
-
-
-def test_final_pool_is_rebuilt_from_all_runs_with_the_pool_statistic(fixture, result):
-    full = select_hrfs(
-        fixture.data, library=fixture.library, task_model=fixture.task_model
-    )
-    statistic = pool_statistic(fixture.data, full)
-    masks = pool_masks(full, fixture.brain_mask, "auto", statistic=statistic)
-    np.testing.assert_array_equal(result.noise_pool, masks.pool)
-    np.testing.assert_array_equal(result.scoring_mask, masks.scoring)
-    np.testing.assert_array_equal(result.pool_r2, statistic)
-    np.testing.assert_array_equal(result.selection_cv_r2, full.cv_r2)
-    np.testing.assert_array_equal(result.initial_hrf_indices, full.hrf_indices)
-    np.testing.assert_array_equal(
-        result.initial_selection.hrf_indices, full.hrf_indices
-    )
-    # Under the RT model the pool is exactly the in-brain noise group.
-    expected = np.zeros(fixture.data.n_features, bool)
-    expected[fixture.groups["noise"]] = True
-    np.testing.assert_array_equal(result.noise_pool, expected)
 
 
 def test_run_components_span_the_independent_oracle_pcs(fixture, result):
@@ -261,25 +279,18 @@ def test_final_pca_diagnostics_report_rank_and_singular_values(fixture, result):
     assert list(table["rank"]) == list(diagnostics.ranks)
 
 
-def test_fold_diagnostics_record_training_masks_and_hrfs(fixture, result):
+def test_fold_diagnostics_record_runs_and_held_out_targets(fixture, result):
     assert len(result.folds) == fixture.data.n_runs
+    labels = result.run_labels
     for v, fold in enumerate(result.folds):
-        labels = result.run_labels
         assert fold.validation_run == labels[v]
         assert fold.training_runs == tuple(x for i, x in enumerate(labels) if i != v)
-        training = subset_runs(fixture.data, [i for i in range(4) if i != v])
-        selection = select_hrfs(
-            training, library=fixture.library, task_model=fixture.task_model
-        )
-        statistic = pool_statistic(training, selection)
-        masks = pool_masks(selection, fixture.brain_mask, "auto", statistic=statistic)
-        np.testing.assert_array_equal(fold.hrf_indices, selection.hrf_indices)
-        np.testing.assert_array_equal(fold.pool, masks.pool)
-        np.testing.assert_array_equal(fold.scoring, masks.scoring)
-        np.testing.assert_array_equal(fold.pool_r2, statistic)
-        assert not (fold.scored & ~fold.scoring).any()
-        assert fold.components.run_labels == fold.training_runs
-        assert len(fold.components.singular_values) == 3
+        assert not fold.zero_target.any()
+        energy = fold.target_energy
+        assert np.isfinite(energy[result.scored]).all()
+        assert np.isnan(energy[~result.scoring_mask]).all()
+    table = result.fold_scores
+    assert set(table.columns) >= {"validation_run", "count", "median_r2", "n_scored"}
 
 
 def test_custom_run_labels_name_runs_in_reasons_and_tables(fixture):
@@ -304,8 +315,7 @@ def test_categorical_task_model_is_supported(fixture):
             cond[2] = np.nan
         events.append(frame.assign(cond=cond))
     data = with_white_noise(rebuild(fixture.data, events=events))
-    mask = np.r_[fixture.brain_mask, np.ones(60, bool)]
-    result = run_selection(fixture, data, brain_mask=mask, task_model=CATEGORICAL)
+    result = run_selection(fixture, data, task_model=CATEGORICAL)
     white = np.arange(26, 86)
     assert result.noise_pool[white].mean() > 0.5
     assert not result.noise_pool[fixture.groups["task"]].any()
@@ -349,9 +359,7 @@ def test_zero_count_augmentation_preserves_numerical_inputs(fixture):
 
 
 def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
-    mask = fixture.brain_mask.copy()
-    mask[fixture.groups["noise"]] = False
-    result = run_selection(fixture, brain_mask=mask, pool_r2_threshold=-0.5)
+    result = run_selection(fixture, pool_r2_threshold=-10.0)
     assert result.n_components == 0
     assert not result.noise_pool.any()
     scores = result.candidate_scores.set_index("count")
@@ -361,68 +369,48 @@ def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
     assert [row["count"] for row in activity["excluded_counts"]] == [1, 2, 4]
 
 
-# ---- pool threshold: automatic mixture rule and fixed values ------------------
+# ---- pool threshold, fallback, and pcstop ----------------------------------------
 
 
-def test_final_pool_uses_the_mixture_threshold_of_the_final_statistic(fixture, result):
-    defined = fixture.brain_mask & (result.initial_hrf_indices >= 0)
-    defined &= np.isfinite(result.pool_r2)
-    expected = mixture_threshold(result.pool_r2[defined])
+def test_final_pool_uses_the_mixture_threshold_of_onoff_r2(result):
+    finite = np.isfinite(result.onoff_r2)
+    expected = mixture_threshold(result.onoff_r2[finite])
     assert result.noise_pool_threshold == expected.threshold
     assert result.noise_pool_mixture == expected
     np.testing.assert_array_equal(
-        result.noise_pool, defined & (result.pool_r2 <= expected.threshold)
+        result.noise_pool, finite & (result.onoff_r2 < expected.threshold)
     )
 
 
-def test_fold_diagnostics_and_table_record_each_fold_threshold(fixture, result):
-    table = result.fold_scores
-    for fold in result.folds:
-        defined = fixture.brain_mask & (fold.hrf_indices >= 0)
-        defined &= np.isfinite(fold.pool_r2)
-        expected = mixture_threshold(fold.pool_r2[defined])
-        assert fold.pool_threshold == expected.threshold
-        assert fold.pool_mixture == expected
-        rows = table[table["validation_run"] == fold.validation_run]
-        assert (rows["pool_r2_threshold"] == fold.pool_threshold).all()
-        assert (rows["pool_size"] == int(fold.pool.sum())).all()
-        assert (rows["scoring_size"] == int(fold.scoring.sum())).all()
-
-
-def test_provenance_records_the_threshold_rule_and_every_fit(result):
+def test_provenance_records_the_glmsingle_rules(result):
     activity = last_activity(result.provenance)
     assert activity["pool_r2_threshold"] == "auto"
     assert activity["pool_threshold_rule"] == "gaussian_mixture_tail_threshold"
     assert activity["noise_pool_threshold"] == result.noise_pool_threshold
     assert activity["noise_pool_mixture"] == result.noise_pool_mixture.to_dict()
     assert activity["noise_pool_mixture"]["n_components"] == 2
-    assert activity["fold_pool_thresholds"] == [f.pool_threshold for f in result.folds]
-    assert activity["fold_pool_mixtures"] == [
-        f.pool_mixture.to_dict() for f in result.folds
-    ]
-    assert activity["fold_pool_sizes"] == [int(f.pool.sum()) for f in result.folds]
+    assert activity["pool_statistic"] == "glmsingle_onoff_r2"
+    assert activity["count_rule"] == "glmsingle_pcstop"
+    assert activity["pcstop"] == 1.05
+    assert activity["performance"] == "median_over_scored_features_of_fold_pooled_r2"
+    assert activity["scoring_fallback"] is False
+    assert activity["perf"] == list(result.perf)
+    assert activity["curve"] == list(result.curve)
 
 
-def test_fixed_threshold_keeps_the_fixed_rule(fixture):
-    result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=0.0)
-    assert result.pool_r2_threshold == 0.0
-    assert result.noise_pool_threshold == 0.0
+def test_fixed_threshold_keeps_the_fixed_rule(fixture, full_data):
+    result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=0.01)
+    assert result.pool_r2_threshold == 0.01
+    assert result.noise_pool_threshold == 0.01
     assert result.noise_pool_mixture is None
-    assert all(f.pool_threshold == 0.0 and f.pool_mixture is None for f in result.folds)
-    full = select_hrfs(
-        fixture.data, library=fixture.library, task_model=fixture.task_model
-    )
-    masks = pool_masks(
-        full, fixture.brain_mask, 0.0, statistic=pool_statistic(fixture.data, full)
-    )
+    selection, statistic, _ = full_data
+    masks = pool_masks(statistic, 0.01, hrf_indices=selection.hrf_indices)
     np.testing.assert_array_equal(result.noise_pool, masks.pool)
     activity = last_activity(result.provenance)
-    assert activity["pool_r2_threshold"] == 0.0
+    assert activity["pool_r2_threshold"] == 0.01
     assert activity["pool_threshold_rule"] == "fixed"
-    assert activity["noise_pool_threshold"] == 0.0
+    assert activity["noise_pool_threshold"] == 0.01
     assert activity["noise_pool_mixture"] is None
-    assert activity["fold_pool_mixtures"] == [None] * 4
-    assert (result.fold_scores["pool_r2_threshold"] == 0.0).all()
 
 
 def test_integer_fixed_threshold_is_stored_as_float(fixture):
@@ -430,62 +418,53 @@ def test_integer_fixed_threshold_is_stored_as_float(fixture):
     assert isinstance(result.pool_r2_threshold, float)
 
 
-def test_degenerate_fold_mixture_raises_with_labels_and_a_hint(fixture):
-    mask = np.zeros(fixture.data.n_features, dtype=bool)
-    mask[0] = True
-    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
-        run_selection(fixture, brain_mask=mask, run_labels=LABELS)
-    assert "holding out run 'sesA'" in str(error.value)
-
-
-def test_degenerate_final_mixture_raises_instead_of_falling_back(fixture, monkeypatch):
+def test_degenerate_mixture_raises_with_labels_and_a_hint(fixture, monkeypatch):
     import boldtailor.denoising as denoising
 
-    # Only the final full-data pool uses the public module's statistic.
     monkeypatch.setattr(
-        denoising, "pool_statistic", lambda data, selection: np.full(26, 0.2)
+        denoising, "onoff_r2", lambda data, library, run_labels: np.full(26, 0.2)
     )
     with pytest.raises(ValueError, match="pool_r2_threshold") as error:
         run_selection(fixture, counts=(0,), run_labels=LABELS)
     message = str(error.value)
-    assert "final full-data noise pool" in message
     assert "'sesA', 'sesB', 'sesC', 'sesD'" in message and "distinct" in message
+    assert "fixed pool_r2_threshold" in message
 
 
-def test_final_pool_that_cannot_support_the_count_raises(fixture, monkeypatch):
-    import boldtailor.denoising as denoising
+def test_best_100_fallback_scores_the_top_features_and_is_recorded(fixture):
+    result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=10.0)
+    assert result.scoring_fallback
+    candidates = np.isfinite(result.onoff_r2) & (result.initial_hrf_indices >= 0)
+    np.testing.assert_array_equal(result.scoring_mask, candidates)  # 24 < 100
+    np.testing.assert_array_equal(result.noise_pool, np.isfinite(result.onoff_r2))
+    assert last_activity(result.provenance)["scoring_fallback"] is True
 
-    noise = fixture.groups["noise"]
 
-    def one_pool_feature(data, selection):
-        statistic = np.ones(data.n_features)
-        statistic[noise[0]] = -1.0
-        return statistic
-
-    # Only the final full-data pool uses the public module's statistic.
-    monkeypatch.setattr(denoising, "pool_statistic", one_pool_feature)
-    with pytest.raises(ValueError) as error:
-        run_selection(fixture, counts=(0, 2), score_tolerance=0.0)
-    message = str(error.value)
-    assert "selected count 2" in message
-    assert "1 feature" in message
-    assert "rank 1" in message
+def test_pcstop_one_never_chooses_fewer_than_the_best_count(fixture, result):
+    strict = run_selection(fixture, pcstop=1.0)
+    scores = strict.candidate_scores
+    eligible = scores[scores["eligible"]]
+    best = eligible.loc[eligible["curve"].idxmax(), "count"]
+    expected = 0 if eligible["curve"].max() <= 0 else best
+    assert strict.n_components == expected
+    assert strict.n_components >= result.n_components
 
 
 # ---- ownership and immutability -------------------------------------------------
 
 
 def test_result_arrays_are_read_only_and_tables_are_copies(result):
-    arrays = [result.noise_pool, result.scoring_mask, result.pool_r2]
+    arrays = [result.noise_pool, result.scoring_mask, result.onoff_r2, result.scored]
     arrays += [result.selection_cv_r2, result.initial_hrf_indices]
+    arrays += [result.perf, result.curve]
     arrays += list(result.run_components) + list(result.components.singular_values)
     fold = result.folds[0]
-    arrays += [fold.pool, fold.scoring, fold.scored, fold.pool_r2, fold.hrf_indices]
+    arrays += [fold.zero_target, fold.target_energy]
     for array in arrays:
         assert not array.flags.writeable
     table = result.candidate_scores
-    table.loc[:, "mean_r2"] = 99.0
-    assert (result.candidate_scores["mean_r2"] != 99.0).all()
+    table.loc[:, "perf"] = 99.0
+    assert (result.candidate_scores["perf"] != 99.0).all()
     folds = result.fold_scores
     folds.loc[:, "reason"] = "edited"
     assert (result.fold_scores["reason"] != "edited").all()
@@ -494,17 +473,13 @@ def test_result_arrays_are_read_only_and_tables_are_copies(result):
     with pytest.raises(FrozenInstanceError):
         result.n_components = 3
     with pytest.raises(FrozenInstanceError):
-        fold.pool = None
+        fold.zero_target = None
 
 
 def test_result_does_not_alias_caller_inputs(fixture):
-    mask = fixture.brain_mask.copy()
     counts = [0, 1, 2]
-    result = run_selection(fixture, brain_mask=mask, counts=counts)
-    pool = result.noise_pool.copy()
-    mask[:] = False
+    result = run_selection(fixture, counts=counts)
     counts.append(9)
-    np.testing.assert_array_equal(result.noise_pool, pool)
     assert result.counts == (0, 1, 2)
 
 
@@ -532,13 +507,17 @@ def test_selection_provenance_records_the_identity_of_every_choice(fixture, resu
     assert activity["counts"] == list(COUNTS)
     assert activity["n_components"] == result.n_components
     assert activity["pool_r2_threshold"] == "auto"
-    assert activity["score_tolerance"] == 0.001
+    assert activity["pcstop"] == 1.05
+    assert "score_tolerance" not in activity
+    assert not any("brain_mask" in key for key in activity)
     assert activity["run_labels"] == list(result.run_labels)
     assert activity["folds"][1] == dict(
         train=[result.run_labels[i] for i in (0, 2, 3)], test=[result.run_labels[1]]
     )
-    assert activity["brain_mask_fingerprint"] == digest(fixture.brain_mask, "|b1")
     assert activity["noise_pool_fingerprint"] == digest(result.noise_pool, "|b1")
+    assert activity["scoring_mask_fingerprint"] == digest(result.scoring_mask, "|b1")
+    assert activity["scored_fingerprint"] == digest(result.scored, "|b1")
+    assert activity["onoff_r2_fingerprint"] == digest(result.onoff_r2)
     assert activity["initial_hrf_assignment_fingerprint"] == digest(
         result.initial_hrf_indices, "<i8"
     )
@@ -640,7 +619,7 @@ def test_component_name_collision_is_rejected(fixture):
         c.assign(denoise_pc_000=rng.normal(size=len(c))) for c in fixture.data.confounds
     ]
     data = rebuild(fixture.data, confounds=confounds)
-    result = run_selection(fixture, data, counts=(0, 1), score_tolerance=0.0)
+    result = run_selection(fixture, data, counts=(0, 1))
     assert result.n_components == 1
     with pytest.raises(ValueError, match="denoise_pc_000"):
         with_denoising(data, result)
@@ -798,7 +777,6 @@ def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
     monkeypatch.setattr(denoising, "default_hrf_library", stand_in)
     result = select_denoising(
         fixture.data,
-        brain_mask=fixture.brain_mask,
         task_model=fixture.task_model,
         counts=(0, 1),
     )
@@ -809,7 +787,7 @@ def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
 
 def test_augmentation_without_confounds_annotates_the_signal_source(fixture):
     data = from_arrays(list(fixture.data.signals), list(fixture.data.events), tr=TR)
-    result = run_selection(fixture, data, counts=(0, 1), score_tolerance=0.0)
+    result = run_selection(fixture, data, counts=(0, 1))
     augmented = with_denoising(data, result)
     assert all(run.confounds is None for run in augmented.provenance.sources)
     assert_annotated_sources(
@@ -840,11 +818,10 @@ def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
         sources=complete_sources(typed.n_runs),
     )
     assert data.provenance.metadata_fingerprint is not None
-    narrow = fixture.brain_mask.copy()
-    narrow[fixture.groups["noise"][::2]] = False
-    options = dict(counts=(0, 1), score_tolerance=0.0)
-    first = run_selection(fixture, data, **options)
-    second = run_selection(fixture, data, brain_mask=narrow, **options)
+    # Different pool thresholds give different pools and components.
+    first = run_selection(fixture, data, counts=(0, 1))
+    second = run_selection(fixture, data, counts=(0, 1), pool_r2_threshold=0.01)
+    assert (first.noise_pool != second.noise_pool).any()
     assert first.n_components == second.n_components == 1
     one, two = with_denoising(data, first), with_denoising(data, second)
     model = conventional(first.component_names)

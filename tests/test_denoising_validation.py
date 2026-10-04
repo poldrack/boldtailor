@@ -25,22 +25,17 @@ BASELINE = ("drift", "cosine")
 MODEL = ModelSpec(contrasts={"task": "task"}, confounds=BASELINE, drift_model=None)
 
 # Recorded history (seeds and effect sizes unchanged since predeclaration):
-# under the original fixed 0.0 threshold the recovery checks below failed and
-# were strict xfail. The pool statistic is the winning HRF's CV R², a maximum
-# over library candidates, so pure noise is biased above 0 (more so for larger
-# libraries) and shared noise makes those scores co-vary: 28 of 30 noise
-# features scored above 0, the final pool held 2 features, and 0 PCs won.
-# With the default pool_r2_threshold="auto" (per-fold Gaussian-mixture tail
-# threshold, GLMsingle's rule) the same data give fold pools of 31-34
-# features, 1 selected PC, and all four checks pass.
+# under the original fixed 0.0 threshold on the winning HRF's CV R² the
+# recovery checks below failed and were strict xfail (28 of 30 noise features
+# scored above 0; the final pool held 2 features; 0 PCs won). Task 5's
+# per-fold Gaussian-mixture threshold made them pass. Task 6 replaced the
+# procedure with the GLMsingle-aligned one (full-data HRFs, ON-OFF R² pool,
+# single pool, median performance, pcstop); the checks were rerun unchanged.
 
 
 def denoise(dataset):
     return select_denoising(
-        dataset.training,
-        brain_mask=dataset.brain_mask,
-        task_model=TaskModel(),
-        library=dataset.library,
+        dataset.training, task_model=TaskModel(), library=dataset.library
     )
 
 
@@ -160,13 +155,19 @@ def test_frozen_pool_and_count_improve_outer_run_beta_recovery(
     )
 
 
-def test_without_shared_noise_zero_components_win_or_tie():
-    dataset = make_validation_dataset("no_benefit")
-    result = denoise(dataset)
-    scores = result.candidate_scores
-    eligible = scores[scores["eligible"]]
-    zero = float(eligible.loc[eligible["count"] == 0, "mean_r2"].iloc[0])
-    assert zero >= eligible["mean_r2"].max() - result.score_tolerance
+@pytest.fixture(scope="module")
+def no_benefit():
+    return make_validation_dataset("no_benefit")
+
+
+def test_without_shared_noise_zero_components_are_chosen(no_benefit):
+    # Requirement change (Task 6): score_tolerance was replaced by GLMsingle's
+    # pcstop rule, so "zero wins or ties" is now "the rule chooses zero".
+    assert denoise(no_benefit).n_components == 0
+
+
+def test_without_shared_noise_the_default_library_also_chooses_zero(no_benefit):
+    result = select_denoising(no_benefit.training, task_model=TaskModel())
     assert result.n_components == 0
 
 
@@ -197,7 +198,6 @@ def test_user_guide_denoising_example_runs():
     )
     namespace = dict(
         data=data,
-        brain_mask=fixture.brain_mask,
         task_model=fixture.task_model,
         library=fixture.library,
         model=model,
@@ -215,7 +215,13 @@ def test_docs_describe_denoising_contract_and_limits():
     )
     section = section.split("\n## ", 1)[0]
     for phrase in (
-        "brain_mask",
+        "anatomy-agnostic",
+        "ON-OFF",
+        "pcstop",
+        "median",
+        "polynomial",
+        "repeat",
+        "best 100",
         "sequential",
         "missing-value",
         "empty",
@@ -232,6 +238,9 @@ def test_docs_describe_denoising_contract_and_limits():
     comparison = Path("docs/glmsingle-comparison.md").read_text()
     assert "select_denoising" in comparison and "optional" in comparison
     assert "task-guided" in comparison
+    for phrase in ("ON-OFF", "pcstop", "polynomial", "repeat", "anatomy-agnostic"):
+        assert phrase in comparison, phrase
+    assert "brain_mask" not in api and "score_tolerance" not in api
 
 
 def test_glmsingle_attribution_ships_and_is_cited():

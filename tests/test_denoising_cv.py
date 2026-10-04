@@ -1,12 +1,14 @@
-"""Leave-one-run-out PC-count selection against an independent stacked oracle.
+"""Leave-one-run-out PC-count scoring against an independent stacked oracle.
 
-The oracle fits each fold's shared task coefficients by one stacked
-least-squares problem: task columns shared across training runs next to a
-block-diagonal matrix of run nuisances [confounds, 1, indicators, PCs]. It
-scores the held-out run against a target projected off [confounds, 1,
-indicators] only. Fold HRFs come from the public ``select_hrfs`` on training
-runs and pool PCs from the (separately tested) pool module; no CV helper
-under test is used to derive an expected value.
+HRFs, the noise pool, and its run-wise PCs are full-data inputs, frozen for
+every fold and count (GLMsingle design). For each fold the oracle fits shared
+task coefficients by one stacked least-squares problem: task columns shared
+across the training runs next to a block-diagonal matrix of run nuisances
+[confounds, 1, indicators, PCs]. It scores the held-out run against a target
+projected off [confounds, 1, indicators] only, pools each feature's SSE and
+SST across folds, and takes the median over scored features. Frozen inputs
+come from the public ``select_hrfs`` and the (separately tested) pool module;
+no CV helper under test derives an expected value.
 """
 
 import re
@@ -17,18 +19,18 @@ from scipy.linalg import block_diag
 
 from boldtailor._denoising_cv import (
     choose_count,
-    prepare_fold,
+    prepare_scoring,
     score_count,
     select_component_count,
     validate_counts,
-    validate_tolerance,
+    validate_pcstop,
 )
 from boldtailor._denoising_pool import (
     analysis_components,
-    pool_statistic,
+    onoff_r2,
+    pool_masks,
     run_components,
 )
-from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays
@@ -37,15 +39,6 @@ from boldtailor.model import Modulator, TaskModel
 from tests.denoising_fixtures import _trial_responses, make_denoising_fixture
 
 COUNTS = (0, 1, 2, 4)
-THRESHOLD = 0.0  # the plan default, valid with the indicator-consistent statistic
-# The fixture's 12 noise features share one latent series, so their scores
-# move together: in the fold training on runs 0, 1, 3 they sit at or above 0
-# even without indicators (median +0.001 under the RT model). Under the
-# missing-RT model the whole group lands at +0.003 to +0.05 there, which
-# empties the pool. That is one correlated draw, not indicator bias (see the
-# independent-noise test below). Only this variant's oracle tests need the
-# higher, still noise/task-separating (task >= 0.3) threshold.
-VARIANT_THRESHOLDS = dict(missing_rt=0.1)
 MISSING_RT = TaskModel((Modulator("response_time", missing="indicator"),))
 CATEGORICAL = TaskModel(
     (
@@ -53,6 +46,7 @@ CATEGORICAL = TaskModel(
         Modulator("cond", kind="categorical", levels=("a", "b"), missing="indicator"),
     )
 )
+CV_LABELS = ("a1", "b2", "c3", "d4")
 
 
 # ---- data variants -----------------------------------------------------------
@@ -114,6 +108,50 @@ def variant(fixture, name):
 VARIANTS = ("rt", "missing_rt", "categorical", "collinear")
 
 
+def frozen_inputs(data, model, library, threshold="auto"):
+    """Full-data HRFs, masks, and pool PCs, as select_denoising builds them."""
+    selection = select_hrfs(data, library=library, task_model=model)
+    statistic = onoff_r2(data, library)
+    masks = pool_masks(statistic, threshold, hrf_indices=selection.hrf_indices)
+    return selection, masks, analysis_components(data, masks.pool)
+
+
+def setup_for(data, model, library, inputs, run_labels=None):
+    selection, masks, comps = inputs
+    return prepare_scoring(
+        data,
+        hrf_indices=selection.hrf_indices,
+        components=comps,
+        scoring=masks.scoring,
+        task_model=model,
+        library=library,
+        run_labels=run_labels,
+    )
+
+
+def select_count(data, model, library, inputs, **options):
+    selection, masks, comps = inputs
+    settings = dict(counts=COUNTS, pcstop=1.05)
+    settings.update(options)
+    return select_component_count(
+        data,
+        hrf_indices=selection.hrf_indices,
+        components=comps,
+        scoring=masks.scoring,
+        task_model=model,
+        library=library,
+        **settings,
+    )
+
+
+@pytest.fixture(scope="module")
+def base(fixture):
+    """Frozen inputs and scoring setup for the unmodified fixture."""
+    data, model = fixture.data, fixture.task_model
+    inputs = frozen_inputs(data, model, fixture.library)
+    return inputs, setup_for(data, model, fixture.library, inputs)
+
+
 # ---- independent oracle ------------------------------------------------------
 
 
@@ -143,9 +181,9 @@ def residual(nuisance, y):
 
 def oracle_coefficients(data, train, comps, features, candidate, count, task_model):
     xs, nuisances, ys = [], [], []
-    for run, comp in zip(train, comps):
+    for run in train:
         x, profiled = design_parts(data, run, task_model, candidate)
-        pcs = np.zeros((len(x), 0)) if comp is None else comp.components[:, :count]
+        pcs = comps[run].components[:, :count]
         xs.append(x)
         nuisances.append(np.column_stack([baseline(data, run), profiled, pcs]))
         ys.append(data.signals[run][:, features])
@@ -155,97 +193,54 @@ def oracle_coefficients(data, train, comps, features, candidate, count, task_mod
 
 
 def oracle_heldout(data, run, features, candidate, beta, task_model):
+    """Held-out SSE and SST against the fixed [confounds, 1, indicators] target."""
     x, profiled = design_parts(data, run, task_model, candidate)
     nuisance = np.column_stack([baseline(data, run), profiled])
     observed = residual(nuisance, data.signals[run][:, features])
     predicted = residual(nuisance, x) @ beta
-    energy = np.sum(observed**2, axis=0)
-    return 1 - np.sum((observed - predicted) ** 2, axis=0) / energy, energy
+    return np.sum((observed - predicted) ** 2, axis=0), np.sum(observed**2, axis=0)
 
 
-def oracle_statistic(data, selection, task_model, library):
-    """LORO CV R² of each winning HRF; denominator ||M_(q,qp) y||² per run."""
-    ids, runs = selection.hrf_indices, range(data.n_runs)
-    statistic = np.full(data.n_features, np.nan)
-    for hrf in np.unique(ids[ids >= 0]):
-        features, candidate = np.flatnonzero(ids == hrf), library.candidates[hrf]
-        loss, total = 0.0, 0.0
-        for held in runs:
-            train = [r for r in runs if r != held]
-            beta = oracle_coefficients(
-                data, train, [None] * len(train), features, candidate, 0, task_model
-            )
-            r2, energy = oracle_heldout(
-                data, held, features, candidate, beta, task_model
-            )
-            loss, total = loss + (1 - r2) * energy, total + energy
-        statistic[features] = 1 - loss / total
-    return statistic
-
-
-def oracle_training(data, validation, library, task_model, brain_mask, threshold):
-    train = [r for r in range(data.n_runs) if r != validation]
-    subset = subset_runs(data, train)
-    selection = select_hrfs(subset, library=library, task_model=task_model)
-    scores = oracle_statistic(subset, selection, task_model, library)
-    defined = brain_mask & np.isfinite(scores) & (selection.hrf_indices >= 0)
-    pool, scoring = defined & (scores <= threshold), defined & (scores > threshold)
-    comps = analysis_components(subset, pool)
-    return train, selection, pool, scoring, comps, scores
-
-
-def oracle_fold(
-    data,
-    validation,
-    library,
-    task_model,
-    brain_mask,
-    counts,
-    zero=(),
-    threshold=THRESHOLD,
-):
-    """Per count: feature R², coefficients, target energies, fold mean."""
-    train, selection, pool, scoring, comps, _ = oracle_training(
-        data, validation, library, task_model, brain_mask, threshold
-    )
-    n, k = data.n_features, len(task_model.regressor_names)
-    results = {}
-    for count in counts:
-        r2, energy = np.full(n, np.nan), np.full(n, np.nan)
-        beta = np.full((k, n), np.nan)
-        for hrf in np.unique(selection.hrf_indices[scoring]):
-            features = np.flatnonzero(scoring & (selection.hrf_indices == hrf))
+def oracle_count(data, inputs, library, task_model, count, scored):
+    """Per-fold coefficients, SSE, SST; pooled feature R²; median performance."""
+    selection, _, comps = inputs
+    n_runs, n, k = data.n_runs, data.n_features, len(task_model.regressor_names)
+    beta = np.full((n_runs, k, n), np.nan)
+    sse, sst = np.full((n_runs, n), np.nan), np.full((n_runs, n), np.nan)
+    ids = selection.hrf_indices
+    for held in range(n_runs):
+        train = [r for r in range(n_runs) if r != held]
+        for hrf in np.unique(ids[scored]):
+            features = np.flatnonzero(scored & (ids == hrf))
             candidate = library.candidates[hrf]
             b = oracle_coefficients(
                 data, train, comps, features, candidate, count, task_model
             )
-            beta[:, features] = b
-            r2[features], energy[features] = oracle_heldout(
-                data, validation, features, candidate, b, task_model
+            beta[held][:, features] = b
+            sse[held, features], sst[held, features] = oracle_heldout(
+                data, held, features, candidate, b, task_model
             )
-        r2[list(zero)] = np.nan
-        results[count] = dict(r2=r2, beta=beta, energy=energy, mean=np.nanmean(r2))
-    results.update(selection=selection, pool=pool, scoring=scoring, comps=comps)
-    return results
+    r2 = np.full(n, np.nan)
+    r2[scored] = 1 - sse[:, scored].sum(axis=0) / sst[:, scored].sum(axis=0)
+    return dict(beta=beta, sse=sse, sst=sst, r2=r2, perf=np.median(r2[scored]))
 
 
-def conservative_choice(counts, scores, tolerance):
-    best = max(s for s in scores if np.isfinite(s))
-    return min(c for c, s in zip(counts, scores) if s >= best - tolerance)
+def glmsingle_choice(counts, perf, pcstop):
+    """GLMsingle select_noise_regressors walk over the available counts."""
+    pairs = [(c, p) for c, p in zip(counts, perf) if np.isfinite(p)]
+    curve = [(c, p - pairs[0][1]) for c, p in pairs]
+    top = max(v for _, v in curve)
+    if top <= 0:
+        return 0
+    best, chosen = -np.inf, None
+    for c, v in curve:
+        if v > best:
+            best, chosen = v, c
+        if best * pcstop >= top:
+            return chosen
 
 
-def fold(data, validation, fixture, task_model, threshold=THRESHOLD, mask=None):
-    return prepare_fold(
-        data,
-        validation,
-        brain_mask=fixture.brain_mask if mask is None else mask,
-        task_model=task_model,
-        library=fixture.library,
-        threshold=threshold,
-    )
-
-
-# ---- validation of counts and tolerance --------------------------------------
+# ---- validation of counts and pcstop -----------------------------------------
 
 
 def test_counts_are_sorted_deduplicated_integers_including_zero():
@@ -261,95 +256,65 @@ def test_invalid_counts_are_rejected(counts):
         validate_counts(counts)
 
 
-def test_tolerance_must_be_finite_and_nonnegative():
-    assert validate_tolerance(0) == 0.0
-    assert validate_tolerance(0.001) == 0.001
-    for value in (-1e-9, np.nan, np.inf, True, "0.1", None):
-        with pytest.raises(ValueError, match="score_tolerance"):
-            validate_tolerance(value)
+def test_pcstop_must_be_finite_and_at_least_one():
+    assert validate_pcstop(1) == 1.0 and validate_pcstop(1.05) == 1.05
+    for value in (0.99, 0, -1, np.nan, np.inf, True, "1.05", None):
+        with pytest.raises(ValueError, match="pcstop"):
+            validate_pcstop(value)
 
 
-# ---- conservative count choice ------------------------------------------------
+# ---- GLMsingle pcstop stopping rule ---------------------------------------------
 
 
-def test_choice_is_smallest_count_within_tolerance_of_the_best():
+def test_pcstop_follows_glmsingle_semantics():
     counts = (0, 1, 2, 4)
-    scores = (0.10, 0.20, 0.2005, 0.19)
-    assert choose_count(counts, scores, 0.001) == 1
-    assert choose_count(counts, scores, 0.0) == 2
-    assert choose_count(counts, (0.3, 0.3, 0.3, 0.3), 0.0) == 0
-    assert choose_count(counts, (0.1, 0.2, 0.2, 0.2), 0.0) == 1
+    perf = (0.10, 0.20, 0.205, 0.19)  # curve (0, .10, .105, .09)
+    assert choose_count(counts, perf, 1.05) == 1  # .10 * 1.05 >= .105
+    assert choose_count(counts, perf, 1.0) == 2
+    assert choose_count(counts, (0.3, 0.3, 0.3, 0.3), 1.05) == 0  # all equal
+    assert choose_count(counts, (0.3, 0.1, 0.2, 0.25), 1.05) == 0  # negative curve
+    assert choose_count(counts, (0.1, 0.2, 0.2, 0.2), 1.0) == 1  # ties keep fewer
 
 
-def test_unavailable_counts_cannot_win():
+def test_pcstop_walks_past_counts_far_below_the_maximum():
+    counts = (0, 1, 2, 3, 4)
+    perf = (0.0, 0.05, 0.02, 0.098, 0.1)
+    assert choose_count(counts, perf, 1.05) == 3  # .098 * 1.05 >= .1
+    assert choose_count(counts, perf, 1.0) == 4
+    assert choose_count(counts, perf, 3.0) == 1  # .05 * 3 >= .1
+
+
+def test_unavailable_counts_are_skipped():
     counts = (0, 1, 2, 4)
-    assert choose_count(counts, (0.10, 0.20, np.nan, 0.19), 0.0) == 1
-    assert choose_count(counts, (0.10, np.nan, np.nan, np.nan), 0.0) == 0
-    assert choose_count((4, 0, 2), (0.5, 0.1, 0.499), 0.002) == 2
+    assert choose_count(counts, (0.10, np.nan, 0.205, 0.19), 1.05) == 2
+    assert choose_count(counts, (0.10, np.nan, np.nan, np.nan), 1.05) == 0
+    assert choose_count((4, 0, 2), (0.5, 0.1, 0.49), 1.05) == 2  # sorted by count
 
 
 def test_choice_requires_a_scored_zero_count_and_aligned_scores():
     with pytest.raises(ValueError, match="zero"):
-        choose_count((0, 1), (np.nan, 0.2), 0.0)
+        choose_count((0, 1), (np.nan, 0.2), 1.05)
     with pytest.raises(ValueError, match="zero"):
-        choose_count((1, 2), (0.1, 0.2), 0.0)
+        choose_count((1, 2), (0.1, 0.2), 1.05)
     with pytest.raises(ValueError, match="one score per count"):
-        choose_count((0, 1), (0.1,), 0.0)
-
-
-# ---- fold preparation uses training runs only -------------------------------
-
-
-def test_fold_selection_masks_and_pcs_come_from_training_runs(fixture):
-    data, model = fixture.data, fixture.task_model
-    result = fold(data, 1, fixture, model)
-    train, selection, pool, scoring, comps, statistic = oracle_training(
-        data, 1, fixture.library, model, fixture.brain_mask, THRESHOLD
-    )
-    assert result.validation_run == 1 and result.training_runs == tuple(train)
-    np.testing.assert_allclose(result.pool_statistic, statistic, atol=1e-10)
-    np.testing.assert_array_equal(result.selection.hrf_indices, selection.hrf_indices)
-    np.testing.assert_array_equal(result.selection.cv_r2, selection.cv_r2)
-    np.testing.assert_array_equal(result.masks.pool, pool)
-    np.testing.assert_array_equal(result.masks.scoring, scoring)
-    assert len(result.components) == len(train)
-    for got, expected in zip(result.components, comps):
-        np.testing.assert_array_equal(got.components, expected.components)
-    assert pool.sum() >= 10 and scoring.sum() >= 6
-
-
-def test_fold_arrays_are_read_only(fixture):
-    result = fold(fixture.data, 0, fixture, fixture.task_model)
-    score = score_count(result, 1)
-    assert not result.pool_statistic.flags.writeable
-    for array in (result.scored, result.zero_target, score.feature_r2):
-        assert not array.flags.writeable
-    for array in (score.coefficients, score.target_energy):
-        assert not array.flags.writeable
+        choose_count((0, 1), (0.1,), 1.05)
 
 
 # ---- numerical agreement with the stacked oracle -----------------------------
 
 
 @pytest.fixture(scope="module")
-def variant_folds(fixture):
-    """Production and oracle results for every fold of every variant."""
+def variant_setups(fixture):
     out = {}
     for name in VARIANTS:
         data, model = variant(fixture, name)
-        threshold = VARIANT_THRESHOLDS.get(name, THRESHOLD)
-        for v in range(data.n_runs):
-            expected = oracle_fold(
-                data,
-                v,
-                fixture.library,
-                model,
-                fixture.brain_mask,
-                COUNTS,
-                threshold=threshold,
-            )
-            result = fold(data, v, fixture, model, threshold=threshold)
-            out[name, v] = (result, expected, model)
+        inputs = frozen_inputs(data, model, fixture.library)
+        out[name] = (
+            data,
+            model,
+            inputs,
+            setup_for(data, model, fixture.library, inputs),
+        )
     return out
 
 
@@ -374,91 +339,115 @@ def test_missing_and_categorical_variants_exercise_indicators(fixture):
 
 @pytest.mark.parametrize("name", VARIANTS)
 @pytest.mark.parametrize("count", COUNTS)
-def test_scores_match_stacked_oracle(variant_folds, name, count):
-    for v in range(4):
-        result, expected, model = variant_folds[name, v]
-        np.testing.assert_array_equal(result.masks.scoring, expected["scoring"])
-        score = score_count(result, count)
-        want = expected[count]
-        assert score.count == count and score.reason == ""
-        assert score.coefficients.shape == (len(model.regressor_names), 26)
-        np.testing.assert_allclose(
-            score.coefficients, want["beta"], rtol=1e-7, atol=1e-9
-        )
-        np.testing.assert_allclose(score.target_energy, want["energy"], rtol=1e-9)
-        np.testing.assert_allclose(score.feature_r2, want["r2"], rtol=0, atol=1e-9)
-        assert score.mean_r2 == pytest.approx(want["mean"], abs=1e-10)
+def test_scores_match_stacked_oracle(fixture, variant_setups, name, count):
+    data, model, inputs, setup = variant_setups[name]
+    want = oracle_count(data, inputs, fixture.library, model, count, setup.scored)
+    score = score_count(setup, count)
+    assert score.count == count and score.reason == ""
+    assert score.coefficients.shape == (4, len(model.regressor_names), 26)
+    scored = setup.scored
+    np.testing.assert_allclose(
+        score.coefficients[:, :, scored],
+        want["beta"][:, :, scored],
+        rtol=1e-7,
+        atol=1e-9,
+    )
+    np.testing.assert_allclose(score.fold_sst, want["sst"], rtol=1e-9)
+    np.testing.assert_allclose(score.fold_sse, want["sse"], rtol=1e-7, atol=1e-9)
+    np.testing.assert_allclose(score.feature_r2, want["r2"], rtol=0, atol=1e-9)
+    assert score.perf == pytest.approx(want["perf"], abs=1e-10)
+
+
+def test_scoring_features_are_the_task_features(fixture, base):
+    inputs, setup = base
+    groups = fixture.groups
+    expected = np.r_[groups["task"], groups["rt"], groups["outside_task"]]
+    np.testing.assert_array_equal(np.flatnonzero(setup.scored), expected)
+    np.testing.assert_array_equal(setup.scoring, inputs[1].scoring)
 
 
 @pytest.mark.parametrize("name", VARIANTS)
 def test_target_denominator_and_scored_features_are_fixed_across_counts(
-    variant_folds, name
+    variant_setups, name
 ):
-    for v in range(4):
-        result = variant_folds[name, v][0]
-        np.testing.assert_array_equal(result.scored, result.masks.scoring)
-        assert not result.zero_target.any()
-        scores = [score_count(result, c) for c in COUNTS]
-        for score in scores[1:]:
-            np.testing.assert_array_equal(score.target_energy, scores[0].target_energy)
-            np.testing.assert_array_equal(
-                np.isfinite(score.feature_r2), np.isfinite(scores[0].feature_r2)
-            )
-        np.testing.assert_array_equal(np.isfinite(scores[0].feature_r2), result.scored)
+    setup = variant_setups[name][3]
+    np.testing.assert_array_equal(setup.scored, setup.scoring)
+    assert not setup.zero_target.any()
+    scores = [score_count(setup, c) for c in COUNTS]
+    for score in scores[1:]:
+        np.testing.assert_array_equal(score.fold_sst, scores[0].fold_sst)
+        np.testing.assert_array_equal(
+            np.isfinite(score.feature_r2), np.isfinite(scores[0].feature_r2)
+        )
+    np.testing.assert_array_equal(np.isfinite(scores[0].feature_r2), setup.scored)
+    np.testing.assert_array_equal(scores[0].fold_sst, setup.target_energy)
 
 
-def test_coefficients_change_with_count_so_the_comparison_is_live(variant_folds):
-    result = variant_folds["rt", 0][0]
-    zero, one = score_count(result, 0), score_count(result, 1)
-    scored = result.scored
-    assert np.max(np.abs(zero.coefficients - one.coefficients)[:, scored]) > 1e-3
+def test_coefficients_change_with_count_so_the_comparison_is_live(base):
+    setup = base[1]
+    zero, one = score_count(setup, 0), score_count(setup, 1)
+    scored = setup.scored
+    difference = np.abs(zero.coefficients - one.coefficients)[:, :, scored]
+    assert np.max(difference) > 1e-3
 
 
-def test_component_count_selection_aggregates_equal_weight_folds(fixture):
+def test_setup_and_score_arrays_are_read_only(base):
+    setup = base[1]
+    score = score_count(setup, 1)
+    for array in (setup.scored, setup.scoring, setup.zero_target, setup.target_energy):
+        assert not array.flags.writeable
+    for array in (score.feature_r2, score.coefficients, score.fold_sse, score.fold_sst):
+        assert not array.flags.writeable
+
+
+def test_component_count_selection_uses_median_pooled_r2_and_pcstop(fixture, base):
+    inputs, setup = base
     data, model = fixture.data, fixture.task_model
-    chosen = select_component_count(
-        data,
-        brain_mask=fixture.brain_mask,
-        task_model=model,
-        library=fixture.library,
-        counts=(4, 0, 2, 1),
-        threshold=THRESHOLD,
-        tolerance=0.001,
-    )
-    folds = [
-        oracle_fold(data, v, fixture.library, model, fixture.brain_mask, COUNTS)
-        for v in range(4)
+    chosen = select_count(data, model, fixture.library, inputs, counts=(4, 0, 2, 1))
+    expected = [
+        oracle_count(data, inputs, fixture.library, model, c, setup.scored)
+        for c in COUNTS
     ]
-    expected = [np.mean([f[c]["mean"] for f in folds]) for c in COUNTS]
+    perf = [e["perf"] for e in expected]
     assert chosen.counts == COUNTS
     table = chosen.scores
     assert list(table["count"]) == list(COUNTS)
     assert table["eligible"].all() and (table["reason"] == "").all()
-    np.testing.assert_allclose(table["mean_r2"], expected, rtol=0, atol=1e-10)
-    assert chosen.n_components == conservative_choice(COUNTS, expected, 0.001)
+    np.testing.assert_allclose(table["perf"], perf, rtol=0, atol=1e-10)
+    np.testing.assert_allclose(table["curve"], np.subtract(perf, perf[0]), atol=1e-10)
+    assert chosen.n_components == glmsingle_choice(COUNTS, perf, 1.05)
     per_fold = chosen.fold_scores
-    assert len(per_fold) == 16 and len(chosen.folds) == 4
+    assert len(per_fold) == 16
     assert list(per_fold["validation_run"]) == [v for v in range(4) for _ in COUNTS]
-    for v, f in enumerate(folds):
+    scored = setup.scored
+    for v in range(4):
         rows = per_fold[per_fold["validation_run"] == v]
+        fold_r2 = [1 - e["sse"][v, scored] / e["sst"][v, scored] for e in expected]
         np.testing.assert_allclose(
-            rows["mean_r2"], [f[c]["mean"] for c in COUNTS], atol=1e-10
+            rows["median_r2"], [np.median(r) for r in fold_r2], atol=1e-10
         )
-        assert (rows["n_scored"] == f["scoring"].sum()).all()
-        assert (rows["n_zero_target"] == 0).all()
+        assert (rows["n_scored"] == scored.sum()).all()
 
 
-def test_selection_requires_three_runs(fixture):
+def test_selection_finds_a_positive_count_on_the_fixture(fixture, base):
+    chosen = select_count(fixture.data, fixture.task_model, fixture.library, base[0])
+    assert chosen.n_components >= 1
+
+
+def test_selection_requires_three_runs(fixture, base):
     data = subset_runs(fixture.data, [0, 1])
+    selection, masks, comps = base[0]
     with pytest.raises(ValueError, match="three runs"):
-        select_component_count(
-            data,
-            brain_mask=fixture.brain_mask,
-            task_model=fixture.task_model,
-            library=fixture.library,
-            counts=COUNTS,
-            threshold=THRESHOLD,
-            tolerance=0.001,
+        select_count(
+            data, fixture.task_model, fixture.library, (selection, masks, comps[:2])
+        )
+
+
+@pytest.mark.parametrize("pcstop", [0.5, np.nan, True])
+def test_selection_rejects_invalid_pcstop(fixture, base, pcstop):
+    with pytest.raises(ValueError, match="pcstop"):
+        select_count(
+            fixture.data, fixture.task_model, fixture.library, base[0], pcstop=pcstop
         )
 
 
@@ -471,72 +460,69 @@ def heldout_replaced(data, run, features, values):
     return rebuild(data, signals=signals)
 
 
-def test_zero_energy_targets_are_excluded_identically_for_every_count(fixture):
+def test_zero_energy_targets_are_excluded_for_every_fold_and_count(fixture, base):
+    inputs = base[0]
     model, run = fixture.task_model, 3
     in_nuisance = 50.0 + 4.0 * fixture.data.confounds[run]["drift"].to_numpy()
     zero = [0, 7]
     data = heldout_replaced(fixture.data, run, zero, in_nuisance)
-    result = fold(data, run, fixture, model)
-    expected = oracle_fold(
-        data, run, fixture.library, model, fixture.brain_mask, COUNTS, zero=zero
-    )
-    assert result.masks.scoring[zero].all()
-    np.testing.assert_array_equal(np.flatnonzero(result.zero_target), zero)
+    setup = setup_for(data, model, fixture.library, inputs)
+    assert setup.scoring[zero].all()
+    assert np.argwhere(setup.zero_target).tolist() == [[run, 0], [run, 7]]
     np.testing.assert_array_equal(
-        result.scored, result.masks.scoring & ~result.zero_target
+        setup.scored, setup.scoring & ~setup.zero_target.any(0)
     )
     for count in COUNTS:
-        score = score_count(result, count)
+        score = score_count(setup, count)
         assert np.isnan(score.feature_r2[zero]).all()
-        assert score.mean_r2 == pytest.approx(expected[count]["mean"], abs=1e-10)
+        want = oracle_count(data, inputs, fixture.library, model, count, setup.scored)
+        assert score.perf == pytest.approx(want["perf"], abs=1e-10)
 
 
-def test_no_nonzero_validation_target_raises(fixture):
-    model, run = fixture.task_model, 3
+def test_no_nonzero_validation_target_raises(fixture, base):
+    run = 3
     in_nuisance = 50.0 + 4.0 * fixture.data.confounds[run]["cosine"].to_numpy()
     data = heldout_replaced(fixture.data, run, np.arange(26), in_nuisance)
     with pytest.raises(ValueError, match="no supported task signal"):
-        fold(data, run, fixture, model)
+        setup_for(data, fixture.task_model, fixture.library, base[0])
 
 
-def test_empty_scoring_mask_raises(fixture):
+def test_empty_scoring_mask_raises(fixture, base):
+    selection, masks, comps = base[0]
+    empty = pool_masks(np.zeros(26), 0.0, hrf_indices=-np.ones(26, dtype=int))
     with pytest.raises(ValueError, match="no supported task signal"):
-        fold(fixture.data, 0, fixture, fixture.task_model, threshold=10.0)
+        select_count(
+            fixture.data, fixture.task_model, fixture.library, (selection, empty, comps)
+        )
 
 
 # ---- eligibility ------------------------------------------------------------------
 
 
-def test_empty_pool_leaves_only_zero(fixture):
-    result = fold(fixture.data, 1, fixture, fixture.task_model, threshold=-10.0)
-    assert result.masks.pool_size == 0
-    assert score_count(result, 0).reason == ""
+def test_empty_pool_leaves_only_zero(fixture, base):
+    selection, masks, _ = base[0]
+    data, model = fixture.data, fixture.task_model
+    empty = analysis_components(data, np.zeros(26, dtype=bool))
+    inputs = (selection, masks, empty)
+    setup = setup_for(data, model, fixture.library, inputs)
+    assert score_count(setup, 0).reason == ""
     for count in (1, 2):
-        score = score_count(result, count)
+        score = score_count(setup, count)
         assert "empty noise pool" in score.reason
-        assert np.isnan(score.mean_r2) and np.isnan(score.feature_r2).all()
+        assert np.isnan(score.perf) and np.isnan(score.feature_r2).all()
         assert np.isnan(score.coefficients).all()
-    chosen = select_component_count(
-        fixture.data,
-        brain_mask=fixture.brain_mask,
-        task_model=fixture.task_model,
-        library=fixture.library,
-        counts=(0, 1, 2),
-        threshold=-10.0,
-        tolerance=0.0,
-    )
+    chosen = select_count(data, model, fixture.library, inputs, counts=(0, 1, 2))
     assert chosen.n_components == 0
     assert list(chosen.scores["eligible"]) == [True, False, False]
     assert chosen.scores["reason"].str.contains("empty noise pool")[1:].all()
 
 
-def test_count_beyond_pool_rank_is_unavailable_not_capped(fixture):
-    result = fold(fixture.data, 0, fixture, fixture.task_model)
-    ranks = [c.rank for c in result.components]
-    too_many = max(ranks) + 1
-    score = score_count(result, too_many)
+def test_count_beyond_pool_rank_is_unavailable_not_capped(base):
+    inputs, setup = base
+    too_many = max(c.rank for c in inputs[2]) + 1
+    score = score_count(setup, too_many)
     assert "exceeds pool PCA rank" in score.reason
-    assert np.isnan(score.mean_r2)
+    assert np.isnan(score.perf)
 
 
 def short_run_data(fixture, extra=40, length=30):
@@ -555,59 +541,77 @@ def short_run_data(fixture, extra=40, length=30):
         events.append(frame[frame.onset < frame_times[-1] - 12.0])
         times.append(frame_times)
         confounds.append(data.confounds[run].iloc[:n].reset_index(drop=True))
-    mask = np.concatenate([fixture.brain_mask, np.ones(extra, bool)])
-    return from_arrays(signals, events, frame_times=times, confounds=confounds), mask
+    return from_arrays(signals, events, frame_times=times, confounds=confounds)
 
 
-def test_count_without_positive_residual_df_is_unavailable_in_every_fold(fixture):
-    data, mask = short_run_data(fixture)
-    model = fixture.task_model
+def test_count_without_positive_residual_df_is_unavailable_in_training_folds(fixture):
+    data, model = short_run_data(fixture), fixture.task_model
+    inputs = frozen_inputs(data, model, fixture.library)
     dof_limit = 30 - 4 - len(model.regressor_names)  # scans - baseline - task
-    result = fold(data, 3, fixture, model, mask=mask)
-    assert 0 in result.training_runs and result.components[0].rank >= dof_limit
-    assert all(c.unavailable_reason(dof_limit) == "" for c in result.components)
-    assert score_count(result, dof_limit - 1).reason == ""
-    blocked = score_count(result, dof_limit)
+    comps = inputs[2]
+    assert comps[0].rank >= dof_limit
+    assert all(c.unavailable_reason(dof_limit) == "" for c in comps)
+    setup = setup_for(data, model, fixture.library, inputs)
+    assert score_count(setup, dof_limit - 1).reason == ""
+    blocked = score_count(setup, dof_limit)
     assert "degrees of freedom" in blocked.reason
-    assert np.isnan(blocked.mean_r2) and np.isnan(blocked.coefficients).all()
-    chosen = select_component_count(
-        data,
-        brain_mask=mask,
-        task_model=model,
-        library=fixture.library,
-        counts=(0, dof_limit),
-        threshold=THRESHOLD,
-        tolerance=0.0,
-    )
+    assert np.isnan(blocked.perf) and np.isnan(blocked.coefficients[1:]).all()
+    chosen = select_count(data, model, fixture.library, inputs, counts=(0, dof_limit))
     assert list(chosen.scores["eligible"]) == [True, False]
-    assert np.isnan(chosen.scores["mean_r2"].iloc[1])
+    assert np.isnan(chosen.scores["perf"].iloc[1])
     rows = chosen.fold_scores[chosen.fold_scores["count"] == dof_limit]
     assert list(rows["eligible"]) == [True, False, False, False]
     assert chosen.n_components == 0
 
 
-# ---- leakage: held-out signals never affect training quantities ---------------
+# ---- leakage: the held-out run never fits its own fold --------------------------
+#
+# HRFs, the pool, and the pool PCs are full-data quantities by design (GLMsingle
+# selects HRFs and the pool once on all runs). What a fold must never use is the
+# held-out run's BOLD to fit the task coefficients, or the held-out run's PCs in
+# the target or the fit.
 
 
-def test_heldout_perturbation_changes_scores_but_not_training(fixture):
-    model, run = fixture.task_model, 1
+def test_heldout_bold_never_enters_the_fold_coefficients(fixture, base):
+    inputs, setup = base
+    run = 1
     rng = np.random.default_rng(3)
     signals = [s.copy() for s in fixture.data.signals]
     signals[run] += rng.normal(scale=5.0, size=signals[run].shape)
     signals[run][:, :8] *= -2.0
     perturbed = rebuild(fixture.data, signals=signals)
-    a = fold(fixture.data, run, fixture, model)
-    b = fold(perturbed, run, fixture, model)
-    np.testing.assert_array_equal(a.selection.hrf_indices, b.selection.hrf_indices)
-    np.testing.assert_array_equal(a.selection.cv_r2, b.selection.cv_r2)
-    np.testing.assert_array_equal(a.masks.pool, b.masks.pool)
-    np.testing.assert_array_equal(a.masks.scoring, b.masks.scoring)
-    for x, y in zip(a.components, b.components):
-        np.testing.assert_array_equal(x.components, y.components)
+    other = setup_for(perturbed, fixture.task_model, fixture.library, inputs)
     for count in COUNTS:
-        sa, sb = score_count(a, count), score_count(b, count)
-        np.testing.assert_array_equal(sa.coefficients, sb.coefficients)
-        assert sa.mean_r2 != pytest.approx(sb.mean_r2, abs=1e-3)
+        a, b = score_count(setup, count), score_count(other, count)
+        np.testing.assert_array_equal(a.coefficients[run], b.coefficients[run])
+        assert not np.allclose(a.fold_sse[run], b.fold_sse[run], equal_nan=True)
+        trained_on_run = [v for v in range(4) if v != run]
+        assert not np.allclose(
+            a.coefficients[trained_on_run][:, :, setup.scored],
+            b.coefficients[trained_on_run][:, :, setup.scored],
+        )
+
+
+def test_heldout_pcs_never_enter_their_own_fold(fixture, base):
+    inputs, setup = base
+    selection, masks, comps = inputs
+    run = 2
+    rng = np.random.default_rng(4)
+    scrambled = list(comps)
+    signal = rng.normal(size=fixture.data.signals[run].shape)
+    scrambled[run] = run_components(signal, fixture.data.confounds[run], masks.pool)
+    other = setup_for(
+        fixture.data,
+        fixture.task_model,
+        fixture.library,
+        (selection, masks, tuple(scrambled)),
+    )
+    for count in (1, 2, 4):
+        a, b = score_count(setup, count), score_count(other, count)
+        np.testing.assert_array_equal(a.coefficients[run], b.coefficients[run])
+        np.testing.assert_array_equal(a.fold_sse[run], b.fold_sse[run])
+        np.testing.assert_array_equal(a.fold_sst, b.fold_sst)
+        assert not np.allclose(a.fold_sse[0], b.fold_sse[0], equal_nan=True)
 
 
 # ---- adversarial PCs aligned with unmodeled task variance ---------------------
@@ -627,147 +631,70 @@ def echo_data(fixture, scale=1.0):
         echo += np.outer(fixture.latent[run], rng.uniform(0.6, 1.4, 6))
         echo += rng.normal(scale=0.3, size=echo.shape) + 80.0
         signals.append(np.column_stack([data.signals[run], echo]))
-    mask = np.concatenate([fixture.brain_mask, np.ones(6, bool)])
-    return rebuild(data, signals=signals), mask
+    return rebuild(data, signals=signals)
 
 
-def naive_projected_r2(data, run, result, count):
-    """Wrong objective: also project held-out PCs out of the target."""
-    comp = run_components(data.signals[run], data.confounds[run], result.masks.pool)
-    score = score_count(result, count)
+def fold_mean_r2(score, setup, run):
+    scored = setup.scored
+    return float(np.mean(1 - score.fold_sse[run, scored] / score.fold_sst[run, scored]))
+
+
+def naive_projected_r2(data, run, setup, inputs, count):
+    """Wrong objective: also project the held-out run's PCs out of the target."""
+    selection, masks, comps = inputs
+    score = score_count(setup, count)
     r2 = []
-    for feature in np.flatnonzero(result.scored):
-        hrf = result.selection.hrf_indices[feature]
+    for feature in np.flatnonzero(setup.scored):
+        hrf = selection.hrf_indices[feature]
         x, profiled = design_parts(
-            data,
-            run,
-            result.selection.task_model,
-            result.selection.library.candidates[hrf],
+            data, run, selection.task_model, selection.library.candidates[hrf]
         )
-        nuisance = np.column_stack([baseline(data, run), profiled, comp.prefix(count)])
+        pcs = comps[run].prefix(count)
+        nuisance = np.column_stack([baseline(data, run), profiled, pcs])
         observed = residual(nuisance, data.signals[run][:, feature])
-        predicted = residual(nuisance, x) @ score.coefficients[:, feature]
+        predicted = residual(nuisance, x) @ score.coefficients[run][:, feature]
         r2.append(1 - np.sum((observed - predicted) ** 2) / np.sum(observed**2))
     return float(np.mean(r2))
 
 
 def test_task_aligned_pcs_cannot_gain_by_removing_target_variance(fixture):
-    data, mask = echo_data(fixture)
-    model, run = fixture.task_model, 0
-    result = fold(data, run, fixture, model, mask=mask)
+    data, model, run = echo_data(fixture), fixture.task_model, 0
+    inputs = frozen_inputs(data, model, fixture.library)
     echo = np.arange(26, 32)
-    assert result.masks.pool[echo].all()
-    zero = score_count(result, 0)
+    assert inputs[1].pool[echo].all()
+    setup = setup_for(data, model, fixture.library, inputs)
+    zero = score_count(setup, 0)
     for count in (2, 4):
-        score = score_count(result, count)
-        naive_gain = naive_projected_r2(data, run, result, count) - zero.mean_r2
+        score = score_count(setup, count)
+        honest = fold_mean_r2(score, setup, run) - fold_mean_r2(zero, setup, run)
+        naive = naive_projected_r2(data, run, setup, inputs, count)
+        naive_gain = naive - fold_mean_r2(zero, setup, run)
         assert naive_gain > 0.1
-        assert score.mean_r2 - zero.mean_r2 < 0.25 * naive_gain
-        np.testing.assert_array_equal(score.target_energy, zero.target_energy)
-    expected = oracle_fold(data, run, fixture.library, model, mask, (0, 2, 4))
-    for count in (0, 2, 4):
-        assert score_count(result, count).mean_r2 == pytest.approx(
-            expected[count]["mean"], abs=1e-10
-        )
+        assert honest < 0.25 * naive_gain
+        np.testing.assert_array_equal(score.fold_sst, zero.fold_sst)
 
 
-# ---- indicator-consistent pool statistic (ruling R4) --------------------------
-
-
-def test_pool_statistic_equals_select_hrfs_cv_r2_without_indicators(fixture):
-    for model in (fixture.task_model, MISSING_RT):  # fixture has no missing RTs
-        selection = select_hrfs(fixture.data, library=fixture.library, task_model=model)
-        statistic = pool_statistic(fixture.data, selection)
-        assert not statistic.flags.writeable
-        np.testing.assert_allclose(statistic, selection.cv_r2, rtol=0, atol=1e-10)
-
-
-@pytest.mark.parametrize("name", ["missing_rt", "categorical"])
-def test_pool_statistic_matches_stacked_loro_oracle_with_indicators(fixture, name):
-    data, model = variant(fixture, name)
-    selection = select_hrfs(data, library=fixture.library, task_model=model)
-    statistic = pool_statistic(data, selection)
-    expected = oracle_statistic(data, selection, model, fixture.library)
-    np.testing.assert_allclose(statistic, expected, rtol=0, atol=1e-10)
-    defined = selection.hrf_indices >= 0
-    assert np.max(np.abs(statistic - selection.cv_r2)[defined]) > 1e-3
-
-
-def test_pool_statistic_requires_matching_runs_and_features(fixture):
-    selection = select_hrfs(
-        fixture.data, library=fixture.library, task_model=fixture.task_model
-    )
-    with pytest.raises(ValueError, match="runs"):
-        pool_statistic(subset_runs(fixture.data, [0, 1]), selection)
-    with pytest.raises(ValueError, match="HrfSelectionResult"):
-        pool_statistic(fixture.data, selection.cv_r2)
-
-
-def with_white_noise(data, n=60, seed=17):
-    """Append independent white-noise features (with confound loadings)."""
-    rng = np.random.default_rng(seed)
-    signals = []
-    for signal, frame in zip(data.signals, data.confounds):
-        confounds = frame.to_numpy()
-        noise = rng.normal(size=(len(signal), n)) + 100.0
-        noise += confounds @ rng.normal(scale=0.8, size=(confounds.shape[1], n))
-        signals.append(np.column_stack([signal, noise]))
-    return rebuild(data, signals=signals)
-
-
-@pytest.mark.parametrize("name", ["missing_rt", "categorical"])
-def test_indicator_models_keep_pure_noise_in_the_pool_at_threshold_zero(fixture, name):
-    data, model = variant(fixture, name)
-    data = with_white_noise(data)
-    white = np.arange(26, 86)
-    task = np.r_[fixture.groups["task"], fixture.groups["rt"]]
-    mask = np.r_[fixture.brain_mask, np.ones(60, bool)]
-    selection = select_hrfs(data, library=fixture.library, task_model=model)
-    statistic = pool_statistic(data, selection)
-    assert np.median(statistic[white]) <= 0.0
-    assert np.median(selection.cv_r2[white]) > np.median(statistic[white])
-    for v in range(data.n_runs):
-        result = fold(data, v, fixture, model, threshold=0.0, mask=mask)
-        assert np.median(result.pool_statistic[white]) <= 0.0
-        assert result.masks.scoring[task].all()
-        assert score_count(result, 4).reason == ""
+# ---- design errors and run labels ---------------------------------------------
 
 
 @pytest.mark.filterwarnings("ignore:Matrix is singular:UserWarning")
-def test_invalid_heldout_design_for_a_frozen_hrf_raises(fixture):
+def test_invalid_design_for_a_frozen_hrf_raises_naming_the_run(fixture, base):
     events = [e.copy() for e in fixture.data.events]
     events[3]["response_time"] = 0.9  # task and RT columns become collinear
     data = rebuild(fixture.data, events=events)
-    # Requirement change (Task 3 review): messages name runs by label.
-    with pytest.raises(
-        ValueError, match="held-out run 'run-04': HRF .* task design is invalid"
-    ):
-        fold(data, 3, fixture, fixture.task_model)
+    # Requirement change (Task 6): every run is both a training and a held-out
+    # run of the frozen design, so the message names the run, not its role.
+    with pytest.raises(ValueError, match="run 'run-04': HRF .* task design is invalid"):
+        setup_for(data, fixture.task_model, fixture.library, base[0])
 
 
-CV_LABELS = ("a1", "b2", "c3", "d4")
-
-
-def test_fold_messages_and_training_selection_use_run_labels(fixture):
-    result = prepare_fold(
+def test_fold_messages_and_tables_use_run_labels(fixture, base):
+    chosen = select_count(
         fixture.data,
-        1,
-        brain_mask=fixture.brain_mask,
-        task_model=fixture.task_model,
-        library=fixture.library,
-        threshold=THRESHOLD,
-        run_labels=CV_LABELS,
-    )
-    assert result.selection.run_labels == ("a1", "c3", "d4")
-    assert score_count(result, 50).reason.startswith("training run 'a1': ")
-    chosen = select_component_count(
-        fixture.data,
-        brain_mask=fixture.brain_mask,
-        task_model=fixture.task_model,
-        library=fixture.library,
+        fixture.task_model,
+        fixture.library,
+        base[0],
         counts=(0, 50),
-        threshold=THRESHOLD,
-        tolerance=0.001,
         run_labels=CV_LABELS,
     )
     per_fold = chosen.fold_scores
@@ -775,22 +702,21 @@ def test_fold_messages_and_training_selection_use_run_labels(fixture):
     reason = chosen.scores.set_index("count").loc[50, "reason"]
     assert "fold holding out run 'b2': training run 'a1': " in reason
     assert not re.search(r"\brun \d", reason)
+    assert chosen.setup.run_labels == CV_LABELS
 
 
 @pytest.mark.parametrize("broken", [0, 2, 3])
-def test_invalid_run_design_names_only_that_run(fixture, broken):
+def test_invalid_run_design_names_only_that_run(fixture, base, broken):
     events = list(fixture.data.events)
     events[broken] = events[broken].drop(columns="response_time")
     data = rebuild(fixture.data, events=events)
     with pytest.raises(ValueError) as error:
-        select_component_count(
+        select_count(
             data,
-            brain_mask=fixture.brain_mask,
-            task_model=fixture.task_model,
-            library=fixture.library,
+            fixture.task_model,
+            fixture.library,
+            base[0],
             counts=(0, 1),
-            threshold=THRESHOLD,
-            tolerance=0.001,
             run_labels=CV_LABELS,
         )
     message = str(error.value)
@@ -798,105 +724,3 @@ def test_invalid_run_design_names_only_that_run(fixture, broken):
     others = [label for i, label in enumerate(CV_LABELS) if i != broken]
     assert not any(label in message for label in others)
     assert not re.search(r"\brun \d", message)
-
-
-# ---- automatic pool threshold ---------------------------------------------------
-
-
-def eligible_statistic(result, brain_mask):
-    statistic = result.pool_statistic
-    defined = brain_mask & np.isfinite(statistic)
-    return statistic[defined & (result.selection.hrf_indices >= 0)]
-
-
-@pytest.mark.parametrize("validation", [0, 2])
-def test_auto_fold_threshold_comes_from_the_training_statistic(fixture, validation):
-    result = fold(fixture.data, validation, fixture, fixture.task_model, "auto")
-    expected = mixture_threshold(eligible_statistic(result, fixture.brain_mask))
-    assert result.masks.threshold == expected.threshold
-    assert result.masks.mixture == expected
-    np.testing.assert_array_equal(
-        result.masks.pool,
-        fixture.brain_mask
-        & (result.selection.hrf_indices >= 0)
-        & (result.pool_statistic <= expected.threshold),
-    )
-
-
-def test_auto_fold_threshold_ignores_the_heldout_run(fixture):
-    run = 1
-    rng = np.random.default_rng(11)
-    signals = [s.copy() for s in fixture.data.signals]
-    signals[run] += rng.normal(scale=5.0, size=signals[run].shape)
-    perturbed = rebuild(fixture.data, signals=signals)
-    a = fold(fixture.data, run, fixture, fixture.task_model, "auto")
-    b = fold(perturbed, run, fixture, fixture.task_model, "auto")
-    assert a.masks.threshold == b.masks.threshold
-    np.testing.assert_array_equal(a.masks.pool, b.masks.pool)
-
-
-def test_fold_table_records_each_fold_threshold_and_mask_sizes(fixture):
-    chosen = select_component_count(
-        fixture.data,
-        brain_mask=fixture.brain_mask,
-        task_model=fixture.task_model,
-        library=fixture.library,
-        counts=COUNTS,
-        threshold="auto",
-        tolerance=0.001,
-    )
-    table = chosen.fold_scores
-    for setup in chosen.folds:
-        rows = table[table["validation_run"] == setup.validation_run]
-        assert len(rows) == len(COUNTS)
-        assert (rows["pool_r2_threshold"] == setup.masks.threshold).all()
-        assert (rows["pool_size"] == setup.masks.pool_size).all()
-        assert (rows["scoring_size"] == setup.masks.scoring_size).all()
-    thresholds = {setup.masks.threshold for setup in chosen.folds}
-    assert len(thresholds) > 1  # fitted per fold, not shared
-
-
-def test_fixed_threshold_is_recorded_in_the_fold_table(fixture):
-    chosen = select_component_count(
-        fixture.data,
-        brain_mask=fixture.brain_mask,
-        task_model=fixture.task_model,
-        library=fixture.library,
-        counts=(0, 1),
-        threshold=THRESHOLD,
-        tolerance=0.001,
-    )
-    assert (chosen.fold_scores["pool_r2_threshold"] == THRESHOLD).all()
-    assert all(setup.masks.mixture is None for setup in chosen.folds)
-
-
-def test_degenerate_auto_threshold_names_the_fold_runs(fixture):
-    mask = np.zeros(fixture.data.n_features, dtype=bool)
-    mask[0] = True
-    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
-        prepare_fold(
-            fixture.data,
-            2,
-            brain_mask=mask,
-            task_model=fixture.task_model,
-            library=fixture.library,
-            threshold="auto",
-            run_labels=("sesA", "sesB", "sesC", "sesD"),
-        )
-    message = str(error.value)
-    assert "holding out run 'sesC'" in message
-    assert "'sesA', 'sesB', 'sesD'" in message
-
-
-@pytest.mark.parametrize("threshold", ["Auto", np.nan, None])
-def test_component_count_rejects_invalid_thresholds(fixture, threshold):
-    with pytest.raises(ValueError, match="pool_r2_threshold"):
-        select_component_count(
-            fixture.data,
-            brain_mask=fixture.brain_mask,
-            task_model=fixture.task_model,
-            library=fixture.library,
-            counts=(0,),
-            threshold=threshold,
-            tolerance=0.001,
-        )

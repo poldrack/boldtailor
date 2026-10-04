@@ -252,3 +252,35 @@ def test_prediction_loss_tolerance_sums_absolute_regressor_cross_terms():
     c = np.array([[-2.0 - 1e-9]])
     # The cross terms cancel, so only per-regressor magnitudes bound roundoff.
     np.testing.assert_array_equal(prediction_loss(a, b, c, amplitude), [[0.0]])
+
+
+@pytest.mark.parametrize(
+    "broken,column", [(0, "response_time"), (2, "late_onset"), (3, "confounds")]
+)
+def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column):
+    from boldtailor._hrf_cv import prepare_runs
+
+    data, library = task_fixture
+    events, confounds = list(data.events), list(data.confounds)
+    if column == "confounds":
+        confounds[broken] = confounds[broken].assign(constant=1.0)
+    elif column == "late_onset":
+        late = events[broken].copy()
+        late.loc[0, "onset"] = data.frame_times[broken][-1] + 10.0
+        events[broken] = late
+    else:
+        events[broken] = events[broken].drop(columns=column)
+    altered = from_arrays(
+        list(data.signals), events, frame_times=data.frame_times, confounds=confounds
+    )
+    labels = ("sesA", "sesB", "sesC", "sesD")
+    with pytest.raises(ValueError) as error:
+        prepare_runs(altered, library, NSD, labels=labels)
+    message = str(error.value)
+    assert message.startswith(f"run '{labels[broken]}': ")
+    assert not any(label in message for i, label in enumerate(labels) if i != broken)
+    # Without labels the existing messages are unchanged.
+    with pytest.raises(ValueError) as unlabeled:
+        prepare_runs(altered, library, NSD)
+    assert "sesA" not in str(unlabeled.value)
+    assert not str(unlabeled.value).startswith("run '")
