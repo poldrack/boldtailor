@@ -25,10 +25,13 @@ from boldtailor.denoising import select_denoising
 from boldtailor.denoising_results import SignificanceGate
 from tests.denoising_fixtures import make_denoising_fixture
 from tests.test_denoising_cv import (
+    MISSING_RT,
     VARIANTS,
     baseline,
     design_parts,
     frozen_inputs,
+    heldout_replaced,
+    rebuild,
     setup_for,
     variant,
 )
@@ -357,6 +360,103 @@ def test_rank_deficient_features_are_excluded_from_n(fixture, base, two_hrf_setu
     )
     tested = result.tested
     np.testing.assert_allclose(result.f_statistic[tested], want["f"][tested], rtol=1e-6)
+
+
+def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base):
+    # Features 0 and 7 are in the baseline span in every run; feature 1 in
+    # run 3 only. pcstop scores neither, so the gate must not test them.
+    inputs, _ = base
+    data = fixture.data
+    for run in range(data.n_runs):
+        drift = data.confounds[run]["drift"].to_numpy()
+        features = [0, 7, 1] if run == 3 else [0, 7]
+        data = heldout_replaced(data, run, features, 50.0 + 4.0 * drift)
+    setup = setup_for(data, fixture.task_model, fixture.library, inputs)
+    zero = np.zeros(data.n_features, bool)
+    zero[[0, 1, 7]] = True
+    assert setup.scoring[zero].all()
+    np.testing.assert_array_equal(setup.scored, setup.scoring & ~zero)
+    result = gate(setup, 2)
+    np.testing.assert_array_equal(result.tested, setup.scored)
+    np.testing.assert_array_equal(result.excluded, zero)
+    assert result.n == int(setup.scored.sum())
+    reasons = [(size, reason) for _, size, reason in result.exclusions]
+    assert sum(size for size, _ in reasons) == 3
+    assert all("zero target" in reason for _, reason in reasons)
+    for array in (result.f_statistic, result.p_value, result.df1, result.df2):
+        assert np.isnan(array[zero]).all()
+    want = oracle_gate(
+        data, inputs, fixture.library, fixture.task_model, 2, setup.scored
+    )
+    tested = result.tested
+    np.testing.assert_allclose(
+        result.f_statistic[tested], want["f"][tested], rtol=1e-6, atol=1e-9
+    )
+
+
+def missing_everywhere(data):
+    """Missing response times in every run, so every run has an indicator."""
+    events = [e.copy() for e in data.events]
+    for frame in events:
+        frame.loc[[1, 4], "response_time"] = np.nan
+    return rebuild(data, events=events)
+
+
+def indicator_components(data, candidate):
+    """Per run: the indicator column off the baseline, as a single unit PC."""
+    comps = []
+    for run in range(data.n_runs):
+        _, profiled = design_parts(data, run, MISSING_RT, candidate)
+        nuisance = baseline(data, run)
+        fitted = nuisance @ np.linalg.lstsq(nuisance, profiled, rcond=None)[0]
+        column = profiled - fitted
+        comps.append(
+            RunComponents(
+                components=column / np.linalg.norm(column),
+                singular_values=np.array([1.0]),
+                rank_tolerance=1e-12,
+                pool_size=1,
+                retained_columns=1,
+            )
+        )
+    return tuple(comps)
+
+
+def test_pcs_inside_the_indicator_span_leave_nothing_to_test(fixture, base):
+    # df1 = 0 for every feature, so n = 0: rejected with a NaN binomial p.
+    _, masks, _ = base[0]
+    data = missing_everywhere(fixture.data)
+    setup = prepare_scoring(
+        data,
+        hrf_indices=np.zeros(data.n_features, dtype=int),
+        components=indicator_components(data, fixture.library.candidates[0]),
+        scoring=masks.scoring,
+        task_model=MISSING_RT,
+        library=fixture.library,
+    )
+    result = gate(setup, 1)
+    assert result.decision == "rejected"
+    assert result.n_components == 0 and result.pcstop_count == 1
+    assert (result.m, result.n) == (0, 0) and np.isnan(result.binomial_p)
+    assert not result.tested.any()
+    np.testing.assert_array_equal(result.excluded, masks.scoring)
+    ((hrf, size, reason),) = result.exclusions
+    assert (hrf, size) == (0, int(masks.scoring.sum()))
+    assert "no columns" in reason
+
+
+def test_internal_errors_in_the_fit_are_not_hidden_as_exclusions(
+    base, pcstop_count, monkeypatch
+):
+    import boldtailor._denoising_gate as module
+
+    def broken(*args):
+        raise ValueError("internal failure")
+
+    _, setup = base
+    monkeypatch.setattr(module, "pooled_amplitude", broken)
+    with pytest.raises(ValueError, match="internal failure"):
+        gate(setup, max(pcstop_count, 1))
 
 
 # ---- result object ---------------------------------------------------------------------

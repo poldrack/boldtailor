@@ -400,6 +400,29 @@ def test_setup_and_score_arrays_are_read_only(base):
         assert not array.flags.writeable
 
 
+def test_scoring_reuses_cached_task_columns(fixture, base, monkeypatch):
+    # Run designs (and their blocks) are cached, so a repeated setup must
+    # not convolve the task design again for any run or HRF.
+    from boldtailor._hrf_cv import RunDesign
+
+    data, model = fixture.data, fixture.task_model
+    want = setup_for(data, model, fixture.library, base[0])
+    calls = []
+    original = RunDesign.task_design
+
+    def counted(self, candidate_id):
+        calls.append(candidate_id)
+        return original(self, candidate_id)
+
+    monkeypatch.setattr(RunDesign, "task_design", counted)
+    again = setup_for(data, model, fixture.library, base[0])
+    assert calls == []
+    for group, repeat in zip(want.groups, again.groups, strict=True):
+        for terms, other in zip(group.runs, repeat.runs, strict=True):
+            np.testing.assert_array_equal(terms.raw, other.raw)
+            np.testing.assert_array_equal(terms.x, other.x)
+
+
 def test_component_count_selection_uses_median_pooled_r2_and_pcstop(fixture, base):
     inputs, setup = base
     data, model = fixture.data, fixture.task_model

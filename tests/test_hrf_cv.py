@@ -284,3 +284,32 @@ def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column
         prepare_runs(altered, library, NSD)
     assert "sesA" not in str(unlabeled.value)
     assert not str(unlabeled.value).startswith("run '")
+
+
+def test_blocks_keep_the_unprojected_task_columns(task_fixture):
+    from boldtailor._hrf_cv import prepare_runs
+
+    data, library = task_fixture
+    runs = prepare_runs(data, library, NSD)
+    for run in runs:
+        for cid in range(len(library.candidates)):
+            want = run.task_design(cid)[list(NSD.regressor_names)].to_numpy()
+            np.testing.assert_array_equal(run.block(cid).raw, want)
+
+
+def test_ineligible_blocks_have_zero_unprojected_columns(task_fixture):
+    from boldtailor._hrf_cv import prepare_runs
+
+    data, library = task_fixture
+    frames = columns_for(data, library, 0, NSD)
+    confounds = [
+        n.assign(null_task=f["task"].to_numpy()) if r == 2 else n
+        for r, (n, f) in enumerate(zip(data.confounds, frames, strict=True))
+    ]
+    altered = from_arrays(
+        data.signals, data.events, frame_times=data.frame_times, confounds=confounds
+    )
+    runs = prepare_runs(altered, library, NSD)
+    assert not runs[2].eligible(0)[0]
+    assert runs[2].block(0).raw.shape == (len(data.frame_times[2]), 3)
+    assert np.all(runs[2].block(0).raw == 0)
