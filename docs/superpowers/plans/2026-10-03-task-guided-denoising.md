@@ -379,3 +379,92 @@ to 0.5 (GLMsingle's "50/50 posterior" tail threshold). The pool is
 - Update docs (user guide, API, GLMsingle comparison) to describe the
   automatic threshold, its GLMsingle provenance, the fixed-threshold option,
   and the validation outcome.
+
+## Amendment (2026-10-04, second): align with GLMsingle
+
+The user directed that the denoising stage follow GLMsingle's procedure as
+closely as possible, deviating only for stated reasons, and that the core
+stay anatomy-agnostic (it operates on a features × timepoints matrix; brain
+masking is a helper concern outside the core). This supersedes the
+"Exact selection procedure" steps 1-2 and 6-7, the `brain_mask` parameter,
+rulings R4 (indicator-consistent CV pool statistic) and the per-fold pools,
+and the absolute `score_tolerance`. Task 5's mixture-threshold helper is
+reused.
+
+## Task 6: GLMsingle-aligned pool, single pool, and pcstop selection
+
+**Procedure (binding).**
+
+1. **HRFs.** Select per-feature HRFs once with `select_hrfs` on all runs
+   (baseline confounds, the caller's task model and library), as GLMsingle's
+   type-B stage does before GLMdenoise. Freeze them for every fold and count.
+2. **Pool statistic (GLMsingle ON-OFF R²).** Fit, in-sample on all runs, a
+   model with one task regressor (every trial, amplitude 1; i.e. `TaskModel()`
+   with no modulators) convolved with the library's canonical/assumed HRF via
+   the existing task-design machinery, a coefficient shared across runs, and
+   each run's baseline confounds plus intercept as run-specific nuisance
+   (GLMsingle uses polynomials; deviation: our analyses carry confounds).
+   Per feature, `onoff_r2 = 1 - Σ_r ||M_r y_r - M_r x_r b||² / Σ_r ||M_r y_r||²`
+   where `M_r` projects off run r's nuisance span. Features with zero
+   residual energy get NaN.
+3. **Threshold.** `pool_r2_threshold="auto"` (default) applies Task 5's
+   two-component Gaussian-mixture tail threshold (GLMsingle
+   `findtailthreshold`) to the finite `onoff_r2` values; a finite float keeps
+   a fixed threshold. No masks: every input feature is a candidate.
+4. **Pool and scoring features, built once.** `pool = finite & onoff_r2 <
+   threshold` (GLMsingle `badR2`); scoring features `= finite & onoff_r2 >
+   threshold` (GLMsingle `pcR2cutoff`, same threshold). If no feature passes,
+   score the 100 features with the highest `onoff_r2` (GLMsingle fallback) and
+   record that. Exclude features with undefined HRF assignments from scoring.
+5. **PCs.** Per run, from the single pool, exactly as Task 1 already does
+   (project off baseline confounds + intercept, drop zero columns, unit-norm
+   columns, SVD, sign convention, rank/tie eligibility). Default
+   `counts = (0, 1, ..., 10)` (GLMsingle `n_pcs=10`).
+6. **Count scoring (deviation, stated).** GLMsingle scores counts by
+   cross-validated single-trial beta consistency across repeated conditions
+   and disables GLMdenoise when there are no repeats. Most boldtailor tasks
+   lack repeats, so keep the time-series criterion (close to original
+   GLMdenoise): leave-one-run-out, shared task coefficients fitted on
+   training runs with each training run's PCs as extra nuisance, frozen
+   HRFs; predict the held-out run against a fixed target that never contains
+   the candidate PCs (unchanged safeguard). Per scoring feature, pool across
+   folds: `r2_f(k) = 1 - Σ_folds SSE / Σ_folds SST`. Performance
+   `perf(k) = median over scoring features of r2_f(k)` (GLMsingle uses the
+   median). Keep per-fold diagnostics.
+7. **Stopping rule (GLMsingle `select_noise_regressors`).** Replace
+   `score_tolerance` with `pcstop: float = 1.05` (finite, ≥ 1). With
+   `curve = perf - perf[0]` over sorted eligible counts, walk counts in
+   increasing order tracking the running best `curve` value and its count;
+   stop at the first count where `best * pcstop >= max(curve)`; choose the
+   count holding that best. Unavailable counts are skipped, zero is always a
+   candidate, and if `max(curve) <= 0` choose 0.
+8. **Final result.** The pool, scoring features, HRFs, and PCs are the
+   single full-data ones above; return the selected prefix per run.
+
+**API changes.** Remove `brain_mask` from `select_denoising` (and
+`validate_feature_mask` uses). `select_denoising(data, *, task_model, library,
+counts=(0,...,10), pool_r2_threshold="auto", pcstop=1.05, feature_signature,
+run_labels)`. `DenoisingResult` records `onoff_r2`, the threshold (method,
+mixture parameters or fixed value), pool and scoring masks, whether the
+best-100 fallback was used, frozen HRF indices, per-count `perf`, `curve`,
+per-fold diagnostics, PCs, eligibility reasons, provenance. Remove the R4
+`pool_statistic` and per-fold pool machinery if no longer used. Keep R6
+provenance annotations and run-label handling.
+
+**Tests (RED first).** Independent oracles for `onoff_r2` (stacked lstsq
+with block-diagonal run nuisance and a shared task column) and for the
+pooled-across-folds per-feature R² and median; pcstop selector cases
+including GLMsingle's semantics (e.g. perf (0.10, 0.20, 0.205, 0.19),
+pcstop 1.05 → curve (0, .10, .105, .09): best .10 at k=1, .10·1.05 = .105 ≥
+.105 → choose 1; pcstop 1.0 → choose 2; all equal → 0; negative curve → 0;
+unavailable counts skipped); best-100 fallback; no mask parameter; leakage
+tests updated to the GLMsingle design (HRFs and pool are full-data by
+design; folds must still not use the held-out run's BOLD to fit the task
+coefficients or its PCs as candidates in the target). Then rerun Task 4's
+predeclared recovery and no-benefit validations unchanged (same seeds and
+effect sizes; no retuning), plus the no-benefit dataset with the default
+library; remove xfail only if checks pass honestly. Update docs (user guide,
+API, GLMsingle comparison) to describe the GLMsingle-aligned procedure, each
+deviation with its reason (confounds vs polynomials; time-series scoring
+because repeats are not assumed; fixed scoring target), the anatomy-agnostic
+core, and the validation outcome.
