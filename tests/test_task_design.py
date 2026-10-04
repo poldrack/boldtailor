@@ -3,8 +3,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from nilearn.glm.first_level import compute_regressor
+from nilearn.glm.first_level import compute_regressor, make_first_level_design_matrix
 
+from boldtailor._task_design import categorical_names, expand_events, task_columns
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.model import Modulator, TaskModel
 from tests.oracles import scaled_condition, peak_kernel
@@ -208,3 +209,87 @@ def test_task_column_peaks_do_not_depend_on_oversampling(hrf):
     # Unit oversampled peaks; slack is 0.1 s frame sampling of the peak only.
     assert peaks[0] == pytest.approx(peaks[1], abs=1e-3)
     assert peaks[1] == pytest.approx(1.0, abs=5e-4)
+
+
+def _cat_events(levels):
+    n = len(levels)
+    return pd.DataFrame(
+        dict(onset=np.arange(n) * 12.0 + 2, duration=np.ones(n), cond=levels)
+    )
+
+
+CAT = Modulator("cond", kind="categorical", levels=("face", "house", "scrambled face"))
+
+
+def _by_name(expanded):
+    return {
+        k: g.modulation.to_numpy()
+        for k, g in expanded.groupby("trial_type", sort=False)
+    }
+
+
+def test_categorical_expansion_builds_reference_coded_indicators():
+    events = _cat_events(
+        ["house", "face", "scrambled face", "house", "face", "scrambled face"]
+    )
+    expanded = expand_events(events, TaskModel((CAT,)), run="run-01")
+    by_name = _by_name(expanded)
+    assert list(by_name) == ["task", "cond[house]", "cond[scrambled face]"]
+    np.testing.assert_array_equal(by_name["task"], np.ones(6))
+    np.testing.assert_array_equal(by_name["cond[house]"], [1, 0, 0, 1, 0, 0])
+    np.testing.assert_array_equal(by_name["cond[scrambled face]"], [0, 0, 1, 0, 0, 1])
+
+
+def test_categorical_columns_match_nilearn_on_hand_built_conditions():
+    events = _cat_events(
+        ["house", "face", "scrambled face", "house", "face", "scrambled face"]
+    )
+    frame_times = np.arange(90) * 1.0
+    ours = task_columns(expand_events(events, TaskModel((CAT,))), frame_times, "glover")
+    manual = pd.concat(
+        [
+            events.assign(trial_type="task", modulation=1.0),
+            events[events.cond == "house"].assign(
+                trial_type="cond[house]", modulation=1.0
+            ),
+            events[events.cond == "scrambled face"].assign(
+                trial_type="cond[scrambled face]", modulation=1.0
+            ),
+        ]
+    )[["onset", "duration", "trial_type", "modulation"]]
+    oracle = task_columns(manual, frame_times, "glover")
+    pd.testing.assert_frame_equal(ours, oracle[ours.columns])
+    raw = make_first_level_design_matrix(
+        frame_times, manual, hrf_model="glover", drift_model=None
+    )
+    assert set(ours.columns) <= set(raw.columns)
+
+
+@pytest.mark.parametrize(
+    "levels, message",
+    [
+        (["face", "house", "face", "house"], "scrambled face"),  # level absent
+        (["house", "scrambled face", "house", "scrambled face"], "face"),  # reference
+        (["face", "house", "scrambled face", "cat"], "cat"),  # unknown value
+        (["face", "house", "scrambled face", None], "missing"),
+    ],
+)
+def test_invalid_categorical_runs_name_the_run_and_level(levels, message):
+    with pytest.raises(ValueError, match=f"run-03.*{message}"):
+        expand_events(_cat_events(levels), TaskModel((CAT,)), run="run-03")
+
+
+def test_missing_indicator_for_categorical_values():
+    mod = Modulator("cond", kind="categorical", levels=("a", "b"), missing="indicator")
+    expanded = expand_events(
+        _cat_events(["a", "b", "n/a", "a", "b"]), TaskModel((mod,))
+    )
+    by_name = _by_name(expanded)
+    assert list(by_name) == ["task", "cond[b]", "missing_cond"]
+    np.testing.assert_array_equal(by_name["cond[b]"], [0, 1, 0, 0, 1])
+    np.testing.assert_array_equal(by_name["missing_cond"], [0, 0, 1, 0, 0])
+
+
+def test_categorical_names_normalise_mixed_dtypes():
+    mod = Modulator("cond", kind="categorical", levels=(0, 1))
+    assert categorical_names(pd.Series([0, 1.0, "1", 0]), mod) == ["0", "1", "1", "0"]
