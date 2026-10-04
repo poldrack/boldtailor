@@ -68,7 +68,7 @@ class SignificanceGate:
     freedom). ``m`` of the ``n`` tested features have ``p < alpha``; the
     count is kept when the one-sided binomial p-value ``binomial_p`` is below
     ``binomial_alpha``. ``excluded`` features (rank-deficient designs,
-    nonpositive residual degrees of freedom, or zero targets) are not in
+    nonpositive degrees of freedom, or a zero target in any run) are not in
     ``n``; ``exclusions`` lists ``(hrf_index, n_features, reason)``.
     ``decision`` is ``"kept"``, ``"rejected"``, ``"skipped_zero_count"``,
     or ``"disabled"``; untested values are NaN.
