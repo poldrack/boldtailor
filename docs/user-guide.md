@@ -637,7 +637,9 @@ not joint optimization.
    confounds only. The held-out run's BOLD never enters this selection.
 2. Each feature's pool statistic is its winning HRF's leave-one-run-out
    task-prediction R² over those training runs. The noise pool is the in-brain
-   features scoring at or below `pool_r2_threshold` (default 0.0). The scoring
+   features scoring at or below the pool threshold. By default
+   (`pool_r2_threshold="auto"`) it is fitted to this fold's training statistic
+   with GLMsingle's two-component Gaussian-mixture rule; a number fixes it. The scoring
    mask is the in-brain features scoring above it. Both masks are frozen
    across counts, and so are the HRFs.
 3. In each training run, the pool's time series are projected off the
@@ -690,7 +692,10 @@ size and ranks rather than returning a different count.
 - `components.table()`, with per-run pool size, retained columns, rank, and
   rank tolerance. Singular values are in `components.singular_values`.
 - `candidate_scores`, with `count`, `eligible`, `mean_r2`, and `reason`.
-- `fold_scores`, with per-fold `mean_r2`, `n_scored`, and `n_zero_target`.
+- `fold_scores`, with per-fold `mean_r2`, `pool_r2_threshold`, `pool_size`,
+  `scoring_size`, `n_scored`, and `n_zero_target`.
+- `noise_pool_threshold` and `noise_pool_mixture` (the final fitted
+  threshold and mixture), and each fold's `pool_threshold` and `pool_mixture`.
 - `folds`, with each fold's training-only masks, pool statistic, HRF indices,
   and PCA diagnostics.
 
@@ -699,15 +704,22 @@ the count, so they are not independent performance estimates. A low pool
 statistic means this task model predicts the feature poorly, not that the
 feature has no neural activity.
 
-The default threshold of 0.0 is a deliberate choice, and its sensitivity has
-not been tested. Pure-noise features score near zero, and roughly half of them
-score above 0.0. Such features land in the scoring mask, not the pool. When
-the noise is shared, pure-noise features' scores rise and fall together, so the
-pool can be nearly empty by chance. In Boldtailor's own predeclared synthetic
-check, two strong shared noise series loaded on every feature. Even so, 28 of
-30 pure-noise features scored above 0.0, the final pool held 2 features, and
-zero PCs were chosen (`tests/test_denoising_validation.py`). In a matched
-check without shared noise, zero PCs were chosen, as expected. Inspect
+**Pool threshold.** The pool statistic is the *winning* HRF's CV R², a
+maximum over library candidates, so it is biased upward for pure noise, and
+the bias grows with library size. A fixed threshold of 0.0 therefore puts
+most pure-noise features in the scoring mask, and with shared noise their
+scores rise and fall together. In Boldtailor's predeclared synthetic check
+(two shared noise series on every feature, 2-candidate library), 28 of 30
+pure-noise features scored above 0.0, the final pool held 2 features, and zero
+PCs were chosen. The default, `pool_r2_threshold="auto"`, instead fits
+GLMsingle's two-component Gaussian-mixture tail threshold to the statistic's
+own distribution in every fold and for the final pool, so it moves with that
+bias. On the same predeclared data it gave fold pools of 31-34 features (the
+30 noise features plus up to 4 of the weakest task features), one PC was
+chosen, and training coefficients, outer-run task prediction, and outer-run
+betas all improved (`tests/test_denoising_validation.py`). In the matched
+check without shared noise, zero PCs were chosen. A degenerate mixture
+raises; pass a number to use a fixed threshold. Inspect
 `noise_pool.sum()`, the fold pool sizes, and `candidate_scores` before relying
 on the choice.
 

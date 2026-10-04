@@ -12,6 +12,7 @@ import pandas as pd
 
 from boldtailor._arrays import own_array_tuples, own_fields, own_tuples, rebind
 from boldtailor._denoising_identity import RunIdentity
+from boldtailor._mixture_threshold import MixtureThreshold
 from boldtailor.data import _owned_table
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
@@ -52,7 +53,12 @@ class PcaDiagnostics:
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class DenoisingFold:
-    """Training-only HRFs, masks, and PCA of one count-selection fold."""
+    """Training-only HRFs, masks, and PCA of one count-selection fold.
+
+    ``pool_threshold`` is the threshold applied to ``pool_r2``; with
+    ``pool_r2_threshold="auto"`` it was fitted on this fold's training
+    statistic and ``pool_mixture`` holds the fit (else ``None``).
+    """
 
     validation_run: str
     training_runs: tuple[str, ...]
@@ -62,6 +68,8 @@ class DenoisingFold:
     zero_target: np.ndarray
     pool_r2: np.ndarray
     hrf_indices: np.ndarray
+    pool_threshold: float
+    pool_mixture: MixtureThreshold | None
     components: PcaDiagnostics
 
     def __post_init__(self):
@@ -78,12 +86,17 @@ class DenoisingResult:
     ``pool_r2`` is the final initial selection's indicator-consistent
     leave-one-run-out task-model R² that defined ``noise_pool``;
     ``selection_cv_r2`` is the raw ``select_hrfs`` score.
+    ``pool_r2_threshold`` is the setting (``"auto"`` or a float);
+    ``noise_pool_threshold`` is the value applied to the final ``pool_r2``,
+    and ``noise_pool_mixture`` the final mixture fit when automatic.
     """
 
     n_components: int
     counts: tuple[int, ...]
-    pool_r2_threshold: float
+    pool_r2_threshold: float | str
     score_tolerance: float
+    noise_pool_threshold: float
+    noise_pool_mixture: MixtureThreshold | None
     noise_pool: np.ndarray
     scoring_mask: np.ndarray
     pool_r2: np.ndarray

@@ -209,11 +209,18 @@ def _training_selection(training, train, labels, library, task_model):
     )
 
 
-def _checked_masks(selection, statistic, brain_mask, threshold, held_out):
-    masks = pool_masks(selection, brain_mask, threshold, statistic=statistic)
+def _fold_context(labels, train, held_out):
+    training = ", ".join(f"'{labels[r]}'" for r in train)
+    return f"the fold holding out run '{held_out}' (training runs {training})"
+
+
+def _checked_masks(selection, statistic, brain_mask, threshold, context):
+    masks = pool_masks(
+        selection, brain_mask, threshold, statistic=statistic, context=context
+    )
     if masks.scoring_size == 0:
         raise ValueError(
-            f"{_NO_TASK_SIGNAL}: the fold holding out run '{held_out}' "
+            f"{_NO_TASK_SIGNAL}: {context} "
             f"has an empty scoring mask at threshold {masks.threshold}"
         )
     return masks
@@ -231,7 +238,8 @@ def prepare_fold(
 ) -> FoldSetup:
     """Select HRFs, masks, and PCs from training runs; cache projected terms.
 
-    Messages name runs by ``run_labels`` (default ``run-01``, ...).
+    ``threshold`` is ``"auto"`` (mixture rule on the training statistic) or
+    a fixed float. Messages name runs by ``run_labels`` (default ``run-01``).
     """
     labels = run_labels_for(data, run_labels)
     train = _training_runs(data, validation_run)
@@ -239,7 +247,8 @@ def prepare_fold(
     training = subset_runs(data, train)
     selection = _training_selection(training, train, labels, library, task_model)
     statistic = pool_statistic(training, selection)
-    masks = _checked_masks(selection, statistic, brain_mask, threshold, held_out)
+    context = _fold_context(labels, train, held_out)
+    masks = _checked_masks(selection, statistic, brain_mask, threshold, context)
     components = analysis_components(training, masks.pool)
     runs = prepare_runs(data, library, task_model)
     split = (train, validation_run, labels)
@@ -388,7 +397,11 @@ def score_count(fold: FoldSetup, count: int) -> CountScore:
 
 
 def fold_score_table(folds, counts) -> pd.DataFrame:
-    """One row per fold and count: eligibility, reason, and fold-mean R²."""
+    """Per fold and count: eligibility, reason, fold-mean R², and fold masks.
+
+    Each fold's resolved pool threshold and pool/scoring sizes repeat on its
+    rows; with ``"auto"`` the threshold differs between folds.
+    """
     rows = []
     for fold in folds:
         for count in counts:
@@ -401,6 +414,9 @@ def fold_score_table(folds, counts) -> pd.DataFrame:
                     eligible=not score.reason,
                     reason=score.reason,
                     mean_r2=score.mean_r2,
+                    pool_r2_threshold=fold.masks.threshold,
+                    pool_size=fold.masks.pool_size,
+                    scoring_size=fold.masks.scoring_size,
                     n_scored=int(fold.scored.sum()),
                     n_zero_target=int(fold.zero_target.sum()),
                 )

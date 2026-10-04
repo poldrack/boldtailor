@@ -4,7 +4,10 @@ The pool is defined from a training HRF selection's time-series CV R² of each
 feature's winning HRF, with the held-out denominator projected off the same
 baseline confounds and missing-value indicators as the prediction (see
 :func:`pool_statistic`). A low score means weak prediction by the specified
-task model, not absence of neural activity. Pool time series are projected off the run's baseline
+task model, not absence of neural activity. The threshold is fixed or, with
+``"auto"``, GLMsingle's two-component Gaussian-mixture tail threshold of the
+statistic over the eligible features (see :mod:`boldtailor._mixture_threshold`).
+Pool time series are projected off the run's baseline
 confounds plus intercept, numerically zero columns are discarded, and the rest
 are scaled to unit L2 norm before a reduced SVD.
 """
@@ -15,6 +18,7 @@ import numpy as np
 
 from boldtailor._arrays import own_fields, readonly_array
 from boldtailor._hrf_cv import pooled_amplitude, prediction_loss, prepare_runs
+from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
 from boldtailor._scalars import is_integer, is_real
 from boldtailor._single_trial_design import _nuisance_matrix
 from boldtailor._single_trial_fit import nuisance_span
@@ -25,11 +29,15 @@ _EPS = np.finfo(float).eps
 
 @dataclass(frozen=True, kw_only=True)
 class PoolMasks:
-    """Disjoint Boolean feature masks fixed for every candidate PC count."""
+    """Disjoint Boolean feature masks fixed for every candidate PC count.
+
+    ``mixture`` is the fitted mixture when the threshold was automatic.
+    """
 
     pool: np.ndarray
     scoring: np.ndarray
     threshold: float
+    mixture: MixtureThreshold | None = None
 
     def __post_init__(self):
         own_fields(self, ("pool", "scoring"), dtype=bool)
@@ -45,9 +53,15 @@ class PoolMasks:
         return int(self.scoring.sum())
 
 
-def validate_threshold(value, name="pool_r2_threshold") -> float:
+AUTO = "auto"
+
+
+def validate_threshold(value, name="pool_r2_threshold") -> float | str:
+    """``"auto"`` (mixture rule) or a finite real number, as a float."""
+    if isinstance(value, str) and value == AUTO:
+        return AUTO
     if not is_real(value) or not np.isfinite(value):
-        raise ValueError(f"{name} must be a finite real number")
+        raise ValueError(f"{name} must be 'auto' or a finite real number")
     return float(value)
 
 
@@ -74,28 +88,44 @@ def _validate_statistic(statistic, n_features):
     return scores
 
 
+def _mixture(values, context):
+    try:
+        return mixture_threshold(values)
+    except ValueError as error:
+        raise ValueError(
+            f"{context}: automatic pool_r2_threshold failed: {error}; "
+            "pass a fixed pool_r2_threshold instead"
+        ) from error
+
+
 def pool_masks(
     selection: HrfSelectionResult,
     brain_mask: np.ndarray,
-    threshold: float,
+    threshold: float | str,
     *,
     statistic: np.ndarray,
+    context: str = "the noise pool",
 ) -> PoolMasks:
     """Pool: in-brain finite statistic <= threshold; scoring: > threshold.
 
     ``statistic`` is normally :func:`pool_statistic`. Features without a
-    defined HRF assignment belong to neither mask. Empty masks are returned
-    as such; callers decide whether they are fatal.
+    defined HRF assignment belong to neither mask. With ``"auto"`` the
+    threshold is the mixture tail threshold of the statistic over exactly
+    those eligible features; a failed fit raises naming ``context``. Empty
+    masks are returned as such; callers decide whether they are fatal.
     """
     _check_selection(selection)
     threshold = validate_threshold(threshold)
     scores = _validate_statistic(statistic, len(selection.hrf_indices))
     brain = validate_feature_mask(brain_mask, len(scores))
     defined = brain & np.isfinite(scores) & (selection.hrf_indices >= 0)
+    mixture = _mixture(scores[defined], context) if threshold == AUTO else None
+    threshold = threshold if mixture is None else mixture.threshold
     return PoolMasks(
         pool=defined & (scores <= threshold),
         scoring=defined & (scores > threshold),
         threshold=threshold,
+        mixture=mixture,
     )
 
 

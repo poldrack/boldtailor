@@ -418,7 +418,7 @@ From `boldtailor.denoising` (opt-in; see the
 
 ```text
 select_denoising(data, *, brain_mask, task_model=TaskModel(), library=None,
-                 counts=(0, 1, 2, 4, 6, 8, 10), pool_r2_threshold=0.0,
+                 counts=(0, 1, 2, 4, 6, 8, 10), pool_r2_threshold="auto",
                  score_tolerance=0.001, feature_signature=None,
                  run_labels=None) -> DenoisingResult
 with_denoising(data, result, *, feature_signature=None) -> AnalysisData
@@ -427,7 +427,14 @@ with_denoising(data, result, *, feature_signature=None) -> AnalysisData
 `select_denoising` needs at least three runs. `brain_mask` is a required
 Boolean vector with one entry per feature. `counts` must contain 0, be
 nonnegative integers (not Booleans), and is sorted and deduplicated.
-`pool_r2_threshold` must be finite. `score_tolerance` must be finite and
+`pool_r2_threshold` is `"auto"` or a finite number. `"auto"` fits a
+two-component `sklearn.mixture.GaussianMixture` to the pool statistic of the
+in-brain features with a defined HRF (z-scored; `random_state=0`, 3
+initialisations, `tol=1e-10`) and uses the rightmost point where the
+lower-mean component's posterior falls through 0.5 (GLMsingle's
+`findtailthreshold` rule), separately in every fold and for the final pool.
+Fewer than two distinct values, or no crossing, raise naming the fold or
+final runs; there is no fallback. A number is applied as a fixed threshold. `score_tolerance` must be finite and
 nonnegative. `library=None` uses `default_hrf_library()`. Every input is
 validated before any fitting.
 
@@ -454,7 +461,13 @@ augmentations. Provenance gains a `denoising_augmentation` activity.
 From `boldtailor.denoising_results`:
 
 - `DenoisingResult` holds:
-  - the choice: `n_components`, `counts`, `pool_r2_threshold`, `score_tolerance`
+  - the choice: `n_components`, `counts`, `pool_r2_threshold` (the setting),
+    `score_tolerance`
+  - the final threshold: `noise_pool_threshold` and `noise_pool_mixture`
+    (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`,
+    `n_values`, `to_dict()`; `None` for a fixed threshold). Each
+    `DenoisingFold` has `pool_threshold` and `pool_mixture`, and
+    `fold_scores` has `pool_r2_threshold`, `pool_size`, and `scoring_size`
   - the final all-run masks and statistic: `noise_pool`, `scoring_mask`,
     `pool_r2`
   - `initial_selection` (`HrfSelectionResult`)

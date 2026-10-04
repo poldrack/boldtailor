@@ -4,7 +4,9 @@
 prediction (selection statistic, not a performance estimate). It then builds
 the noise pool from an initial HRF selection on all runs, scored by the
 indicator-consistent leave-one-run-out task-model R², and returns that
-pool's leading run-specific PCs. The pool is not iterated after adding PCs.
+pool's leading run-specific PCs. By default (``pool_r2_threshold="auto"``)
+each pool threshold is GLMsingle's two-component Gaussian-mixture tail
+threshold, fitted separately in every fold and for the final pool. The pool is not iterated after adding PCs.
 ``with_denoising`` appends those PCs to the baseline confounds of the same
 analysis for ordinary HRF selection and fitting.
 """
@@ -65,7 +67,7 @@ class _Settings:
     task_model: TaskModel
     library: HrfLibrary
     counts: tuple[int, ...]
-    threshold: float
+    threshold: float | str
     tolerance: float
     feature_signature: str | None
 
@@ -144,6 +146,8 @@ def _fold_result(fold, labels):
         zero_target=fold.zero_target,
         pool_r2=fold.pool_statistic,
         hrf_indices=fold.selection.hrf_indices,
+        pool_threshold=fold.masks.threshold,
+        pool_mixture=fold.masks.mixture,
         components=_diagnostics(fold.components, training, fold.masks.pool_size),
     )
 
@@ -161,8 +165,13 @@ def _final_pool(data, labels, settings):
         feature_signature=settings.feature_signature,
     )
     statistic = pool_statistic(data, selection)
+    runs = ", ".join(f"'{label}'" for label in labels)
     masks = pool_masks(
-        selection, settings.brain_mask, settings.threshold, statistic=statistic
+        selection,
+        settings.brain_mask,
+        settings.threshold,
+        statistic=statistic,
+        context=f"the final full-data noise pool (runs {runs})",
     )
     return selection, statistic, masks, analysis_components(data, masks.pool)
 
@@ -208,6 +217,23 @@ def _fold_identities(folds):
     )
 
 
+def _mixture_record(mixture):
+    return None if mixture is None else mixture.to_dict()
+
+
+def _threshold_records(settings, masks, folds):
+    rule = "fixed" if masks.mixture is None else masks.mixture.to_dict()["method"]
+    return dict(
+        pool_r2_threshold=settings.threshold,
+        pool_threshold_rule=rule,
+        noise_pool_threshold=masks.threshold,
+        noise_pool_mixture=_mixture_record(masks.mixture),
+        fold_pool_thresholds=[f.pool_threshold for f in folds],
+        fold_pool_mixtures=[_mixture_record(f.pool_mixture) for f in folds],
+        fold_pool_sizes=[int(f.pool.sum()) for f in folds],
+    )
+
+
 def _excluded_counts(scores):
     failed = scores[~scores["eligible"]]
     return [
@@ -231,7 +257,7 @@ def _selection_activity(context, scores, folds, final):
         feature_signature=settings.feature_signature,
         counts=list(settings.counts),
         n_components=prefixes[0].shape[1],
-        pool_r2_threshold=settings.threshold,
+        **_threshold_records(settings, masks, folds),
         score_tolerance=settings.tolerance,
         excluded_counts=_excluded_counts(scores),
         pool_statistic="indicator_consistent_loro_task_model_r2",
@@ -277,6 +303,8 @@ def _assemble(operation, context, count):
         counts=count.counts,
         pool_r2_threshold=settings.threshold,
         score_tolerance=settings.tolerance,
+        noise_pool_threshold=masks.threshold,
+        noise_pool_mixture=masks.mixture,
         noise_pool=masks.pool,
         scoring_mask=masks.scoring,
         pool_r2=statistic,
@@ -300,7 +328,7 @@ def select_denoising(
     task_model: TaskModel = TaskModel(),
     library: HrfLibrary | None = None,
     counts: tuple[int, ...] = (0, 1, 2, 4, 6, 8, 10),
-    pool_r2_threshold: float = 0.0,
+    pool_r2_threshold: float | str = "auto",
     score_tolerance: float = 0.001,
     feature_signature: str | None = None,
     run_labels: Sequence[str] | None = None,
@@ -309,7 +337,11 @@ def select_denoising(
 
     Requires at least three runs and a caller-supplied Boolean ``brain_mask``
     in feature order. Initial HRFs use baseline confounds only. Count scores
-    are selection statistics, not independent performance estimates. Positive
+    are selection statistics, not independent performance estimates.
+    ``pool_r2_threshold="auto"`` fits GLMsingle's two-component
+    Gaussian-mixture tail threshold to the pool statistic in every fold and
+    for the final pool; a degenerate fit raises (no fallback). A finite float
+    applies that fixed threshold everywhere. Positive
     counts that any fold cannot support are unavailable; zero always remains.
     Raises when the final full-data pool cannot support the chosen count.
     """

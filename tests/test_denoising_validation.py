@@ -24,15 +24,15 @@ from tests.denoising_fixtures import make_denoising_fixture, make_validation_dat
 BASELINE = ("drift", "cosine")
 MODEL = ModelSpec(contrasts={"task": "task"}, confounds=BASELINE, drift_model=None)
 
-# Recorded outcome of the first (predeclared) run, kept rather than re-seeded:
-# the shared latent noise makes the pure-noise features' pool statistics co-vary,
-# 28 of 30 score above the default 0.0 threshold, the final pool holds 2 features
-# (fold pools 3-17), and selection returns zero components. This is behavior of
-# the planned threshold rule, not a code defect; strict so a change is noticed.
-POOL_COLLAPSE = pytest.mark.xfail(
-    strict=True,
-    reason="predeclared recovery seed: threshold-0 pool collapses under shared noise",
-)
+# Recorded history (seeds and effect sizes unchanged since predeclaration):
+# under the original fixed 0.0 threshold the recovery checks below failed and
+# were strict xfail. The pool statistic is the winning HRF's CV R², a maximum
+# over library candidates, so pure noise is biased above 0 (more so for larger
+# libraries) and shared noise makes those scores co-vary: 28 of 30 noise
+# features scored above 0, the final pool held 2 features, and 0 PCs won.
+# With the default pool_r2_threshold="auto" (per-fold Gaussian-mixture tail
+# threshold, GLMsingle's rule) the same data give fold pools of 31-34
+# features, 1 selected PC, and all four checks pass.
 
 
 def denoise(dataset):
@@ -82,12 +82,10 @@ def test_selection_never_sees_the_outer_run(recovery, recovery_result):
     assert lengths == [len(t) for t in recovery.training.frame_times]
 
 
-@POOL_COLLAPSE
 def test_shared_noise_yields_a_positive_component_count(recovery_result):
     assert recovery_result.n_components > 0
 
 
-@POOL_COLLAPSE
 def test_denoising_improves_training_coefficient_recovery(recovery, arms):
     errors = {
         arm: rmse(result.effect("task")[recovery.task], recovery.amplitudes)
@@ -110,7 +108,6 @@ def predicted_task_signal(dataset, selection, effects):
     return np.column_stack(columns)
 
 
-@POOL_COLLAPSE
 def test_frozen_training_estimates_better_predict_the_outer_task_signal(recovery, arms):
     truth = recovery.outer_task_signal[:, recovery.task]
     errors = {
@@ -142,7 +139,6 @@ def outer_with_pcs(outer, components, names):
     )
 
 
-@POOL_COLLAPSE
 def test_frozen_pool_and_count_improve_outer_run_beta_recovery(
     recovery, recovery_result, arms
 ):
