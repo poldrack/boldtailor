@@ -15,6 +15,7 @@ import pytest
 
 from boldtailor._denoising_cv import select_component_count
 from boldtailor._denoising_pool import pool_masks, pool_statistic
+from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor.data import AnalysisData, from_arrays
 from boldtailor.denoising import select_denoising, with_denoising
 from boldtailor.denoising_results import DenoisingResult
@@ -139,6 +140,8 @@ def digest(array, dtype="<f8"):
         (dict(counts=(0, 1.5)), "counts"),
         (dict(pool_r2_threshold=np.nan), "pool_r2_threshold"),
         (dict(pool_r2_threshold=True), "pool_r2_threshold"),
+        (dict(pool_r2_threshold="Auto"), "pool_r2_threshold"),
+        (dict(pool_r2_threshold="0.1"), "pool_r2_threshold"),
         (dict(score_tolerance=-0.1), "score_tolerance"),
         (dict(score_tolerance=np.inf), "score_tolerance"),
         (dict(task_model="rt"), "task_model"),
@@ -174,13 +177,13 @@ def test_count_and_tables_follow_the_cross_validated_choice(fixture, result):
         task_model=fixture.task_model,
         library=fixture.library,
         counts=COUNTS,
-        threshold=0.0,
+        threshold="auto",
         tolerance=0.001,
     )
     assert isinstance(result, DenoisingResult)
     assert result.n_components == expected.n_components
     assert result.counts == COUNTS
-    assert result.pool_r2_threshold == 0.0
+    assert result.pool_r2_threshold == "auto"
     assert result.score_tolerance == 0.001
     scores = result.candidate_scores
     assert list(scores["count"]) == list(COUNTS)
@@ -197,7 +200,7 @@ def test_default_selection_settings_match_the_plan(fixture):
 
     signature = inspect.signature(select_denoising)
     assert signature.parameters["counts"].default == (0, 1, 2, 4, 6, 8, 10)
-    assert signature.parameters["pool_r2_threshold"].default == 0.0
+    assert signature.parameters["pool_r2_threshold"].default == "auto"
     assert signature.parameters["score_tolerance"].default == 0.001
     assert signature.parameters["library"].default is None
     assert signature.parameters["task_model"].default == TaskModel()
@@ -213,7 +216,7 @@ def test_final_pool_is_rebuilt_from_all_runs_with_the_pool_statistic(fixture, re
         fixture.data, library=fixture.library, task_model=fixture.task_model
     )
     statistic = pool_statistic(fixture.data, full)
-    masks = pool_masks(full, fixture.brain_mask, 0.0, statistic=statistic)
+    masks = pool_masks(full, fixture.brain_mask, "auto", statistic=statistic)
     np.testing.assert_array_equal(result.noise_pool, masks.pool)
     np.testing.assert_array_equal(result.scoring_mask, masks.scoring)
     np.testing.assert_array_equal(result.pool_r2, statistic)
@@ -269,7 +272,7 @@ def test_fold_diagnostics_record_training_masks_and_hrfs(fixture, result):
             training, library=fixture.library, task_model=fixture.task_model
         )
         statistic = pool_statistic(training, selection)
-        masks = pool_masks(selection, fixture.brain_mask, 0.0, statistic=statistic)
+        masks = pool_masks(selection, fixture.brain_mask, "auto", statistic=statistic)
         np.testing.assert_array_equal(fold.hrf_indices, selection.hrf_indices)
         np.testing.assert_array_equal(fold.pool, masks.pool)
         np.testing.assert_array_equal(fold.scoring, masks.scoring)
@@ -358,6 +361,97 @@ def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
     assert [row["count"] for row in activity["excluded_counts"]] == [1, 2, 4]
 
 
+# ---- pool threshold: automatic mixture rule and fixed values ------------------
+
+
+def test_final_pool_uses_the_mixture_threshold_of_the_final_statistic(fixture, result):
+    defined = fixture.brain_mask & (result.initial_hrf_indices >= 0)
+    defined &= np.isfinite(result.pool_r2)
+    expected = mixture_threshold(result.pool_r2[defined])
+    assert result.noise_pool_threshold == expected.threshold
+    assert result.noise_pool_mixture == expected
+    np.testing.assert_array_equal(
+        result.noise_pool, defined & (result.pool_r2 <= expected.threshold)
+    )
+
+
+def test_fold_diagnostics_and_table_record_each_fold_threshold(fixture, result):
+    table = result.fold_scores
+    for fold in result.folds:
+        defined = fixture.brain_mask & (fold.hrf_indices >= 0)
+        defined &= np.isfinite(fold.pool_r2)
+        expected = mixture_threshold(fold.pool_r2[defined])
+        assert fold.pool_threshold == expected.threshold
+        assert fold.pool_mixture == expected
+        rows = table[table["validation_run"] == fold.validation_run]
+        assert (rows["pool_r2_threshold"] == fold.pool_threshold).all()
+        assert (rows["pool_size"] == int(fold.pool.sum())).all()
+        assert (rows["scoring_size"] == int(fold.scoring.sum())).all()
+
+
+def test_provenance_records_the_threshold_rule_and_every_fit(result):
+    activity = last_activity(result.provenance)
+    assert activity["pool_r2_threshold"] == "auto"
+    assert activity["pool_threshold_rule"] == "gaussian_mixture_tail_threshold"
+    assert activity["noise_pool_threshold"] == result.noise_pool_threshold
+    assert activity["noise_pool_mixture"] == result.noise_pool_mixture.to_dict()
+    assert activity["noise_pool_mixture"]["n_components"] == 2
+    assert activity["fold_pool_thresholds"] == [f.pool_threshold for f in result.folds]
+    assert activity["fold_pool_mixtures"] == [
+        f.pool_mixture.to_dict() for f in result.folds
+    ]
+    assert activity["fold_pool_sizes"] == [int(f.pool.sum()) for f in result.folds]
+
+
+def test_fixed_threshold_keeps_the_fixed_rule(fixture):
+    result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=0.0)
+    assert result.pool_r2_threshold == 0.0
+    assert result.noise_pool_threshold == 0.0
+    assert result.noise_pool_mixture is None
+    assert all(f.pool_threshold == 0.0 and f.pool_mixture is None for f in result.folds)
+    full = select_hrfs(
+        fixture.data, library=fixture.library, task_model=fixture.task_model
+    )
+    masks = pool_masks(
+        full, fixture.brain_mask, 0.0, statistic=pool_statistic(fixture.data, full)
+    )
+    np.testing.assert_array_equal(result.noise_pool, masks.pool)
+    activity = last_activity(result.provenance)
+    assert activity["pool_r2_threshold"] == 0.0
+    assert activity["pool_threshold_rule"] == "fixed"
+    assert activity["noise_pool_threshold"] == 0.0
+    assert activity["noise_pool_mixture"] is None
+    assert activity["fold_pool_mixtures"] == [None] * 4
+    assert (result.fold_scores["pool_r2_threshold"] == 0.0).all()
+
+
+def test_integer_fixed_threshold_is_stored_as_float(fixture):
+    result = run_selection(fixture, counts=(0,), pool_r2_threshold=0)
+    assert isinstance(result.pool_r2_threshold, float)
+
+
+def test_degenerate_fold_mixture_raises_with_labels_and_a_hint(fixture):
+    mask = np.zeros(fixture.data.n_features, dtype=bool)
+    mask[0] = True
+    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
+        run_selection(fixture, brain_mask=mask, run_labels=LABELS)
+    assert "holding out run 'sesA'" in str(error.value)
+
+
+def test_degenerate_final_mixture_raises_instead_of_falling_back(fixture, monkeypatch):
+    import boldtailor.denoising as denoising
+
+    # Only the final full-data pool uses the public module's statistic.
+    monkeypatch.setattr(
+        denoising, "pool_statistic", lambda data, selection: np.full(26, 0.2)
+    )
+    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
+        run_selection(fixture, counts=(0,), run_labels=LABELS)
+    message = str(error.value)
+    assert "final full-data noise pool" in message
+    assert "'sesA', 'sesB', 'sesC', 'sesD'" in message and "distinct" in message
+
+
 def test_final_pool_that_cannot_support_the_count_raises(fixture, monkeypatch):
     import boldtailor.denoising as denoising
 
@@ -437,7 +531,7 @@ def test_selection_provenance_records_the_identity_of_every_choice(fixture, resu
     assert activity["library_fingerprint"] == fixture.library.fingerprint
     assert activity["counts"] == list(COUNTS)
     assert activity["n_components"] == result.n_components
-    assert activity["pool_r2_threshold"] == 0.0
+    assert activity["pool_r2_threshold"] == "auto"
     assert activity["score_tolerance"] == 0.001
     assert activity["run_labels"] == list(result.run_labels)
     assert activity["folds"][1] == dict(

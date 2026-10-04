@@ -13,6 +13,7 @@ from boldtailor._denoising_pool import (
     pool_masks,
     run_components,
 )
+from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.model import TaskModel
 from tests.denoising_fixtures import GROUP_SIZES, make_denoising_fixture
@@ -121,10 +122,82 @@ def test_brain_mask_must_be_boolean_vector_in_feature_order(selection, mask):
         masks_of(selection, mask, 0.0)
 
 
-@pytest.mark.parametrize("threshold", [np.nan, np.inf, -np.inf, "0", None, True])
+@pytest.mark.parametrize(
+    "threshold", [np.nan, np.inf, -np.inf, "0", "Auto", "", None, True]
+)
 def test_threshold_must_be_finite_real(fixture, selection, threshold):
     with pytest.raises(ValueError, match="pool_r2_threshold"):
         masks_of(selection, fixture.brain_mask, threshold)
+
+
+# ---- automatic (Gaussian-mixture) threshold ------------------------------------
+
+
+def bimodal_statistic(n=N_FEATURES, seed=5):
+    """Two thirds of features near 0 (SD 0.01), the rest near 0.5 (SD 0.1)."""
+    rng = np.random.default_rng(seed)
+    low = n * 2 // 3
+    return np.concatenate([rng.normal(0, 0.01, low), rng.normal(0.5, 0.1, n - low)])
+
+
+def test_auto_threshold_is_the_mixture_threshold_of_eligible_values(selection):
+    statistic = bimodal_statistic()
+    indices = np.zeros(N_FEATURES, dtype=int)
+    indices[2] = -1
+    brain = np.ones(N_FEATURES, bool)
+    brain[[0, 20]] = False
+    statistic[1] = np.nan
+    eligible = brain & np.isfinite(statistic) & (indices >= 0)
+    masks = pool_masks(
+        with_scores(selection, np.zeros(N_FEATURES), indices),
+        brain,
+        "auto",
+        statistic=statistic,
+    )
+    expected = mixture_threshold(statistic[eligible])
+    assert masks.threshold == expected.threshold
+    assert masks.mixture == expected
+    np.testing.assert_array_equal(
+        masks.pool, eligible & (statistic <= expected.threshold)
+    )
+    np.testing.assert_array_equal(
+        masks.scoring, eligible & (statistic > expected.threshold)
+    )
+    assert 0 < masks.pool_size and 0 < masks.scoring_size
+
+
+def test_auto_threshold_ignores_values_outside_the_eligible_features(selection):
+    statistic = bimodal_statistic()
+    indices = np.zeros(N_FEATURES, dtype=int)
+    indices[2] = -1
+    brain = np.ones(N_FEATURES, bool)
+    brain[0] = False
+    changed = statistic.copy()
+    changed[[0, 2]] = [5.0, -5.0]
+    chosen = with_scores(selection, np.zeros(N_FEATURES), indices)
+    a = pool_masks(chosen, brain, "auto", statistic=statistic)
+    b = pool_masks(chosen, brain, "auto", statistic=changed)
+    assert a.threshold == b.threshold
+
+
+def test_fixed_threshold_records_no_mixture(selection):
+    masks = masks_of(selection, np.ones(N_FEATURES, bool), 0.0)
+    assert masks.threshold == 0.0 and masks.mixture is None
+
+
+def test_degenerate_auto_threshold_names_the_context_and_suggests_a_fixed_one(
+    selection,
+):
+    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
+        pool_masks(
+            selection,
+            np.ones(N_FEATURES, bool),
+            "auto",
+            statistic=np.full(N_FEATURES, 0.1),
+            context="the fold holding out run 'sesB'",
+        )
+    message = str(error.value)
+    assert "the fold holding out run 'sesB'" in message and "distinct" in message
 
 
 def test_selection_must_be_an_hrf_selection_result(fixture):

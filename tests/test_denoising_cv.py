@@ -28,6 +28,7 @@ from boldtailor._denoising_pool import (
     pool_statistic,
     run_components,
 )
+from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays
@@ -797,3 +798,105 @@ def test_invalid_run_design_names_only_that_run(fixture, broken):
     others = [label for i, label in enumerate(CV_LABELS) if i != broken]
     assert not any(label in message for label in others)
     assert not re.search(r"\brun \d", message)
+
+
+# ---- automatic pool threshold ---------------------------------------------------
+
+
+def eligible_statistic(result, brain_mask):
+    statistic = result.pool_statistic
+    defined = brain_mask & np.isfinite(statistic)
+    return statistic[defined & (result.selection.hrf_indices >= 0)]
+
+
+@pytest.mark.parametrize("validation", [0, 2])
+def test_auto_fold_threshold_comes_from_the_training_statistic(fixture, validation):
+    result = fold(fixture.data, validation, fixture, fixture.task_model, "auto")
+    expected = mixture_threshold(eligible_statistic(result, fixture.brain_mask))
+    assert result.masks.threshold == expected.threshold
+    assert result.masks.mixture == expected
+    np.testing.assert_array_equal(
+        result.masks.pool,
+        fixture.brain_mask
+        & (result.selection.hrf_indices >= 0)
+        & (result.pool_statistic <= expected.threshold),
+    )
+
+
+def test_auto_fold_threshold_ignores_the_heldout_run(fixture):
+    run = 1
+    rng = np.random.default_rng(11)
+    signals = [s.copy() for s in fixture.data.signals]
+    signals[run] += rng.normal(scale=5.0, size=signals[run].shape)
+    perturbed = rebuild(fixture.data, signals=signals)
+    a = fold(fixture.data, run, fixture, fixture.task_model, "auto")
+    b = fold(perturbed, run, fixture, fixture.task_model, "auto")
+    assert a.masks.threshold == b.masks.threshold
+    np.testing.assert_array_equal(a.masks.pool, b.masks.pool)
+
+
+def test_fold_table_records_each_fold_threshold_and_mask_sizes(fixture):
+    chosen = select_component_count(
+        fixture.data,
+        brain_mask=fixture.brain_mask,
+        task_model=fixture.task_model,
+        library=fixture.library,
+        counts=COUNTS,
+        threshold="auto",
+        tolerance=0.001,
+    )
+    table = chosen.fold_scores
+    for setup in chosen.folds:
+        rows = table[table["validation_run"] == setup.validation_run]
+        assert len(rows) == len(COUNTS)
+        assert (rows["pool_r2_threshold"] == setup.masks.threshold).all()
+        assert (rows["pool_size"] == setup.masks.pool_size).all()
+        assert (rows["scoring_size"] == setup.masks.scoring_size).all()
+    thresholds = {setup.masks.threshold for setup in chosen.folds}
+    assert len(thresholds) > 1  # fitted per fold, not shared
+
+
+def test_fixed_threshold_is_recorded_in_the_fold_table(fixture):
+    chosen = select_component_count(
+        fixture.data,
+        brain_mask=fixture.brain_mask,
+        task_model=fixture.task_model,
+        library=fixture.library,
+        counts=(0, 1),
+        threshold=THRESHOLD,
+        tolerance=0.001,
+    )
+    assert (chosen.fold_scores["pool_r2_threshold"] == THRESHOLD).all()
+    assert all(setup.masks.mixture is None for setup in chosen.folds)
+
+
+def test_degenerate_auto_threshold_names_the_fold_runs(fixture):
+    mask = np.zeros(fixture.data.n_features, dtype=bool)
+    mask[0] = True
+    with pytest.raises(ValueError, match="pool_r2_threshold") as error:
+        prepare_fold(
+            fixture.data,
+            2,
+            brain_mask=mask,
+            task_model=fixture.task_model,
+            library=fixture.library,
+            threshold="auto",
+            run_labels=("sesA", "sesB", "sesC", "sesD"),
+        )
+    message = str(error.value)
+    assert "holding out run 'sesC'" in message
+    assert "'sesA', 'sesB', 'sesD'" in message
+
+
+@pytest.mark.parametrize("threshold", ["Auto", np.nan, None])
+def test_component_count_rejects_invalid_thresholds(fixture, threshold):
+    with pytest.raises(ValueError, match="pool_r2_threshold"):
+        select_component_count(
+            fixture.data,
+            brain_mask=fixture.brain_mask,
+            task_model=fixture.task_model,
+            library=fixture.library,
+            counts=(0,),
+            threshold=threshold,
+            tolerance=0.001,
+        )
