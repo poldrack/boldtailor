@@ -1027,9 +1027,14 @@ def _stage_artifacts(
     return artifacts + input_artifacts(settings, runs, task_model)
 
 
+def figure_name(settings, name):
+    """A figure's PNG path relative to the derivative root."""
+    return f"{settings.stem}_desc-{name}_plot.png"
+
+
 def _figure_artifacts(settings, figures):
     return [
-        figure_artifact(f"{settings.stem}_desc-{name}_plot.png", figure)
+        figure_artifact(figure_name(settings, name), figure)
         for name, figure in (figures or {}).items()
     ]
 

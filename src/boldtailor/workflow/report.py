@@ -4,7 +4,6 @@ import base64
 import html
 import shlex
 from dataclasses import fields
-from io import BytesIO
 
 from boldtailor.workflow.settings import (
     STAGES,
@@ -59,11 +58,10 @@ _LIST_FLAGS = (
 )
 
 
-def embed_figure(figure):
-    buffer = BytesIO()
-    figure.savefig(buffer, format="png", dpi=110, bbox_inches="tight")
-    data = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f'<img alt="figure" src="data:image/png;base64,{data}">'
+def embed_png(data):
+    """An inline image tag for already encoded PNG bytes."""
+    encoded = base64.b64encode(data).decode("ascii")
+    return f'<img alt="figure" src="data:image/png;base64,{encoded}">'
 
 
 def _default(name):
@@ -150,6 +148,13 @@ def _table(frame):
     return frame.to_html(index=False, float_format=lambda v: f"{v:.4g}", border=0)
 
 
+def _optional(title, frame):
+    """A titled table, or nothing when the run produced no such table."""
+    if frame is None or len(frame) == 0:
+        return ""
+    return f"<h3>{html.escape(title)}</h3>{_table(frame)}"
+
+
 def _section(name, title, body):
     return f'<section id="{name}"><h2>{html.escape(title)}</h2>{body}</section>'
 
@@ -186,7 +191,7 @@ def _inputs_body(runs, task_model, library, notes=()):
 
 def _figures(figures, keys):
     return "".join(
-        f"<h3>{html.escape(k)}</h3>{embed_figure(figures[k])}"
+        f"<h3>{html.escape(k)}</h3>{embed_png(figures[k])}"
         for k in keys
         if k in figures
     )
@@ -224,19 +229,38 @@ def _stage_note(name, settings, skipped):
     return None
 
 
+def _confounds(names):
+    if not names:
+        return ""
+    return _note(f"Confounds ({len(names)}): {', '.join(names)}")
+
+
+def _input_tables(data):
+    return (
+        _optional("Runs", data["run_summary"])
+        + _confounds(data["confounds"])
+        + _optional("HRF library (first rows)", data["library_table"])
+    )
+
+
 def _bodies(settings, data, figures):
     return {
         "settings": _settings_body(settings),
         "inputs": _inputs_body(
             data["runs"], data["task_model"], data["library"], data["notes"]
         )
+        + _input_tables(data)
         + _figures(figures, ("Design", "Library")),
         "glms": _table(data["glm_summary"])
         + _table(data["hrf_summary"])
+        + _optional("Most often selected HRFs", data["selected_hrfs"])
         + _figures(figures, ("GLMComparison", "GLMR2Surface")),
         "reliability": _table(data["reliability"])
+        + _optional("Full-curve correlations", data["curve_reliability"])
         + _figures(figures, ("HRFReliability", "HRFCurveReliability")),
         "betas": _table(data["tuning"])
+        + _optional("Outer encoding scores", data["encoding"])
+        + _optional("Ridge choices at a grid endpoint", data["ridge_boundary"])
         + _figures(figures, ("FractionSelection", "RidgeTuning", "BetaR2Surface")),
         "summaries": _table(data["activation_summary"])
         + _table(data["rt_summary"])
@@ -264,7 +288,15 @@ def render_report(
     skipped,
     manifest,
     notes=(),
+    run_summary=None,
+    confounds=(),
+    library_table=None,
+    selected_hrfs=None,
+    curve_reliability=None,
+    encoding=None,
+    ridge_boundary=None,
 ):
+    """The report; ``figures`` maps names to PNG bytes, optional tables may be None."""
     data = dict(locals())
     bodies = _bodies(settings, data, dict(figures))
     sections = "".join(

@@ -189,12 +189,22 @@ def _run(args, settings):
             settings=settings.to_dict(), **workflow_run.describe_inputs(settings)
         )
         print(json.dumps(plan, indent=2))
-        return 0
+        return _plan_status(plan["problems"])
     result = workflow_run.run_workflow(settings)
     print(
         f"wrote {len(result.paths)} files under {settings.output_dir}; report: {result.report_path}"
     )
     return 0
+
+
+def _plan_status(problems):
+    """Report a dry run's problems and exit as the real run would (in run order)."""
+    for problem in problems:
+        prefix = "input error" if problem["kind"] == "input" else "error"
+        print(f"{prefix}: {problem['message']}", file=sys.stderr)
+    if not problems:
+        return 0
+    return 2 if problems[0]["kind"] == "input" else 1
 
 
 def _fail(message, code):

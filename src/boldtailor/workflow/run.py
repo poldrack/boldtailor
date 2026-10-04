@@ -20,6 +20,7 @@ from boldtailor.workflow import (
     outputs,
     plots,
     report,
+    summaries,
     surfaces,
 )
 from boldtailor.workflow.files import odd_even_parity
@@ -64,6 +65,7 @@ class _State:
     tuning: pd.DataFrame | None = None
     beta_models: dict = field(default_factory=dict)
     activation: dict | None = None
+    curve_reliability: pd.DataFrame | None = None
     figures: dict = field(default_factory=dict)
     skipped: list = field(default_factory=list)
     notes: list = field(default_factory=list)
@@ -100,17 +102,36 @@ def _session(settings):
 
 
 def describe_inputs(settings):
-    """What a run would use (for ``--dry-run``), without fitting anything."""
-    runs, task_model, notes = _session(settings)
-    return dict(
-        runs=[r.label for r in runs],
-        task_model=task_model.to_dict(),
-        notes=notes,
+    """What a run would use (for ``--dry-run``), without fitting anything.
+
+    ``problems`` lists what would stop the run, each with a ``kind``
+    (``existing_results`` or ``input``) and a ``message``, in run order.
+    """
+    plan = dict(
         output_dir=str(settings.output_dir),
         fmriprep_dir=str(settings.fmriprep_dir),
         library_candidates=len(settings.build_library().candidates),
         stages=[s for s in STAGES if s in settings.stages],
+        notes=[],
+        problems=[],
     )
+    try:
+        outputs.check_output(settings)
+    except FileExistsError as error:
+        plan["problems"].append(dict(kind="existing_results", message=str(error)))
+    try:
+        _describe_session(settings, plan)
+    except (inputs.InputError, FileNotFoundError) as error:
+        plan["problems"].append(dict(kind="input", message=str(error)))
+    return plan
+
+
+def _describe_session(settings, plan):
+    runs, task_model, notes = _session(settings)
+    plan.update(runs=[r.label for r in runs], task_model=task_model.to_dict())
+    plan["notes"] += notes
+    _check_ridge_cv(settings, runs, task_model)
+    _find_meshes(settings, plan["notes"])
 
 
 def _load(settings):
@@ -242,7 +263,9 @@ def _reliability_stage(state):
         state.library, odd, even
     )
     curve_r = curve_correlations(state.library, odd, even)
-    _, state.figures["HRFCurveReliability"] = plots.curve_agreement(curve_r)
+    state.curve_reliability, state.figures["HRFCurveReliability"] = (
+        plots.curve_agreement(curve_r)
+    )
 
 
 def _beta_stage(state):
@@ -305,30 +328,6 @@ def _surface_maps(state):
     ]
 
 
-def _median(values):
-    finite = np.asarray(values)[np.isfinite(values)]
-    return float(np.median(finite)) if finite.size else float("nan")
-
-
-def _activation_summary(activation):
-    if not activation:
-        return None
-    rows = [dict(model=k, median_t=_median(v["t"])) for k, v in activation.items()]
-    return pd.DataFrame(rows)
-
-
-def _rt_summary(state):
-    if state.activation is None:
-        return None
-    rows = [
-        dict(model=k, scope=s, median_r=_median(m.fit["rt"][s]))
-        for k, m in state.beta_models.items()
-        if m.fit["rt"] is not None
-        for s in ("all", "odd", "even")
-    ]
-    return pd.DataFrame(rows) if rows else None
-
-
 def _provenance(path, stem, listed):
     """The provenance JSON sharing this file's descriptor, when one was written."""
     match = _DESCRIPTOR.search(path)
@@ -347,9 +346,25 @@ def _manifest(paths, stem):
     return [(p, _provenance(p, stem, listed)) for p in paths]
 
 
-def _render(state, paths):
+def _stage_tables(state):
+    return dict(
+        selected_hrfs=summaries.selected_hrfs(
+            state.selections, state.library, len(state.brain)
+        ),
+        curve_reliability=state.curve_reliability,
+        encoding=summaries.encoding_scores(state.beta_models),
+        ridge_boundary=summaries.ridge_boundary(state.beta_models),
+        activation_summary=summaries.activation_summary(state.activation),
+        rt_summary=summaries.rt_summary(state.activation, state.beta_models),
+    )
+
+
+def _render(state, artifacts):
+    """The report, embedding the figure PNGs exactly as published."""
+    payloads = {a.path: a.payload for a in artifacts}
+    settings = state.settings
     return report.render_report(
-        state.settings,
+        settings,
         runs=state.runs,
         task_model=state.task_model,
         library=state.library,
@@ -357,12 +372,15 @@ def _render(state, paths):
         hrf_summary=outputs.hrf_boundary_table(state.selections),
         reliability=state.reliability,
         tuning=state.tuning,
-        activation_summary=_activation_summary(state.activation),
-        rt_summary=_rt_summary(state),
-        figures=state.figures,
+        figures={
+            name: payloads[outputs.figure_name(settings, name)]
+            for name in state.figures
+        },
         skipped=state.skipped,
         notes=state.notes,
-        manifest=_manifest(paths, state.settings.stem),
+        manifest=_manifest([a.path for a in artifacts], settings.stem),
+        **summaries.input_tables(state.runs, state.task_model, state.library),
+        **_stage_tables(state),
     )
 
 
@@ -384,7 +402,7 @@ def _publish(state):
         report=outputs.report_name(settings),
         include_hrf_splits=_reliability_runs(state),
     )
-    html = _render(state, [a.path for a in artifacts])
+    html = _render(state, artifacts)
     return outputs.publish_workflow(settings, state.runs, artifacts, html.encode())
 
 
