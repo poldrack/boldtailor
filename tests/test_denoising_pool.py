@@ -46,6 +46,16 @@ def oracle_normalized_pool(y, confounds):
     return residual[:, keep] / norms[keep]
 
 
+def masks_of(selection, brain_mask, threshold):
+    """Masks from the selection's own CV R².
+
+    These tests pin mask logic. The denoising statistic equals cv_r2 for
+    indicator-free task models (pinned in test_denoising_cv.py), and
+    pool_masks now takes the statistic explicitly.
+    """
+    return pool_masks(selection, brain_mask, threshold, statistic=selection.cv_r2)
+
+
 def projector(basis, rcond=None):
     q = orth(basis, rcond=rcond)
     return q @ q.T
@@ -58,7 +68,7 @@ def test_threshold_boundary_goes_to_pool(selection):
     n = len(selection.cv_r2)
     scores = np.linspace(-0.2, 0.2, n)
     scores[3] = 0.05
-    masks = pool_masks(with_scores(selection, scores), np.ones(n, bool), 0.05)
+    masks = masks_of(with_scores(selection, scores), np.ones(n, bool), 0.05)
     assert masks.pool[3] and not masks.scoring[3]
     np.testing.assert_array_equal(masks.pool, scores <= 0.05)
     np.testing.assert_array_equal(masks.scoring, scores > 0.05)
@@ -74,21 +84,21 @@ def test_nonfinite_scores_and_undefined_hrfs_are_in_neither_mask(selection):
     indices = np.zeros(n, dtype=int)
     indices[5] = -1
     indices[3] = -1
-    masks = pool_masks(with_scores(selection, scores, indices), np.ones(n, bool), 0)
+    masks = masks_of(with_scores(selection, scores, indices), np.ones(n, bool), 0)
     excluded = [0, 1, 2, 3, 5]
     assert not masks.pool[excluded].any() and not masks.scoring[excluded].any()
     assert masks.scoring[4] and masks.pool[6:].all()
 
 
 def test_brain_mask_restricts_both_masks_and_masks_are_disjoint(fixture, selection):
-    masks = pool_masks(selection, fixture.brain_mask, 0.0)
+    masks = masks_of(selection, fixture.brain_mask, 0.0)
     assert not (masks.pool & masks.scoring).any()
     assert not (masks.pool | masks.scoring)[~fixture.brain_mask].any()
 
 
 def test_masks_are_owned_and_readonly(fixture, selection):
     brain = fixture.brain_mask.copy()
-    masks = pool_masks(selection, brain, 0.0)
+    masks = masks_of(selection, brain, 0.0)
     before = masks.pool.copy()
     brain[:] = False
     np.testing.assert_array_equal(masks.pool, before)
@@ -108,22 +118,48 @@ def test_masks_are_owned_and_readonly(fixture, selection):
 )
 def test_brain_mask_must_be_boolean_vector_in_feature_order(selection, mask):
     with pytest.raises(ValueError, match="brain_mask"):
-        pool_masks(selection, mask, 0.0)
+        masks_of(selection, mask, 0.0)
 
 
 @pytest.mark.parametrize("threshold", [np.nan, np.inf, -np.inf, "0", None, True])
 def test_threshold_must_be_finite_real(fixture, selection, threshold):
     with pytest.raises(ValueError, match="pool_r2_threshold"):
-        pool_masks(selection, fixture.brain_mask, threshold)
+        masks_of(selection, fixture.brain_mask, threshold)
 
 
 def test_selection_must_be_an_hrf_selection_result(fixture):
     with pytest.raises(ValueError, match="HrfSelectionResult"):
-        pool_masks(np.zeros(N_FEATURES), fixture.brain_mask, 0.0)
+        pool_masks(
+            np.zeros(N_FEATURES),
+            fixture.brain_mask,
+            0.0,
+            statistic=np.zeros(N_FEATURES),
+        )
+
+
+def test_masks_follow_the_supplied_statistic_not_cv_r2(selection):
+    n = len(selection.cv_r2)
+    statistic = np.where(np.arange(n) % 2 == 0, -0.5, 0.5)
+    masks = pool_masks(
+        with_scores(selection, np.full(n, 0.9)),
+        np.ones(n, bool),
+        0.0,
+        statistic=statistic,
+    )
+    np.testing.assert_array_equal(masks.pool, statistic <= 0)
+    np.testing.assert_array_equal(masks.scoring, statistic > 0)
+
+
+@pytest.mark.parametrize(
+    "statistic", [np.zeros(3), np.zeros((N_FEATURES, 1)), ["a"] * N_FEATURES]
+)
+def test_statistic_must_be_a_real_vector_in_feature_order(selection, statistic):
+    with pytest.raises(ValueError, match="statistic"):
+        pool_masks(selection, np.ones(N_FEATURES, bool), 0.0, statistic=statistic)
 
 
 def test_empty_pool_is_reported_not_substituted(fixture, selection):
-    masks = pool_masks(selection, fixture.brain_mask, -1.0)
+    masks = masks_of(selection, fixture.brain_mask, -1.0)
     assert masks.pool_size == 0 and not masks.pool.any()
     comps = analysis_components(fixture.data, masks.pool)
     for run, comp in zip(fixture.data.signals, comps):
@@ -148,7 +184,7 @@ def test_strong_task_features_with_rt_free_trial_betas_are_not_pooled(
     for amps, rt in zip(fixture.trial_amplitudes, fixture.response_times):
         centered = rt - rt.mean()
         np.testing.assert_allclose(centered @ (amps - amps.mean(axis=0)), 0, atol=1e-9)
-    masks = pool_masks(selection, fixture.brain_mask, 0.0)
+    masks = masks_of(selection, fixture.brain_mask, 0.0)
     assert masks.scoring[groups["task"]].all()
     assert not masks.pool[groups["task"]].any()
     assert masks.scoring[groups["rt"]].all()
@@ -156,7 +192,7 @@ def test_strong_task_features_with_rt_free_trial_betas_are_not_pooled(
 
 def test_pool_is_the_nontask_in_brain_features(fixture, selection):
     groups = fixture.groups
-    masks = pool_masks(selection, fixture.brain_mask, 0.0)
+    masks = masks_of(selection, fixture.brain_mask, 0.0)
     np.testing.assert_array_equal(np.flatnonzero(masks.pool), groups["noise"])
     np.testing.assert_array_equal(
         np.flatnonzero(masks.scoring), np.r_[groups["task"], groups["rt"]]
@@ -164,7 +200,7 @@ def test_pool_is_the_nontask_in_brain_features(fixture, selection):
 
 
 def test_constant_features_are_in_neither_mask(fixture, selection):
-    masks = pool_masks(selection, fixture.brain_mask, 0.0)
+    masks = masks_of(selection, fixture.brain_mask, 0.0)
     constant = fixture.groups["constant"]
     assert not masks.pool[constant].any() and not masks.scoring[constant].any()
 
@@ -174,7 +210,7 @@ def test_masks_follow_training_selection_scores(fixture):
     train_selection = select_hrfs(
         training, library=fixture.library, task_model=fixture.task_model
     )
-    masks = pool_masks(train_selection, fixture.brain_mask, 0.0)
+    masks = masks_of(train_selection, fixture.brain_mask, 0.0)
     scores = train_selection.cv_r2
     expected = fixture.brain_mask & np.isfinite(scores) & (scores <= 0.0)
     np.testing.assert_array_equal(masks.pool, expected)
@@ -182,7 +218,7 @@ def test_masks_follow_training_selection_scores(fixture):
 
 def test_plain_task_model_also_keeps_task_features_out_of_pool(fixture):
     plain = select_hrfs(fixture.data, library=fixture.library, task_model=TaskModel())
-    masks = pool_masks(plain, fixture.brain_mask, 0.0)
+    masks = masks_of(plain, fixture.brain_mask, 0.0)
     assert not masks.pool[fixture.groups["task"]].any()
 
 
@@ -387,7 +423,7 @@ def test_available_cutoffs_define_a_unique_subspace(tied):
 
 
 def test_analysis_components_are_per_run_and_recover_latent(fixture, selection):
-    masks = pool_masks(selection, fixture.brain_mask, 0.0)
+    masks = masks_of(selection, fixture.brain_mask, 0.0)
     comps = analysis_components(fixture.data, masks.pool)
     assert len(comps) == fixture.data.n_runs
     for signal, frame, comp, latent in zip(

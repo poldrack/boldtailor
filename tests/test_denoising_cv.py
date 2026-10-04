@@ -21,7 +21,11 @@ from boldtailor._denoising_cv import (
     validate_counts,
     validate_tolerance,
 )
-from boldtailor._denoising_pool import analysis_components, run_components
+from boldtailor._denoising_pool import (
+    analysis_components,
+    pool_statistic,
+    run_components,
+)
 from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays
@@ -30,9 +34,7 @@ from boldtailor.model import Modulator, TaskModel
 from tests.denoising_fixtures import _trial_responses, make_denoising_fixture
 
 COUNTS = (0, 1, 2, 4)
-# Separates noise (training CV R² <= 0.08 in every variant and fold, because
-# in-sample indicator profiling biases scores upward) from task (>= 0.3).
-THRESHOLD = 0.15
+THRESHOLD = 0.0  # the plan default, valid with the indicator-consistent statistic
 MISSING_RT = TaskModel((Modulator("response_time", missing="indicator"),))
 CATEGORICAL = TaskModel(
     (
@@ -132,7 +134,7 @@ def oracle_coefficients(data, train, comps, features, candidate, count, task_mod
     xs, nuisances, ys = [], [], []
     for run, comp in zip(train, comps):
         x, profiled = design_parts(data, run, task_model, candidate)
-        pcs = comp.components[:, :count]
+        pcs = np.zeros((len(x), 0)) if comp is None else comp.components[:, :count]
         xs.append(x)
         nuisances.append(np.column_stack([baseline(data, run), profiled, pcs]))
         ys.append(data.signals[run][:, features])
@@ -150,14 +152,35 @@ def oracle_heldout(data, run, features, candidate, beta, task_model):
     return 1 - np.sum((observed - predicted) ** 2, axis=0) / energy, energy
 
 
+def oracle_statistic(data, selection, task_model, library):
+    """LORO CV R² of each winning HRF; denominator ||M_(q,qp) y||² per run."""
+    ids, runs = selection.hrf_indices, range(data.n_runs)
+    statistic = np.full(data.n_features, np.nan)
+    for hrf in np.unique(ids[ids >= 0]):
+        features, candidate = np.flatnonzero(ids == hrf), library.candidates[hrf]
+        loss, total = 0.0, 0.0
+        for held in runs:
+            train = [r for r in runs if r != held]
+            beta = oracle_coefficients(
+                data, train, [None] * len(train), features, candidate, 0, task_model
+            )
+            r2, energy = oracle_heldout(
+                data, held, features, candidate, beta, task_model
+            )
+            loss, total = loss + (1 - r2) * energy, total + energy
+        statistic[features] = 1 - loss / total
+    return statistic
+
+
 def oracle_training(data, validation, library, task_model, brain_mask, threshold):
     train = [r for r in range(data.n_runs) if r != validation]
     subset = subset_runs(data, train)
     selection = select_hrfs(subset, library=library, task_model=task_model)
-    scores, ids = selection.cv_r2, selection.hrf_indices
-    defined = brain_mask & np.isfinite(scores) & (ids >= 0)
+    scores = oracle_statistic(subset, selection, task_model, library)
+    defined = brain_mask & np.isfinite(scores) & (selection.hrf_indices >= 0)
     pool, scoring = defined & (scores <= threshold), defined & (scores > threshold)
-    return train, selection, pool, scoring, analysis_components(subset, pool)
+    comps = analysis_components(subset, pool)
+    return train, selection, pool, scoring, comps, scores
 
 
 def oracle_fold(
@@ -171,7 +194,7 @@ def oracle_fold(
     threshold=THRESHOLD,
 ):
     """Per count: feature R², coefficients, target energies, fold mean."""
-    train, selection, pool, scoring, comps = oracle_training(
+    train, selection, pool, scoring, comps, _ = oracle_training(
         data, validation, library, task_model, brain_mask, threshold
     )
     n, k = data.n_features, len(task_model.regressor_names)
@@ -268,11 +291,12 @@ def test_choice_requires_a_scored_zero_count_and_aligned_scores():
 
 def test_fold_selection_masks_and_pcs_come_from_training_runs(fixture):
     data, model = fixture.data, fixture.task_model
-    result = fold(data, 2, fixture, model)
-    train, selection, pool, scoring, comps = oracle_training(
-        data, 2, fixture.library, model, fixture.brain_mask, THRESHOLD
+    result = fold(data, 1, fixture, model)
+    train, selection, pool, scoring, comps, statistic = oracle_training(
+        data, 1, fixture.library, model, fixture.brain_mask, THRESHOLD
     )
-    assert result.validation_run == 2 and result.training_runs == tuple(train)
+    assert result.validation_run == 1 and result.training_runs == tuple(train)
+    np.testing.assert_allclose(result.pool_statistic, statistic, atol=1e-10)
     np.testing.assert_array_equal(result.selection.hrf_indices, selection.hrf_indices)
     np.testing.assert_array_equal(result.selection.cv_r2, selection.cv_r2)
     np.testing.assert_array_equal(result.masks.pool, pool)
@@ -286,6 +310,7 @@ def test_fold_selection_masks_and_pcs_come_from_training_runs(fixture):
 def test_fold_arrays_are_read_only(fixture):
     result = fold(fixture.data, 0, fixture, fixture.task_model)
     score = score_count(result, 1)
+    assert not result.pool_statistic.flags.writeable
     for array in (result.scored, result.zero_target, score.feature_r2):
         assert not array.flags.writeable
     for array in (score.coefficients, score.target_energy):
@@ -625,3 +650,61 @@ def test_task_aligned_pcs_cannot_gain_by_removing_target_variance(fixture):
         assert score_count(result, count).mean_r2 == pytest.approx(
             expected[count]["mean"], abs=1e-10
         )
+
+
+# ---- indicator-consistent pool statistic (ruling R4) --------------------------
+
+
+def test_pool_statistic_equals_select_hrfs_cv_r2_without_indicators(fixture):
+    for model in (fixture.task_model, MISSING_RT):  # fixture has no missing RTs
+        selection = select_hrfs(fixture.data, library=fixture.library, task_model=model)
+        statistic = pool_statistic(fixture.data, selection)
+        assert not statistic.flags.writeable
+        np.testing.assert_allclose(statistic, selection.cv_r2, rtol=0, atol=1e-10)
+
+
+@pytest.mark.parametrize("name", ["missing_rt", "categorical"])
+def test_pool_statistic_matches_stacked_loro_oracle_with_indicators(fixture, name):
+    data, model = variant(fixture, name)
+    selection = select_hrfs(data, library=fixture.library, task_model=model)
+    statistic = pool_statistic(data, selection)
+    expected = oracle_statistic(data, selection, model, fixture.library)
+    np.testing.assert_allclose(statistic, expected, rtol=0, atol=1e-10)
+    defined = selection.hrf_indices >= 0
+    assert np.max(np.abs(statistic - selection.cv_r2)[defined]) > 1e-3
+
+
+def test_pool_statistic_requires_matching_runs_and_features(fixture):
+    selection = select_hrfs(
+        fixture.data, library=fixture.library, task_model=fixture.task_model
+    )
+    with pytest.raises(ValueError, match="runs"):
+        pool_statistic(subset_runs(fixture.data, [0, 1]), selection)
+    with pytest.raises(ValueError, match="HrfSelectionResult"):
+        pool_statistic(fixture.data, selection.cv_r2)
+
+
+@pytest.mark.parametrize("name", ["missing_rt", "categorical"])
+def test_indicator_models_keep_noise_in_the_pool_at_threshold_zero(fixture, name):
+    data, model = variant(fixture, name)
+    noise, task = (
+        fixture.groups["noise"],
+        np.r_[fixture.groups["task"], fixture.groups["rt"]],
+    )
+    selection = select_hrfs(data, library=fixture.library, task_model=model)
+    assert np.median(pool_statistic(data, selection)[noise]) <= 0.0
+    for v in range(data.n_runs):
+        result = fold(data, v, fixture, model, threshold=0.0)
+        assert np.median(result.pool_statistic[noise]) <= 0.0
+        assert result.masks.scoring[task].all()
+        assert score_count(result, 4).reason == ""
+
+
+def test_invalid_heldout_design_for_a_frozen_hrf_raises(fixture):
+    events = [e.copy() for e in fixture.data.events]
+    events[3]["response_time"] = 0.9  # task and RT columns become collinear
+    data = rebuild(fixture.data, events=events)
+    with pytest.raises(
+        ValueError, match="held-out run 3: HRF .* task design is invalid"
+    ):
+        fold(data, 3, fixture, fixture.task_model)
