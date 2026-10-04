@@ -563,8 +563,14 @@ def test_svd_convergence_failure_falls_back_to_gesvd(rank_two, monkeypatch):
     signal, confounds, pool = rank_two[:3]
     reference = run_components(signal, confounds, pool)
 
-    def failing_svd(*args, **kwargs):
-        raise np.linalg.LinAlgError("SVD did not converge")
+    real_svd = np.linalg.svd
+
+    def failing_svd(matrix, *args, **kwargs):
+        # Fail only on the normalized pool (unit-norm columns), as gesdd did;
+        # the nuisance-span SVD of the raw confounds still succeeds.
+        if np.allclose(np.linalg.norm(matrix, axis=0), 1.0):
+            raise np.linalg.LinAlgError("SVD did not converge")
+        return real_svd(matrix, *args, **kwargs)
 
     monkeypatch.setattr(np.linalg, "svd", failing_svd)
     fallback = run_components(signal, confounds, pool)
