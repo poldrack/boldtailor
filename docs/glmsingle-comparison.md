@@ -66,9 +66,9 @@ Deviations, each with its reason:
   task-guided criterion uses the caller's task model, including modulators.
 - **Fixed target.** The held-out target never contains the candidate PCs, so
   more PCs cannot win by shrinking it.
-- **Stopping rule edges.** GLMsingle's loop never returns zero or the largest
-  count; Boldtailor keeps zero as a candidate (chosen when nothing improves on
-  it) and allows the largest count.
+- **Stopping rule.** The walk matches GLMsingle's `select_noise_regressors`
+  except for a 64-eps roundoff slack that keeps numerically equal values
+  equal.
 
 Boldtailor's stage is not run by default or in the NSD example, and it is
 tuned sequentially: HRFs and the pool are frozen while counts are compared.

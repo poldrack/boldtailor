@@ -432,9 +432,9 @@ def choose_count(counts, perf, pcstop) -> int:
     the best curve value so far and its count; stop at the first count where
     ``best * pcstop >= max(curve)`` and return the count holding that best.
     NaN marks an unavailable count (skipped). Zero is always a candidate,
-    and ``max(curve) <= 0`` chooses 0. A roundoff slack of 64 eps (as in HRF
-    choice) keeps numerically equal values equal. Unlike GLMsingle's loop,
-    zero and the largest count can both be chosen.
+    and ``max(curve) <= 0`` chooses 0. This matches GLMsingle's walk over
+    ``p = 0 .. numpcstotry``, except for a roundoff slack of 64 eps (as in
+    HRF choice) that keeps numerically equal values equal.
     """
     counts, perf = tuple(counts), np.asarray(perf, dtype=float)
     if len(perf) != len(counts):

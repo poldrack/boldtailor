@@ -694,8 +694,9 @@ cross-validated single-trial beta consistency across repeated conditions and
 skips GLMdenoise when conditions do not repeat. Most Boldtailor tasks have no
 repeats, so counts are scored by held-out time-series prediction, close to
 the original GLMdenoise. (c) The held-out target is fixed across counts: it
-never contains the candidate PCs. (d) GLMsingle's `select_noise_regressors`
-loop never chooses zero or the largest count; here both can be chosen.
+never contains the candidate PCs. (d) The count walk matches GLMsingle's
+`select_noise_regressors` except for a 64-eps roundoff slack that keeps
+numerically equal values equal.
 (e) The mixture fit uses a fixed `random_state` and records convergence
 instead of warning (see below).
 
