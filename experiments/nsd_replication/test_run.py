@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 import pytest
 
@@ -81,17 +83,57 @@ def test_group_rsa_writes_agreement(config, patched):
     for subject in ("sub-07", "sub-08"):
         for ses in config.sessions:
             run.fit_session(config, "ppdata", subject, ses, ("b1",))
-    table = run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), "b1")
+    table = run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1",))
     assert (config.output_dir / "metrics/ppdata/rsa_b1.tsv").is_file()
-    assert table["r"].iloc[0] == pytest.approx(1.0)
+    assert list(table.columns) == ["threshold", "subject_a", "subject_b", "r"]
+    assert set(table["threshold"]) == {0.0, 0.2, 0.4}
+    assert table["r"].to_numpy() == pytest.approx(1.0)
 
 
-def test_discard_betas_keeps_the_rest(config, patched):
-    run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
-    run.discard_betas(config, "ppdata", "sub-07", ("b1",), sessions=("ses-a",))
+def _fit_and_measure(config, levels=("b1",)):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, levels)
+    return run.subject_metrics(config, "ppdata", "sub-07", levels)
+
+
+def test_discard_betas_marks_metadata_and_is_not_refit(config, patched):
+    _fit_and_measure(config)
+    run.discard_betas(config, "ppdata", "sub-07", ("b1",), multiple_subjects=False)
     path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
-    assert (path / "metadata.json").is_file()
+    assert json.loads((path / "metadata.json").read_text())["betas_discarded"] is True
+    assert is_complete(path)
+    run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    assert not (path / "betas.npy").exists()
+
+
+def test_discard_refuses_when_a_metric_is_missing(config, patched):
+    _fit_and_measure(config)
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    (out / "r6.tsv").unlink()
+    with pytest.raises(FileNotFoundError, match="r6"):
+        run.discard_betas(config, "ppdata", "sub-07", ("b1",), multiple_subjects=False)
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert (path / "betas.npy").exists()
+
+
+def test_main_fit_then_metrics_with_discard(config, patched):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+""")
+    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b1"]
+    assert run.main(["fit", *common]) == 0
+    for ses in config.sessions:
+        assert is_complete(fit_dir(config.output_dir, "ppdata", "sub-07", ses, "b1"))
+    assert run.main(["metrics", *common, "--discard-betas-after-metrics"]) == 0
+    assert (config.output_dir / "metrics/ppdata/sub-07/r1.tsv").is_file()
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert not (path / "betas.npy").exists()
 
 
 def test_main_rejects_unknown_command(config):

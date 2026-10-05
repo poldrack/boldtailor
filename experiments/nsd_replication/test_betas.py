@@ -114,3 +114,21 @@ def test_inputs_digest_different_confound_differs():
     s1 = _minimal_session(confound_val=0.0)
     s2 = _minimal_session(confound_val=1.0)
     assert inputs_digest(s1) != inputs_digest(s2)
+
+
+def _discarded_fit(tmp_path):
+    path = tmp_path / "fit"
+    write_fit(
+        path, np.zeros((2, 2)), _trials(), {"level": "b1", "betas_discarded": True}
+    )
+    (path / "betas.npy").unlink()
+    return path
+
+
+def test_discarded_fit_is_complete(tmp_path):
+    assert is_complete(_discarded_fit(tmp_path))
+
+
+def test_read_fit_of_discarded_fit_raises(tmp_path):
+    with pytest.raises(ValueError, match="betas were discarded after metrics"):
+        read_fit(_discarded_fit(tmp_path))
