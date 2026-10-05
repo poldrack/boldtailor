@@ -19,8 +19,10 @@ from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.workflow.beta_series import trial_predictors
 
 from experiments.nsd_replication.inputs import analysis_data
+from experiments.nsd_replication.lss import lss_canonical, lss_selected
 
 LEVELS = ("b1", "b2", "b2-lib20", "b3", "b4")
+LSS_LEVELS = ("lss-assume", "lss-fit")
 FRACTIONS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 
 
@@ -109,6 +111,31 @@ def _selected_block(indices, session, selection, confounds, fractions):
         ridge_fraction=fractions,
     )
     return _arrays(result, hrf_indices=selection[tuple(indices)].hrf_indices)
+
+
+def _block_signals(session, indices):
+    return [np.asarray(y[:, indices], dtype=float) for y in session.signals]
+
+
+def _lss_assume_block(indices, session):
+    result = fit_single_trials(
+        analysis_data(session, indices), run_labels=_labels(session)
+    )
+    betas = lss_canonical(result, _block_signals(session, indices))
+    return dict(betas=betas, onsets=_onsets(result))
+
+
+def _lss_fit_block(indices, session, selection):
+    result = fit_selected_hrfs(
+        analysis_data(session, indices),
+        hrf_selection=selection[tuple(indices)],
+        run_labels=_labels(session),
+        ridge_fraction=None,
+    )
+    betas = lss_selected(result, _block_signals(session, indices))
+    return dict(
+        betas=betas, onsets=_onsets(result), hrf_indices=result.design.hrf_indices
+    )
 
 
 def _b4_block(indices, session, selection, confounds, task_model, library):
@@ -263,7 +290,20 @@ def _fit_b4(ladder):
     return ladder.fit("b4", out, ladder.library, denoised=True)
 
 
+def _fit_lss_assume(ladder):
+    out = ladder.run(_lss_assume_block, ladder.session)
+    return ladder.fit("lss-assume", out, None)
+
+
+def _fit_lss_fit(ladder):
+    selection = ladder.selection(ladder.library)
+    out = ladder.run(_lss_fit_block, ladder.session, selection)
+    return ladder.fit("lss-fit", out, ladder.library)
+
+
 _FITTERS = {
+    "lss-assume": _fit_lss_assume,
+    "lss-fit": _fit_lss_fit,
     "b1": _fit_b1,
     "b2": _fit_b2,
     "b2-lib20": _fit_b2_lib20,
@@ -294,9 +334,13 @@ def fit_ladder(
     ``select_session_denoising`` result for b3/b4; when selected here it always
     uses ``session.task_model``, whatever ``task_model`` is passed.
     """
-    unknown = set(levels) - set(LEVELS)
+    unknown = set(levels) - set(_FITTERS)
     if unknown:
         raise ValueError(f"unknown ladder levels: {sorted(unknown)}")
     _check_sorted_onsets(session)
     ladder = _Ladder(session, task_model, block_size, n_jobs, denoising)
-    return {level: _FITTERS[level](ladder) for level in LEVELS if level in levels}
+    return {
+        level: _FITTERS[level](ladder)
+        for level in (*LEVELS, *LSS_LEVELS)
+        if level in levels
+    }
