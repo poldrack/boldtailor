@@ -208,3 +208,50 @@ sessions = ["ses-a", "ses-b"]
     assert (config.output_dir / "metrics/released/sub-07/r1.tsv").is_file()
     assert run.main([*base, "--source", "comparison"]) == 0
     assert (config.output_dir / "metrics/comparison/sub-07/alignment.tsv").is_file()
+
+
+def test_floor_failure_keeps_alignment_but_skips_comparison(config, patched):
+    _fit_comparison(config)
+    floored = replace(config, alignment_floor=1.5)
+    with pytest.raises(ValueError, match="sub-07.*ses-a.*ses-b"):
+        run.run_comparison(floored, "sub-07")
+    out = config.output_dir / "metrics/comparison/sub-07"
+    assert (out / "alignment.tsv").is_file()
+    assert not (out / "r1.tsv").exists()
+
+
+def test_comparison_runs_alignment_then_metrics(config, patched):
+    _fit_comparison(config)
+    run.run_comparison(config, "sub-07")
+    out = config.output_dir / "metrics/comparison/sub-07"
+    assert (out / "alignment.tsv").is_file() and (out / "r1.tsv").is_file()
+
+
+def test_discard_requires_comparison_outputs_when_released_configured(config, patched):
+    _fit_and_measure(config)
+    configured = replace(config, released_dir=config.bids_dir)
+    with pytest.raises(FileNotFoundError, match="metrics --source comparison"):
+        run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert (path / "betas.npy").exists()
+
+
+def test_discard_succeeds_after_comparison_outputs(config, patched):
+    _fit_and_measure(config)
+    out = config.output_dir / "metrics/comparison/sub-07"
+    out.mkdir(parents=True)
+    for name in ("alignment.tsv", "r1.tsv"):
+        (out / name).write_text("x\n")
+    configured = replace(config, released_dir=config.bids_dir)
+    run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert not (path / "betas.npy").exists()
+
+
+def test_trial_tables_compare_all_columns(config, patched):
+    _fit_comparison(config)
+    path = fit_dir(config.output_dir, "released", "sub-07", "ses-a", "b2")
+    table = path / "trials.tsv"
+    table.write_text(table.read_text().replace("\n", "\textra\n", 1))
+    with pytest.raises(ValueError, match="ses-a"):
+        run.comparison_metrics(config, "sub-07")
