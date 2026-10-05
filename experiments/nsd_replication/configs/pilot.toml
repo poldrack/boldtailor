@@ -1,0 +1,8 @@
+bids_dir = "/Volumes/extdata1/NSD/BIDS"
+output_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/nsd-replication"
+freesurfer_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD"
+released_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/betas-fsLR"
+subjects = ["sub-07"]
+sessions = ["ses-nsd10", "ses-nsd11", "ses-nsd12", "ses-nsd13", "ses-nsd14",
+            "ses-nsd15", "ses-nsd16", "ses-nsd17", "ses-nsd18", "ses-nsd19"]
+n_jobs = 4
