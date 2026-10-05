@@ -52,10 +52,10 @@ def zscore(betas):
     values = np.asarray(betas, dtype=float)
     out = np.full(values.shape, np.nan)
     finite = np.isfinite(values).all(axis=0)
-    sd = np.zeros(values.shape[1])
-    sd[finite] = values[:, finite].std(axis=0)
-    ok = finite & (sd > 0)
-    out[:, ok] = (values[:, ok] - values[:, ok].mean(axis=0)) / sd[ok]
+    ptp = np.ptp(values, axis=0)
+    ok = finite & (ptp > 0)
+    sd = values[:, ok].std(axis=0)
+    out[:, ok] = (values[:, ok] - values[:, ok].mean(axis=0)) / sd
     return out
 
 
