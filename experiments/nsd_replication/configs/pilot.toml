@@ -1,6 +1,7 @@
 bids_dir = "/Volumes/extdata1/NSD/BIDS"
 output_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/nsd-replication"
 freesurfer_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD"
+ppdata_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/ppdata"
 released_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/betas-fsLR"
 subjects = ["sub-07"]
 sessions = ["ses-nsd10", "ses-nsd11", "ses-nsd12", "ses-nsd13", "ses-nsd14",

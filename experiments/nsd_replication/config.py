@@ -1,6 +1,7 @@
 """Experiment configuration loaded from a TOML file."""
 
 from dataclasses import dataclass, fields
+import math
 from pathlib import Path
 import tomllib
 
@@ -25,13 +26,14 @@ class ExperimentConfig:
     freesurfer_dir: Path
     subjects: tuple[str, ...]
     sessions: tuple[str, ...]
-    fmriprep_dir: Path | None = None
+    ppdata_dir: Path | None = None
     released_dir: Path | None = None
     alignment_floor: float | None = None
     task: str = "nsdcore"
     image_column: str = "73k_id"
     n_jobs: int = 4
     block_size: int = 4096
+    onset_offset: float = 0.0
 
     def __post_init__(self):
         set_ = object.__setattr__
@@ -41,6 +43,8 @@ class ExperimentConfig:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 raise ValueError(f"{name} must be a positive integer")
+        if not math.isfinite(self.onset_offset):
+            raise ValueError("onset_offset must be finite")
 
 
 def load_config(path) -> ExperimentConfig:

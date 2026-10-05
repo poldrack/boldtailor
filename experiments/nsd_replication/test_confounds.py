@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from experiments.nsd_replication.confounds import glmsingle_polynomials, polynomial_degree
+from experiments.nsd_replication.confounds import (
+    glmsingle_polynomials,
+    polynomial_degree,
+)
 
 
 @pytest.mark.parametrize(
