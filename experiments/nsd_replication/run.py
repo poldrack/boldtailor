@@ -17,6 +17,14 @@ from experiments.nsd_replication.betas import (
     write_fit,
     zscore,
 )
+from experiments.nsd_replication.comparison import (
+    VERSIONS,
+    alignment_frame,
+    alignment_row,
+    check_floor,
+    check_trial_tables,
+    reliability_differences,
+)
 from experiments.nsd_replication.config import load_config
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
@@ -29,6 +37,7 @@ from experiments.nsd_replication.metrics import (
     threshold_curves,
     voxel_reliability,
 )
+from experiments.nsd_replication.released import RELEASED, index_released
 from experiments.nsd_replication.roi import load_roi
 from experiments.nsd_replication.trials import (
     images_with,
@@ -37,7 +46,7 @@ from experiments.nsd_replication.trials import (
     trial_table,
 )
 
-SOURCES = ("ppdata",)
+SOURCES = ("ppdata", "released", "comparison")
 R4_THRESHOLDS = (0.0, 0.3)
 R6_THRESHOLDS = (0.0, 0.1, 0.2, 0.3, 0.4)
 RSA_THRESHOLDS = (0.0, 0.2, 0.4)
@@ -246,6 +255,70 @@ def subject_metrics(config, source, subject, levels):
     return tables
 
 
+# ------------------------------------------------------- comparison stage
+
+
+def _comparison_dir(config, subject):
+    return _metrics_dir(config, "comparison", subject)
+
+
+def _version_paths(config, subject, session):
+    return {
+        v: fit_dir(
+            config.output_dir, v.split(":")[0], subject, session, v.split(":")[1]
+        )
+        for v in VERSIONS
+    }
+
+
+def _check_session_tables(config, subject):
+    for session in config.sessions:
+        paths = _version_paths(config, subject, session)
+        tables = {v: pd.read_csv(p / "trials.tsv", sep="\t") for v, p in paths.items()}
+        check_trial_tables(tables, session)
+
+
+def _combined_betas(config, subject):
+    loaded = {}
+    for version in VERSIONS:
+        source, level = version.split(":")
+        loaded[version] = _subject_betas(config, source, subject, level)
+    return loaded
+
+
+def comparison_metrics(config, subject):
+    _check_session_tables(config, subject)
+    roi = _subject_roi(config, subject)
+    loaded = _combined_betas(config, subject)
+    trials = loaded[VERSIONS[0]][1]
+    betas = {v: b for v, (b, _) in loaded.items()}
+    rel = _reliabilities(betas, trials, images_with(trials, 3))
+    tables = {"r1": threshold_curves(rel, roi), "r1_median": _median_table(rel, roi)}
+    out = _comparison_dir(config, subject)
+    _write_tables(config, "comparison", subject, tables)
+    for level, diff in reliability_differences(rel).items():
+        np.save(out / f"r1_difference_{level}.npy", diff)
+    return tables
+
+
+def _session_alignment(config, subject, session, roi):
+    paths = _version_paths(config, subject, session)
+    ours, trials, _ = read_fit(paths["ppdata:b1"])
+    released, _, _ = read_fit(paths["released:b1"])
+    return alignment_row(session, ours, released, trials, roi)
+
+
+def alignment_table(config, subject):
+    roi = _subject_roi(config, subject)
+    rows = []
+    for session in config.sessions:
+        rows.append(_session_alignment(config, subject, session, roi))
+        check_floor(rows[-1], subject, config.alignment_floor)
+    table = alignment_frame(rows)
+    _write_tables(config, "comparison", subject, {"alignment": table})
+    return table
+
+
 # ---------------------------------------------------------------- group RSA
 
 
@@ -343,12 +416,30 @@ def _parser():
 
 
 def _run_fit(config, args, levels):
+    if args.source == "released":
+        return _index_all_released(config)
+    if args.source == "comparison":
+        raise ValueError("comparison has no fit stage")
     for subject in config.subjects:
         for session in config.sessions:
             fit_session(config, args.source, subject, session, levels, args.refit)
 
 
+def _index_all_released(config):
+    for subject in config.subjects:
+        for session in config.sessions:
+            index_released(config, subject, session)
+
+
+def _run_comparison(config):
+    for subject in config.subjects:
+        comparison_metrics(config, subject)
+        alignment_table(config, subject)
+
+
 def _run_metrics(config, args, levels):
+    if args.source == "comparison":
+        return _run_comparison(config)
     for subject in config.subjects:
         subject_metrics(config, args.source, subject, levels)
     multiple = len(config.subjects) > 1
@@ -359,10 +450,14 @@ def _run_metrics(config, args, levels):
             discard_betas(config, args.source, subject, levels, multiple)
 
 
+def _default_levels(source):
+    return tuple(RELEASED) if source == "released" else LEVELS
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     config = load_config(args.config)
-    levels = tuple(args.levels or LEVELS)
+    levels = tuple(args.levels or _default_levels(args.source))
     {"fit": _run_fit, "metrics": _run_metrics}[args.command](config, args, levels)
     return 0
 
