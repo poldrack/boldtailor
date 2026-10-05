@@ -1,3 +1,5 @@
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -25,6 +27,10 @@ def test_ladder_levels_shapes_and_order(synthetic_session):
         assert fit.record["level"] == level
     assert fits["b2"].extras["hrf_indices"].shape == (30,)
     assert fits["b4"].extras["ridge_fraction"].shape == (30,)
+    assert not np.allclose(fits["b3"].betas, fits["b2"].betas)
+    assert not np.allclose(fits["b4"].betas, fits["b3"].betas)
+    fractions = fits["b4"].extras["ridge_fraction"]
+    assert not np.all(fractions[np.isfinite(fractions)] == 1.0)
 
 
 def test_trial_order_matches_trial_table(synthetic_session):
@@ -76,3 +82,11 @@ def test_fitted_hrf_improves_reliability_on_delayed_hrf(synthetic_session):
         for level in ("b1", "b2")
     }
     assert rel["b2"] > rel["b1"]
+
+
+def test_unsorted_onsets_raise_with_run_label(synthetic_session):
+    events = list(synthetic_session.events)
+    events[2] = events[2].iloc[::-1].reset_index(drop=True)
+    session = dataclasses.replace(synthetic_session, events=tuple(events))
+    with pytest.raises(ValueError, match=synthetic_session.labels[2]):
+        fit_ladder(session, levels=("b1",), block_size=30)
