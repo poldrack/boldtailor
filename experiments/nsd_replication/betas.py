@@ -1,0 +1,71 @@
+"""Common on-disk beta format shared by boldtailor and released betas."""
+
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from experiments.nsd_replication.trials import TRIAL_COLUMNS
+
+_REQUIRED = ("betas.npy", "trials.tsv", "metadata.json")
+
+
+def fit_dir(output_dir, source, subject, session, level):
+    return Path(output_dir) / "fits" / source / subject / session / level
+
+
+def write_fit(path, betas, trials, metadata, extras=None):
+    if len(betas) != len(trials):
+        raise ValueError(f"betas rows ({len(betas)}) must match trials ({len(trials)})")
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "metadata.json").unlink(missing_ok=True)
+    np.save(path / "betas.npy", np.asarray(betas, dtype=np.float32))
+    trials.loc[:, list(TRIAL_COLUMNS)].to_csv(
+        path / "trials.tsv", sep="\t", index=False
+    )
+    for name, values in (extras or {}).items():
+        np.save(path / f"{name}.npy", np.asarray(values))
+    (path / "metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True))
+
+
+def is_complete(path):
+    return all((Path(path) / name).is_file() for name in _REQUIRED)
+
+
+def read_fit(path):
+    path = Path(path)
+    if not is_complete(path):
+        raise FileNotFoundError(f"incomplete fit: {path}")
+    trials = pd.read_csv(path / "trials.tsv", sep="\t")
+    metadata = json.loads((path / "metadata.json").read_text())
+    return np.load(path / "betas.npy"), trials, metadata
+
+
+def read_extra(path, name):
+    return np.load(Path(path) / f"{name}.npy")
+
+
+def zscore(betas):
+    values = np.asarray(betas, dtype=float)
+    out = np.full(values.shape, np.nan)
+    finite = np.isfinite(values).all(axis=0)
+    sd = np.zeros(values.shape[1])
+    sd[finite] = values[:, finite].std(axis=0)
+    ok = finite & (sd > 0)
+    out[:, ok] = (values[:, ok] - values[:, ok].mean(axis=0)) / sd[ok]
+    return out
+
+
+def inputs_digest(session):
+    digest = hashlib.sha256()
+    digest.update(json.dumps([session.source, list(session.labels)]).encode())
+    for times, events, confounds in zip(
+        session.frame_times, session.events, session.confounds, strict=True
+    ):
+        digest.update(np.asarray(times, dtype="<f8").tobytes())
+        digest.update(events.to_csv(index=False).encode())
+        digest.update(confounds.to_csv(index=False).encode())
+    return digest.hexdigest()
