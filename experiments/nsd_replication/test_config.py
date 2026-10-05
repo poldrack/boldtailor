@@ -23,6 +23,8 @@ def test_load_config_converts_paths_and_tuples(tmp_path):
     assert config.sessions == ("ses-nsd10", "ses-nsd11")
     assert config.n_jobs == 2
     assert config.image_column == "73k_id"
+    assert config.onset_offset == 0.0
+    assert config.ppdata_dir is None
 
 
 @pytest.mark.parametrize(
@@ -47,3 +49,16 @@ def test_unknown_key_rejected(tmp_path):
     path.write_text(TOML + 'colour = "red"\n')
     with pytest.raises(ValueError, match="colour"):
         load_config(path)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_onset_offset_must_be_finite(value):
+    with pytest.raises(ValueError, match="onset_offset"):
+        ExperimentConfig(
+            bids_dir=Path("/b"),
+            output_dir=Path("/o"),
+            freesurfer_dir=Path("/l"),
+            subjects=("sub-07",),
+            sessions=("ses-nsd10",),
+            onset_offset=value,
+        )
