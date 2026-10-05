@@ -1,10 +1,11 @@
 import json
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
 from experiments.nsd_replication import run
-from experiments.nsd_replication.betas import fit_dir, is_complete, read_fit
+from experiments.nsd_replication.betas import fit_dir, is_complete, read_fit, write_fit
 
 
 @pytest.fixture
@@ -139,3 +140,71 @@ block_size = 16
 def test_main_rejects_unknown_command(config):
     with pytest.raises(SystemExit):
         run.main(["bogus", "--config", "x.toml"])
+
+
+def _fit_released(config, perturb=False):
+    for ses in config.sessions:
+        for lv in ("b1", "b2", "b4"):
+            betas, trials, _ = read_fit(
+                fit_dir(config.output_dir, "ppdata", "sub-07", ses, lv)
+            )
+            rng = np.random.default_rng(1)
+            noisy = betas + 0.1 * rng.normal(size=betas.shape)
+            if perturb and ses == "ses-b":
+                trials = trials.assign(image=trials["image"] + 1)
+            path = fit_dir(config.output_dir, "released", "sub-07", ses, lv)
+            write_fit(path, noisy, trials, {"level": lv})
+
+
+def _fit_comparison(config, perturb=False):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2", "b4"))
+    _fit_released(config, perturb)
+
+
+def test_comparison_metrics_combined_versions(config, patched):
+    _fit_comparison(config)
+    tables = run.comparison_metrics(config, "sub-07")
+    expected = {
+        f"{s}:{lv}" for s in ("ppdata", "released") for lv in ("b1", "b2", "b4")
+    }
+    assert set(tables["r1"]["version"]) == expected
+    assert set(tables["r1_median"]["version"]) == expected
+    out = config.output_dir / "metrics/comparison/sub-07"
+    assert (out / "r1.tsv").is_file() and (out / "r1_median.tsv").is_file()
+    for lv in ("b1", "b2", "b4"):
+        assert len(np.load(out / f"r1_difference_{lv}.npy")) == 30
+
+
+def test_trial_tables_must_match(config, patched):
+    _fit_comparison(config, perturb=True)
+    with pytest.raises(ValueError, match="ses-b"):
+        run.comparison_metrics(config, "sub-07")
+
+
+def test_alignment_table_rows_and_floor(config, patched):
+    _fit_comparison(config)
+    table = run.alignment_table(config, "sub-07")
+    assert list(table["session"]) == ["ses-a", "ses-b"]
+    assert (table["run_length"] == 24).all()
+    assert (table["true_median"] > 0.9).all()
+    assert (config.output_dir / "metrics/comparison/sub-07/alignment.tsv").is_file()
+    floored = replace(config, alignment_floor=1.5)
+    with pytest.raises(ValueError, match="sub-07.*ses-a"):
+        run.alignment_table(floored, "sub-07")
+
+
+def test_main_metrics_released_and_comparison(config, patched):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+""")
+    _fit_comparison(config)
+    base = ["metrics", "--config", str(toml)]
+    assert run.main([*base, "--source", "released"]) == 0
+    assert (config.output_dir / "metrics/released/sub-07/r1.tsv").is_file()
+    assert run.main([*base, "--source", "comparison"]) == 0
+    assert (config.output_dir / "metrics/comparison/sub-07/alignment.tsv").is_file()
