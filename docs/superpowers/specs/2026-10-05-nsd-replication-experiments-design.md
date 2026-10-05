@@ -92,12 +92,17 @@ Where the paper is ambiguous, the protocol records the choice made and why.
     the pilot.
 - **Order of runs.** Each subject's stages run when its fMRIPrep derivatives
   and converted released betas are available.
-- **ROI.** nsdgeneral, from NSD's fsaverage labels transformed to fsLR 32k
-  (neuromaps nearest-neighbour) and mapped onto the cortical grayordinates.
-  - Deviation: the paper used subject-specific nsdgeneral in volume space.
-  - If the user converts each subject's native-surface nsdgeneral labels to
-    fsLR 91k by the same route as the betas, that subject-specific ROI is
-    used instead, and the group ROI becomes the fallback.
+- **ROI.** Each subject's own nsdgeneral, from NSD's native-surface labels
+  (`derivatives/freesurfer-NSD/subjNN/label/{lh,rh}.nsdgeneral.mgz`, 0/1 on the
+  native vertices).
+  - Resampling: the labels are resampled to fsLR 32k with exactly the Workbench
+    route used for the released betas: `wb_command -metric-resample ...
+    ADAP_BARY_AREA` with area metrics. The spheres and area metrics are read
+    from the betas' JSON sidecars.
+  - Then: the result is thresholded at 0.5 and mapped onto the cortical
+    grayordinates.
+  - Deviation: the paper used the same subject-specific ROI, but in volume
+    space rather than on the surface.
 - **"On par"** is an equivalence test (TOST) between boldtailor on fMRIPrep
   data and the released betas. Its margin is fixed from pilot variability
   before the freeze.
@@ -150,7 +155,7 @@ The package follows `examples/validation`:
 | `config.py` | Frozen dataclass loaded from TOML: BIDS root, released-betas root, subjects, session window, output root, `n_jobs` |
 | `trials.py` | Standard trial tables, presentation order, repetition arrays |
 | `inputs.py` | Load one session's fMRIPrep runs restricted to cortical surface grayordinates: BOLD, events, confounds |
-| `roi.py` | nsdgeneral fsaverage → fsLR 32k → grayordinate mask; subject-specific converted ROI when present |
+| `roi.py` | Subject nsdgeneral: native surface → fsLR 32k (Workbench, same route as the betas) → cortical grayordinate mask |
 | `released.py` | Read the released betas (b1, b2, b4), check them against the fMRIPrep axis and the BIDS trials, and index them in the common format |
 | `ladder.py`, `lss.py` | Boldtailor ladder levels and LSS via the public API |
 | `betas.py` | Common beta store; per-session z-scoring |
@@ -160,9 +165,8 @@ The package follows `examples/validation`:
 | `figures.py` | Figures and reports |
 | `run.py` | CLI: `uv run python -m experiments.nsd_replication.run <stage> --config ...`; stages `fit`, `metrics`, `features`, `figures`; fits are resumable and existing outputs are skipped |
 
-A new `experiments` uv dependency group holds `neuromaps`. Its label
-transform uses Connectome Workbench (`wb_command`), a documented system
-prerequisite.
+No new Python dependencies are needed. Connectome Workbench (`wb_command`)
+is a documented system prerequisite for the ROI resampling.
 
 ## Inputs
 
@@ -342,8 +346,9 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
 - **End-to-end test.** A synthetic session (tens of features, images
   repeated three times, a non-canonical HRF, shared noise) runs the ladder
   and the metrics. Checks: R1 reliability rises from b1 to b2.
-- **ROI test.** On a synthetic label, skipped when neuromaps or Workbench is
-  unavailable.
+- **ROI tests.** Threshold and command construction on synthetic inputs. A
+  data-gated sub-07 test runs the real resampling and is skipped without
+  Workbench.
 - **Data-gated tests.** Smoke tests that skip when
   `/Volumes/extdata1/NSD/BIDS` is not mounted: one fMRIPrep session and one
   released file of sub-07.

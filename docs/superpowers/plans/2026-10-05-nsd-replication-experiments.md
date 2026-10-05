@@ -10,7 +10,7 @@
 - It calls boldtailor's public API and reuses the workflow's fMRIPrep loaders. The boldtailor core is not modified.
 - Fits are written per session and level to a common beta format. Metrics read only that format, so boldtailor and released betas are treated alike.
 
-**Tech Stack:** Python ≥ 3.12, uv, boldtailor (this repo), nibabel, numpy, pandas, scipy, scikit-learn (LinearSVC), Nilearn (LSS oracle), and neuromaps with Connectome Workbench (ROI transform).
+**Tech Stack:** Python ≥ 3.12, uv, boldtailor (this repo), nibabel, numpy, pandas, scipy, scikit-learn (LinearSVC), Nilearn (LSS oracle), and Connectome Workbench `wb_command` (ROI resampling).
 
 **Spec:** `docs/superpowers/specs/2026-10-05-nsd-replication-experiments-design.md`
 
@@ -19,7 +19,7 @@
 - Every analysis uses only the cortical surface grayordinates: the CIFTI structures `CIFTI_STRUCTURE_CORTEX_LEFT` and `CIFTI_STRUCTURE_CORTEX_RIGHT`. Subcortical volume grayordinates are dropped when inputs are loaded, before any fitting.
 - The core package (`src/boldtailor/`) is not modified and gains no dependency. Anatomy (cortex filter, ROI) lives only in the experiment package.
 - Every `__init__.py` stays empty. This plan creates none, because `experiments` and `experiments/nsd_replication` are namespace packages.
-- Use `uv` for packages and `uv run` for every command. New dependencies go in the `experiments` dependency group.
+- Use `uv` for packages and `uv run` for every command. This plan adds no Python dependencies; if one becomes necessary, it goes in an `experiments` dependency group, never in the core dependencies.
 - TDD: the failing test is committed first, in its own commit (`test: ... (RED)`), then the implementation.
 - Tests are opt-in. They live in `experiments/nsd_replication/` and run with `uv run pytest experiments/nsd_replication -W error`. `pyproject.toml` keeps `testpaths = ["tests"]`, so the default suite is unaffected.
 - Code is formatted with Black: `uv run black experiments/`.
@@ -47,7 +47,7 @@
 2. **Constant or all-NaN grayordinates** (medial wall, dropout). Expected: z-scoring and correlations give NaN for those features, never warnings or crashes, and every ROI summary ignores NaN. Pinned in Task 5 by `test_zscore_constant_feature_is_nan_without_warning` and in Task 8 by `test_reliability_constant_feature_is_nan`.
 3. **A fit directory left half-written by a crash.** Expected: it is detected as incomplete and refit, not read as valid. `metadata.json` is written last, and its absence means incomplete. Pinned in Task 5 by `test_incomplete_fit_is_not_complete`.
 4. **Released-beta trial counts or order that don't match the events.** For example, a session with one run missing gives 688 trials instead of 750. Expected: an error naming subject, session and version. Pinned in Task 11 by `test_released_trial_count_mismatch_names_session`.
-5. **ROI labels with values other than 0/1** (NSD's mgz uses −1 outside cortex). Expected: only the value 1 counts as inside the ROI. Pinned in Task 4 by `test_roi_only_value_one_is_inside`.
+5. **Resampled ROI labels are fractional** at the ROI edge after adaptive barycentric resampling. Expected: a vertex is inside when its value is ≥ 0.5, so the ROI neither grows nor shrinks systematically. Pinned in Task 4 by `test_roi_threshold_at_half`.
 
 ---
 
@@ -80,24 +80,18 @@
 ### Task 1: Scaffold, dependencies, configuration
 
 **Files:**
-- Modify: `pyproject.toml` (new `experiments` dependency group)
 - Create: `experiments/nsd_replication/conftest.py`, `config.py`, `test_config.py`, `configs/pilot.toml`, `README.md`
 
 **Interfaces:**
 - Produces:
   - `ExperimentConfig` (frozen dataclass) with fields:
-    - required: `bids_dir: Path`, `output_dir: Path`, `nsdgeneral_dir: Path`, `subjects: tuple[str, ...]`, `sessions: tuple[str, ...]`;
+    - required: `bids_dir: Path`, `output_dir: Path`, `freesurfer_dir: Path`, `subjects: tuple[str, ...]`, `sessions: tuple[str, ...]`;
     - optional: `fmriprep_dir: Path | None = None`, `released_dir: Path | None = None`, `alignment_floor: float | None = None`, `task: str = "nsdcore"`, `image_column: str = "73k_id"`, `n_jobs: int = 4`, `block_size: int = 4096`.
   - `load_config(path) -> ExperimentConfig`.
 
-- [ ] **Step 1: Add dependencies**
+- [ ] **Step 1: Check prerequisites**
 
-```bash
-uv add --group experiments neuromaps
-uv sync --group dev --group experiments
-uv run python -c "import neuromaps; print('ok')"
-```
-Expected: `ok`. Then run `which wb_command`; expected: a path. The machine has `/Applications/wb_view.app/Contents/usr/bin/wb_command`.
+No new Python dependencies are needed: scikit-learn, Nilearn, nibabel and scipy are already project dependencies. Run `uv sync --group dev`, then run `which wb_command`; expected: a path. The machine has `/Applications/wb_view.app/Contents/usr/bin/wb_command`.
 
 - [ ] **Step 2: Write `conftest.py`**
 
@@ -121,7 +115,7 @@ from experiments.nsd_replication.config import ExperimentConfig, load_config
 TOML = """
 bids_dir = "/data/BIDS"
 output_dir = "/data/out"
-nsdgeneral_dir = "/data/labels"
+freesurfer_dir = "/data/freesurfer"
 subjects = ["sub-07"]
 sessions = ["ses-nsd10", "ses-nsd11"]
 n_jobs = 2
@@ -147,7 +141,7 @@ def test_bad_labels_rejected(field, value):
     values = dict(
         bids_dir=Path("/b"),
         output_dir=Path("/o"),
-        nsdgeneral_dir=Path("/l"),
+        freesurfer_dir=Path("/l"),
         subjects=("sub-07",),
         sessions=("ses-nsd10",),
     )
@@ -171,7 +165,7 @@ Expected: FAIL with `ModuleNotFoundError: ... config`.
 - [ ] **Step 5: Commit RED**
 
 ```bash
-git add pyproject.toml uv.lock experiments/nsd_replication/conftest.py experiments/nsd_replication/test_config.py
+git add experiments/nsd_replication/conftest.py experiments/nsd_replication/test_config.py
 git commit -m "test: experiment configuration (RED)"
 ```
 
@@ -202,7 +196,7 @@ def _labels(name, values, entity):
 class ExperimentConfig:
     bids_dir: Path
     output_dir: Path
-    nsdgeneral_dir: Path
+    freesurfer_dir: Path
     subjects: tuple[str, ...]
     sessions: tuple[str, ...]
     fmriprep_dir: Path | None = None
@@ -238,7 +232,7 @@ def load_config(path) -> ExperimentConfig:
 ```toml
 bids_dir = "/Volumes/extdata1/NSD/BIDS"
 output_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/nsd-replication"
-nsdgeneral_dir = "/Volumes/extdata1/NSD/nsddata/freesurfer/fsaverage/label"
+freesurfer_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD"
 released_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/betas-fsLR"
 subjects = ["sub-07"]
 sessions = ["ses-nsd10", "ses-nsd11", "ses-nsd12", "ses-nsd13", "ses-nsd14",
@@ -250,13 +244,13 @@ n_jobs = 4
 
 - **Purpose.** One paragraph, linking the spec.
 - **Prerequisites:**
-  - `uv sync --group dev --group experiments`;
+  - `uv sync --group dev`;
   - Connectome Workbench `wb_command` on `PATH`;
-  - NSD's `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` from `nsddata/freesurfer/fsaverage/label/` (NSD AWS bucket), placed in `nsdgeneral_dir`;
+  - each subject's native-surface `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` under `freesurfer_dir/subjNN/label/`;
   - the released betas converted to CIFTI under `released_dir` (`derivatives/betas-fsLR`).
 - **Tests:** `uv run pytest experiments/nsd_replication -W error`.
 - **Verified API notes:**
-  - `neuromaps.transforms.fsaverage_to_fslr(data, target_density='32k', hemi=None, method='linear')`, called with `method='nearest'`.
+  - ROI resampling: `wb_command -metric-resample <in> <source sphere> <target sphere> ADAP_BARY_AREA <out> -area-metrics <source area> <target area>`, with inputs read from the released betas' JSON sidecars, then thresholded at 0.5.
 
 - [ ] **Step 8: Run the tests, format, commit**
 
@@ -587,7 +581,7 @@ def _pilot_config():
 
     return ExperimentConfig(
         bids_dir=DATA, output_dir=DATA / "derivatives/nsd-replication",
-        nsdgeneral_dir=DATA, subjects=("sub-07",), sessions=("ses-nsd10",),
+        freesurfer_dir=DATA, subjects=("sub-07",), sessions=("ses-nsd10",),
     )
 
 
@@ -720,26 +714,47 @@ git commit -m "feat: cortical-only NSD fMRIPrep session loading"
 
 ---
 
-### Task 4: nsdgeneral ROI on fsLR cortex
+### Task 4: Subject nsdgeneral ROI on fsLR cortex
 
 **Files:**
 - Create: `experiments/nsd_replication/roi.py`, `test_roi.py`
 
-**Interfaces:**
-- Produces:
-  - `fslr_labels(nsdgeneral_dir: Path) -> dict[str, np.ndarray]`. Keys `"L"` and `"R"`; values are integer label arrays of length 32492 on fsLR 32k vertices.
-  - `roi_mask(brain: BrainModelAxis, labels: dict[str, np.ndarray]) -> np.ndarray[bool]`. Per cortical grayordinate; True where the vertex's label equals 1.
-  - `subject_roi(path: Path, brain) -> np.ndarray[bool]`. Reads a converted dscalar; True where the value is 1. The dscalar axis must equal `brain`, otherwise an error is raised.
-  - `load_roi(config, subject, brain) -> np.ndarray[bool]`. Uses the subject ROI when the file `config.output_dir / "roi" / f"{subject}_nsdgeneral.dscalar.nii"` exists, otherwise the group ROI. Raises if the mask is empty.
+**Background.** NSD gives each subject's nsdgeneral as native-surface labels:
+- files: `<freesurfer_dir>/subjNN/label/{lh,rh}.nsdgeneral.mgz`;
+- values: float 0/1, on the subject's native vertices, which are the same vertices as NSD's native-surface betas (sub-07: 198,770 left, 200,392 right).
 
-- [ ] **Step 1: Write the failing tests**
+The released betas were resampled to fsLR 32k with Workbench adaptive barycentric resampling. Each beta's JSON sidecar records the inputs used:
+- `SourceSpheres` / `TargetSpheres`: lists `[left, right]`;
+- `SourceAreaMetrics` / `TargetAreaMetrics`: lists `[left, right]`.
+
+The ROI goes through the identical resampling, then is thresholded at 0.5. That way ROI and betas share one route.
+
+**Interfaces:**
+- Consumes:
+  - `ExperimentConfig.freesurfer_dir` and `ExperimentConfig.released_dir` (Task 1);
+  - `released_path` (Task 11) is not available yet, so this task builds the sidecar path itself with the same file naming.
+- Produces:
+  - `FSLR_VERTICES = 32492`
+  - `label_paths(config, subject) -> dict[str, Path]`. Keys `"L"` and `"R"`, pointing at `freesurfer_dir/subj{NN}/label/{lh,rh}.nsdgeneral.mgz`.
+  - `resampling_inputs(sidecar: dict) -> dict[str, dict[str, Path]]`. Maps `"L"`/`"R"` to `{"source_sphere", "target_sphere", "source_area", "target_area"}`.
+  - `resample_command(metric_in, metric_out, inputs) -> list[str]`, which gives `["wb_command", "-metric-resample", metric_in, source_sphere, target_sphere, "ADAP_BARY_AREA", metric_out, "-area-metrics", source_area, target_area]`.
+  - `fslr_labels(config, subject, sidecar) -> dict[str, np.ndarray]`. Float arrays of length 32492, cached as `output_dir/roi/{subject}_hemi-{L,R}_nsdgeneral.func.gii`.
+  - `roi_mask(brain, labels, threshold=0.5) -> np.ndarray[bool]`. Per cortical grayordinate; True where the label value is ≥ threshold. Raises if the result is empty.
+  - `load_roi(config, subject, brain) -> np.ndarray[bool]`. Reads the sidecar of the released `assumehrf` beta for `config.sessions[0]`, then calls `roi_mask(brain, fslr_labels(...))`.
+
+- [ ] **Step 1: Write the failing tests `test_roi.py`**
 
 ```python
+import json
+from pathlib import Path
+
 import nibabel as nib
 import numpy as np
 import pytest
 
-from experiments.nsd_replication.roi import roi_mask
+from experiments.nsd_replication.roi import resample_command, resampling_inputs, roi_mask
+
+DATA = Path("/Volumes/extdata1/NSD/BIDS")
 
 
 def _brain():
@@ -748,44 +763,87 @@ def _brain():
     return left + right
 
 
-def test_roi_only_value_one_is_inside():
-    labels = {"L": np.zeros(32492, int), "R": np.zeros(32492, int)}
-    labels["L"][[0, 3]] = [1, -1]
-    labels["R"][5] = 1
+def _labels():
+    return {"L": np.zeros(32492), "R": np.zeros(32492)}
+
+
+def test_roi_threshold_at_half():
+    labels = _labels()
+    labels["L"][[0, 3]] = [0.6, 0.4]
+    labels["R"][5] = 1.0
     assert roi_mask(_brain(), labels).tolist() == [True, False, True]
 
 
 def test_empty_roi_raises():
-    labels = {"L": np.zeros(32492, int), "R": np.zeros(32492, int)}
     with pytest.raises(ValueError, match="empty"):
-        roi_mask(_brain(), labels)
+        roi_mask(_brain(), _labels())
 
 
 def test_wrong_label_length_raises():
-    labels = {"L": np.zeros(10, int), "R": np.zeros(32492, int)}
+    labels = _labels()
+    labels["L"] = np.zeros(10)
     with pytest.raises(ValueError, match="32492"):
         roi_mask(_brain(), labels)
-```
 
-Also add a transform test, `test_fslr_labels_from_fsaverage`. It skips unless `wb_command` is on `PATH` and neuromaps is importable (`pytest.importorskip("neuromaps")`). The test writes synthetic fsaverage `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` files (163842 vertices, with value 1 on the vertices with index < 1000 and 0 elsewhere), calls `fslr_labels`, and asserts:
-- both arrays have length 32492;
-- the values are a subset of {0, 1};
-- some vertices are 1.
+
+def test_resampling_inputs_and_command():
+    sidecar = {
+        "SourceSpheres": ["/s/lh.sphere", "/s/rh.sphere"],
+        "TargetSpheres": ["/t/L.sphere", "/t/R.sphere"],
+        "SourceAreaMetrics": ["/s/lh.area", "/s/rh.area"],
+        "TargetAreaMetrics": ["/t/L.area", "/t/R.area"],
+    }
+    inputs = resampling_inputs(sidecar)
+    assert inputs["R"]["source_sphere"] == Path("/s/rh.sphere")
+    command = resample_command("in.gii", "out.gii", inputs["L"])
+    assert command == [
+        "wb_command", "-metric-resample", "in.gii", "/s/lh.sphere", "/t/L.sphere",
+        "ADAP_BARY_AREA", "out.gii", "-area-metrics", "/s/lh.area", "/t/L.area",
+    ]
+
+
+def test_resampling_inputs_missing_key_raises():
+    with pytest.raises(ValueError, match="TargetAreaMetrics"):
+        resampling_inputs({"SourceSpheres": [1, 2], "TargetSpheres": [1, 2], "SourceAreaMetrics": [1, 2]})
+
+
+@pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
+def test_pilot_roi_on_fmriprep_cortex(tmp_path):
+    import shutil
+
+    if shutil.which("wb_command") is None:
+        pytest.skip("Connectome Workbench not installed")
+    from experiments.nsd_replication.config import ExperimentConfig
+    from experiments.nsd_replication.inputs import fmriprep_brain
+    from experiments.nsd_replication.roi import load_roi
+
+    config = ExperimentConfig(
+        bids_dir=DATA, output_dir=tmp_path,
+        freesurfer_dir=DATA / "derivatives/freesurfer-NSD",
+        released_dir=DATA / "derivatives/betas-fsLR",
+        subjects=("sub-07",), sessions=("ses-nsd10",),
+    )
+    mask = load_roi(config, "sub-07", fmriprep_brain(config, "sub-07", "ses-nsd10"))
+    assert mask.shape == (59412,)
+    assert 0.05 < mask.mean() < 0.4
+```
 
 - [ ] **Step 2: Run, verify failure, commit RED**
 
 ```bash
 uv run pytest experiments/nsd_replication/test_roi.py -v   # FAIL: ModuleNotFoundError
 git add experiments/nsd_replication/test_roi.py
-git commit -m "test: nsdgeneral ROI on fsLR cortex (RED)"
+git commit -m "test: subject nsdgeneral ROI resampled like the released betas (RED)"
 ```
 
 - [ ] **Step 3: Implement `roi.py`**
 
 ```python
-"""nsdgeneral from NSD fsaverage labels to a cortical grayordinate mask."""
+"""Subject nsdgeneral, resampled to fsLR 32k exactly as the released betas were."""
 
+import json
 from pathlib import Path
+import subprocess
 import tempfile
 
 import nibabel as nib
@@ -793,33 +851,68 @@ import numpy as np
 
 FSLR_VERTICES = 32492
 _HEMI = {"CIFTI_STRUCTURE_CORTEX_LEFT": "L", "CIFTI_STRUCTURE_CORTEX_RIGHT": "R"}
+_KEYS = {
+    "source_sphere": "SourceSpheres",
+    "target_sphere": "TargetSpheres",
+    "source_area": "SourceAreaMetrics",
+    "target_area": "TargetAreaMetrics",
+}
+_SIDECAR = (
+    "{subject}/{session}/func/{subject}_{session}_task-{task}_space-fsLR_den-91k"
+    "_desc-assumehrf_stat-effect_statmap.json"
+)
 
 
-def _gifti(values, path):
-    array = nib.gifti.GiftiDataArray(np.asarray(values, dtype=np.float32))
-    nib.save(nib.gifti.GiftiImage(darrays=[array]), path)
-    return str(path)
+def label_paths(config, subject):
+    label = config.freesurfer_dir / f"subj{subject.removeprefix('sub-')}" / "label"
+    return {"L": label / "lh.nsdgeneral.mgz", "R": label / "rh.nsdgeneral.mgz"}
 
 
-def fslr_labels(nsdgeneral_dir):
-    from neuromaps.transforms import fsaverage_to_fslr
-
-    with tempfile.TemporaryDirectory() as tmp:
-        files = tuple(
-            _gifti(
-                np.asarray(nib.load(Path(nsdgeneral_dir) / f"{h}.nsdgeneral.mgz").dataobj).ravel(),
-                Path(tmp) / f"{h}.func.gii",
-            )
-            for h in ("lh", "rh")
-        )
-        left, right = fsaverage_to_fslr(files, target_density="32k", method="nearest")
+def resampling_inputs(sidecar):
+    missing = [key for key in _KEYS.values() if key not in sidecar]
+    if missing:
+        raise ValueError(f"beta sidecar lacks resampling inputs: {missing}")
     return {
-        "L": np.rint(left.agg_data()).astype(int),
-        "R": np.rint(right.agg_data()).astype(int),
+        hemi: {name: Path(sidecar[key][i]) for name, key in _KEYS.items()}
+        for i, hemi in enumerate(("L", "R"))
     }
 
 
-def roi_mask(brain, labels):
+def resample_command(metric_in, metric_out, inputs):
+    return [
+        "wb_command", "-metric-resample", str(metric_in),
+        str(inputs["source_sphere"]), str(inputs["target_sphere"]),
+        "ADAP_BARY_AREA", str(metric_out),
+        "-area-metrics", str(inputs["source_area"]), str(inputs["target_area"]),
+    ]
+
+
+def _save_metric(values, path):
+    array = nib.gifti.GiftiDataArray(np.asarray(values, dtype=np.float32))
+    nib.save(nib.gifti.GiftiImage(darrays=[array]), path)
+
+
+def _resample(source, target, inputs):
+    with tempfile.TemporaryDirectory() as tmp:
+        metric = Path(tmp) / "native.func.gii"
+        _save_metric(np.asarray(nib.load(source).dataobj).ravel(), metric)
+        subprocess.run(resample_command(metric, target, inputs), check=True)
+
+
+def fslr_labels(config, subject, sidecar):
+    inputs = resampling_inputs(sidecar)
+    out = config.output_dir / "roi"
+    out.mkdir(parents=True, exist_ok=True)
+    labels = {}
+    for hemi, source in label_paths(config, subject).items():
+        target = out / f"{subject}_hemi-{hemi}_nsdgeneral.func.gii"
+        if not target.is_file():
+            _resample(source, target, inputs[hemi])
+        labels[hemi] = nib.load(target).agg_data().astype(float)
+    return labels
+
+
+def roi_mask(brain, labels, threshold=0.5):
     for hemi, values in labels.items():
         if len(values) != FSLR_VERTICES:
             raise ValueError(f"{hemi} labels must have {FSLR_VERTICES} vertices")
@@ -827,36 +920,27 @@ def roi_mask(brain, labels):
     mask = np.zeros(len(brain), bool)
     for hemi in ("L", "R"):
         rows = hemis == hemi
-        mask[rows] = labels[hemi][brain.vertex[rows]] == 1
+        mask[rows] = labels[hemi][brain.vertex[rows]] >= threshold
     if not mask.any():
         raise ValueError("nsdgeneral ROI is empty on these grayordinates")
     return mask
 
 
-def subject_roi(path, brain):
-    image = nib.load(path)
-    if image.header.get_axis(1) != brain:
-        raise ValueError(f"{path}: grayordinates differ from the data")
-    mask = np.asarray(image.dataobj)[0] == 1
-    if not mask.any():
-        raise ValueError(f"{path}: nsdgeneral ROI is empty")
-    return mask
-
-
 def load_roi(config, subject, brain):
-    path = config.output_dir / "roi" / f"{subject}_nsdgeneral.dscalar.nii"
-    if path.is_file():
-        return subject_roi(path, brain)
-    return roi_mask(brain, fslr_labels(config.nsdgeneral_dir))
+    path = config.released_dir / _SIDECAR.format(
+        subject=subject, session=config.sessions[0], task=config.task
+    )
+    sidecar = json.loads(path.read_text())
+    return roi_mask(brain, fslr_labels(config, subject, sidecar))
 ```
 
 - [ ] **Step 4: Run, format, commit GREEN**
 
 ```bash
-uv run pytest experiments/nsd_replication/test_roi.py -W error -v   # PASS
+uv run pytest experiments/nsd_replication/test_roi.py -W error -v   # PASS (data test passes when mounted)
 uv run black experiments/
 git add experiments/nsd_replication/roi.py
-git commit -m "feat: nsdgeneral ROI from fsaverage labels on fsLR cortex"
+git commit -m "feat: subject nsdgeneral ROI resampled like the released betas"
 ```
 
 ---
@@ -1631,7 +1715,7 @@ from experiments.nsd_replication.betas import fit_dir, is_complete
 def config(tmp_path):
     from experiments.nsd_replication.config import ExperimentConfig
     return ExperimentConfig(
-        bids_dir=tmp_path, output_dir=tmp_path / "out", nsdgeneral_dir=tmp_path,
+        bids_dir=tmp_path, output_dir=tmp_path / "out", freesurfer_dir=tmp_path,
         subjects=("sub-07",), sessions=("ses-a", "ses-b"), block_size=16,
     )
 
@@ -2037,7 +2121,7 @@ git commit -m "feat: released GLMsingle betas, alignment check, comparison metri
 
 - [ ] **Step 1: User prerequisites**
 
-1. Download `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` from NSD's `nsddata/freesurfer/fsaverage/label/` into the `nsdgeneral_dir` set in `configs/pilot.toml`.
+1. Confirm that `freesurfer_dir/subjNN/label/{lh,rh}.nsdgeneral.mgz` exist for each configured subject. They exist for sub-07.
 2. Confirm `wb_command` is on `PATH`. It is installed at `/Applications/wb_view.app/Contents/usr/bin/wb_command`.
 
 - [ ] **Step 2: User runs the pilot** (estimate: several hours per session; the full workflow took 105 min per session)
