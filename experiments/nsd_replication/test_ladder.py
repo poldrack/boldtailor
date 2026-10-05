@@ -27,6 +27,7 @@ def test_ladder_levels_shapes_and_order(synthetic_session):
         assert fit.betas.shape == (len(trials), 30), level
         assert fit.record["level"] == level
     assert fits["b2"].extras["hrf_indices"].shape == (30,)
+    assert "hrf_indices" in fits["lss-fit"].extras
     assert fits["b4"].extras["ridge_fraction"].shape == (30,)
     assert not np.allclose(fits["b3"].betas, fits["b2"].betas)
     assert not np.allclose(fits["b4"].betas, fits["b3"].betas)
