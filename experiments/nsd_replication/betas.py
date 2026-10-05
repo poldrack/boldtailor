@@ -9,8 +9,6 @@ import pandas as pd
 
 from experiments.nsd_replication.trials import TRIAL_COLUMNS
 
-_REQUIRED = ("betas.npy", "trials.tsv", "metadata.json")
-
 
 def fit_dir(output_dir, source, subject, session, level):
     return Path(output_dir) / "fits" / source / subject / session / level
@@ -31,14 +29,24 @@ def write_fit(path, betas, trials, metadata, extras=None):
     (path / "metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True))
 
 
+def _discarded(path):
+    meta = json.loads((path / "metadata.json").read_text())
+    return bool(meta.get("betas_discarded", False))
+
+
 def is_complete(path):
-    return all((Path(path) / name).is_file() for name in _REQUIRED)
+    path = Path(path)
+    if not all((path / name).is_file() for name in ("trials.tsv", "metadata.json")):
+        return False
+    return (path / "betas.npy").is_file() or _discarded(path)
 
 
 def read_fit(path):
     path = Path(path)
     if not is_complete(path):
         raise FileNotFoundError(f"incomplete fit: {path}")
+    if not (path / "betas.npy").is_file():
+        raise ValueError(f"{path}: betas were discarded after metrics")
     trials = pd.read_csv(path / "trials.tsv", sep="\t")
     metadata = json.loads((path / "metadata.json").read_text())
     return np.load(path / "betas.npy"), trials, metadata

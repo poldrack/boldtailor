@@ -40,7 +40,8 @@ from experiments.nsd_replication.trials import (
 SOURCES = ("ppdata",)
 R4_THRESHOLDS = (0.0, 0.3)
 R6_THRESHOLDS = (0.0, 0.1, 0.2, 0.3, 0.4)
-RSA_THRESHOLD = 0.0
+RSA_THRESHOLDS = (0.0, 0.2, 0.4)
+SUBJECT_TABLES = ("r1", "r1_median", "r3b", "r4_t0.0", "r4_t0.3", "r6")
 
 
 # ---------------------------------------------------------------- fit stage
@@ -55,7 +56,11 @@ def _load(config, source, subject, session):
 def _git_commit():
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=Path(__file__).resolve().parent,
         )
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
@@ -244,43 +249,83 @@ def subject_metrics(config, source, subject, levels):
 # ---------------------------------------------------------------- group RSA
 
 
-def _subject_pattern(config, source, subject, level, images_for):
-    roi = _subject_roi(config, subject)
-    betas, trials = _subject_betas(config, source, subject, level)
-    rel = voxel_reliability(repetition_array(betas, trials, images_with(trials, 3)))
-    reps = repetition_array(betas, trials, images_for)
-    return reps.mean(axis=0), _mask(roi, rel, RSA_THRESHOLD)
-
-
-def _shared_images(config, source, subjects, level):
-    sets = []
-    for subject in subjects:
-        trials = _subject_betas(config, source, subject, level)[1]
-        sets.append(set(images_with(trials, 3)))
+def _shared_images(trials_by_subject):
+    sets = [set(images_with(t, 3)) for t in trials_by_subject.values()]
     return np.array(sorted(set.intersection(*sets)))
 
 
-def group_rsa(config, source, subjects, level):
-    shared = _shared_images(config, source, subjects, level)
-    rdms = {}
-    for subject in subjects:
-        patterns, mask = _subject_pattern(config, source, subject, level, shared)
-        rdms[subject] = rdm(patterns[:, mask])
-    table = rdm_agreement(rdms).assign(version=level, n_images=len(shared))
+def _subject_inputs(config, source, subject, levels):
+    loaded = {lv: _subject_betas(config, source, subject, lv) for lv in levels}
+    betas = {lv: b for lv, (b, _) in loaded.items()}
+    trials = loaded[levels[0]][1]
+    rel = _reliabilities(betas, trials, images_with(trials, 3))
+    return dict(betas=betas, trials=trials, composite=_composite(rel))
+
+
+def _mean_patterns(inputs, images):
+    return {
+        lv: repetition_array(b, inputs["trials"], images).mean(axis=0)
+        for lv, b in inputs["betas"].items()
+    }
+
+
+def _rsa_rows(patterns, masks, level, threshold):
+    rdms = {s: rdm(patterns[s][level][:, masks[s](threshold)]) for s in patterns}
+    return rdm_agreement(rdms).assign(threshold=threshold)
+
+
+def _level_rsa(patterns, masks, level):
+    frames = [_rsa_rows(patterns, masks, level, t) for t in RSA_THRESHOLDS]
+    columns = ["threshold", "subject_a", "subject_b", "r"]
+    return pd.concat(frames, ignore_index=True)[columns]
+
+
+def group_rsa(config, source, subjects, levels):
+    inputs = {s: _subject_inputs(config, source, s, levels) for s in subjects}
+    shared = _shared_images({s: i["trials"] for s, i in inputs.items()})
+    patterns = {s: _mean_patterns(i, shared) for s, i in inputs.items()}
+    rois = {s: _subject_roi(config, s) for s in subjects}
+    masks = {
+        s: (lambda t, s=s: _mask(rois[s], inputs[s]["composite"], t)) for s in subjects
+    }
+    tables = {lv: _level_rsa(patterns, masks, lv) for lv in levels}
     out = _metrics_dir(config, source)
     out.mkdir(parents=True, exist_ok=True)
-    table.to_csv(out / f"rsa_{level}.tsv", sep="\t", index=False)
-    return table
+    for level, table in tables.items():
+        table.to_csv(out / f"rsa_{level}.tsv", sep="\t", index=False)
+    return pd.concat(tables, names=["version"])
 
 
 # ----------------------------------------------------------------- cleanup
 
 
-def discard_betas(config, source, subject, levels, sessions=None):
-    for session in sessions or config.sessions:
+def _expected_tables(config, source, subject, levels, multiple_subjects):
+    names = [f"{n}.tsv" for n in SUBJECT_TABLES]
+    paths = [_metrics_dir(config, source, subject) / n for n in names]
+    if multiple_subjects:
+        paths += [_metrics_dir(config, source) / f"rsa_{lv}.tsv" for lv in levels]
+    return paths
+
+
+def _mark_discarded(path):
+    meta_path = path / "metadata.json"
+    meta = json.loads(meta_path.read_text())
+    meta_path.write_text(
+        json.dumps(dict(meta, betas_discarded=True), indent=2, sort_keys=True)
+    )
+    (path / "betas.npy").unlink(missing_ok=True)
+
+
+def discard_betas(config, source, subject, levels, multiple_subjects=False):
+    expected = _expected_tables(config, source, subject, levels, multiple_subjects)
+    missing = [p.name for p in expected if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"refusing to discard betas; missing metrics: {missing}"
+        )
+    for session in config.sessions:
         for level in levels:
-            path = fit_dir(config.output_dir, source, subject, session, level)
-            (path / "betas.npy").unlink(missing_ok=True)
+            _mark_discarded(fit_dir(config.output_dir, source, subject, session, level))
 
 
 # ---------------------------------------------------------------------- CLI
@@ -306,12 +351,12 @@ def _run_fit(config, args, levels):
 def _run_metrics(config, args, levels):
     for subject in config.subjects:
         subject_metrics(config, args.source, subject, levels)
-    if len(config.subjects) > 1:
-        for level in levels:
-            group_rsa(config, args.source, config.subjects, level)
+    multiple = len(config.subjects) > 1
+    if multiple:
+        group_rsa(config, args.source, config.subjects, levels)
     if args.discard_betas_after_metrics:
         for subject in config.subjects:
-            discard_betas(config, args.source, subject, levels)
+            discard_betas(config, args.source, subject, levels, multiple)
 
 
 def main(argv=None):
