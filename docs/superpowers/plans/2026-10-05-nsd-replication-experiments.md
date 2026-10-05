@@ -10,7 +10,7 @@
 - It calls boldtailor's public API and reuses the workflow's fMRIPrep loaders. The boldtailor core is not modified.
 - Fits are written per session and level to a common beta format. Metrics read only that format, so boldtailor and released betas are treated alike.
 
-**Tech Stack:** Python ≥ 3.12, uv, boldtailor (this repo), nibabel, numpy, pandas, scipy, scikit-learn (LinearSVC), Nilearn (LSS oracle), and neuromaps with Connectome Workbench (ROI transform). GLMsingle is a test-only oracle, pinned from git.
+**Tech Stack:** Python ≥ 3.12, uv, boldtailor (this repo), nibabel, numpy, pandas, scipy, scikit-learn (LinearSVC), Nilearn (LSS oracle), and neuromaps with Connectome Workbench (ROI transform).
 
 **Spec:** `docs/superpowers/specs/2026-10-05-nsd-replication-experiments-design.md`
 
@@ -27,14 +27,16 @@
 - Use these names and paths exactly:
   - BIDS root: `/Volumes/extdata1/NSD/BIDS`
   - fMRIPrep: `derivatives/fmriprep-25.2.5`
-  - ppdata: `BIDS/derivatives/ppdata/subjNN/func1pt8mm/timeseries/sub-NN_ses-nsdYY_task-nsdcore_run-ZZ_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii`
+  - released betas: `derivatives/betas-fsLR/sub-NN/ses-nsdYY/func/sub-NN_ses-nsdYY_task-nsdcore_space-fsLR_den-91k_desc-<version>_stat-effect_statmap.dscalar.nii`, with 750 maps `trial-001`…`trial-750` in percent signal change. NSD's ×300 scaling is already undone, so no rescaling is applied.
   - image column: `73k_id`
   - task: `nsdcore`
 - Sessions:
   - pilot: `sub-07`, `ses-nsd10`–`ses-nsd19`;
   - primary: `sub-01`–`sub-04`, `ses-nsd01`–`ses-nsd10`;
   - extension: `sub-05`, `sub-06`, `sub-08`, `ses-nsd01`–`ses-nsd10`.
-- Released GLMsingle versions: `assumehrf` (b1), `fithrf` (b2), `fithrf_GLMdenoise_RR` (b4).
+- Released GLMsingle versions (`desc-` values): `assumehrf` (b1), `fithrf` (b2), `fithrfGLMdenoiseRR` (b4).
+- The released betas share the fMRIPrep fsLR 91k grayordinate axis. ppdata is not used.
+- Every comparison report states that the two arms differ in preprocessing (fMRIPrep versus NSD's pipeline) as well as in the GLM.
 - Freeze tag: `nsd-replication-protocol-v1`.
 - Reliability thresholds: r = −0.2 to 0.6 in steps of 0.05.
 - The R1 threshold mask is the composite reliability: the mean over the beta versions being compared.
@@ -44,7 +46,7 @@
 1. **Images with more than 3 presentations, or any presented twice in one run.** Expected: the repetition array uses each image's first three presentations in time order and never crashes. Pinned in Task 2 by `test_repetition_array_uses_first_three_in_time_order`.
 2. **Constant or all-NaN grayordinates** (medial wall, dropout). Expected: z-scoring and correlations give NaN for those features, never warnings or crashes, and every ROI summary ignores NaN. Pinned in Task 5 by `test_zscore_constant_feature_is_nan_without_warning` and in Task 8 by `test_reliability_constant_feature_is_nan`.
 3. **A fit directory left half-written by a crash.** Expected: it is detected as incomplete and refit, not read as valid. `metadata.json` is written last, and its absence means incomplete. Pinned in Task 5 by `test_incomplete_fit_is_not_complete`.
-4. **Released-beta trial counts or order that don't match the events.** For example, a session with one run missing gives 688 trials instead of 750. Expected: an error naming subject, session and version. Pinned in Task 12 by `test_released_trial_count_mismatch_names_session`.
+4. **Released-beta trial counts or order that don't match the events.** For example, a session with one run missing gives 688 trials instead of 750. Expected: an error naming subject, session and version. Pinned in Task 11 by `test_released_trial_count_mismatch_names_session`.
 5. **ROI labels with values other than 0/1** (NSD's mgz uses −1 outside cortex). Expected: only the value 1 counts as inside the ROI. Pinned in Task 4 by `test_roi_only_value_one_is_inside`.
 
 ---
@@ -57,10 +59,9 @@
 | `experiments/nsd_replication/README.md` | Prerequisites (Workbench, label files, converted released betas), commands, verified API notes |
 | `experiments/nsd_replication/protocol.md` | Frozen protocol |
 | `experiments/nsd_replication/config.py` | `ExperimentConfig`, `load_config` |
-| `experiments/nsd_replication/configs/pilot.toml`, `primary.toml`, `extension.toml`, `ppdata.toml` | Run configurations |
+| `experiments/nsd_replication/configs/pilot.toml`, `primary.toml`, `extension.toml` | Run configurations |
 | `experiments/nsd_replication/trials.py` | Standard trial tables, presentation order, repetition arrays |
-| `experiments/nsd_replication/inputs.py` | Cortex filter, `Session`, fMRIPrep and ppdata loaders, `analysis_data` |
-| `experiments/nsd_replication/confounds.py` | GLMsingle polynomial basis |
+| `experiments/nsd_replication/inputs.py` | Cortex filter, `Session`, fMRIPrep loader, `analysis_data` |
 | `experiments/nsd_replication/roi.py` | nsdgeneral fsaverage → fsLR 32k → cortical mask |
 | `experiments/nsd_replication/betas.py` | Fit directories, read/write, completeness, z-scoring |
 | `experiments/nsd_replication/ladder.py` | Boldtailor b1, b2, b2-lib20, b3, b4 per session |
@@ -86,15 +87,15 @@
 - Produces:
   - `ExperimentConfig` (frozen dataclass) with fields:
     - required: `bids_dir: Path`, `output_dir: Path`, `nsdgeneral_dir: Path`, `subjects: tuple[str, ...]`, `sessions: tuple[str, ...]`;
-    - optional: `fmriprep_dir: Path | None = None`, `ppdata_dir: Path | None = None`, `released_template: str | None = None`, `ppdata_onset_offset: float | None = None`, `task: str = "nsdcore"`, `image_column: str = "73k_id"`, `n_jobs: int = 4`, `block_size: int = 4096`.
+    - optional: `fmriprep_dir: Path | None = None`, `released_dir: Path | None = None`, `alignment_floor: float | None = None`, `task: str = "nsdcore"`, `image_column: str = "73k_id"`, `n_jobs: int = 4`, `block_size: int = 4096`.
   - `load_config(path) -> ExperimentConfig`.
 
 - [ ] **Step 1: Add dependencies**
 
 ```bash
-uv add --group experiments neuromaps "glmsingle @ git+https://github.com/cvnlab/GLMsingle.git@1ab54a65edd3ea41a6133d4b4ecb78a9c7296684"
+uv add --group experiments neuromaps
 uv sync --group dev --group experiments
-uv run python -c "import neuromaps, glmsingle; print('ok')"
+uv run python -c "import neuromaps; print('ok')"
 ```
 Expected: `ok`. Then run `which wb_command`; expected: a path. The machine has `/Applications/wb_view.app/Contents/usr/bin/wb_command`.
 
@@ -205,9 +206,8 @@ class ExperimentConfig:
     subjects: tuple[str, ...]
     sessions: tuple[str, ...]
     fmriprep_dir: Path | None = None
-    ppdata_dir: Path | None = None
-    released_template: str | None = None
-    ppdata_onset_offset: float | None = None
+    released_dir: Path | None = None
+    alignment_floor: float | None = None
     task: str = "nsdcore"
     image_column: str = "73k_id"
     n_jobs: int = 4
@@ -239,6 +239,7 @@ def load_config(path) -> ExperimentConfig:
 bids_dir = "/Volumes/extdata1/NSD/BIDS"
 output_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/nsd-replication"
 nsdgeneral_dir = "/Volumes/extdata1/NSD/nsddata/freesurfer/fsaverage/label"
+released_dir = "/Volumes/extdata1/NSD/BIDS/derivatives/betas-fsLR"
 subjects = ["sub-07"]
 sessions = ["ses-nsd10", "ses-nsd11", "ses-nsd12", "ses-nsd13", "ses-nsd14",
             "ses-nsd15", "ses-nsd16", "ses-nsd17", "ses-nsd18", "ses-nsd19"]
@@ -252,12 +253,9 @@ n_jobs = 4
   - `uv sync --group dev --group experiments`;
   - Connectome Workbench `wb_command` on `PATH`;
   - NSD's `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` from `nsddata/freesurfer/fsaverage/label/` (NSD AWS bucket), placed in `nsdgeneral_dir`;
-  - for the ppdata comparison, the user-converted released betas, matching `released_template`.
+  - the released betas converted to CIFTI under `released_dir` (`derivatives/betas-fsLR`).
 - **Tests:** `uv run pytest experiments/nsd_replication -W error`.
 - **Verified API notes:**
-  - GLMsingle commit `1ab54a6`;
-  - `glmsingle.ols.make_poly_matrix.make_polynomial_matrix(n, degree)`;
-  - default `maxpolydeg = alt_round(n * tr / 60 / 2)` (`glmsingle.utils.alt_round.alt_round`);
   - `neuromaps.transforms.fsaverage_to_fslr(data, target_density='32k', hemi=None, method='linear')`, called with `method='nearest'`.
 
 - [ ] **Step 8: Run the tests, format, commit**
@@ -498,7 +496,7 @@ The protocol has these sections:
 3. **Ladder and settings.** Copy the spec's ladder table. Fraction grid: the `WorkflowSettings` default `(0.1, …, 1.0)`. Encoding mode `within_run`. Denoising: `select_denoising` defaults.
 4. **ROI.** Copy from the spec.
 5. **Repeat counts.** Paste the Step 5 output.
-6. **Margin δ, replication criteria, sanity floor.** Write: "Set in Task 11 before the freeze."
+6. **Margin δ, replication criteria, alignment floor.** Write: "Set in Task 12 before the freeze."
 7. **Deviations log.** Starts empty.
 
 ```bash
@@ -508,16 +506,15 @@ git commit -m "docs: NSD replication protocol draft with metric definitions"
 
 ---
 
-### Task 3: Inputs, cortex filter, polynomial confounds
+### Task 3: Cortical inputs
 
 **Files:**
-- Create: `experiments/nsd_replication/inputs.py`, `confounds.py`, `test_inputs.py`, `test_confounds.py`
+- Create: `experiments/nsd_replication/inputs.py`, `test_inputs.py`
 
 **Interfaces:**
 - Consumes:
   - `ExperimentConfig` (Task 1);
-  - `boldtailor.workflow.inputs.load_session`, `block_signals`, `detect_task_model`;
-  - `boldtailor.workflow.settings.WorkflowSettings`;
+  - from the boldtailor workflow: `load_session`, `block_signals` and `detect_task_model` (`boldtailor.workflow.inputs`), `WorkflowSettings` and `resolve_fmriprep_dir` (`boldtailor.workflow.settings`);
   - `boldtailor.data.from_arrays`.
 - Produces:
   - `CORTEX = ("CIFTI_STRUCTURE_CORTEX_LEFT", "CIFTI_STRUCTURE_CORTEX_RIGHT")`
@@ -527,61 +524,25 @@ git commit -m "docs: NSD replication protocol draft with metric definitions"
     - `signals: tuple[np.ndarray, ...]`: float32, time × cortical features;
     - `events: tuple[pd.DataFrame, ...]`, `confounds: tuple[pd.DataFrame, ...]`, `frame_times: tuple[np.ndarray, ...]`;
     - `brain: nib.cifti2.BrainModelAxis`: cortical-only;
-    - `task_model: TaskModel`;
-    - `source: str`: `"fmriprep"` or `"ppdata"`.
+    - `task_model: TaskModel | None`;
+    - `source: str`: always `"fmriprep"` here.
   - `analysis_data(session, indices, confounds=None) -> AnalysisData`
   - `load_fmriprep(config, subject, session) -> Session`
-  - `load_ppdata(config, subject, session) -> Session`
-  - `confounds.polynomial_degree(n_volumes, tr) -> int`
-  - `confounds.glmsingle_polynomials(n_volumes, tr) -> pd.DataFrame`, with columns `poly_0`…
+  - `fmriprep_brain(config, subject, session) -> nib.cifti2.BrainModelAxis`. The cortical axis of the session's first fMRIPrep run, read from the header only.
 
-- [ ] **Step 1: Write the failing tests**
-
-`test_confounds.py`:
+- [ ] **Step 1: Write the failing tests `test_inputs.py`**
 
 ```python
-import numpy as np
-import pytest
+from pathlib import Path
 
-from experiments.nsd_replication.confounds import glmsingle_polynomials, polynomial_degree
-
-
-@pytest.mark.parametrize("n, tr, degree", [(226, 1.6, 3), (301, 1.0, 3), (75, 1.6, 1), (450, 1.0, 4)])
-def test_degree_rule(n, tr, degree):
-    assert polynomial_degree(n, tr) == degree
-
-
-def test_degree_rounds_half_away_from_zero():
-    assert polynomial_degree(150, 1.0) == 1  # 1.25 -> 1
-    assert polynomial_degree(180, 1.0) == 2  # 1.5 -> 2 (Python round would give 2 too)
-    assert polynomial_degree(300, 1.0) == 3  # 2.5 -> 3 (Python round gives 2)
-
-
-def test_basis_is_orthonormal():
-    basis = glmsingle_polynomials(226, 1.6).to_numpy()
-    np.testing.assert_allclose(basis.T @ basis, np.eye(basis.shape[1]), atol=1e-10)
-
-
-def test_matches_glmsingle_span():
-    poly = pytest.importorskip("glmsingle.ols.make_poly_matrix")
-    alt_round = pytest.importorskip("glmsingle.utils.alt_round").alt_round
-    n, tr = 226, 1.6
-    ours = glmsingle_polynomials(n, tr).to_numpy()
-    theirs = poly.make_polynomial_matrix(n, int(alt_round(n * tr / 60 / 2)))
-    assert ours.shape == theirs.shape
-    proj = lambda x: x @ np.linalg.pinv(x)
-    np.testing.assert_allclose(proj(ours), proj(theirs), atol=1e-8)
-```
-
-`test_inputs.py` uses a synthetic BrainModelAxis:
-
-```python
 import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
 
-from experiments.nsd_replication.inputs import Session, analysis_data, cortical_indices
+from experiments.nsd_replication.inputs import CORTEX, Session, analysis_data, cortical_indices
+
+DATA = Path("/Volumes/extdata1/NSD/BIDS")
 
 
 def _brain(with_cortex=True):
@@ -619,51 +580,45 @@ def test_analysis_data_selects_columns_and_keeps_runs():
     data = analysis_data(session, np.array([0, 2]))
     assert data.n_runs == 2
     np.testing.assert_array_equal(data.signals[0], signals[0][:, [0, 2]])
-```
 
-The fMRIPrep and ppdata loaders are covered by the data-gated smoke test in Step 6.
+
+def _pilot_config():
+    from experiments.nsd_replication.config import ExperimentConfig
+
+    return ExperimentConfig(
+        bids_dir=DATA, output_dir=DATA / "derivatives/nsd-replication",
+        nsdgeneral_dir=DATA, subjects=("sub-07",), sessions=("ses-nsd10",),
+    )
+
+
+@pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
+def test_fmriprep_pilot_session_is_cortical_only():
+    from experiments.nsd_replication.inputs import fmriprep_brain, load_fmriprep
+
+    session = load_fmriprep(_pilot_config(), "sub-07", "ses-nsd10")
+    assert len(session.labels) == 12
+    assert session.signals[0].shape[1] == len(session.brain) == 59412
+    assert set(session.brain.name) == set(CORTEX)
+    assert "73k_id" in session.events[0]
+    assert fmriprep_brain(_pilot_config(), "sub-07", "ses-nsd10") == session.brain
+```
 
 - [ ] **Step 2: Run, verify failure, commit RED**
 
-Run: `uv run pytest experiments/nsd_replication/test_inputs.py experiments/nsd_replication/test_confounds.py -v`
+Run: `uv run pytest experiments/nsd_replication/test_inputs.py -v`
 Expected: FAIL with `ModuleNotFoundError`.
 
 ```bash
-git add experiments/nsd_replication/test_inputs.py experiments/nsd_replication/test_confounds.py
-git commit -m "test: cortex filter, session data, polynomial confounds (RED)"
+git add experiments/nsd_replication/test_inputs.py
+git commit -m "test: cortex filter and cortical session loading (RED)"
 ```
 
-- [ ] **Step 3: Implement `confounds.py`**
+- [ ] **Step 3: Implement `inputs.py`**
 
 ```python
-"""GLMsingle's polynomial drift basis, used as boldtailor confounds for ppdata."""
-
-import math
-
-import numpy as np
-import pandas as pd
-
-
-def polynomial_degree(n_volumes, tr):
-    """GLMsingle default: alt_round(duration in minutes / 2), half away from zero."""
-    value = n_volumes * tr / 60 / 2
-    return int(math.floor(value + 0.5))
-
-
-def glmsingle_polynomials(n_volumes, tr):
-    degree = polynomial_degree(n_volumes, tr)
-    x = np.linspace(-1, 1, n_volumes)
-    basis, _ = np.linalg.qr(np.polynomial.legendre.legvander(x, degree))
-    return pd.DataFrame(basis, columns=[f"poly_{d}" for d in range(degree + 1)])
-```
-
-- [ ] **Step 4: Implement `inputs.py`**
-
-```python
-"""Load one NSD session as cortical-only arrays for boldtailor."""
+"""Load one NSD fMRIPrep session as cortical-only arrays for boldtailor."""
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -672,15 +627,9 @@ import pandas as pd
 from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
 from boldtailor.workflow.inputs import block_signals, detect_task_model, load_session
-from boldtailor.workflow.settings import WorkflowSettings
-
-from experiments.nsd_replication.confounds import glmsingle_polynomials
+from boldtailor.workflow.settings import WorkflowSettings, resolve_fmriprep_dir
 
 CORTEX = ("CIFTI_STRUCTURE_CORTEX_LEFT", "CIFTI_STRUCTURE_CORTEX_RIGHT")
-PPDATA = (
-    "subj{nn}/func1pt8mm/timeseries/{subject}_{session}_task-{task}_{run}"
-    "_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii"
-)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -730,13 +679,12 @@ def load_fmriprep(config, subject, session):
     runs = load_session(_settings(config, subject, session), hrf_only=True)
     brain = runs[0].image.header.get_axis(1)
     cortex = cortical_indices(brain)
-    signals = tuple(y.astype(np.float32) for y in block_signals(runs, cortex))
     labels = tuple(r.label for r in runs)
     return Session(
         subject=subject,
         session=session,
         labels=labels,
-        signals=signals,
+        signals=tuple(y.astype(np.float32) for y in block_signals(runs, cortex)),
         events=tuple(r.events for r in runs),
         confounds=tuple(r.confounds for r in runs),
         frame_times=tuple(r.frame_times for r in runs),
@@ -746,101 +694,29 @@ def load_fmriprep(config, subject, session):
     )
 
 
-def _ppdata_run(config, subject, session, events_path):
-    run = events_path.name.split("_")[3]
-    nn = subject.removeprefix("sub-")
-    path = config.ppdata_dir / PPDATA.format(
-        nn=nn, subject=subject, session=session, task=config.task, run=run
-    )
-    if not path.is_file():
-        raise FileNotFoundError(f"{subject} {session} {run}: missing {path}")
-    image = nib.load(path)
-    series, brain = (image.header.get_axis(i) for i in (0, 1))
-    times = config.ppdata_onset_offset + series.start + np.arange(image.shape[0]) * series.step
-    events = pd.read_csv(events_path, sep="\t")
-    _check_onsets(events, times, series.step, f"{subject} {session} {run}")
-    return run, image, brain, times, events
-
-
-def _check_onsets(events, times, tr, name):
-    end = events["onset"] + events["duration"]
-    if events["onset"].min() < times[0] - tr or end.max() > times[-1] + tr:
-        raise ValueError(f"{name}: onsets fall outside the ppdata time base")
-
-
-def load_ppdata(config, subject, session):
-    if config.ppdata_dir is None or config.ppdata_onset_offset is None:
-        raise ValueError("ppdata needs ppdata_dir and ppdata_onset_offset")
-    func = config.bids_dir / subject / session / "func"
-    pattern = f"{subject}_{session}_task-{config.task}_run-*_events.tsv"
-    runs = [_ppdata_run(config, subject, session, p) for p in sorted(func.glob(pattern))]
-    if not runs:
-        raise FileNotFoundError(f"{subject} {session}: no events in {func}")
-    brain = runs[0][2]
-    if any(r[2] != brain for r in runs):
-        raise ValueError(f"{subject} {session}: ppdata runs differ in grayordinates")
-    cortex = cortical_indices(brain)
-    events = [r[4] for r in runs]
-    labels = [r[0] for r in runs]
-    return Session(
-        subject=subject,
-        session=session,
-        labels=tuple(labels),
-        signals=tuple(
-            np.asarray(r[1].dataobj, dtype=np.float32)[:, cortex] for r in runs
-        ),
-        events=tuple(events),
-        confounds=tuple(
-            glmsingle_polynomials(len(r[3]), float(r[3][1] - r[3][0])) for r in runs
-        ),
-        frame_times=tuple(r[3] for r in runs),
-        brain=brain[cortex],
-        task_model=detect_task_model(events, labels=labels),
-        source="ppdata",
-    )
+def fmriprep_brain(config, subject, session):
+    root = config.fmriprep_dir or resolve_fmriprep_dir(config.bids_dir)
+    func = root / subject / session / "func"
+    pattern = f"{subject}_{session}_task-{config.task}_run-*_space-fsLR_den-91k_bold.dtseries.nii"
+    files = sorted(func.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"{subject} {session}: no fMRIPrep CIFTI in {func}")
+    brain = nib.load(files[0]).header.get_axis(1)
+    return brain[cortical_indices(brain)]
 ```
 
-`fmriprep_dir=None` lets `WorkflowSettings` resolve the BIDS root's single `derivatives/fmriprep*`. If constructing `WorkflowSettings` rejects `output_dir`, rule on it: pass a path under `config.output_dir`, and record the ruling.
+`fmriprep_dir=None` lets `WorkflowSettings` resolve the BIDS root's single `derivatives/fmriprep*`. If constructing `WorkflowSettings` rejects `output_dir`, rule on it: pass a path under `config.output_dir`, and record the ruling. If `resolve_fmriprep_dir`'s signature differs from `resolve_fmriprep_dir(bids_dir)` (`boldtailor/workflow/settings.py:29`), call it as defined there.
 
-- [ ] **Step 5: Run, format, commit GREEN**
+- [ ] **Step 4: Run, format, commit GREEN**
 
 Run: `uv run pytest experiments/nsd_replication -W error -v`
-Expected: all PASS, with the GLMsingle span test passing because the `experiments` group is installed.
+Expected: all PASS. The data-gated test passes when `/Volumes/extdata1` is mounted.
 
 ```bash
 uv run black experiments/
-git add experiments/nsd_replication/inputs.py experiments/nsd_replication/confounds.py
-git commit -m "feat: cortical-only NSD session loading and polynomial confounds"
+git add experiments/nsd_replication/inputs.py
+git commit -m "feat: cortical-only NSD fMRIPrep session loading"
 ```
-
-- [ ] **Step 6: Data-gated smoke test**
-
-Add this test to `test_inputs.py`. It skips when the data volume is absent, and is committed in the same commit as Step 5:
-
-```python
-from pathlib import Path
-
-DATA = Path("/Volumes/extdata1/NSD/BIDS")
-
-
-@pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
-def test_fmriprep_pilot_session_is_cortical_only():
-    from experiments.nsd_replication.config import ExperimentConfig
-    from experiments.nsd_replication.inputs import load_fmriprep
-
-    config = ExperimentConfig(
-        bids_dir=DATA, output_dir=DATA / "derivatives/nsd-replication",
-        nsdgeneral_dir=DATA, subjects=("sub-07",), sessions=("ses-nsd10",),
-    )
-    session = load_fmriprep(config, "sub-07", "ses-nsd10")
-    assert len(session.labels) == 12
-    assert session.signals[0].shape[1] == len(session.brain) == 59412
-    assert set(session.brain.name) == set(CORTEX)
-    assert "73k_id" in session.events[0]
-```
-
-Run: `uv run pytest experiments/nsd_replication/test_inputs.py -W error -v`
-Expected: PASS when the volume is mounted.
 
 ---
 
@@ -1733,7 +1609,7 @@ git commit -m "feat: Prince et al. NSD metrics R1-R6 and HRF consistency"
 **Interfaces:**
 - Consumes: everything above.
 - Produces:
-  - `main(argv: list[str] | None = None) -> int`. Command: `uv run python -m experiments.nsd_replication.run {fit,metrics} --config PATH [--source fmriprep|ppdata] [--levels ...] [--refit] [--discard-betas-after-metrics]`.
+  - `main(argv: list[str] | None = None) -> int`. Command: `uv run python -m experiments.nsd_replication.run {fit,metrics} --config PATH [--source fmriprep|released] [--levels ...] [--refit] [--discard-betas-after-metrics]`.
   - `fit_session(config, source, subject, session, levels, refit=False) -> list[Path]`. Skips complete fits whose metadata `inputs_digest` matches. A complete fit with a different digest raises `ValueError` naming the fit, unless `refit`.
   - `subject_metrics(config, source, subject, levels) -> dict[str, pd.DataFrame]`. Loads every session's fits, z-scores each session, concatenates, and computes R1 curves, R3B curves, R4 tables at composite ≥ 0 and 0.3, and R6 decoding at the protocol thresholds. Writes TSVs to `output_dir/metrics/<source>/<subject>/`.
   - `group_rsa(config, source, subjects, level) -> pd.DataFrame`: R5 across subjects. Writes `output_dir/metrics/<source>/rsa_<level>.tsv`.
@@ -1806,7 +1682,7 @@ git commit -m "test: resumable fit stage and subject metrics (RED)"
 - [ ] **Step 3: Implement `run.py`**
 
 Functions, each short:
-- `_load(config, source, subject, session)` dispatches to `load_fmriprep` or `load_ppdata`.
+- `_load(config, source, subject, session)` calls `load_fmriprep` (the only fitted source). With `--source released`, the fit stage calls `released.index_released` instead (Task 11).
 - `_metadata(level, session, fit)` combines `fit.record` with `inputs_digest`, `boldtailor.__version__` (or `importlib.metadata.version("boldtailor")`), the `git rev-parse HEAD` output and the source.
 - `fit_session(...)`:
   1. compute the paths;
@@ -1937,35 +1813,260 @@ uv run black experiments/ && git add experiments/nsd_replication/stats.py && git
 
 ---
 
-### Task 11: Pilot run, pilot report, freeze (compute run started by the user)
+### Task 11: Released betas, alignment check, comparison metrics
 
 **Files:**
-- Create: `docs/validation/nsd-replication-pilot-<date>.md`, `experiments/nsd_replication/pilot_report.py`
-- Modify: `experiments/nsd_replication/protocol.md`
+- Create: `experiments/nsd_replication/released.py`, `test_released.py`
+- Modify: `experiments/nsd_replication/run.py` (`fit --source released`; comparison metrics), `test_run.py`
+
+**Interfaces:**
+- Consumes:
+  - `cortical_indices` and `fmriprep_brain` (Task 3);
+  - `trial_table` (Task 2);
+  - `fit_dir`, `write_fit` and `read_fit` (Task 5);
+  - `columnwise_corr`, `voxel_reliability` and `threshold_curves` (Task 8).
+- Produces:
+  - `RELEASED = {"b1": "assumehrf", "b2": "fithrf", "b4": "fithrfGLMdenoiseRR"}`
+  - `released_path(config, subject, session, level) -> Path`
+  - `load_released(path, brain, n_trials, name) -> np.ndarray` (float32, trials × cortical features). Errors name the subject, session and version through `name`.
+  - `bids_trials(config, subject, session) -> pd.DataFrame`. Built with `trial_table` from the raw BIDS events, in BIDS run order.
+  - `index_released(config, subject, session) -> list[Path]`. Writes `fits/released/<subject>/<session>/<level>/` for each level in `RELEASED`. Metadata holds `level`, `version`, `file`, `file_size` and `file_mtime_ns`. A complete entry whose size and mtime match is skipped.
+  - `alignment_check(ours_b1: np.ndarray, released_b1: np.ndarray, run_length: int, roi: np.ndarray) -> dict`. Keys `true_median` and `null_median`. The first is the median over ROI grayordinates of `columnwise_corr(ours, released)`. The second uses `np.roll(released, run_length, axis=0)`.
+  - In `run.py`:
+    - `comparison_metrics(config, subject) -> dict[str, pd.DataFrame]`. Takes boldtailor b1, b2 and b4 plus released b1, b2 and b4, all named `<source>:<level>`. It computes R1 curves over that combined set (composite = mean of all six) and ROI medians, and writes `metrics/comparison/<subject>/r1.tsv`, `r1_median.tsv` and `r1_difference_<level>.npy` (per-grayordinate boldtailor − released reliability for b1, b2 and b4).
+    - Every session's `trials.tsv` for released and fMRIPrep fits must be identical. Otherwise raise `ValueError` naming the session.
+
+- [ ] **Step 1: Write the failing tests `test_released.py`**
+
+```python
+import nibabel as nib
+import numpy as np
+import pytest
+
+from experiments.nsd_replication.released import alignment_check, load_released
+
+
+def _brain():
+    left = nib.cifti2.BrainModelAxis.from_surface(np.array([0, 1]), 10, "CIFTI_STRUCTURE_CORTEX_LEFT")
+    right = nib.cifti2.BrainModelAxis.from_surface(np.array([0]), 10, "CIFTI_STRUCTURE_CORTEX_RIGHT")
+    mask = np.zeros((2, 1, 1), bool)
+    mask[0, 0, 0] = True
+    thal = nib.cifti2.BrainModelAxis.from_mask(mask, "CIFTI_STRUCTURE_THALAMUS_LEFT")
+    return left + right + thal
+
+
+def _write(path, values, names=None):
+    names = names or [f"trial-{i:03d}" for i in range(1, len(values) + 1)]
+    image = nib.Cifti2Image(values, header=(nib.cifti2.ScalarAxis(names), _brain()))
+    nib.save(image, path)
+    return path
+
+
+def test_load_released_keeps_cortex_in_order(tmp_path):
+    values = np.array([[1, 2, 3, np.nan], [4, 5, 6, np.nan]], dtype=np.float32)
+    path = _write(tmp_path / "b.dscalar.nii", values)
+    cortex = _brain()[[0, 1, 2]]
+    got = load_released(path, cortex, 2, "sub-07 ses-nsd10 assumehrf")
+    np.testing.assert_array_equal(got, values[:, :3])
+
+
+def test_released_trial_count_mismatch_names_session(tmp_path):
+    path = _write(tmp_path / "b.dscalar.nii", np.zeros((3, 4), np.float32))
+    with pytest.raises(ValueError, match="sub-07 ses-nsd10 assumehrf.*3 trials.*750"):
+        load_released(path, _brain()[[0, 1, 2]], 750, "sub-07 ses-nsd10 assumehrf")
+
+
+def test_released_axis_mismatch_raises(tmp_path):
+    path = _write(tmp_path / "b.dscalar.nii", np.zeros((2, 4), np.float32))
+    with pytest.raises(ValueError, match="grayordinates"):
+        load_released(path, _brain()[[0, 1]], 2, "x")
+
+
+def test_released_map_order_checked(tmp_path):
+    path = _write(tmp_path / "b.dscalar.nii", np.zeros((2, 4), np.float32), ["trial-002", "trial-001"])
+    with pytest.raises(ValueError, match="order"):
+        load_released(path, _brain()[[0, 1, 2]], 2, "x")
+
+
+def test_missing_released_file_names_version(tmp_path):
+    with pytest.raises(FileNotFoundError, match="fithrf"):
+        load_released(tmp_path / "missing.dscalar.nii", _brain(), 2, "sub-07 ses-nsd10 fithrf")
+
+
+def test_alignment_check_detects_shift():
+    rng = np.random.default_rng(0)
+    released = rng.normal(size=(120, 5))
+    ours = released + rng.normal(scale=0.5, size=released.shape)
+    result = alignment_check(ours, released, 60, np.ones(5, bool))
+    assert result["true_median"] > 0.8 and abs(result["null_median"]) < 0.3
+```
+
+Add a data-gated test, `test_pilot_released_matches_fmriprep_axis`, skipped unless the volume is mounted. It calls `load_released` on `released_path(config, "sub-07", "ses-nsd10", "b4")` with `fmriprep_brain(...)` and `len(bids_trials(...))`, and asserts the shape `(750, 59412)`.
+
+In `test_run.py`, add `test_comparison_metrics_combined_versions`. It writes synthetic released fits with `write_fit` under `source="released"`, using the same `trials.tsv` as the fMRIPrep fits. It asserts that `r1.tsv` has six versions and that `r1_difference_b4.npy` has length 30. A second test, `test_trial_tables_must_match`, perturbs one released `trials.tsv` and expects the `ValueError`.
+
+- [ ] **Step 2: Run, verify failure, commit RED**
+
+```bash
+uv run pytest experiments/nsd_replication/test_released.py experiments/nsd_replication/test_run.py -v   # FAIL
+git add experiments/nsd_replication/test_released.py experiments/nsd_replication/test_run.py
+git commit -m "test: released GLMsingle betas, alignment check, comparison metrics (RED)"
+```
+
+- [ ] **Step 3: Implement `released.py`**
+
+```python
+"""NSD's released GLMsingle betas, converted to fsLR 91k CIFTI, in the common format."""
+
+from pathlib import Path
+
+import nibabel as nib
+import numpy as np
+import pandas as pd
+
+from experiments.nsd_replication.betas import fit_dir, is_complete, write_fit
+from experiments.nsd_replication.inputs import cortical_indices, fmriprep_brain
+from experiments.nsd_replication.metrics import columnwise_corr
+from experiments.nsd_replication.trials import trial_table
+
+RELEASED = {"b1": "assumehrf", "b2": "fithrf", "b4": "fithrfGLMdenoiseRR"}
+_NAME = (
+    "{subject}_{session}_task-{task}_space-fsLR_den-91k_desc-{version}"
+    "_stat-effect_statmap.dscalar.nii"
+)
+
+
+def released_path(config, subject, session, level):
+    name = _NAME.format(
+        subject=subject, session=session, task=config.task, version=RELEASED[level]
+    )
+    return Path(config.released_dir) / subject / session / "func" / name
+
+
+def _check_maps(axis, n_trials, name):
+    maps = list(axis.name)
+    if len(maps) != n_trials:
+        raise ValueError(f"{name}: {len(maps)} trials, but the events have {n_trials}")
+    if maps != [f"trial-{i:03d}" for i in range(1, n_trials + 1)]:
+        raise ValueError(f"{name}: maps are not trial-001... in presentation order")
+
+
+def load_released(path, brain, n_trials, name):
+    if not Path(path).is_file():
+        raise FileNotFoundError(f"{name}: missing {path}")
+    image = nib.load(path)
+    axis = image.header.get_axis(1)
+    cortex = cortical_indices(axis)
+    if axis[cortex] != brain:
+        raise ValueError(f"{name}: grayordinates differ from the fMRIPrep cortex")
+    _check_maps(image.header.get_axis(0), n_trials, name)
+    values = np.asarray(image.dataobj, dtype=np.float32)[:, cortex]
+    if not np.isfinite(values).all():
+        raise ValueError(f"{name}: non-finite cortical betas")
+    return values
+
+
+def bids_trials(config, subject, session):
+    func = config.bids_dir / subject / session / "func"
+    files = sorted(func.glob(f"{subject}_{session}_task-{config.task}_run-*_events.tsv"))
+    if not files:
+        raise FileNotFoundError(f"{subject} {session}: no events in {func}")
+    events = [pd.read_csv(f, sep="\t") for f in files]
+    labels = [f.name.split("_")[3] for f in files]
+    return trial_table(events, labels, session, config.image_column)
+
+
+def _stat(path):
+    info = Path(path).stat()
+    return {"file": str(path), "file_size": info.st_size, "file_mtime_ns": info.st_mtime_ns}
+
+
+def _current(target, stat):
+    if not is_complete(target):
+        return False
+    import json
+
+    meta = json.loads((target / "metadata.json").read_text())
+    return all(meta.get(k) == v for k, v in stat.items())
+
+
+def index_released(config, subject, session):
+    brain = fmriprep_brain(config, subject, session)
+    trials = bids_trials(config, subject, session)
+    paths = []
+    for level, version in RELEASED.items():
+        source = released_path(config, subject, session, level)
+        target = fit_dir(config.output_dir, "released", subject, session, level)
+        stat = _stat(source) if source.is_file() else {}
+        if not stat or not _current(target, stat):
+            betas = load_released(source, brain, len(trials), f"{subject} {session} {version}")
+            write_fit(target, betas, trials, {"level": level, "version": version, **stat})
+        paths.append(target)
+    return paths
+
+
+def alignment_check(ours_b1, released_b1, run_length, roi):
+    true = columnwise_corr(ours_b1[:, roi], released_b1[:, roi])
+    null = columnwise_corr(ours_b1[:, roi], np.roll(released_b1[:, roi], run_length, axis=0))
+    return {"true_median": float(np.nanmedian(true)), "null_median": float(np.nanmedian(null))}
+```
+
+Move the `json` import to the top of the module when implementing; it's shown inline above only to keep `_current` self-explanatory.
+
+- [ ] **Step 4: Implement the `run.py` changes**
+
+- `fit --source released` loops over the configured subjects and sessions and calls `index_released`.
+- `metrics --source comparison` calls `comparison_metrics(config, subject)` for each subject. It also writes `metrics/comparison/<subject>/alignment.tsv`, with one row per session from `alignment_check` (with `run_length` = the trial count of that session's first run). It raises `ValueError` naming the session when `true_median` is below `config.alignment_floor`. `alignment_floor` (Task 1) defaults to `None`, which skips the check until the pilot sets the floor.
+
+- [ ] **Step 5: Run, format, commit GREEN**
+
+```bash
+uv run pytest experiments/nsd_replication -W error -v   # all PASS
+uv run black experiments/
+git add experiments/nsd_replication
+git commit -m "feat: released GLMsingle betas, alignment check, comparison metrics"
+```
+
+---
+
+### Task 12: Pilot run, pilot report, freeze (compute run started by the user)
+
+**Files:**
+- Create: `docs/validation/nsd-replication-pilot-<date>.md`, `experiments/nsd_replication/pilot_report.py`, `test_pilot_report.py`
+- Modify: `experiments/nsd_replication/protocol.md`, `configs/pilot.toml` (`alignment_floor`)
 
 - [ ] **Step 1: User prerequisites**
 
 1. Download `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` from NSD's `nsddata/freesurfer/fsaverage/label/` into the `nsdgeneral_dir` set in `configs/pilot.toml`.
-2. Confirm `wb_command` is on `PATH`.
+2. Confirm `wb_command` is on `PATH`. It is installed at `/Applications/wb_view.app/Contents/usr/bin/wb_command`.
 
-- [ ] **Step 2: User runs the pilot fits** (estimate: several hours per session; the full workflow took 105 min per session)
+- [ ] **Step 2: User runs the pilot** (estimate: several hours per session; the full workflow took 105 min per session)
 
 ```bash
-uv run python -m experiments.nsd_replication.run fit --config experiments/nsd_replication/configs/pilot.toml --source fmriprep --levels b1 b2 b2-lib20 b3 b4 lss-assume lss-fit
-uv run python -m experiments.nsd_replication.run metrics --config experiments/nsd_replication/configs/pilot.toml --source fmriprep
+C=experiments/nsd_replication/configs/pilot.toml
+uv run python -m experiments.nsd_replication.run fit --config $C --source fmriprep --levels b1 b2 b2-lib20 b3 b4 lss-assume lss-fit
+uv run python -m experiments.nsd_replication.run fit --config $C --source released
+uv run python -m experiments.nsd_replication.run metrics --config $C --source fmriprep
+uv run python -m experiments.nsd_replication.run metrics --config $C --source released
+uv run python -m experiments.nsd_replication.run metrics --config $C --source comparison
 ```
 
-- [ ] **Step 3: Write `pilot_report.py` with a test**
+- [ ] **Step 3: `pilot_report.py` (TDD)**
 
-`pilot_report.py` holds `variability(config) -> pd.DataFrame`. For each version, it computes the median ROI R1 reliability from leave-one-session-out subsets of the 10 sessions. It reports the SD across subsets and the split-to-split SD (odd versus even sessions). The test runs it on two synthetic sessions through the `run.py` fixture route from Task 9, and checks the column set and finite values. Commit RED and then GREEN as usual.
+`pilot_report.py` holds `variability(config, source, levels) -> pd.DataFrame`. For each version, it computes the median ROI R1 reliability from leave-one-session-out subsets of the 10 sessions. It reports the SD across subsets and the split-to-split SD (odd versus even sessions).
 
-- [ ] **Step 4: Write the pilot report and complete the protocol**
+`test_pilot_report.py` writes two synthetic sessions through the Task 9 fixture route, and asserts the column set (`version, loso_sd, split_sd, median`) and finite values. Commit RED, implement, commit GREEN.
+
+- [ ] **Step 4: Write the pilot report; complete the protocol**
 
 `docs/validation/nsd-replication-pilot-<date>.md` contains:
-- R1–R6 results for sub-07, with the paper's direction for each;
+- sub-07 R1–R6 for boldtailor and released versions, with the paper's direction for each;
+- the comparison curves and difference maps;
 - repeat counts;
+- the alignment table;
 - the variability table;
-- runtime per level, from the fit metadata.
+- runtime per level, from the fit metadata;
+- the preprocessing caveat.
 
 Complete these `protocol.md` sections:
 - **δ.** Propose δ = 2 × the larger of the two SDs as a fraction of the median, rounded up to 0.01, with a written justification. Present the proposal to the user for approval before tagging.
@@ -1975,7 +2076,7 @@ Complete these `protocol.md` sections:
   - R4: b4 lag-1 mean r below b1;
   - R5: mean pairwise RDM r b4 > b1;
   - R6: accuracy b4 > b1 at composite ≥ 0.2.
-- **Sanity floor.** Write "set in Task 12 from sub-07 ppdata b1 agreement", or a floor if ppdata is already available.
+- **Alignment floor.** The midpoint between the pilot's lowest session `true_median` and its highest `null_median`. If the true medians don't clearly exceed the null medians, stop and report to the user: trials or grayordinates are misaligned. Set `alignment_floor` in every config.
 
 - [ ] **Step 5: Freeze (after user approval of δ)**
 
@@ -1983,49 +2084,6 @@ Complete these `protocol.md` sections:
 git add docs/validation experiments/nsd_replication
 git commit -m "docs: NSD replication pilot report and frozen protocol"
 git tag nsd-replication-protocol-v1
-```
-
----
-
-### Task 12: Released betas and ppdata comparison
-
-**Files:**
-- Create: `experiments/nsd_replication/released.py`, `test_released.py`, `configs/ppdata.toml`
-- Modify: `run.py` (fit stage `--source released`, which indexes released betas into the common format)
-
-**Interfaces:**
-- Produces:
-  - `RELEASED = {"b1": "assumehrf", "b2": "fithrf", "b4": "fithrf_GLMdenoise_RR"}`
-  - `released_path(config, subject, session, version) -> Path`, from `config.released_template.format(root=..., nn=..., subject=..., session=..., version=...)`.
-  - `load_released(config, subject, session, level, brain, trials) -> np.ndarray`. Reads the CIFTI and checks that the grayordinate axis equals the ppdata cortical axis (after `cortical_indices`). Checks the row count equals `len(trials)`. Undoes integer scaling per the README note, using a divisor recorded in the protocol (NSD stores betas as int16 × 300 percent signal change). Returns trials × cortical features in `trials` order, which the user's conversion preserves as presentation order.
-  - `index_released(config, subject, session)`. Writes `fits/released/<subject>/<session>/<level>/` for each level in `RELEASED`.
-
-- [ ] **Step 1: Failing tests** with synthetic dscalar files:
-  - `test_released_round_trip_scaling`: a file of int16 values 300 × x gives x back.
-  - `test_released_trial_count_mismatch_names_session`: a 688-row file against a 750-row trial table raises `ValueError` whose message contains the subject, session and version.
-  - `test_released_axis_mismatch_raises`.
-  - `test_missing_released_file_names_version`.
-
-Commit RED.
-
-- [ ] **Step 2: Implement; GREEN commit.**
-
-- [ ] **Step 3: User provides the inputs; derive the ppdata onset offset**
-
-Once the ppdata series and converted betas are on disk:
-- Compare b1 from boldtailor on ppdata with the released `assumehrf` for sub-07 `ses-nsd10` at candidate offsets (0 s, plus ± one ppdata TR).
-- Pick the offset that maximises the median per-grayordinate correlation of b1 betas.
-- Record the offset and the agreement in `protocol.md` as the sanity floor: 0.8 × the pilot's median correlation.
-
-If no offset reaches a median correlation of 0.5, stop and report to the user. That indicates an alignment or conversion problem.
-
-- [ ] **Step 4: User runs the ppdata comparison**
-
-```bash
-uv run python -m experiments.nsd_replication.run fit --config experiments/nsd_replication/configs/ppdata.toml --source ppdata --levels b1 b2 b2-lib20 b3 b4
-uv run python -m experiments.nsd_replication.run fit --config experiments/nsd_replication/configs/ppdata.toml --source released
-uv run python -m experiments.nsd_replication.run metrics --config experiments/nsd_replication/configs/ppdata.toml --source ppdata
-uv run python -m experiments.nsd_replication.run metrics --config experiments/nsd_replication/configs/ppdata.toml --source released
 ```
 
 ---
@@ -2090,7 +2148,7 @@ Each test checks the axes count and labels on synthetic tables, with the `Agg` b
 - `primary.toml`: subjects `sub-01`…`sub-04`, sessions `ses-nsd01`…`ses-nsd10`.
 - `extension.toml`: subjects `sub-05`, `sub-06`, `sub-08`, same sessions.
 
-- [ ] **Step 3: User runs the primary and extension fits and metrics** (same commands as Task 11 Step 2, with each config). Then:
+- [ ] **Step 3: User runs the primary and extension fits and metrics** (same commands as Task 12 Step 2, including `fit --source released` and `metrics --source comparison`, with each config). Then:
 
 ```bash
 uv run python -m experiments.nsd_replication.run metrics --config experiments/nsd_replication/configs/primary.toml --source fmriprep
@@ -2101,7 +2159,7 @@ uv run python -m experiments.nsd_replication.run figures --config experiments/ns
 
 `docs/validation/nsd-replication-<date>.md` contains:
 - the replication table: the paper's pattern, the boldtailor result, and per-subject criteria for R1–R6;
-- the parity TOST on ppdata at b4 (primary), and at b1, b2 and R4–R6 (secondary);
+- the parity TOST, boldtailor (fMRIPrep) versus released, at b4 (primary) and at b1, b2 and R4–R6 (secondary), with the preprocessing caveat;
 - the feature experiments;
 - the deviation log;
 - figures.
