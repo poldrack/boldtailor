@@ -9,6 +9,7 @@ from boldtailor.hrf_library import default_hrf_library
 from experiments.nsd_replication.inputs import analysis_data
 from experiments.nsd_replication.ladder import (
     LEVELS,
+    LSS_LEVELS,
     denoised_confounds,
     fit_ladder,
     select_session_denoising,
@@ -17,11 +18,11 @@ from experiments.nsd_replication.trials import trial_table
 
 
 def test_ladder_levels_shapes_and_order(synthetic_session):
-    fits = fit_ladder(synthetic_session, block_size=16)
+    fits = fit_ladder(synthetic_session, levels=LEVELS + LSS_LEVELS, block_size=16)
     trials = trial_table(
         synthetic_session.events, synthetic_session.labels, "s", "73k_id"
     )
-    assert set(fits) == set(LEVELS)
+    assert set(fits) == set(LEVELS) | set(LSS_LEVELS)
     for level, fit in fits.items():
         assert fit.betas.shape == (len(trials), 30), level
         assert fit.record["level"] == level
