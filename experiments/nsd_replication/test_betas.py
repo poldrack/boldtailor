@@ -1,5 +1,4 @@
-import json
-
+import nibabel as nib
 import numpy as np
 import pandas as pd
 import pytest
@@ -71,10 +70,18 @@ def test_zscore_constant_feature_is_nan_without_warning():
     assert np.isnan(z[:, 1]).all() and np.isnan(z[:, 2]).all()
 
 
+def test_zscore_nonrepresentable_constant_is_nan():
+    # Test both 0.1 (repeated, non-representable) and 0.3 (as float32 then upcast)
+    values = np.hstack(
+        [np.full((3, 2), 0.1), np.full((3, 1), np.float32(0.3)).astype(float)]
+    )
+    with np.errstate(all="raise"):
+        z = zscore(values)
+    assert np.isnan(z).all()
+
+
 def _minimal_session(source="ppdata", confound_val=0.0):
     """Create a minimal Session for testing inputs_digest."""
-    import nibabel as nib
-
     left = nib.cifti2.BrainModelAxis.from_surface(
         np.array([0]), 10, "CIFTI_STRUCTURE_CORTEX_LEFT"
     )
