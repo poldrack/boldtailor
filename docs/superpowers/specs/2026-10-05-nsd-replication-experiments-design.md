@@ -61,6 +61,19 @@ Where the paper is ambiguous, the protocol records the choice made and why.
   layer-B2 CIFTI space with the same pipeline. The spec treats the
   conversion as an external input step and records it in the protocol.
 - **Events.** The existing BIDS `events.tsv` files, for both data sources.
+- **Cortex only.** Every fit and every analysis uses only cortical surface
+  grayordinates: the CIFTI brain-model structures `CIFTI_STRUCTURE_CORTEX_LEFT`
+  and `CIFTI_STRUCTURE_CORTEX_RIGHT`.
+  - What is excluded: subcortical volume grayordinates. In the 91k files they
+    are dropped when inputs are loaded, before any fitting, so they never
+    reach boldtailor, the betas, the metrics or the maps.
+  - Where it happens: the selection is an input-step concern in the
+    experiment package (`inputs.py`). Boldtailor's core is unchanged and
+    still sees a plain features × timepoints matrix.
+  - Whole-cortex summaries: they mean exactly this set, about 59,412
+    grayordinates in 91k.
+  - ppdata and released betas: the same structure filter applies. Files
+    without both cortical structures are an error.
 - **Staging.**
   - Pilot: sub-07, `nsd01`–`nsd10`. Sub-07 is not one of the paper's
     subjects, and its fMRIPrep derivatives already exist.
