@@ -57,17 +57,26 @@ Where the paper is ambiguous, the protocol records the choice made and why.
     Each holds 750 maps named `trial-001`…`trial-750`, in presentation order.
   - Units: percent signal change. NSD's ×300 integer scaling has already been
     undone ("ScalingApplied": "divided by 300").
-  - Grid: the same fsLR 91k grayordinate axis as the fMRIPrep CIFTI. Cortical
-    values are finite; subcortex is NaN placeholders.
+  - Grid: fsLR 91k. The cortical part is exactly the ppdata grayordinates
+    (same names and vertices). Cortical values are finite; subcortex is NaN
+    placeholders.
   - Source: resampled from NSD's native-surface betas with adaptive
     barycentric resampling via each subject's sphere registration. That
     conversion is external to this package and recorded in the protocol.
   - Also present: subject-level NSD NCSNR maps per version
     (`sub-NN/func/*_stat-ncsnr*`), computed by NSD over all of its sessions.
     They are a reference only, not our metric.
-- **Data.** fMRIPrep CIFTI (`space-fsLR_den-91k`) at the native TR of 1.6 s,
-  with exact onsets. No temporal resampling. The NSD ppdata series are not
-  used: they are on a different grid from the released betas.
+- **Data.** Boldtailor fits NSD's own preprocessed series (ppdata,
+  `func1pt8mm`), resampled by the user to fsLR 32k on the layer-B2 surface.
+  - Files: `derivatives/ppdata/subjNN/func1pt8mm/timeseries/sub-NN_ses-nsdYY_task-nsdcore_run-ZZ_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii`.
+  - Timing: TR 4/3 s, 226 volumes per run.
+  - Grid: cortex only, 59,412 grayordinates, the same vertices as the released
+    betas' cortex.
+  - Why: this is the preprocessing the released betas (and the paper) used, so
+    the comparison isolates the GLM pipeline. fMRIPrep derivatives are not used.
+  - Onsets: BIDS onsets map onto the ppdata time base by a constant
+    `onset_offset`, calibrated once in the pilot by maximising the alignment
+    check over candidate offsets.
 - **Events.** The existing BIDS `events.tsv` files.
 - **Cortex only.** Every fit and every analysis uses only cortical surface
   grayordinates: the CIFTI brain-model structures `CIFTI_STRUCTURE_CORTEX_LEFT`
@@ -80,18 +89,17 @@ Where the paper is ambiguous, the protocol records the choice made and why.
     still sees a plain features × timepoints matrix.
   - Whole-cortex summaries mean exactly this set: 59,412 grayordinates.
   - Released betas: the same structure filter applies. Files without both
-    cortical structures, or whose axis differs from the fMRIPrep axis, are an
-    error.
+    cortical structures, or whose cortex differs from the ppdata
+    grayordinates, are an error.
 - **Staging.**
-  - Pilot: sub-07, `nsd10`–`nsd19`. These are the ten sessions whose
-    fMRIPrep derivatives already exist; released betas exist for all 40
-    sub-07 sessions. Sub-07 is not one of the paper's subjects, so the pilot
-    window does not need to match the primary one.
+  - Pilot: sub-07, `nsd10`–`nsd19`. ppdata and released betas exist for
+    all 40 sub-07 sessions. Sub-07 is not one of the paper's subjects, so the
+    pilot window does not need to match the primary one.
   - Primary replication: subjects 01–04, `nsd01`–`nsd10`, as in the paper.
   - Extension: subjects 05, 06 and 08, same window. Sub-07 is reported as
     the pilot.
-- **Order of runs.** Each subject's stages run when its fMRIPrep derivatives
-  and converted released betas are available.
+- **Order of runs.** Each subject's stages run when its ppdata and converted
+  released betas are available.
 - **ROI.** Each subject's own nsdgeneral, from NSD's native-surface labels
   (`derivatives/freesurfer-NSD/subjNN/label/{lh,rh}.nsdgeneral.mgz`, 0/1 on the
   native vertices).
@@ -103,12 +111,12 @@ Where the paper is ambiguous, the protocol records the choice made and why.
     grayordinates.
   - Deviation: the paper used the same subject-specific ROI, but in volume
     space rather than on the surface.
-- **"On par"** is an equivalence test (TOST) between boldtailor on fMRIPrep
-  data and the released betas. Its margin is fixed from pilot variability
-  before the freeze.
-  - Caveat, stated in every report: the two arms differ in preprocessing
-    (fMRIPrep versus NSD's pipeline) as well as in the GLM. The comparison
-    is between two complete pipelines, not between the GLMs alone.
+- **"On par"** is an equivalence test (TOST) between boldtailor on ppdata
+  and the released betas. Its margin is fixed from pilot variability before
+  the freeze.
+  - Caveat, stated in every report: both arms start from NSD's preprocessing,
+    but they reach the surface differently. ppdata were sampled at layer B2;
+    the released betas were resampled from NSD's native-surface betas.
 - **Feature experiments:**
   - HRF selection quality;
   - task modulators;
@@ -136,8 +144,10 @@ session, as GLMsingle does.
 
 - **Task model.** `task`, `response_time`, `trial_type`, as the workflow
   detects them for NSD.
-- **Confounds.** The NSD example's fMRIPrep set: 24 motion columns, six
-  aCompCor components, cosines, and trimmed non-steady-state volumes.
+- **Confounds.** GLMsingle's polynomial drift basis per run, as NSD's
+  GLMsingle used: powers 0..d of `linspace(-1, 1, n)`, orthonormalised, with
+  `d = alt_round(n * tr / 60 / 2)` (3 for NSD runs). Data-driven noise
+  regressors come from boldtailor's denoising stage at b3.
 - **LSS** is implemented in the experiment package, not the core. Each trial
   gets its own model with that trial and an "all other trials" regressor, plus
   the same confounds. It is tested against Nilearn `run_glm` fits on a small
@@ -154,9 +164,10 @@ The package follows `examples/validation`:
 |---|---|
 | `config.py` | Frozen dataclass loaded from TOML: BIDS root, released-betas root, subjects, session window, output root, `n_jobs` |
 | `trials.py` | Standard trial tables, presentation order, repetition arrays |
-| `inputs.py` | Load one session's fMRIPrep runs restricted to cortical surface grayordinates: BOLD, events, confounds |
+| `inputs.py` | Load one session's ppdata runs (cortical surface grayordinates), BIDS events, and polynomial confounds |
+| `confounds.py` | GLMsingle polynomial drift basis |
 | `roi.py` | Subject nsdgeneral: native surface → fsLR 32k (Workbench, same route as the betas) → cortical grayordinate mask |
-| `released.py` | Read the released betas (b1, b2, b4), check them against the fMRIPrep axis and the BIDS trials, and index them in the common format |
+| `released.py` | Read the released betas (b1, b2, b4), check them against the ppdata grayordinates and the BIDS trials, and index them in the common format |
 | `ladder.py`, `lss.py` | Boldtailor ladder levels and LSS via the public API |
 | `betas.py` | Common beta store; per-session z-scoring |
 | `metrics.py`, `hrf_maps.py` | R1–R6 metrics as defined in the protocol |
@@ -197,7 +208,7 @@ Each fit writes one directory:
     metadata.json   level, settings, inputs digest, runtime, boldtailor version, git commit
 ```
 
-`<source>` is `fmriprep` for boldtailor fits and `released` for the indexed
+`<source>` is `ppdata` for boldtailor fits and `released` for the indexed
 released betas, so metric code treats every version alike.
 
 **Storage.** Roughly 130 GB, at about 180 MB per fit at 59,412 cortical
@@ -211,7 +222,7 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
 ## Comparison with released GLMsingle betas
 
 - **Data.** For each subject, `nsd01`–`nsd10` (`nsd10`–`nsd19` for the
-  pilot): boldtailor b1, b2, b3 and b4 on fMRIPrep, plus released b1, b2 and
+  pilot): boldtailor b1, b2, b3 and b4 on ppdata, plus released b1, b2 and
   b4, all on the same cortical grayordinates with the same trials.
 - **Outputs:**
   - every R1–R6 metric for every version;
@@ -219,9 +230,10 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
     (boldtailor − released) for b1, b2 and b4;
   - per-subject ROI summaries.
   - NSD's NCSNR maps are shown alongside as a reference.
-- **Alignment check.** Boldtailor b1 and released b1 differ only in
-  preprocessing, so their per-grayordinate correlation across trials should
-  be clearly positive in the ROI.
+- **Alignment check.** Boldtailor b1 and released b1 are both canonical-HRF
+  OLS fits of NSD-preprocessed data, so their per-grayordinate correlation
+  across trials should be high in the ROI. The same check calibrates
+  `onset_offset` in the pilot.
   - Null: correlate after shifting the released trial order by one run
     (62–63 trials).
   - The pilot reports the true and null medians, and the protocol sets a
@@ -311,7 +323,7 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
 - **Final report:** `docs/validation/nsd-replication-<date>.md`. Covers:
   - the replication table (the paper's pattern, the boldtailor result,
     criterion met per subject);
-  - the parity results, with the preprocessing caveat;
+  - the parity results, with the surface-sampling caveat;
   - the feature experiments;
   - the deviations.
 - **Figures paralleling Figs. 2, 2-suppl., 3, 5, 6 and 7:**
@@ -326,7 +338,8 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
 |---|---|---|
 | missing run file, events, or confounds for a configured session | `inputs.py` | error naming subject, session, run |
 | a CIFTI lacks either cortical surface structure | `inputs.py`, `released.py` | error naming file |
-| released betas: missing version/session, trial count ≠ events, axis ≠ fMRIPrep axis | `released.py` | error naming subject, session, version |
+| released betas: missing version/session, trial count ≠ events, cortex ≠ ppdata grayordinates | `released.py` | error naming subject, session, version |
+| ppdata onsets fall outside the run's time base after `onset_offset` | `inputs.py` | error naming subject, session, run |
 | released b1 alignment below the protocol floor | `run.py` | error naming subject, session |
 | ROI has no overlap with the CIFTI axis | `roi.py` | error |
 | a fit directory exists with a different inputs digest | `run.py` | error unless `--refit`; never silently reused |
@@ -350,7 +363,7 @@ metric for that subject is written. It keeps `trials.tsv` and the metadata.
   data-gated sub-07 test runs the real resampling and is skipped without
   Workbench.
 - **Data-gated tests.** Smoke tests that skip when
-  `/Volumes/extdata1/NSD/BIDS` is not mounted: one fMRIPrep session and one
+  `/Volumes/extdata1/NSD/BIDS` is not mounted: one ppdata session and one
   released file of sub-07.
 
 ## Task outline (for the implementation plan)
