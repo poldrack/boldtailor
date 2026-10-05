@@ -4,15 +4,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from experiments.nsd_replication import run
+from boldtailor.hrf_library import default_hrf_library
+
+from experiments.nsd_replication import features, run
 from experiments.nsd_replication.betas import fit_dir, is_complete
 from experiments.nsd_replication.features import (
     circular_shift,
     gate_experiment,
     hrf_choice_experiment,
     modulator_experiment,
+    null_session,
     rt_correlation,
 )
+
+# A small library keeps the four denoising selections per gate run fast.
+SMALL = default_hrf_library(32, seed=0)
 
 N_TRIALS = 6 * 24
 
@@ -56,7 +62,7 @@ def test_circular_shift_does_not_modify_input():
 
 
 def test_gate_experiment_structure(synthetic_session):
-    table = gate_experiment(synthetic_session, seed=0)
+    table = gate_experiment(synthetic_session, seed=0, library=SMALL)
     assert list(table.columns[:5]) == [
         "condition",
         "gate",
@@ -73,10 +79,19 @@ def test_gate_experiment_structure(synthetic_session):
     assert np.all(ungated["n_components"] == ungated["pcstop_count"])
 
 
-def test_gate_experiment_is_deterministic(synthetic_session):
-    a = gate_experiment(synthetic_session, seed=0).set_index(["condition", "gate"])
-    b = gate_experiment(synthetic_session, seed=0).set_index(["condition", "gate"])
-    pd.testing.assert_frame_equal(a, b)
+def test_null_session_is_seeded_and_in_the_sampled_window(synthetic_session):
+    a, b = null_session(synthetic_session, 0), null_session(synthetic_session, 0)
+    c = null_session(synthetic_session, 1)
+    for x, y in zip(a.events, b.events):
+        pd.testing.assert_frame_equal(x, y)
+    assert not all(x.equals(z) for x, z in zip(a.events, c.events))
+    starts = [e["onset"].min() for e in a.events]
+    assert len(set(starts)) > 1
+    for events, times, real in zip(a.events, a.frame_times, synthetic_session.events):
+        onsets = events["onset"].to_numpy()
+        assert len(events) == len(real)
+        assert np.all(np.diff(onsets) >= 0)
+        assert np.all((onsets >= times[0] - 24.0) & (onsets < times[-1]))
 
 
 def _ar(rng, shape, rho=0.3):
@@ -96,7 +111,9 @@ def noise_session(synthetic_session):
 
 
 def test_gate_rejects_pure_noise(noise_session):
-    table = gate_experiment(noise_session, seed=0).set_index(["condition", "gate"])
+    table = gate_experiment(noise_session, seed=0, library=SMALL).set_index(
+        ["condition", "gate"]
+    )
     assert table.loc[("real", True), "n_components"] == 0
     assert table.loc[("null", True), "n_components"] == 0
 
@@ -117,6 +134,11 @@ def test_modulator_experiment_returns_two_fits(synthetic_session, modulator_fits
         synthetic_session.task_model.regressor_names
     )
     assert len(modulator_fits["b4"].record["task_model"]) > 1
+    # Encoding ridge CV needs a modulator; both fits tune ridge on the full model.
+    for fit in modulator_fits.values():
+        assert fit.record["ridge_task_model"] == list(
+            synthetic_session.task_model.regressor_names
+        )
     assert not np.allclose(
         modulator_fits["b4"].betas, modulator_fits["b4-taskonly"].betas
     )
@@ -209,6 +231,7 @@ def patched(monkeypatch, synthetic_session):
     monkeypatch.setattr(run, "_load", lambda *a: synthetic_session)
     monkeypatch.setattr(run, "ppdata_brain", lambda *a: synthetic_session.brain)
     monkeypatch.setattr(run, "load_roi", lambda *a: np.arange(30) < 20)
+    monkeypatch.setattr(features, "default_hrf_library", lambda: SMALL)
 
 
 def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
