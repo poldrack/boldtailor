@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 
-from experiments.nsd_replication.stats import criterion_met, mean_ci, relative_difference, tost_paired
+from experiments.nsd_replication.stats import (
+    criterion_met,
+    mean_ci,
+    relative_difference,
+    tost_paired,
+)
 
 
 def test_tost_equivalent_when_tight():
@@ -21,11 +26,18 @@ def test_tost_rejects_bad_margin():
 
 
 def test_relative_difference():
-    np.testing.assert_allclose(relative_difference(np.array([1.1, 0.9]), np.array([1.0, 1.0])), [0.1, -0.1])
+    np.testing.assert_allclose(
+        relative_difference(np.array([1.1, 0.9]), np.array([1.0, 1.0])), [0.1, -0.1]
+    )
 
 
 def test_criterion_three_of_four():
-    values = {"sub-01": (0.3, 0.2), "sub-02": (0.3, 0.2), "sub-03": (0.3, 0.2), "sub-04": (0.1, 0.2)}
+    values = {
+        "sub-01": (0.3, 0.2),
+        "sub-02": (0.3, 0.2),
+        "sub-03": (0.3, 0.2),
+        "sub-04": (0.1, 0.2),
+    }
     result = criterion_met(values, minimum=3)
     assert result["replicated"] and result["per_subject"]["sub-04"] is False
 
