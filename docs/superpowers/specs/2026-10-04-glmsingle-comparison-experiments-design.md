@@ -194,7 +194,7 @@ Each fit writes one directory:
     150 GB.
   - Requirement: the output root needs about 600 GB.
   - Disposal: `run.py fit --discard-betas-after-metrics` may delete a fit's
-    betas once its metrics are written, keeping `trials.tsv` and the metadata.
+    betas once every metric for that subject is written, keeping `trials.tsv` and the metadata.
 
 ## Metrics
 
