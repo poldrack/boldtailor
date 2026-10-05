@@ -8,7 +8,7 @@
 
 ## 2. Metric definitions
 
-*Metric definitions are taken from the paper (PMC9708069, checked 2026-10-05). Each metric is z-scored per grayordinate within the session.*
+*Metric definitions are taken from the paper (PMC9708069, checked 2026-10-05). Betas are z-scored per grayordinate within each session before every metric.*
 
 ### R1. Voxel test-retest reliability
 
@@ -60,6 +60,8 @@ All fits are per session and use the public API, not `run_workflow`. The workflo
 | b4 | b3 + per-grayordinate fractional-ridge CV (workflow defaults) |
 | LSS-assume, LSS-fit | least-squares-separate with the canonical HRF and with the b2 HRFs (R3 only) |
 
+LSS: for each trial, one OLS fit with the design [trial, sum of all other trials, nuisance regressors]; the trial's beta is its own coefficient.
+
 ### Settings
 
 - **Task model:** `task`, `response_time`, `trial_type`, as the workflow detects them for NSD.
@@ -78,6 +80,8 @@ The comparator is NSD's released GLMsingle betas, converted by the user to CIFTI
 - Units: percent signal change. NSD's ×300 integer scaling has already been undone.
 - Grid: fsLR 91k. The cortical part is exactly the ppdata grayordinates (same names and vertices).
 - Source: resampled from NSD's native-surface betas with adaptive barycentric resampling.
+- Surface-sampling caveat: the ppdata series are sampled onto the cortical surface at layer B2, whereas the released betas were fitted on NSD's native-surface data and then resampled to fsLR. The two versions therefore differ in surface sampling as well as in GLM pipeline; the alignment check bounds, but does not remove, this difference.
+- Grid rule: a released file whose cortical grayordinates differ from the ppdata grayordinates (names or vertices) is an error, never silently reindexed.
 - Also present: subject-level NSD NCSNR maps per version (reference only, not our metric).
 
 ### Data
@@ -88,6 +92,10 @@ Boldtailor fits NSD's own preprocessed series (ppdata, `func1pt8mm`), resampled 
 - Grid: cortex only, 59,412 grayordinates, the same vertices as the released betas' cortex.
 - Why: this is the preprocessing the released betas (and the paper) used, so the comparison isolates the GLM pipeline.
 - Onsets: BIDS onsets map onto the ppdata time base by a constant `onset_offset`, calibrated once in the pilot by maximising the alignment check over candidate offsets.
+
+### "On par" (TOST)
+
+Boldtailor b4 is on par with the released b4 when a paired two one-sided tests (TOST) procedure, across subjects, rejects both bounds of the equivalence interval at α = 0.05. The paired quantity is each subject's relative difference of the median ROI R1 reliability at b4, (boldtailor − released) / released; the equivalence margin is ±δ (see section 6).
 
 ### Events
 
@@ -117,7 +125,30 @@ Out-of-sample images: 88
 
 ## 6. Margin δ, replication criteria, alignment floor
 
-Set in Task 12 before the freeze.
+### Replication criteria
+
+Each criterion is directional, evaluated per subject, and must hold in at least 3 of 4 primary subjects.
+
+- **R1:** median ROI reliability at b4 exceeds b1, and the b4 curve at t = 0.2 lies above the b1 curve.
+- **R3:** the b4 curve at t = 0.2 lies above both LSS versions (LSS-assume and LSS-fit).
+- **R4:** the lag-1 mean pattern correlation at b4 is below that at b1.
+- **R5:** the mean pairwise RDM correlation at b4 exceeds that at b1.
+- **R6:** decoding accuracy at b4 exceeds b1 at composite reliability ≥ 0.2.
+
+### Onset-offset calibration
+
+How BIDS onsets map onto the ppdata time base is checked once, before the full pilot, on sub-07 ses-nsd10:
+1. Fit only b1 at each candidate `onset_offset` in `np.round(np.arange(-2, 2.01, 1/3), 4)` seconds.
+2. Compute `alignment_check(ours_b1, released_b1, run_length, roi)` for each candidate (`calibrate_offset.py`).
+3. Set `onset_offset` in every config to the candidate with the largest `true_median`.
+4. If the best `true_median` is not clearly above every `null_median`, stop and report: trials or grayordinates are misaligned.
+
+Calibrated `onset_offset`: Pending pilot (Task 12).
+
+### Pending values
+
+- **δ:** Pending pilot (Task 12).
+- **Alignment floor:** Pending pilot (Task 12).
 
 ## 7. Deviations log
 
