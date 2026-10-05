@@ -29,7 +29,9 @@ def test_trial_table_orders_runs_and_onsets():
 
 def test_trial_table_missing_image_column_raises():
     with pytest.raises(ValueError, match="73k_id"):
-        trial_table([_events([4.0], [1]).drop(columns="73k_id")], ["run-01"], "s", "73k_id")
+        trial_table(
+            [_events([4.0], [1]).drop(columns="73k_id")], ["run-01"], "s", "73k_id"
+        )
 
 
 def _trials(rows):
@@ -64,8 +66,12 @@ def test_images_with_and_counts():
 def test_out_of_sample_requires_distinct_sessions():
     trials = _trials(
         [
-            ("s1", "r", 0, 0.0, 1), ("s2", "r", 0, 0.0, 1), ("s3", "r", 0, 0.0, 1),
-            ("s1", "r", 1, 4.0, 2), ("s1", "r", 2, 8.0, 2), ("s2", "r", 1, 4.0, 2),
+            ("s1", "r", 0, 0.0, 1),
+            ("s2", "r", 0, 0.0, 1),
+            ("s3", "r", 0, 0.0, 1),
+            ("s1", "r", 1, 4.0, 2),
+            ("s1", "r", 2, 8.0, 2),
+            ("s2", "r", 1, 4.0, 2),
         ]
     )
     assert out_of_sample_images(trials).tolist() == [1]
