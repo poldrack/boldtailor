@@ -64,7 +64,6 @@ def test_denoised_confounds_match_with_denoising(synthetic_session):
         np.testing.assert_array_equal(got.to_numpy(), want.to_numpy())
 
 
-@pytest.mark.xfail(strict=True, reason="needs Task 8 metrics")
 def test_fitted_hrf_improves_reliability_on_delayed_hrf(synthetic_session):
     from experiments.nsd_replication.metrics import voxel_reliability
     from experiments.nsd_replication.betas import zscore
