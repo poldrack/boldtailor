@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate
+from boldtailor.hrf_library import (
+    CANONICAL_PARAMETERS,
+    HrfCandidate,
+    spm_parameters,
+    timing_parameters,
+)
 from boldtailor.workflow.inputs import detect_task_model
 
 from experiments.nsd_replication.confounds import glmsingle_polynomials
@@ -20,7 +25,8 @@ N_RUNS, N_VOLUMES, N_TRIALS = 6, 96, 24
 N_IMAGES, N_FEATURES, N_RESPONSIVE = 40, 30, 20
 N_FILLERS = N_RUNS * N_TRIALS - 3 * N_IMAGES  # 6 x 24 slots exceed 40 x 3
 OVERSAMPLING = 16
-DELAYED = (6.5, *CANONICAL_PARAMETERS[1:])  # peak 6.5 s, outside the canonical 6 s
+# Response lobe peaks at 6.5 s; the canonical lobe (SPM delay 6) peaks at 5 s.
+DELAYED = spm_parameters((6.5, *timing_parameters(CANONICAL_PARAMETERS)[1:]))
 
 
 def _events(images, rng):
