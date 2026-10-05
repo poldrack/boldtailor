@@ -272,6 +272,12 @@ _FITTERS = {
 }
 
 
+def _check_sorted_onsets(session):
+    for label, events in zip(session.labels, session.events, strict=True):
+        if not np.all(np.diff(events["onset"].to_numpy(dtype=float)) >= 0):
+            raise ValueError(f"{label}: event onsets must be non-decreasing")
+
+
 def fit_ladder(
     session,
     *,
@@ -283,11 +289,14 @@ def fit_ladder(
 ):
     """Fit the requested levels in ladder order; betas are trials x features.
 
-    Rows follow run order, then onset within run (as ``trial_table``).
-    ``denoising`` reuses a ``select_session_denoising`` result for b3/b4.
+    Rows follow run order, then onset within run (as ``trial_table``); runs
+    whose events are not onset-sorted raise. ``denoising`` reuses a
+    ``select_session_denoising`` result for b3/b4; when selected here it always
+    uses ``session.task_model``, whatever ``task_model`` is passed.
     """
     unknown = set(levels) - set(LEVELS)
     if unknown:
         raise ValueError(f"unknown ladder levels: {sorted(unknown)}")
+    _check_sorted_onsets(session)
     ladder = _Ladder(session, task_model, block_size, n_jobs, denoising)
     return {level: _FITTERS[level](ladder) for level in LEVELS if level in levels}
