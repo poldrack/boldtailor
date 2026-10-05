@@ -75,8 +75,9 @@ Where the paper is ambiguous, the protocol records the choice made and why.
   - ppdata and released betas: the same structure filter applies. Files
     without both cortical structures are an error.
 - **Staging.**
-  - Pilot: sub-07, `nsd01`–`nsd10`. Sub-07 is not one of the paper's
-    subjects, and its fMRIPrep derivatives already exist.
+  - Pilot: sub-07, `nsd10`–`nsd19`. These are the ten sessions whose
+    fMRIPrep derivatives already exist. Sub-07 is not one of the paper's
+    subjects, so the pilot window does not need to match the primary one.
   - Primary replication: subjects 01–04, `nsd01`–`nsd10`, as in the paper.
   - Extension: subjects 05, 06 and 08, same window. Sub-07 is reported as
     the pilot.
@@ -163,7 +164,7 @@ system prerequisite.
 ## Inputs
 
 - **Images and repeats.**
-  - Image identity is the 73k ID in the events.
+  - Image identity is the `73k_id` column of the events.
   - Repeats are matched by ID across sessions.
   - The paper's analyses use images presented three times within the window,
     and so do these. The pilot report gives the counts.
