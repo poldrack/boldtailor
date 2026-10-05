@@ -6,14 +6,13 @@ from experiments.nsd_replication.released import alignment_check
 
 LEVELS = ("b1", "b2", "b4")
 VERSIONS = tuple(f"{s}:{lv}" for s in ("ppdata", "released") for lv in LEVELS)
-_KEY = ["session", "run", "trial", "onset", "image"]
 
 
 def check_trial_tables(tables_by_version, session):
     """Every version's trials.tsv for a session must be identical."""
     reference_name, reference = next(iter(tables_by_version.items()))
     for name, table in tables_by_version.items():
-        if not table.loc[:, _KEY].equals(reference.loc[:, _KEY]):
+        if not table.equals(reference):
             raise ValueError(
                 f"{session}: trials.tsv of {name} differs from {reference_name}"
             )
@@ -31,11 +30,14 @@ def first_run_length(trials):
     return int((trials["run"] == trials["run"].iloc[0]).sum())
 
 
-def check_floor(row, subject, floor):
-    if floor is not None and row["true_median"] < floor:
+def check_floor(rows, subject, floor):
+    if floor is None:
+        return
+    below = [r for r in rows if r["true_median"] < floor]
+    if below:
+        found = ", ".join(f"{r['session']} ({r['true_median']:.3f})" for r in below)
         raise ValueError(
-            f"{subject} {row['session']}: alignment true_median "
-            f"{row['true_median']:.3f} is below the floor {floor}"
+            f"{subject}: alignment true_median below the floor {floor} in {found}"
         )
 
 

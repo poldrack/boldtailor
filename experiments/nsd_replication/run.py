@@ -310,13 +310,17 @@ def _session_alignment(config, subject, session, roi):
 
 def alignment_table(config, subject):
     roi = _subject_roi(config, subject)
-    rows = []
-    for session in config.sessions:
-        rows.append(_session_alignment(config, subject, session, roi))
-        check_floor(rows[-1], subject, config.alignment_floor)
+    rows = [_session_alignment(config, subject, s, roi) for s in config.sessions]
     table = alignment_frame(rows)
     _write_tables(config, "comparison", subject, {"alignment": table})
+    check_floor(rows, subject, config.alignment_floor)
     return table
+
+
+def run_comparison(config, subject):
+    """Alignment first (written even on failure), then the comparison metrics."""
+    alignment_table(config, subject)
+    return comparison_metrics(config, subject)
 
 
 # ---------------------------------------------------------------- group RSA
@@ -389,7 +393,20 @@ def _mark_discarded(path):
     (path / "betas.npy").unlink(missing_ok=True)
 
 
+def _check_comparison_done(config, source, subject):
+    if source != "ppdata" or config.released_dir is None:
+        return
+    out = _comparison_dir(config, subject)
+    missing = [n for n in ("alignment.tsv", "r1.tsv") if not (out / n).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"refusing to discard betas; missing comparison outputs {missing}; "
+            "run `metrics --source comparison` first"
+        )
+
+
 def discard_betas(config, source, subject, levels, multiple_subjects=False):
+    _check_comparison_done(config, source, subject)
     expected = _expected_tables(config, source, subject, levels, multiple_subjects)
     missing = [p.name for p in expected if not p.is_file()]
     if missing:
@@ -433,8 +450,7 @@ def _index_all_released(config):
 
 def _run_comparison(config):
     for subject in config.subjects:
-        comparison_metrics(config, subject)
-        alignment_table(config, subject)
+        run_comparison(config, subject)
 
 
 def _run_metrics(config, args, levels):
