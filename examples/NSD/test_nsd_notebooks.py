@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import subprocess
 
 import nbformat
 from nbclient import NotebookClient
@@ -19,6 +20,24 @@ HERE = Path(__file__).parent
 WORKFLOW_NOTEBOOK = HERE / "nsd_workflow.ipynb"
 SESSION_NOTEBOOK = HERE / "nsd_session_hrf_reliability.ipynb"
 MULTISESSION_NOTEBOOK = HERE / "nsd_multisession.ipynb"
+
+
+@pytest.mark.parametrize(
+    "path", [WORKFLOW_NOTEBOOK, SESSION_NOTEBOOK, MULTISESSION_NOTEBOOK]
+)
+def test_notebook_sources_are_tracked_percent_scripts(path):
+    """Notebooks live in git as jupytext py:percent files, not as .ipynb."""
+    assert path.suffix == ".py"
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(path)],
+        cwd=HERE,
+        capture_output=True,
+    )
+    assert tracked.returncode == 0, f"{path.name} is not tracked"
+    notebook = _read_notebook(path)
+    nbformat.validate(notebook)
+    assert any(cell.cell_type == "markdown" for cell in notebook.cells)
+    assert any(cell.cell_type == "code" for cell in notebook.cells)
 
 
 def _execute(path, name, config, tmp_path, timeout=600):
