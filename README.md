@@ -133,25 +133,22 @@ signals with your usual imaging tools and use the array API, or adapt an example
 
 ## How does it compare with GLMsingle?
 
-Both packages estimate single-trial responses with an HRF selected at each
-brain location. Boldtailor also supports conventional contrasts and custom
-design matrices. Its single-trial workflow uses supplied confounds, fixed or
-encoding-guided ridge penalties, and HRF selection by task-model prediction
-across runs.
+Both packages estimate a beta for every trial with an HRF chosen at each brain
+location, and both scale betas to the peak BOLD response. The main differences:
 
-The published GLMsingle workflow selects HRFs by in-sample fit, then uses
-repeated conditions to tune data-derived denoising and fractional ridge.
-Boldtailor's HRF selection needs no repeated images, but assumes that the
-task-model response transfers between runs. Every event's predicted response is scaled to a peak of one (kernels are
-also stored at unit peak). A beta is therefore the peak BOLD response to that
-presentation in signal units, independent of TR, oversampling, and event
-duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Boldtailor's ridge CV predicts trial
-beta series from variables such as trial type and RT. Fractional CV scores
-fixed OLS targets; shared-alpha CV scores candidate-regularized targets. Both
-assume that the predictor relationships transfer across runs. See the
-[GLMsingle comparison](docs/glmsingle-comparison.md) for the methods, assumptions,
-and differences from the locally developed GLMsingle API.
+| | Boldtailor | GLMsingle |
+| --- | --- | --- |
+| Analyses | Single-trial betas, plus conventional contrasts, task R², and custom design matrices | Single-trial betas |
+| Default HRF library | Canonical SPM, 512 timing-space samples, and GLMsingle's 20 HRFs | 20 empirical HRFs |
+| HRF selection | Prediction of held-out runs | In-sample R² |
+| Nuisance regressors | Supplied confounds; optional GLMdenoise-style PCs (array API only) | Polynomial drift and GLMdenoise PCs |
+| Ridge penalty | OLS, fixed ridge, or fractional ridge tuned per location by predicting trial variables such as RT | Fractional ridge, tuned per voxel by beta reliability |
+| Needs repeated stimuli | No | For denoising and ridge tuning |
+| Interface | Python API, or `boldtailor run` for fMRIPrep CIFTI sessions | `GLMestimatesingletrial` in MATLAB or Python |
+
+Boldtailor assumes that the task-model response, and the relationship between
+betas and trial variables, transfer across runs. See the
+[GLMsingle comparison](docs/glmsingle-comparison.md) for details.
 
 ## Documentation
 
