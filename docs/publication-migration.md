@@ -22,7 +22,8 @@ outside this contract.
 ## Signature change
 
 Remove `retain_incomplete` from calls. The supported keyword arguments are
-`source_paths`, `overwrite`, and `lock_timeout`. Successful rollback discards
+`source_paths`, `overwrite`, `lock_timeout`, and `keep_existing` (paths, such as
+a shared dataset description, written only if absent once the lock is held). Successful rollback discards
 staged outputs. Failed rollback automatically preserves its transaction;
 there is no separate failed-artifact copy or rewritten provenance record.
 

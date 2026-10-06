@@ -170,7 +170,8 @@ design does not retain its matrices: `design.matrix(run_index, hrf_id)` rebuilds
 one fitted design on request (`KeyError` for an unfitted pair). The selected
 container also exposes `design.hrf_indices`, `design.design_fingerprint`, and
 `design.selection_provenance`.
-Matrices include trial columns followed by nuisance columns. See the
+Matrices include trial columns followed by nuisance columns; a selected design's
+`matrix()` returns an unlabelled read-only NumPy array rather than a DataFrame. See the
 [result migration guide](result-migration.md) for the previous access paths.
 
 ## Per-grayordinate fractional ridge
@@ -317,7 +318,7 @@ From `boldtailor.hrf_library`:
 | `HrfLibrary.timing_table` | One row per candidate with both parameterizations |
 | `HrfLibrary.from_parameters(parameters, origin=None, *, include_glmsingle=False)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 and, optionally, the 20 GLMsingle kernels after them |
 | `HrfLibrary.from_table(table)` | Rebuild a library exactly from its saved `parameter_table` (double-gamma rows plus the GLMsingle block if present) |
-| `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"` or `"double_gamma"` |
+| `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"`, `"double_gamma"`, or `"glmsingle"` (for `"glmsingle"`, `parameters` holds the one-based GLMsingle index) |
 | `candidate.kernel(tr, oversampling=50)` | Sample a read-only kernel scaled to a peak of one at TR/oversampling; canonical SPM is Nilearn's `spm_hrf` divided by its maximum |
 
 Parameter order is `response_delay`, `undershoot_delay`, `response_dispersion`,
@@ -373,13 +374,15 @@ result.
 `at_parameter_bound`. `parameter_bound_flags` is a read-only boolean array of
 shape `(n_features, 6, 2)` over `PARAMETER_NAMES[:6]` and `[low, high]`: True
 where the selected custom kernel's parameter lies within 2 % of the library
-box width of that edge; all False for IDs 0 and -1. `at_parameter_bound` is the
+box width of that edge; all False for IDs 0 and -1 and for GLMsingle kernels.
+`at_parameter_bound` is the
 per-feature `any()` over `library.informative_parameters` only, so a constant or
 two-level grid parameter (for `expanded_hrf_library()`, `undershoot_delay`) does
 not flag every pick. `parameter_bound_table()` returns a DataFrame with
 columns `parameter`, `edge`, and `fraction_flagged` (over features with ID > 0;
-NaN when there are none). The default box implies peak times of roughly
-1.5–7.5 s, so late-peaking responses saturate there. Eligibility records are checked lazily;
+NaN when there are none). The default library (`TIMING_BOUNDS`) spans peak
+times of 2.5–8.5 s; the Sobol and expanded grid box implies roughly 1.5–7.5 s,
+so late-peaking responses saturate there. Eligibility records are checked lazily;
 an unchecked candidate is not an excluded candidate.
 
 `evaluate_hrf_split` uses disjoint, zero-based run indices. Its
@@ -562,9 +565,10 @@ From `boldtailor.denoising_results`:
 From `boldtailor.provenance`:
 
 - `SourceRef(role, uri=None, media_type=None, byte_size=None, modified_at=None,
-  annotations=...)` describes a source. A complete identity needs its relative
-  URI, byte size, and UTC modification time with a trailing `Z` (for example,
-  `2026-09-27T12:00:00Z`); media type is optional.
+  sha256=None, annotations=...)` describes a source. A complete identity needs
+  its relative URI, byte size, and UTC modification time ending in `Z` or
+  `+00:00` (for example, `2026-09-27T12:00:00Z`); media type is optional, and
+  `sha256`, when given, is 64 lowercase hexadecimal characters.
 - `RunSources(signal, events, confounds=None)` groups source references for one
   run. Include a confound reference when supplying a confound table.
 - `ProvenanceRecord` holds sources, activities, lifecycle events, warnings,
@@ -667,7 +671,7 @@ front end.
 | `fit_beta_models(runs, root, blocks, settings, library, selections, task_model)` | `boldtailor.workflow.beta_series` | Canonical and selected-HRF trial models (OLS plus the configured ridge mode) over feature blocks |
 | `BetaModel` | `boldtailor.workflow.beta_series` | One beta model: name, HRF, estimator, fit, and (tuned ridge) tuning and outer-split evaluation |
 | `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |
-| `render_report(settings, **sections)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded PNG figures (bytes) and the equivalent command line |
+| `render_report(settings, *, runs, task_model, ...)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded PNG figures (bytes) and the equivalent command line |
 | `selected_hrfs`, `encoding_scores`, `ridge_boundary`, `input_tables` | `boldtailor.workflow.summaries` | Report tables built from in-memory results |
 | `build_parser`, `settings_from_args`, `main` | `boldtailor.cli` | Argument parser, args to `WorkflowSettings`, and the `boldtailor` entry point (returns the exit code) |
 

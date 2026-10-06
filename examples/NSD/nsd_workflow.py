@@ -145,8 +145,8 @@ show("Design", "GLMComparison", "GLMR2Surface")
 # %% [markdown]
 # ## 5. HRF library and odd/even reliability
 #
-# The default library contains canonical SPM plus Sobol samples of the six double-gamma
-# parameters. Selection predicts each held-out run's task-model response from the other runs
+# The default library contains canonical SPM, 512 timing-space Sobol samples, and the 20
+# GLMsingle HRFs. Selection predicts each held-out run's task-model response from the other runs
 # and picks **one winning HRF per grayordinate**. Independent odd- and even-run selections
 # compare parameters and complete HRF curves (Pearson over time samples, without peak
 # alignment) against the canonical baseline. These are descriptive shape agreements, not

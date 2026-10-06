@@ -19,6 +19,10 @@ opt-in: `uv run pytest examples/NSD`, `uv run pytest examples/validation`, and
 `uv run pytest --run-notebooks examples/NSD`.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
+Notebooks are tracked as jupytext py:percent scripts and paired with gitignored
+`.ipynb` files by `jupytext.toml`; notebook tests read the `.py` sources. After
+editing an `.ipynb` outside a jupytext-enabled Jupyter server, run
+`uv run jupytext --sync <notebook>` so the change reaches the `.py`.
 
 CI splits the suites. On every push and pull request it runs the package
 suite in `tests/` with warnings treated as errors, uploads its line coverage
@@ -53,17 +57,19 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 
 | Area | Modules |
 | --- | --- |
-| Owned arrays, event tables, timing, and source records | `data`, `_arrays`, `provenance` |
-| Event-based conventional GLMs | `model`, `design`, `fit`, `_conventional`, `results` |
+| Owned arrays, event tables, timing, and source records | `data`, `_arrays`, `_scalars`, `provenance` |
+| Event-based conventional GLMs | `model`, `design`, `_task_design`, `fit`, `_conventional`, `results` |
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
 | Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
-| Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication` |
+| Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_denoising_pool`, `_denoising_cv`, `_denoising_gate`, `_denoising_identity`, `_mixture_threshold` |
+| Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication`, `_software` |
+| Shared constants and deprecation shims | `_constants`, `_deprecation` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
-| Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `run`, `outputs`, `report`), `cli` |
+| Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
 | Notebook-only dataset helpers | `examples/NSD` |
 
 The core numerical functions accept arrays and tables and return results in
@@ -77,7 +83,7 @@ output naming, plotting, and the HTML report. Generic CIFTI dense-scalar I/O
 lives in `boldtailor.cifti` (nibabel is a runtime dependency). Package modules
 never import from `examples`. The remaining NSD example modules
 (`nsd_settings.py`, `session_hrf*.py`, `multisession_*.py`) and the notebooks
-import only public modules; plotting helpers use development dependencies.
+import only public modules; plotting uses matplotlib, a runtime dependency.
 Shared NSD test fixtures live in `examples/NSD/conftest.py`; each notebook has
 one `@pytest.mark.notebook` kernel smoke test. See the
 [NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
@@ -175,8 +181,8 @@ check uses normalized columns, but its decomposition for shrinkage uses raw
 projected columns. This distinction preserves the requested ratio of raw trial
 coefficient norms to their OLS norms. `solve` returns betas and feature-specific
 implied alphas; `betas_at` returns only betas. Neither solver retains candidate
-outputs. The older `trial_beta_path` and `fraction_beta_path` iterators remain
-thin adapters for validation scripts.
+outputs. The older `trial_beta_path` and `fraction_beta_path` iterators now
+live in `tests/oracles.py` as adapters for tests and validation scripts.
 
 In `_ridge_cv`, `RunBetaPath` groups features by their training-selected HRF and
 restores their original column positions. Each fold prepares each run once,
@@ -190,13 +196,18 @@ Shared numerical references live in `tests/oracles.py`: independent augmented
 least squares and root finding provide checks against the production SVD.
 Reusable synthetic datasets are pytest fixtures in `tests/conftest.py`.
 
-HRF ID 0 dispatches to the exact Nilearn SPM kernel with 32-second support.
+HRF ID 0 is the Nilearn SPM kernel (32-second support) divided by its maximum.
 `expanded_hrf_library()` adds 648 double-gamma candidates with 36-second support.
-The NSD notebooks instead default to `sobol_hrf_library(n_samples=512, seed=0)`,
-which adds 512 sampled custom HRFs over the same parameter ranges.
+`default_hrf_library()`, used by `boldtailor run` and the workflow and
+multisession notebooks, holds canonical SPM, 512 timing-space Sobol candidates
+(`timing_hrf_library`), and GLMsingle's 20 empirical HRFs (533 in total). The
+session-reliability notebook uses `sobol_hrf_library(n_samples=512, seed=0)`,
+512 Sobol samples over the original grid's gamma-parameter ranges.
 Candidate order is deterministic. Exported curves use a 0.1-second grid;
-convolution uses TR/50 and the supplied acquisition times. Kernels have discrete
-sum one. Peak-normalizing them would change the interpretation of trial betas.
+convolution uses TR/50 and the supplied acquisition times. Kernels are stored
+at unit peak and each event's response is scaled to peak one
+(`HRF_NORMALIZATION = "peak_one_event_response"`), so a trial beta is the peak
+BOLD response to that event.
 
 HRF selection pools leave-one-run-out prediction errors for a shared mean
 stimulus response. Training amplitudes are held fixed on the omitted run.
@@ -287,7 +298,7 @@ up); `rollback_errors` lists the failures.
 
 ## NSD exports and parallel execution
 
-The NSD notebook helpers load feature blocks, preserve CIFTI axes, and
+The session workflow (`boldtailor.workflow`) loads feature blocks, preserves CIFTI axes, and
 reconstruct full output arrays in the parent process. `n_jobs>1` uses
 `boldtailor.parallel.map_blocks`: bounded batches of joblib loky processes,
 each with all runs for its assigned feature block and one numerical-library

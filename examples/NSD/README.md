@@ -1,19 +1,29 @@
 # NSD CIFTI analysis
 
 These notebooks analyze Natural Scenes Dataset sessions using fMRIPrep CIFTI
-time series. Start with the [full workflow notebook](nsd_workflow.ipynb); the
+time series. Start with the [full workflow notebook](nsd_workflow.py); the
 other two notebooks reuse or extend its results. The workflow notebook runs the
 package workflow, `boldtailor.workflow.run.run_workflow`, which is also available
 as the [`boldtailor run` command](#command-line-interface).
 
 | Notebook | What you get |
 | --- | --- |
-| [Full workflow](nsd_workflow.ipynb) | Matched canonical and optimized-HRF GLMs (task, RT, trial type) with contrast, R², and optimized-minus-canonical R² maps; per-grayordinate HRFs with odd/even reliability; OLS, fixed-ridge, or ridge-CV beta series; RT correlations; activation maps |
-| [Session HRF reliability](nsd_session_hrf_reliability.ipynb) | HRFs selected separately per session, with across-session curve agreement and parameter variability |
-| [Multi-session comparison](nsd_multisession.ipynb) | Fits missing sessions with the full workflow, then summarizes paired optimized-minus-canonical changes across sessions |
+| [Full workflow](nsd_workflow.py) | Matched canonical and optimized-HRF GLMs (task, RT, trial type) with contrast, R², and optimized-minus-canonical R² maps; per-grayordinate HRFs with odd/even reliability; OLS, fixed-ridge, or ridge-CV beta series; RT correlations; activation maps |
+| [Session HRF reliability](nsd_session_hrf_reliability.py) | HRFs selected separately per session, with across-session curve agreement and parameter variability |
+| [Multi-session comparison](nsd_multisession.py) | Fits missing sessions with the full workflow, then summarizes paired optimized-minus-canonical changes across sessions |
 
 See the project [user guide](../../docs/user-guide.md) for the underlying models
 and the [API reference](../../docs/api.md) for using arrays directly.
+
+The notebooks are stored as [jupytext](https://jupytext.readthedocs.io)
+py:percent scripts; only the `.py` files are tracked, and `.ipynb` files are
+gitignored so outputs stay out of git. `uv sync --group dev` installs jupytext.
+In Jupyter, open a `.py` file as a notebook, or create the paired notebook
+with `uv run jupytext --to ipynb examples/NSD/nsd_workflow.py`. The repository's
+`jupytext.toml` pairs every notebook with its script, so saving in Jupyter
+(with jupytext installed in the server environment) updates the `.py` as well.
+Editors that do not run jupytext, such as VS Code, need
+`uv run jupytext --sync <notebook>` after editing to update the `.py`.
 
 ## Data needed
 
@@ -36,8 +46,9 @@ not included in this repository.
 
 ## Full workflow notebook
 
-Open [nsd_workflow.ipynb](nsd_workflow.ipynb) in your notebook editor after
-running `uv sync --group dev`, and select the checkout's `.venv` Python kernel.
+Open [nsd_workflow.py](nsd_workflow.py) as a notebook after running
+`uv sync --group dev` (see the jupytext note above), and select the checkout's
+`.venv` Python kernel.
 Set `NSD_BIDS_ROOT` before starting the notebook kernel, then edit the
 `config` in the first code cell and run all cells. Every key is a
 `WorkflowSettings` field (`src/boldtailor/workflow/settings.py`), with
@@ -94,14 +105,16 @@ remain task, RT, and `trial_type[1]`. Conventional task ΔR² includes the indic
 contribution. HRF selection and beta estimation retain all trials; RT scoring
 continues to exclude unavailable RTs.
 
-By default, the notebook samples 512 continuous parameter combinations with
-a scrambled Sobol sequence (seed 0), then adds canonical SPM for 513 HRFs.
-This is the same parameter range as the original grid described below, with
-36-second custom curves. Sampling balances coverage in parameter space;
-different parameter combinations can still produce similar HRF shapes.
+By default (`hrf_library="default"`), the notebook uses canonical SPM, 512
+timing-space Sobol candidates (seed 0) sampled over realized peak time,
+response width, trough time, undershoot width, and trough depth, and GLMsingle's
+20 empirical HRFs: 533 HRFs in total, with 36-second custom curves.
+`hrf_library="sobol"` gives the earlier library: canonical SPM plus 512 Sobol
+samples over the original grid's gamma-parameter ranges. Sampling balances
+coverage, but different candidates can still produce similar HRF shapes.
 Set `hrf_n_samples` to a power of two and `hrf_seed` to a nonnegative integer.
-The library cell plots every HRF, colored by time to peak, and runs separately
-from the following selection cell so you can inspect it before fitting.
+The workflow saves a plot of every HRF, colored by time to peak
+(`desc-Library_plot.png`), which the notebook shows in section 5.
 
 For the previous grid, set `hrf_library="expanded"`; `"canonical"` uses SPM
 alone. The metadata JSON saves these settings; the library TSV and NPZ save the
@@ -314,14 +327,14 @@ for automated tests and the bounded real-data audit.
 ## HRF reliability across sessions
 
 For combined HRF **and beta-series** comparisons, use
-[nsd_multisession.ipynb](nsd_multisession.ipynb). It defaults to `sub-07`, sessions
+[nsd_multisession.py](nsd_multisession.py). It defaults to `sub-07`, sessions
 10–19, and canonical versus optimized OLS and fractional-CV models. Set paths in
 `NSD_MULTI_CONFIG` or the same `NSD_BIDS_ROOT` environment variable used above.
 The notebook automatically runs `run_workflow` for missing sessions,
 sequentially, with `existing_results="overwrite"` and surface figures off.
 Completed sessions are reused;
 each new session is saved before the next begins. This can be a long computation
-with the full Sobol library and fractional CV. Set `fit_missing=False` to require
+with the default 533-HRF library and fractional CV. Set `fit_missing=False` to require
 existing results instead. `analysis_config` supplies fitting overrides; otherwise
 scientific settings inherit from the first completed session. Conflicting
 settings, axes, or libraries fail explicitly rather than mixing analyses.
@@ -367,7 +380,7 @@ Aggregate CIFTIs, TSVs, figures, and JSON source hashes use
 
 For the smaller **HRF-only** workflow:
 
-Use [nsd_session_hrf_reliability.ipynb](nsd_session_hrf_reliability.ipynb) to
+Use [nsd_session_hrf_reliability.py](nsd_session_hrf_reliability.py) to
 compare independently estimated HRFs for `sub-07`, `ses-nsd10` through
 `ses-nsd19`. All sessions use the same 513-candidate Sobol library by default.
 The notebook fits only HRF selection, using all runs within each session and
@@ -378,9 +391,11 @@ selection. Trials with missing reaction times are retained.
 
 Completed session estimates are saved immediately under each session's `func`
 directory. Reruns reuse them when the input identities, library, settings,
-coverage, software versions, and spatial axis match. Matching outputs from
-the full workflow can also be reused; add other derivative roots to
-`reuse_roots` if needed. Older grid estimates are refitted separately. A
+coverage, software versions, and spatial axis match. Full-workflow outputs
+can be reused only when they were fitted with the same library
+(`hrf_library="sobol"` with the same `hrf_n_samples` and `hrf_seed`); add their
+derivative roots to `reuse_roots`. Outputs from the default 533-HRF library
+never match. Older grid estimates are refitted separately. A
 changed input or library receives a new cache name, and damaged caches are
 recomputed. Source identity uses file paths, sizes, and modification times,
 plus the prepared event/confound/timing values; it does not hash every BOLD
@@ -414,8 +429,10 @@ export NSD_BIDS_ROOT=/path/to/NSD/BIDS
 ```
 
 Then open a notebook and select the checkout's `.venv` kernel. To run the
-workflow notebook non-interactively, inject a configuration cell defining
-`NSD_CONFIG` before the setup cell. Keys are `WorkflowSettings` fields;
+workflow notebook non-interactively, read `nsd_workflow.py` with
+`jupytext.read(path, fmt="py:percent")`, insert a code cell defining
+`NSD_CONFIG` before the setup cell, and execute it with `nbclient`, as
+`test_nsd_notebooks.py` does. Keys are `WorkflowSettings` fields;
 `nsd_settings(NSD_CONFIG)` returns the settings the notebook runs:
 
 | Setting | Default | Use |
@@ -517,6 +534,9 @@ response dispersion, undershoot dispersion, response/undershoot ratio, onset
 delay, duration, and `peak_time`. Peak time uses the maximum of the full HRF on
 its saved 0.1-second grid, including the onset delay and undershoot. The
 numeric HRF IDs are categorical labels; use the library table to interpret them.
+Grayordinates that select a GLMsingle HRF have NaN in the seven SPM-parameter
+maps; `peak_time` stays defined, and the library table's `source_index`
+identifies the kernel.
 
 Beta-series models are `CanonicalTrialOLS` and `OptimizedTrialOLS`, plus
 `...TrialRidge`, `...TrialRidgeCV`, or `...TrialFractionalCV` for the chosen

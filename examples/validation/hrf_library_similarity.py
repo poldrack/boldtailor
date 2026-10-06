@@ -16,7 +16,10 @@
 # %% [markdown]
 # # How similar are the HRFs in a Sobol library?
 #
-# The default library samples double-gamma parameters with a scrambled Sobol sequence.
+# The gamma-box Sobol library (`sobol_hrf_library`) samples double-gamma parameters with a
+# scrambled Sobol sequence. "The default library" below means `sobol_hrf_library(512, seed=0)`,
+# the package default when this analysis was run; these results motivated the current default,
+# `default_hrf_library()` (timing-space Sobol plus the 20 GLMsingle HRFs).
 # Parameter-space coverage does not guarantee waveform-space coverage: different parameter
 # combinations can produce nearly identical kernels, and a selection among near-duplicates
 # is a coin flip. This notebook measures that directly.

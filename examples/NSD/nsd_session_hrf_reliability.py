@@ -30,7 +30,7 @@
 #
 # Sessions run sequentially, with parallel grayordinate blocks within each session. `max_grayordinates=128` provides a quick check using all runs; `None` processes the full brain.
 #
-# Completed session estimates are saved immediately. Rerunning reuses compatible estimates from this notebook or the boldtailor workflow (`boldtailor run` or `nsd_workflow.ipynb`). Matching requires the same library, source identities, nuisance model, trimming, coverage, and CIFTI axis. Old grid/untrimmed script results remain separate. `reuse_roots` can point to additional derivative roots containing full-workflow outputs.
+# Completed session estimates are saved immediately. Rerunning reuses compatible estimates from this notebook or the boldtailor workflow (`boldtailor run` or `nsd_workflow.py`, fitted with `hrf_library="sobol"`). Matching requires the same library, source identities, nuisance model, trimming, coverage, and CIFTI axis. Old grid/untrimmed script results remain separate. `reuse_roots` can point to additional derivative roots containing full-workflow outputs.
 #
 #
 # Set `NSD_BIDS_ROOT` in the environment before starting the kernel, or supply

@@ -24,7 +24,7 @@
 #
 # Completed session results are reused. **Missing sessions are fitted automatically**
 # by running the package workflow (`boldtailor.workflow.run.run_workflow`) for each session. With the
-# 513-HRF library and fractional CV, this can be a long computation. Each completed
+# default 533-HRF library and fractional CV, this can be a long computation. Each completed
 # session is saved before the next starts; reruns resume from those outputs.
 # Set `fit_missing=False` for a strictly read-only session-loading pass.
 #

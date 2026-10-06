@@ -26,10 +26,10 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
 | Choose a ridge fraction at each grayordinate using held-out trial prediction | [Fractional ridge](docs/user-guide.md#fractional-ridge-at-each-grayordinate) |
 | Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
-| Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.ipynb) |
+| Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.py) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
 | Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
-| Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |
+| Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.py) |
 | Run the whole NSD-style CIFTI analysis from the shell | [Command line](#command-line) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
@@ -122,7 +122,7 @@ their outputs. It explains the notebook settings (`examples/NSD/nsd_settings.py`
 your own data paths, and running several workers. The single-session analysis
 is also available as the [`boldtailor run`](#command-line) command.
 
-The [full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) fits matched
+The [full NSD workflow notebook](examples/NSD/nsd_workflow.py) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
 SPM HRF and then with an optimized HRF per grayordinate. It also demonstrates
 HRF reliability, single-trial beta series, nested ridge selection, held-out
@@ -167,8 +167,9 @@ and differences from the locally developed GLMsingle API.
 
 Boldtailor is under active development. It currently supports t contrasts,
 OLS/AR(1) conventional GLMs, and OLS, fixed-ridge, or encoding-tuned single-trial
-fits. Automatic GLMdenoise and a general BIDS analysis command are not yet
-available. HRF and encoding-guided ridge selection do not require repeated stimuli.
+fits. GLMdenoise-style denoising (`select_denoising`) is available through the
+array API but is not part of `boldtailor run`, which handles NSD-style fsLR-91k
+CIFTI sessions; a general BIDS analysis command is not yet available. HRF and encoding-guided ridge selection do not require repeated stimuli.
 
 ## License
 

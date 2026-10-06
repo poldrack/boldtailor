@@ -134,9 +134,9 @@ usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
 recompiled on request rather than retained. Run indices
 are zero-based and result arrays preserve the input feature order.
 
-This option is available through the array API. The standalone NSD conventional
-command uses fixed HRFs; the full NSD workflow notebook includes both
-canonical and selected-HRF conventional GLMs. Adapting an image workflow
+This option is available through the array API and `boldtailor run`; the full
+NSD workflow notebook includes both canonical and selected-HRF conventional
+GLMs. Adapting an image workflow
 also requires saving each grouped design.
 
 The selection can come from separate training runs. If you supplied a
@@ -398,7 +398,7 @@ Evaluate the chosen pipeline on separate outer runs before interpreting its
 predictive performance. RT used for tuning is no longer an independent check
 on the same training data.
 
-The [NSD notebook](../examples/NSD/nsd_workflow.ipynb) performs odd-to-even and
+The [NSD notebook](../examples/NSD/nsd_workflow.py) performs odd-to-even and
 even-to-odd outer evaluations, then tunes again on all runs for the final beta
 images. Canonical and optimized HRFs receive separate penalties. Conventional
 GLMs remain OLS, and the HRF reliability analysis is unchanged.
@@ -420,9 +420,11 @@ optimized_ridge = fit_selected_hrfs(
 )
 ```
 
-This library contains exact canonical SPM plus 512 double-gamma curves sampled
-continuously with a scrambled Sobol sequence. It covers the same parameter
-ranges as the original grid: response delay 3–6 s, undershoot delay 10–16 s,
+The default library, `default_hrf_library()`, is described later in this
+section. The earlier default, `sobol_hrf_library()`, contains exact canonical
+SPM plus 512 double-gamma curves sampled continuously with a scrambled Sobol
+sequence. It covers the same parameter ranges as the
+original grid: response delay 3–6 s, undershoot delay 10–16 s,
 response dispersion 0.5–1.5, undershoot dispersion 0.5–2.5,
 response/undershoot ratio 2–8, and onset delay 0–2 s. Custom curves span 36 s.
 The sample count must be a power of two; the seed controls reproducibility.
@@ -435,9 +437,10 @@ flagged: one with at least three distinct library values and nonzero width
 (`library.informative_parameters`). Two-level grid parameters such as the
 expanded grid's undershoot delay (10 or 16 s) put every pick at an edge and are
 therefore reported in the table but excluded from the scalar; every Sobol
-parameter is informative. The default box implies peak times of roughly
-1.5–7.5 s, so late-peaking responses will saturate at the response-delay or
-onset edge.
+parameter is informative. The Sobol and expanded-grid box implies peak times of
+roughly 1.5–7.5 s, so late-peaking responses will saturate at the
+response-delay or onset edge; the default library's timing bounds
+(`TIMING_BOUNDS`) span peak times of 2.5–8.5 s.
 This balances coverage in parameter space, though similar waveforms can still
 arise from different parameter combinations.
 
@@ -464,7 +467,7 @@ Downstream fitting is unchanged because candidates carry SPM parameters. `realiz
 `timing_parameters()` and `spm_parameters()` convert exactly between SPM
 parameters and the gamma-lobe description.
 `library.timing_table` lists both parameterizations. See
-`examples/validation/hrf_library_similarity.ipynb` for how the two samplers
+`examples/validation/hrf_library_similarity.py` for how the two samplers
 compare in waveform similarity.
 
 When `select_hrfs()` or `evaluate_hrf_split()` is called without a library it
@@ -504,13 +507,15 @@ from boldtailor.model import Modulator, TaskModel
 
 task_model = TaskModel((
     Modulator("response_time", missing="indicator"),
-    Modulator("trial_type", kind="categorical"),
+    Modulator("trial_type", kind="categorical", levels=("face", "house")),
 ))
 selection = select_hrfs(multi_run_data, library=library, task_model=task_model)
 ```
 
 Each modulator names a column of the raw per-trial events: numeric by default,
-or discrete with `kind="categorical"` (see Modulators under the command line).
+or discrete with `kind="categorical"` and explicit `levels=` (the command line
+and workflow detect levels from the events; see Modulators under the command
+line).
 Modulators are not centered; the `task` contrast is the response at modulator
 value zero, and R², ΔR², and HRF selection are unchanged by this choice.
 `missing="indicator"` gives
@@ -906,9 +911,9 @@ within runs. Missing or nonpositive RT values are excluded from this diagnostic,
 not from beta estimation. It exports all-run, odd-run, even-run, and per-run
 correlations and valid-trial counts.
 
-Scatterplots use cortical vertices selected by canonical-OLS odd-run RT
-correlations, then show even-run trials. With optimized HRFs, those plots use
-HRFs selected only from odd runs. The production RT maps use all-run HRFs and
+Scatterplots show even-run trials at the cortical vertex with the largest
+canonical-OLS odd-run RT correlation. The optimized-HRF panel uses HRFs
+selected from all runs, so it is descriptive. The production RT maps use all-run HRFs and
 are descriptive. The correlation helper itself provides no significance tests
 or tuning. The notebook's separate encoding CV workflow uses RT and trial type
 to tune ridge, so correlations from its final all-run fits are not independent
@@ -972,7 +977,7 @@ Flags are grouped as in `boldtailor run --help`.
 | inputs | `--no-modulators` | Fit the task regressor alone; excludes `--modulator` |
 | HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
 | HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sobol candidates and seed (512, 0) |
-| HRF selection | `--no-rt-in-hrf-selection` | Select HRFs from the task regressor only, without RT modulators |
+| HRF selection | `--no-rt-in-hrf-selection` | Select HRFs without the `response_time` modulator (other modulators are kept) |
 | beta series | `--ridge-mode` | `fractional_cv`, `cv`, `fixed`, or `off` (`fractional_cv`) |
 | beta series | `--ridge-alpha` | Penalty for `fixed` (0.1) |
 | beta series | `--ridge-fractions`, `--ridge-alphas` | Candidate grids for `fractional_cv` and `cv` |

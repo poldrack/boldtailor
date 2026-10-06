@@ -33,10 +33,13 @@ restore the enclosing context afterward. Provenance retains the last eight event
 | Prepared task comparison | `task_delta_r2_prepared` |
 | Shared-HRF trial fit | `single_trial` |
 | Selected-HRF trial fit | `selected_hrf_single_trial` |
+| HRF selection | `hrf_selection` |
+| Held-out HRF evaluation | `hrf_independent_evaluation` |
+| Denoising selection and augmentation | `denoising_selection`, `denoising_augmentation` |
 
 The selected-HRF trial events are new. Each prefix has `_started`, `_completed`,
-and `_failed` variants. HRF selection and cross-validation retain their existing
-provenance records without adding per-candidate progress events.
+and `_failed` variants. HRF selection and cross-validation emit only these
+operation-level events, not per-candidate progress events.
 
 Completion timestamps and sequence numbers are reserved while final provenance
 is assembled. Failed construction may leave sequence gaps; sequences need not
