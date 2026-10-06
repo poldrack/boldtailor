@@ -44,10 +44,20 @@ def _shifted_run(events, frame_times, rng):
     return shifted.sort_values("onset", kind="stable").reset_index(drop=True)
 
 
+def _entropy(seed):
+    return [int(v) for v in np.atleast_1d(seed)]
+
+
+def seed_label(seed):
+    """The seed as recorded in the gate table, e.g. "7,0"."""
+    return ",".join(str(v) for v in _entropy(seed))
+
+
 def null_session(session, seed):
-    """Each run's events circularly shifted with seed ``[seed, run index]``."""
+    """Each run's events circularly shifted with seed ``[*seed, run index]``
+    (``seed`` an int or a tuple such as (subject number, session index))."""
     events = tuple(
-        _shifted_run(e, t, np.random.default_rng([seed, i]))
+        _shifted_run(e, t, np.random.default_rng([*_entropy(seed), i]))
         for i, (e, t) in enumerate(zip(session.events, session.frame_times))
     )
     return dataclasses.replace(session, events=events)
@@ -75,7 +85,7 @@ def gate_experiment(session, seed, *, library=None):
         for name, s in sessions.items()
         for gate in (True, False)
     ]
-    return pd.DataFrame(rows, columns=list(GATE_COLUMNS)).assign(seed=seed)
+    return pd.DataFrame(rows, columns=list(GATE_COLUMNS)).assign(seed=seed_label(seed))
 
 
 # ------------------------------------------------------------ modulators

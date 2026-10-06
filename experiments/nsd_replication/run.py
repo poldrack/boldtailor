@@ -603,14 +603,22 @@ def _write_missing(config, subject, session, data, fits):
     _write_levels(config, "ppdata", subject, session, data, missing)
 
 
+def subject_number(subject):
+    number = subject.removeprefix("sub-")
+    if not number.isdigit():
+        raise ValueError(f"{subject}: null seeds need a numeric sub-NN label")
+    return int(number)
+
+
 def _session_features(config, subject, index, session, roi):
-    """Seed ``index`` (the session's position in the config) for the null."""
+    """The null is seeded [subject number, session index, run index]."""
     data = _load(config, "ppdata", subject, session)
     _check_digests(
         _feature_paths(config, subject, session).values(), inputs_digest(data)
     )
+    seed = (subject_number(subject), index)
     out = session_features(
-        data, roi, index, session, block_size=config.block_size, n_jobs=config.n_jobs
+        data, roi, seed, session, block_size=config.block_size, n_jobs=config.n_jobs
     )
     _write_missing(config, subject, session, data, out["fits"])
     return out
