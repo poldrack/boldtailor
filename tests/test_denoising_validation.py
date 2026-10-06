@@ -9,6 +9,7 @@ never enters selection; the winning inner-CV score is not used as evidence.
 from dataclasses import replace
 from pathlib import Path
 import re
+import tomllib
 
 import numpy as np
 import pytest
@@ -285,14 +286,18 @@ def test_docs_describe_denoising_contract_and_limits():
     assert "score_tolerance" not in denoising_api
 
 
+GLMSINGLE_NOTICE = "src/boldtailor/_resources/GLMsingle-LICENSE.txt"
+
+
 def test_glmsingle_attribution_ships_and_is_cited():
-    """BSD 3-Clause notice is kept and the GLMsingle paper is cited."""
-    notice = Path("LICENSES/GLMsingle-BSD-3-Clause.txt").read_text()
+    """BSD 3-Clause notice sits beside the bundled HRF data and is cited."""
+    notice = Path(GLMSINGLE_NOTICE).read_text()
+    assert "BSD 3-Clause License" in notice
     assert "Copyright (c) 2021, Kendrick Kay" in notice
     for path in ("docs/user-guide.md", "docs/api.md", "docs/glmsingle-comparison.md"):
         text = Path(path).read_text()
         assert "10.7554/eLife.77599" in text and "e77599" in text, path
-        assert "LICENSES/GLMsingle-BSD-3-Clause.txt" in text, path
+        assert GLMSINGLE_NOTICE in text, path
     for module in (
         "_mixture_threshold",
         "_denoising_pool",
@@ -301,8 +306,24 @@ def test_glmsingle_attribution_ships_and_is_cited():
     ):
         source = Path(f"src/boldtailor/{module}.py").read_text()
         docstring = source.split('"""', 2)[1]
-        assert "LICENSES/GLMsingle-BSD-3-Clause.txt" in docstring, module
+        assert GLMSINGLE_NOTICE in docstring, module
         assert "10.7554/eLife.77599" in docstring, module
+    resource_note = Path("src/boldtailor/_resources/glmsingle_hrf_library.md")
+    assert "GLMsingle-LICENSE.txt" in resource_note.read_text()
+
+
+def test_package_is_mit_with_glmsingle_data_notice_only():
+    """Boldtailor is MIT; the only other license covers the bundled HRF data."""
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    project = pyproject["project"]
+    assert project["license"] == "MIT"
+    assert project["license-files"] == ["LICENSE", GLMSINGLE_NOTICE]
+    package_data = pyproject["tool"]["setuptools"]["package-data"]
+    assert "*.txt" in package_data["boldtailor._resources"]
+    assert Path("LICENSE").read_text().startswith("MIT License")
+    assert not Path("LICENSES").exists()
+    readme = Path("README.md").read_text()
+    assert "MIT License" in readme and GLMSINGLE_NOTICE in readme
 
 
 def test_docs_describe_the_significance_gate():
