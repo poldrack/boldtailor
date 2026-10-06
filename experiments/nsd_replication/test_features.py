@@ -277,3 +277,81 @@ def test_features_check_digest_before_computing(config, patched, tmp_path, monke
     with pytest.raises(ValueError, match="inputs digest"):
         run.main(["features", "--config", str(config), "--source", "ppdata"])
     assert not called
+
+
+def _two_session_config(tmp_path):
+    toml = tmp_path / "two.toml"
+    toml.write_text(f"""bids_dir = "{tmp_path}"
+output_dir = "{tmp_path / 'out'}"
+freesurfer_dir = "{tmp_path}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+""")
+    return toml
+
+
+def _stub_features(calls, fail=()):
+    from experiments.nsd_replication.ladder import LadderFit
+
+    def stub(data, roi, seed, label, **kwargs):
+        calls.append(label)
+        if label in fail:
+            raise RuntimeError(f"{label} failed")
+        fit = LadderFit(betas=np.zeros((N_TRIALS, 30)), record={"level": "b4"})
+        tag = dict(session=label)
+        return dict(
+            fits={"b4": fit, "b4-taskonly": fit},
+            gate=pd.DataFrame({"condition": ["real"], "gate": [True]}).assign(**tag),
+            rt=pd.DataFrame({"version": ["b4"], "r": [0.1]}).assign(**tag),
+            hrf=pd.DataFrame([dict(tag, skipped="x")]),
+        )
+
+    return stub
+
+
+def test_features_keep_finished_sessions_after_a_failure(
+    patched, tmp_path, monkeypatch
+):
+    toml, calls = _two_session_config(tmp_path), []
+    monkeypatch.setattr(run, "session_features", _stub_features(calls, fail={"ses-b"}))
+    with pytest.raises(RuntimeError, match="ses-b"):
+        run.main(["features", "--config", str(toml)])
+    metrics = tmp_path / "out/metrics/ppdata/sub-07"
+    for name in ("gate", "rt", "hrf"):
+        table = pd.read_csv(metrics / f"features_{name}.tsv", sep="\t")
+        assert set(table["session"]) == {"ses-a"}, name
+
+
+def test_features_skip_finished_sessions_unless_recompute(
+    patched, tmp_path, monkeypatch
+):
+    toml, calls = _two_session_config(tmp_path), []
+    monkeypatch.setattr(run, "session_features", _stub_features(calls, fail={"ses-b"}))
+    with pytest.raises(RuntimeError):
+        run.main(["features", "--config", str(toml)])
+    calls.clear()
+    monkeypatch.setattr(run, "session_features", _stub_features(calls))
+    run.main(["features", "--config", str(toml)])
+    assert calls == ["ses-b"]
+    metrics = tmp_path / "out/metrics/ppdata/sub-07"
+    gate = pd.read_csv(metrics / "features_gate.tsv", sep="\t")
+    assert list(gate["session"]) == ["ses-a", "ses-b"]
+    calls.clear()
+    run.main(["features", "--config", str(toml)])
+    assert calls == []
+    run.main(["features", "--config", str(toml), "--recompute"])
+    assert calls == ["ses-a", "ses-b"]
+    gate = pd.read_csv(metrics / "features_gate.tsv", sep="\t")
+    assert list(gate["session"]) == ["ses-a", "ses-b"]
+
+
+def test_features_rerun_session_missing_a_fit(patched, tmp_path, monkeypatch):
+    toml, calls = _two_session_config(tmp_path), []
+    monkeypatch.setattr(run, "session_features", _stub_features(calls))
+    run.main(["features", "--config", str(toml)])
+    path = fit_dir(tmp_path / "out", "ppdata", "sub-07", "ses-a", "b4-taskonly")
+    (path / "metadata.json").unlink()
+    calls.clear()
+    run.main(["features", "--config", str(toml)])
+    assert calls == ["ses-a"]
