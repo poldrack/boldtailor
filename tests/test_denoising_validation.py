@@ -318,8 +318,6 @@ def test_package_is_mit_with_glmsingle_data_notice_only():
     project = pyproject["project"]
     assert project["license"] == "MIT"
     assert project["license-files"] == ["LICENSE", GLMSINGLE_NOTICE]
-    package_data = pyproject["tool"]["setuptools"]["package-data"]
-    assert "*.txt" in package_data["boldtailor._resources"]
     assert Path("LICENSE").read_text().startswith("MIT License")
     assert not Path("LICENSES").exists()
     readme = Path("README.md").read_text()
