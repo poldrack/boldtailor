@@ -164,7 +164,7 @@ def make_six_runs(root, prep):
     rng = np.random.default_rng(75)
     for number in range(1, 7):
         path = next(prep.rglob(f"*run-{number:02d}*dtseries.nii"))
-        image = nib.load(path)
+        image = nib.load(path, mmap=False)
         y = image.get_fdata()
         y[:, :3] += rng.normal(0, 0.3, y[:, :3].shape)
         nib.save(nib.Cifti2Image(y, header=image.header), path)
