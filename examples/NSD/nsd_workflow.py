@@ -69,8 +69,7 @@ from examples.NSD.nsd_settings import nsd_paths, nsd_settings
 config = dict(
     subject="sub-07",
     session="ses-nsd10",
-    bids_root="/Volumes/extdata1/NSD/BIDS",
-    n_jobs=12,
+    # bids_root="/path/to/NSD/BIDS",  # else the NSD_BIDS_ROOT environment variable
     # max_grayordinates=128, n_jobs=4, block_size=4096, existing_results="overwrite",
     # ridge_mode="fractional_cv",  # "fractional_cv", "cv", "fixed" (with ridge_alpha), or "off"
     # hrf_library="default", hrf_n_samples=512, hrf_seed=0, hrf_selection_rt=True,
