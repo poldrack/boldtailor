@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "boldtailor"
 version = "0.1.0"
-description = "Composable first-level fMRI modeling"
+description = "Optimized first-level fMRI modeling"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "src/boldtailor/_resources/GLMsingle-LICENSE.txt"]
