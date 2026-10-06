@@ -43,3 +43,22 @@ def test_identical_sessions_have_negligible_spread(config, fitted):
     # every synthetic session is identical, so subsets give the same median
     table = pilot_report.variability(config, "ppdata", LEVELS)
     assert (table[["loso_sd", "split_sd"]] < 0.05).all().all()
+
+
+def test_cli_writes_variability_table(config, fitted, capsys):
+    import pandas as pd
+
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b", "ses-c"]
+block_size = 16
+""")
+    argv = ["--config", str(toml), "--source", "ppdata", "--levels", *LEVELS]
+    assert pilot_report.main(argv) == 0
+    path = config.output_dir / "metrics/ppdata/sub-07/variability.tsv"
+    table = pd.read_csv(path, sep="\t")
+    assert list(table["version"]) == list(LEVELS)
+    assert "loso_sd" in capsys.readouterr().out
