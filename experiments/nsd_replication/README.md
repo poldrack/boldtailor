@@ -21,7 +21,7 @@ uv run pytest experiments/nsd_replication -W error
 
 ## Commands
 
-Run each stage with `uv run python -m experiments.nsd_replication.run <fit|metrics> --config <toml> --source <ppdata|released|comparison>`.
+Run each stage with `uv run python -m experiments.nsd_replication.run <fit|metrics|features|figures> --config <toml> --source <ppdata|released|comparison>`.
 Required order: ppdata fit and metrics, released fit and metrics, `metrics --source comparison`, and only then `--discard-betas-after-metrics` for ppdata.
 With `released_dir` configured, discarding ppdata betas is refused until the comparison outputs (`alignment.tsv`, `r1.tsv`) exist.
 The comparison writes `alignment.tsv` first and stops before the other tables if any session is below `alignment_floor`.
@@ -29,3 +29,7 @@ The comparison writes `alignment.tsv` first and stops before the other tables if
 ## Verified API Notes
 
 **ROI resampling:** `wb_command -metric-resample <in> <source sphere> <target sphere> ADAP_BARY_AREA <out> -area-metrics <source area> <target area>`, with inputs read from the released betas' JSON sidecars, then thresholded at 0.5.
+
+## Figures
+
+`uv run python -m experiments.nsd_replication.run figures --config <toml>` renders PNGs from whichever metric TSVs exist: per-subject figures under `<output_dir>/figures/<subject>/` and group RSA and parity figures under `<output_dir>/figures/group/`. Missing inputs are skipped with a message. Run configs: `configs/primary.toml` (sub-01 to sub-04) and `configs/extension.toml` (sub-05, sub-06, sub-08).

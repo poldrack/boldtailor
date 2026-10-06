@@ -26,6 +26,7 @@ from experiments.nsd_replication.comparison import (
     reliability_differences,
 )
 from experiments.nsd_replication.config import load_config
+from experiments.nsd_replication.figure_stage import make_figures
 from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
@@ -469,7 +470,7 @@ def _run_features(config, args, levels):
 
 def _parser():
     parser = argparse.ArgumentParser(prog="nsd_replication.run")
-    parser.add_argument("command", choices=("fit", "metrics", "features"))
+    parser.add_argument("command", choices=("fit", "metrics", "features", "figures"))
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--source", choices=SOURCES, default="ppdata")
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
@@ -512,6 +513,10 @@ def _run_metrics(config, args, levels):
             discard_betas(config, args.source, subject, levels, multiple)
 
 
+def _run_figures(config, args, levels):
+    make_figures(config)
+
+
 def _default_levels(source):
     return tuple(RELEASED) if source == "released" else LEVELS
 
@@ -520,7 +525,12 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     config = load_config(args.config)
     levels = tuple(args.levels or _default_levels(args.source))
-    commands = {"fit": _run_fit, "metrics": _run_metrics, "features": _run_features}
+    commands = {
+        "fit": _run_fit,
+        "metrics": _run_metrics,
+        "features": _run_features,
+        "figures": _run_figures,
+    }
     commands[args.command](config, args, levels)
     return 0
 
