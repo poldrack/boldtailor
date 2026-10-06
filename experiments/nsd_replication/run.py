@@ -1,7 +1,7 @@
 """Resumable fit and metrics stages of the NSD replication experiments."""
 
 import argparse
-from functools import cached_property
+from functools import cache, cached_property
 import json
 from importlib.metadata import version
 from pathlib import Path
@@ -10,10 +10,13 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+from boldtailor.hrf_library import default_hrf_library, glmsingle_hrf_library
+
 from experiments.nsd_replication.betas import (
     fit_dir,
     inputs_digest,
     is_complete,
+    read_extra,
     read_fit,
     write_fit,
     zscore,
@@ -30,6 +33,7 @@ from experiments.nsd_replication.comparison import (
 from experiments.nsd_replication.config import load_config
 from experiments.nsd_replication.figure_stage import make_figures
 from experiments.nsd_replication.features import session_features
+from experiments.nsd_replication.hrf_maps import session_consistency
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
 from experiments.nsd_replication.metric_tables import ensure_tables
@@ -320,6 +324,63 @@ def subject_metrics(config, source, subject, levels, recompute=False):
     return ensure_tables(out, _table_builders(config.n_jobs), data, recompute)
 
 
+# ------------------------------------------------- R2 (HRF consistency)
+
+R2_LIBRARIES = {"b2": default_hrf_library, "b2-lib20": glmsingle_hrf_library}
+
+
+def _session_paths(config, source, subject, level):
+    return [
+        fit_dir(config.output_dir, source, subject, s, level) for s in config.sessions
+    ]
+
+
+def _check_library(path, library):
+    meta = json.loads((path / "metadata.json").read_text())
+    if meta.get("library_fingerprint") != library.fingerprint:
+        raise ValueError(f"{path}: HRF library fingerprint differs from the R2 library")
+
+
+def _consistency(config, subject, level):
+    library = R2_LIBRARIES[level]()
+    paths = _session_paths(config, "ppdata", subject, level)
+    for path in paths:
+        _check_library(path, library)
+    indices = np.vstack([read_extra(p, "hrf_indices") for p in paths])
+    return session_consistency(library, indices, config.sessions)
+
+
+def _r2_summary(level, table, roi):
+    values = {}
+    for column in ("mean_pairwise_r", "mean_canonical_baseline"):
+        finite = table[column].to_numpy()[roi]
+        finite = finite[np.isfinite(finite)]
+        values[column] = float(np.median(finite)) if len(finite) else np.nan
+    return pd.DataFrame([dict(version=level, **values, n_features=int(roi.sum()))])
+
+
+def _r2_builders(config, subject, level, roi):
+    table = cache(lambda: _consistency(config, subject, level))
+    return {
+        f"r2_{level}": lambda _: table(),
+        f"r2_{level}_roi": lambda _: _r2_summary(level, table(), roi()),
+    }
+
+
+def hrf_consistency(config, subject, recompute=False):
+    """R2 for b2 and b2-lib20 wherever every session's fit exists; the ROI
+    summary holds within-ROI medians of the per-feature columns."""
+    if len(config.sessions) < 2:
+        return
+    roi = cache(lambda: _subject_roi(config, subject))
+    out = _metrics_dir(config, "ppdata", subject)
+    for level in R2_LIBRARIES:
+        paths = _session_paths(config, "ppdata", subject, level)
+        if all(is_complete(p) for p in paths):
+            builders = _r2_builders(config, subject, level, roi)
+            ensure_tables(out, builders, None, recompute)
+
+
 # ------------------------------------------------------- comparison stage
 
 
@@ -574,6 +635,8 @@ def _run_metrics(config, args, levels):
         return _run_comparison(config, args.recompute)
     for subject in config.subjects:
         subject_metrics(config, args.source, subject, levels, args.recompute)
+        if args.source == "ppdata":
+            hrf_consistency(config, subject, args.recompute)
     multiple = len(config.subjects) > 1
     if multiple:
         group_rsa(config, args.source, config.subjects, levels)

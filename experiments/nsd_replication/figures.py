@@ -98,6 +98,9 @@ def fig_r2_hrf(consistency):
     for column in ("mean_pairwise_r", "mean_canonical_baseline"):
         ax.plot(consistency[column].to_numpy(), marker="o", label=column)
     ax.set_xlabel("Session subset")
+    if "version" in consistency:
+        ax.set_xticks(range(len(consistency)), consistency["version"])
+        ax.set_xlabel("Version (ROI median)")
     ax.set_ylabel("Mean HRF-choice consistency (r)")
     ax.legend()
     return fig

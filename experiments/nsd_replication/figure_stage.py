@@ -7,6 +7,8 @@ import pandas as pd
 from experiments.nsd_replication import figures
 from experiments.nsd_replication.comparison import LEVELS
 
+R2_LEVELS = ("b2", "b2-lib20")
+
 
 def _read(path):
     return pd.read_csv(path, sep="\t") if path.is_file() else None
@@ -34,13 +36,22 @@ def _subject_figures(metrics):
         "r4_t0.3": (_r4(metrics.get("r4_t0.3")), figures.fig_r4_lag),
         "gate": (gate, figures.fig_gate),
         "modulators": (rt, figures.fig_modulators),
+        "r2": (metrics.get("r2"), figures.fig_r2_hrf),
     }
 
 
 def _load_subject_tables(metrics_dir):
     names = ("r1", "r3b", "r6", "r4_t0.0", "r4_t0.3", "features_rt", "features_gate")
     loaded = {n: _read(metrics_dir / f"{n}.tsv") for n in names}
+    loaded["r2"] = _r2_summaries(metrics_dir)
     return {n: t for n, t in loaded.items() if t is not None}
+
+
+def _r2_summaries(metrics_dir):
+    """ROI summaries of R2, one row per HRF library level found."""
+    found = [_read(metrics_dir / f"r2_{lv}_roi.tsv") for lv in R2_LEVELS]
+    found = [t for t in found if t is not None]
+    return pd.concat(found, ignore_index=True) if found else None
 
 
 def _save(fig, path):
