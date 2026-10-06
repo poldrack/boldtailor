@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 
+import jupytext
 import nbformat
 from nbclient import NotebookClient
 import nibabel as nib
@@ -17,9 +18,14 @@ from boldtailor.workflow.settings import WorkflowSettings
 from examples.NSD import multisession_inputs, multisession_workflow
 
 HERE = Path(__file__).parent
-WORKFLOW_NOTEBOOK = HERE / "nsd_workflow.ipynb"
-SESSION_NOTEBOOK = HERE / "nsd_session_hrf_reliability.ipynb"
-MULTISESSION_NOTEBOOK = HERE / "nsd_multisession.ipynb"
+WORKFLOW_NOTEBOOK = HERE / "nsd_workflow.py"
+SESSION_NOTEBOOK = HERE / "nsd_session_hrf_reliability.py"
+MULTISESSION_NOTEBOOK = HERE / "nsd_multisession.py"
+
+
+def _read_notebook(path):
+    """The notebook held in a jupytext py:percent source file."""
+    return jupytext.read(path, fmt="py:percent")
 
 
 @pytest.mark.parametrize(
@@ -41,7 +47,7 @@ def test_notebook_sources_are_tracked_percent_scripts(path):
 
 
 def _execute(path, name, config, tmp_path, timeout=600):
-    notebook = nbformat.read(path, as_version=4)
+    notebook = _read_notebook(path)
     nbformat.validate(notebook)
     notebook.cells.insert(0, nbformat.v4.new_code_cell(f"{name} = {config!r}"))
     client = NotebookClient(
@@ -53,7 +59,7 @@ def _execute(path, name, config, tmp_path, timeout=600):
     try:
         return client.execute()
     finally:
-        nbformat.write(notebook, tmp_path / f"executed-{path.name}")
+        nbformat.write(notebook, tmp_path / f"executed-{path.stem}.ipynb")
 
 
 def _left_cortex_meshes(directory):
@@ -95,7 +101,7 @@ def test_session_hrf_notebook_fits_three_sessions_exports_comparisons_and_resume
         n_jobs=1,
         reuse_roots=[],
     )
-    notebook = nbformat.read(SESSION_NOTEBOOK, as_version=4)
+    notebook = _read_notebook(SESSION_NOTEBOOK)
     notebook.cells.insert(
         0, nbformat.v4.new_code_cell(f"HRF_RELIABILITY_CONFIG = {config!r}")
     )
