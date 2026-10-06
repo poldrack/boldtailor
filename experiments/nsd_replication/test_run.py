@@ -523,3 +523,102 @@ def test_figures_render_r2_summary(config):
         _write_tsv(out / f"r2_{level}_roi.tsv", summary)
     run.make_figures(config)
     assert (config.output_dir / "figures/sub-07/r2.png").stat().st_size > 0
+
+
+def _write_config(config, extra=""):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+{extra}""")
+    return toml
+
+
+def test_ppdata_default_levels_include_lss(config, monkeypatch):
+    from experiments.nsd_replication.ladder import LEVELS as ALL, LSS_LEVELS
+
+    seen = {}
+    monkeypatch.setattr(
+        run,
+        "fit_session",
+        lambda c, src, sub, ses, levels, refit: seen.setdefault("fit", levels),
+    )
+    monkeypatch.setattr(
+        run,
+        "subject_metrics",
+        lambda c, src, sub, levels, recompute: seen.setdefault("metrics", levels),
+    )
+    monkeypatch.setattr(run, "hrf_consistency", lambda *a: None)
+    toml = _write_config(config)
+    run.main(["fit", "--config", str(toml)])
+    run.main(["metrics", "--config", str(toml)])
+    assert tuple(seen["fit"]) == ALL + LSS_LEVELS
+    assert tuple(seen["metrics"]) == ALL + LSS_LEVELS
+
+
+def test_metric_tables_record_composite_levels(config, patched):
+    import pandas as pd
+
+    for subject in ("sub-07", "sub-08"):
+        for ses in config.sessions:
+            run.fit_session(config, "ppdata", subject, ses, ("b1", "b2"))
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+    out = config.output_dir / "metrics/ppdata"
+    for name in run.SUBJECT_TABLES:
+        table = pd.read_csv(out / "sub-07" / f"{name}.tsv", sep="\t")
+        assert set(table["composite_levels"]) == {"b1|b2"}, name
+    run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1", "b2"))
+    rsa = pd.read_csv(out / "rsa_b1.tsv", sep="\t")
+    assert set(rsa["composite_levels"]) == {"b1|b2"}
+
+
+def test_comparison_tables_record_composite_levels(config, patched):
+    import pandas as pd
+
+    from experiments.nsd_replication.comparison import VERSIONS
+
+    _fit_comparison(config)
+    run.comparison_metrics(config, "sub-07")
+    out = config.output_dir / "metrics/comparison/sub-07"
+    for name in run.SUBJECT_TABLES:
+        table = pd.read_csv(out / f"{name}.tsv", sep="\t")
+        assert set(table["composite_levels"]) == {"|".join(VERSIONS)}, name
+
+
+def test_different_level_set_requires_recompute(config, patched):
+    import pandas as pd
+
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    before = _metric_mtimes(config)
+    with pytest.raises(ValueError, match="--recompute"):
+        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+    assert _metric_mtimes(config) == before
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"), recompute=True)
+    r1 = config.output_dir / "metrics/ppdata/sub-07/r1.tsv"
+    assert set(pd.read_csv(r1, sep="\t")["composite_levels"]) == {"b1|b2"}
+    # a table without the column (an older run) is not silently replaced
+    pd.read_csv(r1, sep="\t").drop(columns="composite_levels").to_csv(
+        r1, sep="\t", index=False
+    )
+    with pytest.raises(ValueError, match="--recompute"):
+        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+
+
+def test_discard_requires_tables_covering_requested_levels(config, patched):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    with pytest.raises(ValueError, match="b2"):
+        run.discard_betas(config, "ppdata", "sub-07", ("b1", "b2"))
+    for lv in ("b1", "b2"):
+        path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", lv)
+        assert (path / "betas.npy").exists()
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"), recompute=True)
+    run.discard_betas(config, "ppdata", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert not (path / "betas.npy").exists()
