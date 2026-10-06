@@ -1,0 +1,3 @@
+# Pair every notebook with a py:percent script. Git tracks only the .py file;
+# the .ipynb (with outputs) is gitignored. Sync with `uv run jupytext --sync`.
+formats = "ipynb,py:percent"
