@@ -684,8 +684,6 @@ Run them from the repository checkout:
 | `examples.NSD.nsd_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
 | `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
 | `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
-| `examples.stop_signal_demo.discover_run_inputs`, `common_brain_mask`, `make_masker`, `load_run` | Load aligned NIfTI runs using an intersected mask |
-| `examples.stop_signal_demo.whole_brain_image`, `result_artifacts` | Reconstruct and prepare NIfTI outputs |
 
 See [running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks).
 The retired NSD scripts are replaced by [`boldtailor run`](#session-workflow-and-command-line).

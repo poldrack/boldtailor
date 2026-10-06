@@ -15,7 +15,6 @@ from their named modules; package initializers are empty.
 | [Ownership migration](ownership-migration.md) | Ordinary read-only NumPy arrays and editable copies |
 | [GLMsingle comparison](glmsingle-comparison.md) | Method differences and assumptions |
 | [NSD guide](../examples/NSD/README.md) | Dataset-specific commands, notebooks, and saved artifacts |
-| [Stop-signal notebook](../examples/stop_signal_demo.ipynb) | Prepared-design NIfTI workflow |
 
 ## Current methods
 

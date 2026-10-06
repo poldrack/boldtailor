@@ -10,21 +10,21 @@ Use Python 3.12 or later and uv:
 ```bash
 uv sync --group dev
 uv run pytest -q -W error
-uv run black --check src tests examples/NSD examples/stop_signal_demo.py
+uv run black --check src tests examples/NSD
 uv run git diff --check
 ```
 
 `uv run pytest` runs the package suite in `tests/`. Example and notebook tests are
 opt-in: `uv run pytest examples/NSD`, `uv run pytest examples/validation`, and
-`uv run pytest --run-notebooks tests/test_stop_signal_demo.py examples/NSD`.
+`uv run pytest --run-notebooks examples/NSD`.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
 
 CI splits the suites. On every push and pull request it runs the package
 suite in `tests/` with warnings treated as errors and checks Python formatting
 on a clean Python 3.12 runner. A separate `examples` job, run only on manual
-dispatch and on schedule, runs `examples/NSD`, `examples/validation`, and the
-stop-signal notebook test with `--run-notebooks` and warnings as errors. It also builds and tests the installed
+dispatch and on schedule, runs `examples/NSD` and `examples/validation`
+with `--run-notebooks` and warnings as errors. It also builds and tests the installed
 wheel in an isolated environment, without the checkout's editable installation
 or notebook development dependencies:
 
@@ -63,7 +63,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
 | Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `run`, `outputs`, `report`), `cli` |
-| Notebook-only dataset helpers and image reconstruction | `examples/NSD`, `examples/stop_signal_demo.py` |
+| Notebook-only dataset helpers | `examples/NSD` |
 
 The core numerical functions accept arrays and tables and return results in
 memory. Example workflows own dataset discovery, image loading, spatial axes,

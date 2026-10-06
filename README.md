@@ -23,7 +23,6 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
 | Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
 | Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.ipynb) |
-| Fit and view whole-brain NIfTI contrast and R² maps | [Whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) |
 | Run the whole NSD-style CIFTI analysis from the shell | [Command line](#command-line) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
@@ -121,11 +120,6 @@ GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
 SPM HRF and then with an optimized HRF per grayordinate. It also demonstrates
 HRF reliability, single-trial beta series, nested ridge selection, held-out
 trial encoding, RT checks, and CIFTI export.
-
-The [whole-brain stop-signal notebook](examples/stop_signal_demo.ipynb) combines
-multiple sessions in a common brain mask, fits contrasts, displays maps, and
-optionally saves NIfTI results. Set `BOLDTAILOR_BIDS_ROOT` to your dataset and
-edit the notebook's subject, session, and preprocessing settings.
 
 These are dataset-specific examples. For a different dataset, load aligned
 signals with your usual imaging tools and use the array API, or adapt an example.

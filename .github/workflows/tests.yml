@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - run: uv sync --locked --group dev
       - run: uv run pytest -q -W error
-      - run: uv run black --check src tests examples/NSD examples/stop_signal_demo.py
+      - run: uv run black --check src tests examples/NSD
       - run: git diff --check
       - run: uv build --wheel
       - run: uv run --isolated --no-project --with "$(ls dist/boldtailor-*.whl)" python tests/check_installed_package.py
@@ -34,4 +34,4 @@ jobs:
         with:
           python-version: '3.12'
       - run: uv sync --locked --group dev
-      - run: uv run pytest -q -W error --run-notebooks examples/NSD examples/validation tests/test_stop_signal_demo.py
+      - run: uv run pytest -q -W error --run-notebooks examples/NSD examples/validation

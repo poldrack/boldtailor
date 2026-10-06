@@ -135,11 +135,9 @@ recompiled on request rather than retained. Run indices
 are zero-based and result arrays preserve the input feature order.
 
 This option is available through the array API. The standalone NSD conventional
-command and stop-signal notebook use fixed HRFs; the full NSD workflow
-notebook includes both canonical and selected-HRF conventional GLMs. Adapting
-an image workflow
-also requires saving each grouped design; the stop-signal `result_artifacts()`
-helper currently expects a common-HRF result.
+command uses fixed HRFs; the full NSD workflow notebook includes both
+canonical and selected-HRF conventional GLMs. Adapting an image workflow
+also requires saving each grouped design.
 
 The selection can come from separate training runs. If you supplied a
 `feature_signature` when selecting HRFs, also pass the target data's spatial
