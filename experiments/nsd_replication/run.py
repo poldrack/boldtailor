@@ -616,25 +616,58 @@ def _session_features(config, subject, index, session, roi):
     return out
 
 
-def subject_features(config, subject):
-    roi = _subject_roi(config, subject)
-    outs = [
-        _session_features(config, subject, i, s, roi)
-        for i, s in enumerate(config.sessions)
-    ]
-    tables = {
-        f"features_{name}": pd.concat([o[name] for o in outs], ignore_index=True)
-        for name in FEATURE_TABLES
+def _feature_table(config, subject, name):
+    return _metrics_dir(config, "ppdata", subject) / f"features_{name}.tsv"
+
+
+def _read_table(path):
+    return pd.read_csv(path, sep="\t") if path.is_file() else None
+
+
+def _session_done(config, subject, session):
+    """Both feature fits complete and rows for ``session`` in every table."""
+    paths = _feature_paths(config, subject, session).values()
+    if not all(is_complete(p) for p in paths):
+        return False
+    tables = [_read_table(_feature_table(config, subject, n)) for n in FEATURE_TABLES]
+    return all(t is not None and (t["session"] == session).any() for t in tables)
+
+
+def _merge_session(config, subject, session, out):
+    """Replace ``session``'s rows in each subject table, in config order."""
+    order = {s: i for i, s in enumerate(config.sessions)}
+    for name in FEATURE_TABLES:
+        path = _feature_table(config, subject, name)
+        old = _read_table(path)
+        kept = [] if old is None else [old[old["session"] != session]]
+        merged = pd.concat([*kept, out[name]], ignore_index=True)
+        merged = merged.sort_values(
+            "session", key=lambda c: c.map(order), kind="stable"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        merged.to_csv(path, sep="\t", index=False)
+
+
+def subject_features(config, subject, recompute=False):
+    """Feature experiments per session; finished sessions are skipped unless
+    ``recompute``, and each session's rows are written as soon as it ends."""
+    roi = cache(lambda: _subject_roi(config, subject))
+    for index, session in enumerate(config.sessions):
+        if not recompute and _session_done(config, subject, session):
+            continue
+        out = _session_features(config, subject, index, session, roi())
+        _merge_session(config, subject, session, out)
+    return {
+        f"features_{n}": _read_table(_feature_table(config, subject, n))
+        for n in FEATURE_TABLES
     }
-    _write_tables(config, "ppdata", subject, tables)
-    return tables
 
 
 def _run_features(config, args, levels):
     if args.source != "ppdata":
         raise ValueError("feature experiments run on ppdata only")
     for subject in config.subjects:
-        subject_features(config, subject)
+        subject_features(config, subject, args.recompute)
 
 
 # ---------------------------------------------------------------------- CLI
