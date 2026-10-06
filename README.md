@@ -168,3 +168,13 @@ Boldtailor is under active development. It currently supports t contrasts,
 OLS/AR(1) conventional GLMs, and OLS, fixed-ridge, or encoding-tuned single-trial
 fits. Automatic GLMdenoise and a general BIDS analysis command are not yet
 available. HRF and encoding-guided ridge selection do not require repeated stimuli.
+
+## License
+
+Boldtailor is released under the [MIT License](LICENSE).
+
+It bundles one third-party file: GLMsingle's 20-HRF library
+(`src/boldtailor/_resources/glmsingle_hrf_library.tsv`, Copyright (c) 2021,
+Kendrick Kay), redistributed under the BSD 3-Clause License reproduced in
+`src/boldtailor/_resources/GLMsingle-LICENSE.txt`. That license covers only
+this data file.

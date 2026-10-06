@@ -20,8 +20,9 @@ fitting.
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions,
-and disclaimer. It is an independent reimplementation, not a copy of
+src/boldtailor/_resources/GLMsingle-LICENSE.txt for the copyright
+notice, conditions, and disclaimer.
+It is an independent reimplementation, not a copy of
 GLMsingle code. Follows the GLMdenoise stage of GLMsingle (noise pool,
 run-wise PCs, cross-validated PC count, select_noise_regressors).
 Reference: Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr,

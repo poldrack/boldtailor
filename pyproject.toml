@@ -7,7 +7,8 @@ name = "boldtailor"
 version = "0.1.0"
 description = "Composable first-level fMRI modeling"
 readme = "README.md"
-license-files = ["LICENSES/*"]
+license = "MIT"
+license-files = ["LICENSE", "src/boldtailor/_resources/GLMsingle-LICENSE.txt"]
 requires-python = ">=3.12"
 dependencies = [
   "filelock",
@@ -41,7 +42,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-"boldtailor._resources" = ["*.tsv", "*.md"]
+"boldtailor._resources" = ["*.tsv", "*.md", "*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

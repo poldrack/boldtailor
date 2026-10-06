@@ -25,8 +25,9 @@ scores are selection statistics, not independent performance estimates.
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions,
-and disclaimer. It is an independent reimplementation, not a copy of
+src/boldtailor/_resources/GLMsingle-LICENSE.txt for the copyright
+notice, conditions, and disclaimer.
+It is an independent reimplementation, not a copy of
 GLMsingle code. Follows GLMsingle's select_noise_regressors stopping rule
 (pcstop) and the GLMdenoise cross-validated choice of the PC count.
 Reference: Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr,

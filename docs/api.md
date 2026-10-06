@@ -424,7 +424,7 @@ estimates using GLMsingle. *eLife*, 11, e77599.
 deviations listed in the [user guide](user-guide.md#task-guided-denoising).
 It is an independent reimplementation;
 GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
-3-Clause License, reproduced in `LICENSES/GLMsingle-BSD-3-Clause.txt`.
+3-Clause License, reproduced in `src/boldtailor/_resources/GLMsingle-LICENSE.txt`.
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
 ```text

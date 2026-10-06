@@ -604,7 +604,7 @@ estimates using GLMsingle. *eLife*, 11, e77599.
 [doi:10.7554/eLife.77599](https://doi.org/10.7554/eLife.77599)), with the
 deviations listed in this section. It is an independent reimplementation;
 GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
-3-Clause License, reproduced in `LICENSES/GLMsingle-BSD-3-Clause.txt`.
+3-Clause License, reproduced in `src/boldtailor/_resources/GLMsingle-LICENSE.txt`.
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
 ```python

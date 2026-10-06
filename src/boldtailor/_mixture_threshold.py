@@ -17,8 +17,9 @@ and recorded (``converged``, ``n_iter``) instead of printed; failures raise
 This module reimplements procedures from GLMsingle
 (https://github.com/cvnlab/GLMsingle), Copyright (c) 2021, Kendrick Kay,
 distributed under the BSD 3-Clause License; see
-LICENSES/GLMsingle-BSD-3-Clause.txt for the copyright notice, conditions, and
-disclaimer. It is an independent reimplementation, not a copy of GLMsingle
+src/boldtailor/_resources/GLMsingle-LICENSE.txt for the copyright
+notice, conditions, and disclaimer.
+It is an independent reimplementation, not a copy of GLMsingle
 code. Follows GLMsingle's findtailthreshold and robustrange. Reference: Prince,
 J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J., Kay, K.N. (2022).
 Improving the accuracy of single-trial fMRI response estimates using GLMsingle.

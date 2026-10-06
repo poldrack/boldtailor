@@ -10,6 +10,8 @@ rescales after convolving with the stimulus duration); the notebook divides
 each column by its maximum before plotting.
 
 The library is Copyright (c) 2021 Kendrick Kay and is redistributed here under
-the BSD 3-Clause License of the GLMsingle repository. `boldtailor.hrf_library.glmsingle_hrf_curves()` loads it and rescales each
+the BSD 3-Clause License of the GLMsingle repository, reproduced in
+`GLMsingle-LICENSE.txt` in this directory.
+`boldtailor.hrf_library.glmsingle_hrf_curves()` loads it and rescales each
 column to unit peak; `default_hrf_library()` appends the 20 kernels to the
 timing-space Sobol candidates.
