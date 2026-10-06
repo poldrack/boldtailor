@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.18,<0.10"]
+build-backend = "uv_build"
 
 [project]
 name = "boldtailor"
@@ -34,15 +34,6 @@ dev = [
   "pytest",
   "pytest-cov",
 ]
-
-[tool.setuptools]
-package-dir = { "" = "src" }
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"boldtailor._resources" = ["*.tsv", "*.md", "*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
