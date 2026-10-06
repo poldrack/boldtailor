@@ -143,7 +143,7 @@ How BIDS onsets map onto the ppdata time base is checked once, before the full p
 3. Set `onset_offset` in every config to the candidate with the largest `true_median`.
 4. If the best `true_median` is not clearly above every `null_median`, stop and report: trials or grayordinates are misaligned.
 
-Calibrated `onset_offset`: Pending pilot (Task 12).
+Calibrated `onset_offset`: 0.667 s, set in every config (sub-07 ses-nsd10: median b1 `true_median` 0.97 against a shifted-trial `null_median` of about 0.06).
 
 ### Pending values
 
