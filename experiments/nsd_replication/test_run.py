@@ -2,6 +2,7 @@ import json
 from dataclasses import replace
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from experiments.nsd_replication import run
@@ -86,7 +87,9 @@ def test_group_rsa_writes_agreement(config, patched):
         for ses in config.sessions:
             run.fit_session(config, "ppdata", subject, ses, ("b1",))
     table = run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1",))
-    assert (config.output_dir / "metrics/ppdata/rsa_b1.tsv").is_file()
+    assert (
+        config.output_dir / "metrics/ppdata/group_sub-07_sub-08/rsa_b1.tsv"
+    ).is_file()
     assert list(table.columns) == ["threshold", "subject_a", "subject_b", "r"]
     assert set(table["threshold"]) == {0.0, 0.2, 0.4}
     assert table["r"].to_numpy() == pytest.approx(1.0)
@@ -240,9 +243,7 @@ def test_discard_requires_comparison_outputs_when_released_configured(config, pa
 def test_discard_succeeds_after_comparison_outputs(config, patched):
     _fit_and_measure(config)
     out = config.output_dir / "metrics/comparison/sub-07"
-    out.mkdir(parents=True)
-    for name in ("alignment.tsv", "r1.tsv"):
-        (out / name).write_text("x\n")
+    _write_comparison_outputs(out)
     configured = replace(config, released_dir=config.bids_dir)
     run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
     path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
@@ -283,7 +284,8 @@ def _synthetic_metrics(config):
     rsa = pd.DataFrame(
         {"threshold": [0.0], "subject_a": ["a"], "subject_b": ["b"], "r": [0.3]}
     )
-    _write_tsv(out / "ppdata" / "rsa_b4.tsv", rsa)
+    group = "group_" + "_".join(config.subjects)
+    _write_tsv(out / "ppdata" / group / "rsa_b4.tsv", rsa)
 
 
 def test_figures_command_saves_pngs_and_skips_missing(config, capsys):
@@ -571,8 +573,12 @@ def test_metric_tables_record_composite_levels(config, patched):
         table = pd.read_csv(out / "sub-07" / f"{name}.tsv", sep="\t")
         assert set(table["composite_levels"]) == {"b1|b2"}, name
     run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1", "b2"))
-    rsa = pd.read_csv(out / "rsa_b1.tsv", sep="\t")
+    rsa = pd.read_csv(out / "group_sub-07_sub-08" / "rsa_b1.tsv", sep="\t")
     assert set(rsa["composite_levels"]) == {"b1|b2"}
+    assert set(rsa["sessions"]) == {"ses-a|ses-b"}
+    for name in run.SUBJECT_TABLES:
+        table = pd.read_csv(out / "sub-07" / f"{name}.tsv", sep="\t")
+        assert set(table["sessions"]) == {"ses-a|ses-b"}, name
 
 
 def test_comparison_tables_record_composite_levels(config, patched):
@@ -634,3 +640,49 @@ def test_subject_metrics_requires_matching_trials_across_levels(config, patched)
     trials.assign(image=trials["image"] + 1).to_csv(path, sep="\t", index=False)
     with pytest.raises(ValueError, match="sub-07.*b2"):
         run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+
+
+def _write_comparison_outputs(out, skip=()):
+    out.mkdir(parents=True, exist_ok=True)
+    names = ["alignment.tsv", *(f"{n}.tsv" for n in run.SUBJECT_TABLES)]
+    names += [f"r1_difference_{lv}.npy" for lv in ("b1", "b2", "b4")]
+    for name in names:
+        if name not in skip:
+            (out / name).write_text("x\n")
+
+
+@pytest.mark.parametrize("missing", ["r6.tsv", "r4_t0.3.tsv", "r1_difference_b4.npy"])
+def test_discard_requires_every_comparison_output(config, patched, missing):
+    _fit_and_measure(config)
+    out = config.output_dir / "metrics/comparison/sub-07"
+    _write_comparison_outputs(out, skip=(missing,))
+    configured = replace(config, released_dir=config.bids_dir)
+    with pytest.raises(FileNotFoundError, match=missing):
+        run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert (path / "betas.npy").exists()
+
+
+def test_group_rsa_keyed_by_subject_set(config, patched):
+    for subject in ("sub-01", "sub-02", "sub-05", "sub-06"):
+        for ses in config.sessions:
+            run.fit_session(config, "ppdata", subject, ses, ("b1",))
+    run.group_rsa(config, "ppdata", ("sub-01", "sub-02"), ("b1",))
+    run.group_rsa(config, "ppdata", ("sub-05", "sub-06"), ("b1",))
+    out = config.output_dir / "metrics/ppdata"
+    first = pd.read_csv(out / "group_sub-01_sub-02" / "rsa_b1.tsv", sep="\t")
+    second = pd.read_csv(out / "group_sub-05_sub-06" / "rsa_b1.tsv", sep="\t")
+    assert set(first["subject_a"]) == {"sub-01"}
+    assert set(second["subject_a"]) == {"sub-05"}
+
+
+def test_session_window_change_requires_recompute(config, patched):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    narrowed = replace(config, sessions=("ses-a",))
+    with pytest.raises(ValueError, match="sessions.*--recompute"):
+        run.subject_metrics(narrowed, "ppdata", "sub-07", ("b1",))
+    run.subject_metrics(narrowed, "ppdata", "sub-07", ("b1",), recompute=True)
+    r1 = config.output_dir / "metrics/ppdata/sub-07/r1.tsv"
+    assert set(pd.read_csv(r1, sep="\t")["sessions"]) == {"ses-a"}
