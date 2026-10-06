@@ -62,3 +62,19 @@ def test_onset_offset_must_be_finite(value):
             sessions=("ses-nsd10",),
             onset_offset=value,
         )
+
+
+@pytest.mark.parametrize(
+    "name,subjects",
+    [
+        ("primary", ("sub-01", "sub-02", "sub-03", "sub-04")),
+        ("extension", ("sub-05", "sub-06", "sub-08")),
+    ],
+)
+def test_shipped_configs(name, subjects):
+    path = Path(__file__).parent / "configs" / f"{name}.toml"
+    config = load_config(path)
+    assert config.subjects == subjects
+    assert config.sessions == tuple(f"ses-nsd{i:02d}" for i in range(1, 11))
+    assert config.n_jobs == 4
+    assert config.released_dir is not None

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from experiments.nsd_replication import run
+from experiments.nsd_replication.comparison import LEVELS
 from experiments.nsd_replication.betas import fit_dir, is_complete, read_fit, write_fit
 
 
@@ -255,3 +256,55 @@ def test_trial_tables_compare_all_columns(config, patched):
     table.write_text(table.read_text().replace("\n", "\textra\n", 1))
     with pytest.raises(ValueError, match="ses-a"):
         run.comparison_metrics(config, "sub-07")
+
+
+def _write_tsv(path, table):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, sep="\t", index=False)
+
+
+def _synthetic_metrics(config):
+    import pandas as pd
+
+    out = config.output_dir / "metrics"
+    curves = pd.DataFrame(
+        {
+            "version": ["b1", "b4"] * 2,
+            "threshold": [0.0, 0.0, 0.2, 0.2],
+            "n_features": 9,
+            "mean_difference": [0.0, 0.1, 0.0, 0.2],
+        }
+    )
+    for sub in config.subjects:
+        _write_tsv(out / "ppdata" / sub / "r1.tsv", curves)
+        versions = [f"{s}:{lv}" for s in ("ppdata", "released") for lv in LEVELS]
+        median = pd.DataFrame({"version": versions, "median": np.arange(6) / 10})
+        _write_tsv(out / "comparison" / sub / "r1_median.tsv", median)
+    rsa = pd.DataFrame(
+        {"threshold": [0.0], "subject_a": ["a"], "subject_b": ["b"], "r": [0.3]}
+    )
+    _write_tsv(out / "ppdata" / "rsa_b4.tsv", rsa)
+
+
+def test_figures_command_saves_pngs_and_skips_missing(config, capsys):
+    config = replace(config, subjects=("sub-01", "sub-02"))
+    _synthetic_metrics(config)
+    run.make_figures(config)
+    figs = config.output_dir / "figures"
+    assert (figs / "sub-01" / "r1.png").stat().st_size > 0
+    assert (figs / "sub-02" / "r1.png").is_file()
+    assert (figs / "group" / "rsa.png").is_file()
+    assert (figs / "group" / "parity.png").is_file()
+    assert not (figs / "sub-01" / "r6.png").exists()
+    assert "skipped" in capsys.readouterr().out
+
+
+def test_figures_cli(tmp_path, config):
+    config_toml = tmp_path / "c.toml"
+    config_toml.write_text(
+        f'bids_dir="{tmp_path}"\noutput_dir="{config.output_dir}"\n'
+        f'freesurfer_dir="{tmp_path}"\nsubjects=["sub-07"]\nsessions=["ses-a"]\n'
+    )
+    _synthetic_metrics(config)
+    assert run.main(["figures", "--config", str(config_toml)]) == 0
+    assert (config.output_dir / "figures" / "sub-07" / "r1.png").is_file()
