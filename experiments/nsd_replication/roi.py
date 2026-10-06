@@ -1,6 +1,7 @@
 """Subject nsdgeneral, resampled to fsLR 32k exactly as the released betas were."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -64,10 +65,17 @@ def _run(command):
 
 
 def _resample(source, target, inputs):
-    with tempfile.TemporaryDirectory() as tmp:
-        metric = Path(tmp) / "native.func.gii"
-        _save_metric(np.asarray(nib.load(source).dataobj).ravel(), metric)
-        _run(resample_command(metric, target, inputs))
+    """wb_command writes beside ``target``; the finished file is moved into
+    place so the cache never holds a partial file."""
+    partial = target.with_name(f".partial-{target.name}")
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            metric = Path(tmp) / "native.func.gii"
+            _save_metric(np.asarray(nib.load(source).dataobj).ravel(), metric)
+            _run(resample_command(metric, partial, inputs))
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def fslr_labels(config, subject, sidecar):
@@ -98,6 +106,8 @@ def roi_mask(brain, labels, threshold=0.5):
 
 
 def load_roi(config, subject, brain):
+    if config.released_dir is None:
+        raise ValueError("released_dir is required to read the ROI resampling inputs")
     path = config.released_dir / _SIDECAR.format(
         subject=subject, session=config.sessions[0], task=config.task
     )
