@@ -349,11 +349,13 @@ describe features that have since shipped.
 ## Branch inventory
 
 Branches merged into `main` and not checked out in a worktree were deleted with
-`git branch -d`. The remaining unmerged branches, with purposes taken from
-their last commit, are:
+`git branch -d`. `fix/dynamic-contrast-artifacts` is merged but kept because
+its worktree (`.worktrees/dynamic-contrast-artifacts`) still exists. The
+remaining branches, with purposes taken from their last commit, are:
 
 | Branch | Purpose (last commit) |
 | --- | --- |
+| `fix/dynamic-contrast-artifacts` | Merged; BIDS-safe contrast labels (kept for its worktree) |
 | `feature/pre-fitlins-remediation` | Remediation work before FitLins integration (privacy coverage tests) |
 | `fix/red-team-remediation` | Red-team remediation (shared-checkout integration verification) |
 | `safety/prepared-notebook-source-access` | Safety copy: prepared notebook source-access documentation |
