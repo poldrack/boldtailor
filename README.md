@@ -1,4 +1,11 @@
-# boldtailor
+<h1 align="center">
+  <img src="logo.png" alt="boldtailor" width="480">
+</h1>
+
+<p align="center">
+  <a href="https://github.com/poldrack/boldtailor/actions/workflows/tests.yml"><img src="https://github.com/poldrack/boldtailor/actions/workflows/tests.yml/badge.svg?branch=main" alt="tests"></a>
+  <a href="https://codecov.io/gh/poldrack/boldtailor"><img src="https://codecov.io/gh/poldrack/boldtailor/branch/main/graph/badge.svg" alt="codecov"></a>
+</p>
 
 Boldtailor fits first-level fMRI models to voxel or grayordinate time series.
 You can estimate condition contrasts, measure variance explained by a task,

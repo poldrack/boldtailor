@@ -21,12 +21,13 @@ Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
 
 CI splits the suites. On every push and pull request it runs the package
-suite in `tests/` with warnings treated as errors and checks Python formatting
-on a clean Python 3.12 runner. A separate `examples` job, run only on manual
-dispatch and on schedule, runs `examples/NSD` and `examples/validation`
-with `--run-notebooks` and warnings as errors. It also builds and tests the installed
-wheel in an isolated environment, without the checkout's editable installation
-or notebook development dependencies:
+suite in `tests/` with warnings treated as errors, uploads its line coverage
+to Codecov (the README badge), and checks Python formatting on a clean
+Python 3.12 runner. A separate `examples` job, run only on manual dispatch and
+on schedule, runs `examples/NSD` and `examples/validation` with
+`--run-notebooks` and warnings as errors. The push job also builds and tests
+the installed wheel in an isolated environment, without the checkout's
+editable installation or notebook development dependencies:
 
 ```bash
 uv build --wheel
