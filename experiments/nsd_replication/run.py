@@ -38,6 +38,7 @@ from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
 from experiments.nsd_replication.metric_tables import (
     COMPOSITE_COLUMN,
+    SESSIONS_COLUMN,
     ensure_tables,
     stored_levels,
 )
@@ -165,6 +166,12 @@ def fit_session(config, source, subject, session, levels, refit=False):
 def _metrics_dir(config, source, subject=None):
     base = config.output_dir / "metrics" / source
     return base if subject is None else base / subject
+
+
+def _group_dir(config, source, subjects):
+    """Group tables live under their subject set, so runs over different
+    subjects (e.g. primary and extension) never share them."""
+    return _metrics_dir(config, source) / ("group_" + "_".join(subjects))
 
 
 def _level_betas(config, source, subject, level, columns=None):
@@ -331,7 +338,7 @@ def subject_metrics(config, source, subject, levels, recompute=False):
     )
     out = _metrics_dir(config, source, subject)
     builders = _table_builders(config.n_jobs)
-    return ensure_tables(out, builders, data, recompute, levels)
+    return ensure_tables(out, builders, data, recompute, levels, config.sessions)
 
 
 # ------------------------------------------------- R2 (HRF consistency)
@@ -388,7 +395,7 @@ def hrf_consistency(config, subject, recompute=False):
         paths = _session_paths(config, "ppdata", subject, level)
         if all(is_complete(p) for p in paths):
             builders = _r2_builders(config, subject, level, roi)
-            ensure_tables(out, builders, None, recompute)
+            ensure_tables(out, builders, None, recompute, sessions=config.sessions)
 
 
 # ------------------------------------------------------- comparison stage
@@ -431,7 +438,7 @@ def comparison_metrics(config, subject, recompute=False):
     )
     out = _comparison_dir(config, subject)
     builders = _table_builders(config.n_jobs)
-    tables = ensure_tables(out, builders, data, recompute, VERSIONS)
+    tables = ensure_tables(out, builders, data, recompute, VERSIONS, config.sessions)
     _save_differences(out, data, recompute)
     return tables
 
@@ -517,10 +524,11 @@ def group_rsa(config, source, subjects, levels, recompute=False):
     builders = {
         f"rsa_{lv}": lambda _, lv=lv: _level_rsa(*inputs(), lv) for lv in levels
     }
-    out = _metrics_dir(config, source)
-    tables = ensure_tables(out, builders, None, recompute, levels)
+    out = _group_dir(config, source, subjects)
+    tables = ensure_tables(out, builders, None, recompute, levels, config.sessions)
+    recorded = [COMPOSITE_COLUMN, SESSIONS_COLUMN]
     return pd.concat(
-        {lv: tables[f"rsa_{lv}"].drop(columns=COMPOSITE_COLUMN) for lv in levels},
+        {lv: tables[f"rsa_{lv}"].drop(columns=recorded) for lv in levels},
         names=["version"],
     )
 
@@ -532,7 +540,8 @@ def _expected_tables(config, source, subject, levels, multiple_subjects):
     names = [f"{n}.tsv" for n in SUBJECT_TABLES]
     paths = [_metrics_dir(config, source, subject) / n for n in names]
     if multiple_subjects:
-        paths += [_metrics_dir(config, source) / f"rsa_{lv}.tsv" for lv in levels]
+        group = _group_dir(config, source, config.subjects)
+        paths += [group / f"rsa_{lv}.tsv" for lv in levels]
     return paths
 
 
@@ -545,11 +554,18 @@ def _mark_discarded(path):
     (path / "betas.npy").unlink(missing_ok=True)
 
 
+def _comparison_outputs():
+    """Everything the comparison stage writes; tables are written one at a
+    time, so a partial comparison must not count as done."""
+    names = ["alignment.tsv", *(f"{n}.tsv" for n in SUBJECT_TABLES)]
+    return names + [f"r1_difference_{lv}.npy" for lv in COMPARED_LEVELS]
+
+
 def _check_comparison_done(config, source, subject):
     if source != "ppdata" or config.released_dir is None:
         return
     out = _comparison_dir(config, subject)
-    missing = [n for n in ("alignment.tsv", "r1.tsv") if not (out / n).is_file()]
+    missing = [n for n in _comparison_outputs() if not (out / n).is_file()]
     if missing:
         raise FileNotFoundError(
             f"refusing to discard betas; missing comparison outputs {missing}; "

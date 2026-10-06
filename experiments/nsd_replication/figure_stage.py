@@ -101,8 +101,11 @@ def _subject_parity(subject, median):
 
 def _rsa_tables(config):
     found = {}
+    group = "group_" + "_".join(config.subjects)
     for level in LEVELS:
-        table = _read(config.output_dir / "metrics" / "ppdata" / f"rsa_{level}.tsv")
+        table = _read(
+            config.output_dir / "metrics" / "ppdata" / group / f"rsa_{level}.tsv"
+        )
         if table is not None:
             found[level] = table
     return found or None
