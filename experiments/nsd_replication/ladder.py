@@ -332,6 +332,7 @@ def fit_ladder(
     n_jobs=1,
     denoising=None,
     ridge_task_model=None,
+    on_fit=None,
 ):
     """Fit the requested levels in ladder order; betas are trials x features.
 
@@ -341,6 +342,8 @@ def fit_ladder(
     uses ``session.task_model``, whatever ``task_model`` is passed.
     ``ridge_task_model`` supplies b4's encoding predictors (default: the task
     model in effect); encoding ridge CV needs at least one modulator.
+    ``on_fit(level, fit)``, when given, runs as soon as each level is fitted
+    (e.g. to write it before a later level can fail).
     """
     unknown = set(levels) - set(_FITTERS)
     if unknown:
@@ -349,8 +352,10 @@ def fit_ladder(
     ladder = _Ladder(
         session, task_model, block_size, n_jobs, denoising, ridge_task_model
     )
-    return {
-        level: _FITTERS[level](ladder)
-        for level in (*LEVELS, *LSS_LEVELS)
-        if level in levels
-    }
+    fits = {}
+    for level in (*LEVELS, *LSS_LEVELS):
+        if level in levels:
+            fits[level] = _FITTERS[level](ladder)
+            if on_fit is not None:
+                on_fit(level, fits[level])
+    return fits

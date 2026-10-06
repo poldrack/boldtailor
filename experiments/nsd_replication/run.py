@@ -109,13 +109,23 @@ def _check_digests(paths, digest):
             )
 
 
-def _write_levels(config, source, subject, session, data, fits):
+def _level_writer(config, source, subject, session, data):
+    """A ``(level, fit)`` callback writing one level's fit to disk."""
     digest = inputs_digest(data)
     trials = trial_table(data.events, data.labels, session, config.image_column)
-    for level, fit in fits.items():
+
+    def write(level, fit):
         path = fit_dir(config.output_dir, source, subject, session, level)
         meta = _metadata(source, session, digest, fit)
         write_fit(path, fit.betas, trials, meta, fit.extras)
+
+    return write
+
+
+def _write_levels(config, source, subject, session, data, fits):
+    write = _level_writer(config, source, subject, session, data)
+    for level, fit in fits.items():
+        write(level, fit)
 
 
 def fit_session(config, source, subject, session, levels, refit=False):
@@ -128,10 +138,13 @@ def fit_session(config, source, subject, session, levels, refit=False):
         _check_digests(paths.values(), inputs_digest(data))
     missing = [lv for lv in levels if refit or not is_complete(paths[lv])]
     if missing:
-        fits = fit_ladder(
-            data, levels=missing, block_size=config.block_size, n_jobs=config.n_jobs
+        fit_ladder(
+            data,
+            levels=missing,
+            block_size=config.block_size,
+            n_jobs=config.n_jobs,
+            on_fit=_level_writer(config, source, subject, session, data),
         )
-        _write_levels(config, source, subject, session, data, fits)
     return list(paths.values())
 
 
