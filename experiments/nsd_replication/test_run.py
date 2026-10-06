@@ -323,3 +323,115 @@ def test_completed_level_survives_a_later_failure(config, patched, monkeypatch):
     assert not is_complete(
         fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b2")
     )
+
+
+def _metric_mtimes(config, names=run.SUBJECT_TABLES):
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    return {n: (out / f"{n}.tsv").stat().st_mtime_ns for n in names}
+
+
+def test_existing_metric_tables_skipped_unless_recompute(config, patched):
+    _fit_and_measure(config)
+    before = _metric_mtimes(config)
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    assert _metric_mtimes(config) == before
+    run.subject_metrics(config, "ppdata", "sub-07", ("b1",), recompute=True)
+    after = _metric_mtimes(config)
+    assert all(after[n] != before[n] for n in before)
+
+
+def test_metric_tables_written_before_a_later_failure(config, patched, monkeypatch):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("r6 failed")
+
+    monkeypatch.setattr(run, "_r6_table", boom)
+    with pytest.raises(RuntimeError, match="r6 failed"):
+        run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    assert (out / "r1.tsv").is_file() and not (out / "r6.tsv").exists()
+
+
+def test_main_metrics_recompute_flag(config, patched):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+""")
+    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b1"]
+    run.main(["fit", *common])
+    run.main(["metrics", *common])
+    before = _metric_mtimes(config, ("r1",))
+    run.main(["metrics", *common])
+    assert _metric_mtimes(config, ("r1",)) == before
+    run.main(["metrics", *common, "--recompute"])
+    assert _metric_mtimes(config, ("r1",)) != before
+
+
+def test_r6_same_with_one_or_two_jobs(config, patched):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+    tables = {}
+    for n_jobs in (1, 2):
+        cfg = replace(config, n_jobs=n_jobs)
+        tables[n_jobs] = run.subject_metrics(
+            cfg, "ppdata", "sub-07", ("b1", "b2"), recompute=True
+        )["r6"]
+    import pandas as pd
+
+    pd.testing.assert_frame_equal(tables[1], tables[2])
+
+
+def test_r6_uses_config_jobs(config, patched, monkeypatch):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
+    seen = []
+    real = run.decoding_accuracies
+
+    def spy(reps, masks, n_jobs=1):
+        seen.append(n_jobs)
+        return real(reps, masks, n_jobs=1)
+
+    monkeypatch.setattr(run, "decoding_accuracies", spy)
+    run.subject_metrics(replace(config, n_jobs=3), "ppdata", "sub-07", ("b1",))
+    assert seen and set(seen) == {3}
+
+
+def test_subject_metrics_sliced_to_roi_with_identical_results(
+    config, patched, monkeypatch
+):
+    from experiments.nsd_replication.betas import zscore
+    from experiments.nsd_replication.metrics import threshold_curves
+    from experiments.nsd_replication.trials import images_with, repetition_array
+
+    import pandas as pd
+
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+    full = {}
+    for lv in ("b1", "b2"):
+        pairs = [
+            read_fit(fit_dir(config.output_dir, "ppdata", "sub-07", s, lv))[:2]
+            for s in config.sessions
+        ]
+        betas = np.vstack([zscore(b) for b, _ in pairs])
+        trials = pd.concat([t for _, t in pairs], ignore_index=True)
+        reps = repetition_array(betas, trials, images_with(trials, 3))
+        full[lv] = run.voxel_reliability(reps)
+    roi = np.arange(30) < 20
+    expected = threshold_curves(full, roi)
+    widths = []
+    real = run.voxel_reliability
+    monkeypatch.setattr(
+        run,
+        "voxel_reliability",
+        lambda reps: widths.append(reps.shape[-1]) or real(reps),
+    )
+    r1 = run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))["r1"]
+    assert widths and set(widths) == {20}
+    pd.testing.assert_frame_equal(r1[expected.columns], expected)

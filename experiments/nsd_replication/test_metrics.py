@@ -112,3 +112,22 @@ def test_decoding_too_few_features_returns_nan():
     mask = np.zeros(20, bool)
     mask[:5] = True
     assert np.isnan(decoding_accuracy(reps, mask)["accuracy"])
+
+
+def _decoding_reps():
+    rng = np.random.default_rng(1)
+    prototypes = rng.normal(size=(6, 30))
+    return prototypes[None] + rng.normal(scale=1.0, size=(3, 6, 30))
+
+
+def test_decoding_accuracies_parallel_matches_serial():
+    from experiments.nsd_replication.metrics import decoding_accuracies
+
+    reps = _decoding_reps()
+    masks = [np.arange(30) < n for n in (5, 12, 20, 30)]
+    serial = decoding_accuracies(reps, masks, n_jobs=1)
+    parallel = decoding_accuracies(reps, masks, n_jobs=2)
+    single = [decoding_accuracy(reps, m) for m in masks]
+    pd.testing.assert_frame_equal(pd.DataFrame(parallel), pd.DataFrame(serial))
+    pd.testing.assert_frame_equal(pd.DataFrame(serial), pd.DataFrame(single))
+    assert np.isnan(serial[0]["accuracy"]) and np.isfinite(serial[3]["accuracy"])
