@@ -104,3 +104,66 @@ def test_pilot_roi_on_ppdata_cortex(tmp_path):
     mask = load_roi(config, "sub-07", ppdata_brain(config, "sub-07", "ses-nsd10"))
     assert mask.shape == (59412,)
     assert 0.05 < mask.mean() < 0.4
+
+
+@pytest.fixture
+def label_source(tmp_path):
+    path = tmp_path / "src" / "lh.nsdgeneral.mgz"
+    path.parent.mkdir()
+    nib.save(nib.MGHImage(np.zeros((10, 1, 1), np.float32), np.eye(4)), path)
+    return path
+
+
+def _inputs():
+    return {
+        k: Path(k)
+        for k in ("source_sphere", "target_sphere", "source_area", "target_area")
+    }
+
+
+def test_failed_resample_leaves_no_cache_file(tmp_path, label_source, monkeypatch):
+    from experiments.nsd_replication import roi
+
+    def partial(command):
+        Path(command[6]).write_text("partial")
+        raise RuntimeError("wb_command failed")
+
+    monkeypatch.setattr(roi, "_run", partial)
+    out = tmp_path / "roi"
+    out.mkdir()
+    with pytest.raises(RuntimeError):
+        roi._resample(
+            label_source, out / "sub-07_hemi-L_nsdgeneral.func.gii", _inputs()
+        )
+    assert list(out.iterdir()) == []
+
+
+def test_resample_moves_finished_file_into_place(tmp_path, label_source, monkeypatch):
+    from experiments.nsd_replication import roi
+
+    def finish(command):
+        assert Path(command[6]).parent == out
+        roi._save_metric(np.ones(5), command[6])
+
+    monkeypatch.setattr(roi, "_run", finish)
+    out = tmp_path / "roi"
+    out.mkdir()
+    target = out / "sub-07_hemi-L_nsdgeneral.func.gii"
+    roi._resample(label_source, target, _inputs())
+    assert list(out.iterdir()) == [target]
+    np.testing.assert_array_equal(nib.load(target).agg_data(), np.ones(5))
+
+
+def test_load_roi_requires_released_dir(tmp_path):
+    from experiments.nsd_replication.config import ExperimentConfig
+    from experiments.nsd_replication.roi import load_roi
+
+    config = ExperimentConfig(
+        bids_dir=tmp_path,
+        output_dir=tmp_path,
+        freesurfer_dir=tmp_path,
+        subjects=("sub-07",),
+        sessions=("ses-a",),
+    )
+    with pytest.raises(ValueError, match="released_dir is required"):
+        load_roi(config, "sub-07", _brain())
