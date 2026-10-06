@@ -104,7 +104,10 @@ def test_decoding_perfect_on_separable_images():
     result = decoding_accuracy(reps, np.ones(20, bool))
     assert result["accuracy"] == 1.0 and result["chance"] == pytest.approx(0.2)
     assert result["n_classes"] == 5
-    assert 0 <= result["n_unconverged"] <= 3  # counts folds hitting max_iter
+    # counts folds (of three) hitting max_iter
+    assert "n_unconverged" in result
+    assert isinstance(result["n_unconverged"], int)
+    assert 0 <= result["n_unconverged"] <= 3
 
 
 def test_decoding_too_few_features_returns_nan():
