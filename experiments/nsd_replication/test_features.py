@@ -258,3 +258,22 @@ def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
 def test_features_requires_ppdata(config):
     with pytest.raises(ValueError, match="ppdata"):
         run.main(["features", "--config", str(config), "--source", "released"])
+
+
+def _stale_fit(out, level="b4"):
+    from experiments.nsd_replication.betas import write_fit
+
+    trials = pd.DataFrame(
+        {"session": "ses-a", "run": "r", "trial": [0], "onset": [0.0], "image": [1]}
+    )
+    path = fit_dir(out, "ppdata", "sub-07", "ses-a", level)
+    write_fit(path, np.zeros((1, 30)), trials, {"level": level, "inputs_digest": "x"})
+
+
+def test_features_check_digest_before_computing(config, patched, tmp_path, monkeypatch):
+    _stale_fit(tmp_path / "out")
+    called = []
+    monkeypatch.setattr(run, "session_features", lambda *a, **k: called.append(1))
+    with pytest.raises(ValueError, match="inputs digest"):
+        run.main(["features", "--config", str(config), "--source", "ppdata"])
+    assert not called
