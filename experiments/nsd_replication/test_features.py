@@ -241,7 +241,8 @@ def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
     gate = pd.read_csv(metrics / "features_gate.tsv", sep="\t")
     assert len(gate) == 4
     assert set(gate["session"]) == {"ses-a"}
-    assert set(gate["seed"]) == {0}
+    # null seed is [subject number, session index, run index]
+    assert set(gate["seed"]) == {"7,0"}
     rt = pd.read_csv(metrics / "features_rt.tsv", sep="\t")
     assert set(zip(rt["session"], rt["version"])) == {
         ("ses-a", "b4"),
@@ -355,3 +356,35 @@ def test_features_rerun_session_missing_a_fit(patched, tmp_path, monkeypatch):
     calls.clear()
     run.main(["features", "--config", str(toml)])
     assert calls == ["ses-a"]
+
+
+def test_null_session_seeds_each_run_with_the_seed_tuple(synthetic_session):
+    seeded = null_session(synthetic_session, (7, 2))
+    for i, (events, times) in enumerate(
+        zip(synthetic_session.events, synthetic_session.frame_times)
+    ):
+        expected = features._shifted_run(
+            events, times, np.random.default_rng([7, 2, i])
+        )
+        pd.testing.assert_frame_equal(seeded.events[i], expected)
+    other = null_session(synthetic_session, (8, 2))
+    assert not all(a.equals(b) for a, b in zip(seeded.events, other.events))
+
+
+def test_subject_number():
+    assert run.subject_number("sub-07") == 7
+    with pytest.raises(ValueError, match="sub-ab"):
+        run.subject_number("sub-ab")
+
+
+def test_features_seed_by_subject_and_session(patched, tmp_path, monkeypatch):
+    toml, seeds = _two_session_config(tmp_path), []
+    stub = _stub_features([])
+    monkeypatch.setattr(
+        run,
+        "session_features",
+        lambda data, roi, seed, label, **k: seeds.append(seed)
+        or stub(data, roi, seed, label),
+    )
+    run.main(["features", "--config", str(toml)])
+    assert seeds == [(7, 0), (7, 1)]
