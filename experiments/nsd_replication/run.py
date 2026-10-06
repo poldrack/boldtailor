@@ -581,11 +581,18 @@ def discard_betas(config, source, subject, levels, multiple_subjects=False):
 FEATURE_TABLES = ("gate", "rt", "hrf")
 
 
-def _write_missing(config, subject, session, data, fits):
-    paths = {
-        lv: fit_dir(config.output_dir, "ppdata", subject, session, lv) for lv in fits
+FEATURE_LEVELS = ("b4", "b4-taskonly")
+
+
+def _feature_paths(config, subject, session):
+    return {
+        lv: fit_dir(config.output_dir, "ppdata", subject, session, lv)
+        for lv in FEATURE_LEVELS
     }
-    _check_digests(paths.values(), inputs_digest(data))
+
+
+def _write_missing(config, subject, session, data, fits):
+    paths = _feature_paths(config, subject, session)
     missing = {lv: f for lv, f in fits.items() if not is_complete(paths[lv])}
     _write_levels(config, "ppdata", subject, session, data, missing)
 
@@ -593,6 +600,9 @@ def _write_missing(config, subject, session, data, fits):
 def _session_features(config, subject, index, session, roi):
     """Seed ``index`` (the session's position in the config) for the null."""
     data = _load(config, "ppdata", subject, session)
+    _check_digests(
+        _feature_paths(config, subject, session).values(), inputs_digest(data)
+    )
     out = session_features(
         data, roi, index, session, block_size=config.block_size, n_jobs=config.n_jobs
     )
