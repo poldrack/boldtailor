@@ -49,7 +49,7 @@ def test_discovery_requires_every_run_to_have_cifti(dataset, settings_for):
 def test_inconsistent_grayordinate_order_is_rejected(dataset, settings_for):
     root, prep, *_ = dataset
     path = next(prep.rglob("*run-02*.dtseries.nii"))
-    image = nib.load(path)
+    image = nib.load(path, mmap=False)
     axes = (image.header.get_axis(0), image.header.get_axis(1)[::-1])
     changed = nib.Cifti2Image(image.get_fdata(), nib.Cifti2Header.from_axes(axes))
     nib.save(changed, path)
