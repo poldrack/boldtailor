@@ -29,8 +29,15 @@ def tost_paired(diff, margin, alpha=0.05):
     )
 
 
-def criterion_met(values_by_subject, minimum):
-    per = {s: bool(b4 > b1) for s, (b4, b1) in values_by_subject.items()}
+_COMPARE = {"greater": np.greater, "less": np.less}
+
+
+def criterion_met(values_by_subject, minimum, direction="greater"):
+    """Count subjects whose ``(b4, b1)`` pair has b4 ``direction`` than b1."""
+    if direction not in _COMPARE:
+        raise ValueError(f"direction must be 'greater' or 'less', not {direction!r}")
+    compare = _COMPARE[direction]
+    per = {s: bool(compare(b4, b1)) for s, (b4, b1) in values_by_subject.items()}
     return dict(
         per_subject=per,
         count=sum(per.values()),
