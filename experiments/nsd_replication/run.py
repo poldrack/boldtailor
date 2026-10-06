@@ -203,17 +203,21 @@ class SubjectData:
     """Lazily loaded z-scored betas, trials and reliabilities per version.
 
     ``load(version)`` returns stacked ``(betas, trials)``; ``roi`` masks the
-    loaded columns.
+    loaded columns. Every version's trials must be identical (``label``
+    names the data in the error).
     """
 
-    def __init__(self, load, versions, roi):
+    def __init__(self, load, versions, roi, label):
         self._load = load
         self.versions = tuple(versions)
         self.roi = roi
+        self.label = label
 
     @cached_property
     def _loaded(self):
-        return {v: self._load(v) for v in self.versions}
+        loaded = {v: self._load(v) for v in self.versions}
+        check_trial_tables({v: t for v, (_, t) in loaded.items()}, self.label)
+        return loaded
 
     @cached_property
     def betas(self):
@@ -323,6 +327,7 @@ def subject_metrics(config, source, subject, levels, recompute=False):
         lambda lv: _subject_betas(config, source, subject, lv, columns),
         levels,
         np.ones(len(columns), bool),
+        subject,
     )
     out = _metrics_dir(config, source, subject)
     builders = _table_builders(config.n_jobs)
@@ -422,6 +427,7 @@ def comparison_metrics(config, subject, recompute=False):
         lambda v: _version_betas(config, subject, v),
         VERSIONS,
         _subject_roi(config, subject),
+        subject,
     )
     out = _comparison_dir(config, subject)
     builders = _table_builders(config.n_jobs)
