@@ -622,3 +622,15 @@ def test_discard_requires_tables_covering_requested_levels(config, patched):
     run.discard_betas(config, "ppdata", "sub-07", ("b1",))
     path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
+
+
+def test_subject_metrics_requires_matching_trials_across_levels(config, patched):
+    import pandas as pd
+
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-b", "b2") / "trials.tsv"
+    trials = pd.read_csv(path, sep="\t")
+    trials.assign(image=trials["image"] + 1).to_csv(path, sep="\t", index=False)
+    with pytest.raises(ValueError, match="sub-07.*b2"):
+        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
