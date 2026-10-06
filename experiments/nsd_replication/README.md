@@ -9,6 +9,7 @@ This package replicates the GLMsingle single-trial fMRI analyses from Prince et 
 - `uv sync --group dev`
 - Connectome Workbench `wb_command` on `PATH`
 - Each subject's native-surface `lh.nsdgeneral.mgz` and `rh.nsdgeneral.mgz` under `freesurfer_dir/subjNN/label/`
+- BIDS events for every configured subject and session, read from `bids_dir`: `sub-NN/ses-nsdYY/func/sub-NN_ses-nsdYY_task-nsdcore_run-ZZ_events.tsv`. These are the trial onsets for the ppdata fits and the trial order for pairing the released betas. Required columns: `onset`, `duration`, the image ID (`image_column`, default `73k_id`), plus `trial_type` and `response_time` for the task model. Onsets must be sorted within each run and on the BIDS clock (seconds from run start; `onset_offset` maps them onto the ppdata time base), and each session must have as many trials as its released betas (750)
 - NSD ppdata layer-B2 time series resampled to fsLR 32k under `ppdata_dir` (`subjNN/func1pt8mm/timeseries/`); `onset_offset` is calibrated by the pilot (Task 12)
 - The released betas converted to CIFTI under `released_dir` (`derivatives/betas-fsLR`)
 
