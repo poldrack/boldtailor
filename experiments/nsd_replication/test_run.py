@@ -453,3 +453,73 @@ def test_comparison_metrics_all_tables_share_one_composite(config, patched):
     r4 = tables["r4_t0.3"]
     assert (r4.groupby("lag")["n_pairs"].nunique() == 1).all()
     assert set(r4["threshold"]) == {0.3}
+
+
+def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
+    import pandas as pd
+
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b2",))
+    run.hrf_consistency(config, "sub-07")
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    table = pd.read_csv(out / "r2_b2.tsv", sep="\t")
+    assert len(table) == 30
+    assert {"mean_pairwise_r", "mean_canonical_baseline"} <= set(table.columns)
+    # identical synthetic sessions choose identical HRFs
+    assert table["mean_pairwise_r"].to_numpy() == pytest.approx(1.0)
+    summary = pd.read_csv(out / "r2_b2_roi.tsv", sep="\t")
+    assert summary["version"].tolist() == ["b2"]
+    assert summary["n_features"].tolist() == [20]
+    expected = np.median(table["mean_pairwise_r"][:20])
+    assert summary["mean_pairwise_r"].iloc[0] == pytest.approx(expected)
+    assert not (out / "r2_b2-lib20.tsv").exists()
+
+
+def test_hrf_consistency_uses_matching_library(config, patched):
+    for ses in config.sessions:
+        run.fit_session(config, "ppdata", "sub-07", ses, ("b2-lib20",))
+    run.hrf_consistency(config, "sub-07")
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    assert (out / "r2_b2-lib20.tsv").is_file()
+    meta = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b2-lib20")
+    meta = meta / "metadata.json"
+    meta.write_text(
+        meta.read_text().replace(
+            '"library_fingerprint": "', '"library_fingerprint": "x'
+        )
+    )
+    with pytest.raises(ValueError, match="library"):
+        run.hrf_consistency(config, "sub-07", recompute=True)
+
+
+def test_main_metrics_runs_r2(config, patched):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+""")
+    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b2"]
+    run.main(["fit", *common])
+    run.main(["metrics", *common])
+    assert (config.output_dir / "metrics/ppdata/sub-07/r2_b2_roi.tsv").is_file()
+
+
+def test_figures_render_r2_summary(config):
+    import pandas as pd
+
+    out = config.output_dir / "metrics/ppdata/sub-07"
+    for level in ("b2", "b2-lib20"):
+        summary = pd.DataFrame(
+            {
+                "version": [level],
+                "mean_pairwise_r": [0.5],
+                "mean_canonical_baseline": [0.2],
+                "n_features": [20],
+            }
+        )
+        _write_tsv(out / f"r2_{level}_roi.tsv", summary)
+    run.make_figures(config)
+    assert (config.output_dir / "figures/sub-07/r2.png").stat().st_size > 0
