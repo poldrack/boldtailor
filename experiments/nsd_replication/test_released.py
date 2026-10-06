@@ -98,3 +98,31 @@ def test_pilot_released_matches_ppdata_axis():
     path = released_path(config, "sub-07", "ses-nsd10", "b4")
     got = load_released(path, brain, len(trials), "sub-07 ses-nsd10 b4")
     assert got.shape == (750, 59412) and got.dtype == np.float32
+
+
+def test_discarded_released_betas_are_not_current(tmp_path):
+    import json
+
+    import pandas as pd
+
+    from experiments.nsd_replication import released
+    from experiments.nsd_replication.betas import write_fit
+
+    source = _write(tmp_path / "b.dscalar.nii", np.zeros((2, 4), np.float32))
+    stat = released._stat(source)
+    trials = pd.DataFrame(
+        {
+            "session": "s",
+            "run": "r",
+            "trial": [0, 1],
+            "onset": [0.0, 4.0],
+            "image": [1, 2],
+        }
+    )
+    target = tmp_path / "fit"
+    write_fit(target, np.zeros((2, 3)), trials, {"level": "b1", **stat})
+    assert released._current(target, stat)
+    meta = json.loads((target / "metadata.json").read_text())
+    (target / "metadata.json").write_text(json.dumps(dict(meta, betas_discarded=True)))
+    (target / "betas.npy").unlink()
+    assert not released._current(target, stat)
