@@ -30,6 +30,10 @@ sources=None, provenance_metadata=None)` returns an `AnalysisData`.
 `n_features`, `timing_source`, and `provenance`. Signal arrays and frame times
 are owned by the result; table access returns copies.
 
+`run_labels_for(data, run_labels)` returns validated run labels as a tuple:
+one unique `[A-Za-z0-9_-]+` string per run, defaulting to `run-01`, `run-02`, ...
+when `run_labels` is `None`; anything else raises `ValueError`.
+
 ### `boldtailor.model.ModelSpec`
 
 `contrasts` is required and maps contrast names to expressions or regressor-weight
@@ -50,6 +54,19 @@ mappings. The other arguments have these defaults:
 `contrast_names` preserves the order of the contrast mapping. A model needs at
 least one nonzero t contrast. Numeric contrast vectors and F contrasts are not
 accepted by this interface.
+
+`boldtailor.model` also exports the defaults and identity helpers the fitting
+functions use:
+
+| Name | Use |
+| --- | --- |
+| `OVERSAMPLING`, `MIN_ONSET` | The `oversampling` (`50`) and `min_onset` (`-24.0`) defaults above |
+| `DIAGNOSTIC_NOISE_MODEL` | `"ols"`: the noise model for the full/nuisance R² diagnostic fits |
+| `contrast_metadata(contrasts)` | JSON form of a contrast mapping: `{"kind": "expression", "value": ...}` or `{"kind": "weights", "weights": {...}}` per name |
+| `contrasts_from_metadata(metadata)` | Invert `contrast_metadata` back to expressions and weight maps |
+| `model_identity(model, *, hrf_model="keep")` | A `ModelIdentity` with the settings that identify a model; `hrf_model` overrides how the HRF is recorded (for example `{"kind": "selected"}`) |
+| `ModelIdentity(activity, fingerprint, warnings)` | The recorded model settings, the settings used for the analysis fingerprint (`None`, with a reproducibility warning, for a non-importable HRF callable), and those warnings |
+| `nuisance_model_settings(model)` | The nuisance-only model record: `events=False`, the model's confounds and drift settings, and `noise_model=DIAGNOSTIC_NOISE_MODEL` |
 
 ## Conventional fits
 
@@ -76,6 +93,11 @@ use the default task-only model.
 
 `CompiledDesign` contains `matrix`, `excluded_event_count`, and
 `min_onset_cutoff`. Events earlier than the cutoff are excluded with a warning.
+
+`boldtailor.design.kernel_task_columns(frame_times, events, kernel, model, run)`
+returns the Nilearn task columns for one peak-one kernel, in Nilearn's order,
+with each event's amplitude scaled so its response peaks at one and no drift or
+constant column; compilation errors are re-raised as `ValueError` naming `run`.
 
 `AnalysisResult` provides:
 
@@ -109,6 +131,16 @@ for source-identity requirements, NaN handling, and the difference from ridge R�
 For an `HrfAnalysisResult`, the comparison automatically uses its HRF assignment
 and retains NaNs at undefined or constant features. It verifies source metadata,
 effective model settings, spatial assignment, and compiled design identity.
+
+`boldtailor.results` holds the builders the fitting functions use:
+
+| Function | Use |
+| --- | --- |
+| `make_result(contrasts, designs, design_provenance, run_r2, r2, provenance)` | Assemble an `AnalysisResult` |
+| `make_task_delta_r2_result(*, full_r2, nuisance_r2, nuisance_designs, provenance, allow_undefined=False)` | Validate matching 1-D R² arrays and finite numeric nuisance designs, then build a `TaskDeltaR2Result` with raw and zero-clipped ΔR², the negative count, and the raw minimum; `allow_undefined` permits NaN entries |
+| `contrast_result(contrast)` | Copy a Nilearn contrast's effect, variance, statistic, z score, and p-value |
+| `mask_contrast(result, undefined)` | A copy of a contrast result with every statistic NaN where `undefined` is True |
+| `owned_contrasts(contrasts)` | A read-only name-to-contrast mapping |
 
 ## Prepared designs
 
@@ -254,6 +286,14 @@ the grid). A winner at the largest alpha (the shrinkage end) means the grid
 should be extended; a winner at alpha 0 means no regularization was
 preferred. Merge spatial blocks before this call.
 
+Both selectors use two helpers from `boldtailor.ridge_results`:
+`paired_scores(scores, grid, *, kind, grid_name)` returns the score matrix and
+grid from a `CandidateScores` of regularization `kind` (passing a grid as well
+raises `TypeError`; another kind raises `ValueError`) or from an array plus its
+grid (required, else `TypeError`). `scoring_mask(scores, feature_mask)` marks
+features finite at every candidate, intersected with an optional matching
+boolean `feature_mask`.
+
 From `boldtailor.trial_encoding`:
 
 ```text
@@ -268,6 +308,12 @@ within each test run and feature for scoring only. SSE and within-run SST are
 pooled before division; negative R² is retained. `encoding_mode="absolute"`
 reproduces the original shared-intercept fit and uncentered residual loss. Both
 candidate scorers accept the same mode and default.
+`validate_encoding_mode(encoding_mode)` returns the mode or raises `ValueError`
+for anything other than `"within_run"` or `"absolute"`.
+`encoding_metadata(encoding_mode)` returns the dict that describes the
+objective in cross-validation provenance and exported artifacts
+(`encoding_mode`, `encoding_objective_version=2`, `score`, `encoding_model`,
+`predictor_transform`, `validation_intercept`, `prediction_reference`).
 
 Split indices are zero-based. `TrialEncodingResult` contains `coefficients`
 (shape `(1+p, features)`), pooled training `predictor_means`, `predictor_names`,
@@ -316,8 +362,9 @@ From `boldtailor.hrf_library`:
 | `spm_parameters_from_realized(timing)` | SPM gamma parameters whose curve realizes the requested peak time, FWHMs, trough time, and depth (onset carried through); raises `ValueError` for targets no double gamma can realize |
 | `timing_parameters(parameters)` / `spm_parameters(timing)` | Exact closed-form conversion between the SPM gamma parameters and the gamma-lobe timing `TIMING_NAMES` (lobe peak time and SD, undershoot-lobe peak time and SD, lobe depth, onset, duration) |
 | `HrfLibrary.timing_table` | One row per candidate with both parameterizations |
+| `HrfLibrary.origin` | Read-only mapping describing how the library was built (`kind`, such as `"default"`, `"timing_sobol"`, `"sobol"`, `"expanded_grid"`, `"glmsingle"`, or `"explicit"`, plus the generator's settings); not part of equality or `fingerprint` |
 | `HrfLibrary.from_parameters(parameters, origin=None, *, include_glmsingle=False)` | Build a library from seven-value parameter rows, adding canonical SPM as ID 0 and, optionally, the 20 GLMsingle kernels after them |
-| `HrfLibrary.from_table(table)` | Rebuild a library exactly from its saved `parameter_table` (double-gamma rows plus the GLMsingle block if present) |
+| `HrfLibrary.from_table(table, origin=None)` | Rebuild a library exactly from its saved `parameter_table` (double-gamma rows plus the GLMsingle block if present) |
 | `HrfCandidate(id, kind, parameters)` | Describe one kernel; `kind` is `"spm"`, `"double_gamma"`, or `"glmsingle"` (for `"glmsingle"`, `parameters` holds the one-based GLMsingle index) |
 | `candidate.kernel(tr, oversampling=50)` | Sample a read-only kernel scaled to a peak of one at TR/oversampling; canonical SPM is Nilearn's `spm_hrf` divided by its maximum |
 
@@ -325,6 +372,10 @@ Parameter order is `response_delay`, `undershoot_delay`, `response_dispersion`,
 `undershoot_dispersion`, `response_undershoot_ratio`, `onset_delay`, `duration`.
 SPM candidates require the exact canonical parameter tuple
 `(6, 16, 1, 1, 6, 0, 32)`.
+
+The module constants are `CANONICAL_PARAMETERS` (that tuple), `OVERSAMPLING`
+(`50`, the default `kernel` oversampling), `GLMSINGLE_HRF_COUNT` (`20`), and
+`PARAMETER_NAMES` (the order above).
 
 `HrfLibrary` exposes `candidates`, `parameter_table`, `parameter_bounds`
 (`low`/`high` of the six sampled parameters over custom candidates),
@@ -413,6 +464,19 @@ level; `task` is the reference-level response. `kind="numeric"` takes neither
 `levels` nor `reference`. `level_name(value)` returns the canonical text of one
 value (`1`, `"1"`, `1.0` give `"1"`) or `None` for a missing value (`n/a`, `""`,
 NaN) and raises `ValueError` for infinities and booleans.
+
+`missing="error"` (the default) rejects any trial whose modulator value is
+missing (nonfinite for `kind="numeric"`, `level_name(...) is None` for
+categorical). `missing="indicator"` instead gives those trials a zero
+amplitude in the modulator's regressors and, in each run that has missing
+values, adds a 0/1 regressor named by `indicator_name` (`missing_<column>`);
+`TaskModel.profiled_names` lists these indicators. A numeric modulator with no
+observed value in a run is an error under either policy. `column` must be a
+nonempty string other than `task`, `constant`, `onset`, or `duration`, and must
+not start with `missing_`. A categorical modulator created without `levels` is
+unresolved (`resolved` is `False`, while it is always `True` for numeric);
+`with_levels(values)` returns a copy with the levels set, and `TaskModel`
+rejects unresolved modulators.
 
 ## Task-guided denoising
 
@@ -575,12 +639,34 @@ From `boldtailor.provenance`:
   execution ID, and available source/analysis fingerprints.
 - All three types support `to_dict()` and `from_dict()`;
   `ProvenanceRecord.canonical_json()` serializes a record deterministically.
+- `ProvenanceRecord.metadata_fingerprint` is the SHA-256 of the run sources
+  when every source has a complete identity, else `None`;
+  `ProvenanceRecord.analysis_fingerprint` is the stored analysis fingerprint,
+  or `None`. `SCHEMA_ID` (`"boldtailor.provenance/1"`) is the default `schema`.
+- `analysis_fingerprint(metadata_fingerprint, model)` returns the SHA-256 of
+  the source fingerprint together with the model settings, or `None` when
+  `metadata_fingerprint` is `None`.
+- `identity_activity(record)` returns the record's last activity without its
+  environment-only `software` key, for embedding in other identities.
+- `extend_provenance(record, *, execution_id, activity, events, warnings,
+  analysis_id)` returns a copy with the new execution ID, `activity` appended,
+  `events` replacing the event history, `warnings` appended, and
+  `analysis_fingerprint` set to `analysis_id`.
+- `validate_relative_path(text, *, name="path")` returns `text` if it is a
+  non-empty dataset-relative POSIX path of `[A-Za-z0-9+_.-]` components (no
+  leading `/`, empty, `.`, or `..` components); otherwise it raises
+  `ValueError` mentioning `name`.
 
 `boldtailor.bids_provenance.project_bids_provenance(record, ...)` returns a
 mapping of relative filenames to bytes. Options include `dataset_name`,
 `label`, `code_url`, `container`, `source_datasets`, `dataset_links`,
 `derivative_sidecars`, and `export_bids_prov`. It produces dataset metadata and
 the analysis record, with optional draft BIDS provenance files.
+`STABLE_BIDS_VERSION` (`"1.11.1"`) is the `BIDSVersion` written to
+`dataset_description.json`. The draft files pin `BEP028_DRAFT_IDENTIFIER`
+(`"BEP028"`) at specification commit `BEP028_DRAFT_SNAPSHOT` and implement only
+`BEP028_SUPPORTED_SUBSET` (Activities, Files, Environments, Software, the
+provenance label table, and file GeneratedBy and Sources relationships).
 
 `boldtailor.publication.Artifact(path, payload)` describes a file to
 save. `publish_artifact_set(destination, artifacts, *, source_paths=(),
@@ -597,6 +683,8 @@ transaction directory and `rollback_errors` contains the recovery exceptions.
 The original operation error remains the exception's cause. See the
 [publication migration](publication-migration.md) for recovery and the removed
 `retain_incomplete` argument.
+`is_control_directory(path)` is True for a path ending in `.boldtailor`, the
+`<destination>.boldtailor` sibling that holds the writer lock and staging files.
 
 For example, after the README's fit, save a contrast array with its records:
 
@@ -623,6 +711,14 @@ records contain `error_code` instead of exception text; callers still receive
 the original exception. See the [lifecycle migration](lifecycle-migration.md)
 and [developer guide](development.md) for event names and identity rules.
 
+`boldtailor.logging` provides the helpers behind those records:
+
+| Function | Use |
+| --- | --- |
+| `bind_context(*, execution_id=None, data_id=None, analysis_id=None, run_index=None, inherit=True)` | Context manager adding the given identity fields to every event emitted inside it; `inherit=False` starts from an empty context |
+| `emit_event(event, *, stage, level=logging.INFO, error=None, execution_id=None, data_id=None, analysis_id=None, run_index=None)` | Log one compact sorted-key JSON record (`timestamp`, `sequence`, `level`, `event`, `stage`, bound and explicit identity fields, and `error_code` when `error` is given) and return it as a read-only mapping |
+| `append_event_history(history, event)` | Return `history` plus the event's standard fields (those listed for `emit_event`), keeping the last 8 entries |
+
 ## Imaging, diagnostics, and parallel helpers
 
 These modules operate on fitted arrays and CIFTI axes; none fits a model.
@@ -634,6 +730,7 @@ These modules operate on fitted arrays and CIFTI axes; none fits a model.
 | `boldtailor.cifti.cortical_values(values, brain)` | Scatter a grayordinate vector onto `left`/`right` cortical vertices; absent vertices are NaN |
 | `boldtailor.cifti.spatial_signature(brain, indices)` | SHA-256 feature identity of the ordered axis and selected grayordinates, for `feature_signature` |
 | `boldtailor.diagnostics.one_sample_t(run_betas)` | Pooled trial-beta mean, t, uncorrected two-sided p, count, and df (`ONE_SAMPLE_T_NAMES`), assuming independent trials |
+| `boldtailor.diagnostics.pearson_correlation(cross, beta_ss, rt_ss, counts)` | Pearson r from centered cross-products and sums of squares, clipped to [-1, 1]; NaN below 3 trials or with zero variance |
 | `boldtailor.diagnostics.correlate_rt(beta_runs, rt_runs, *, run_numbers)` | Within-run-centered beta/RT Pearson r and counts per run and for all, odd, and even runs |
 | `boldtailor.diagnostics.even_run_points(beta_runs, rt_runs, run_numbers, vertex)` | The matched, centered (RT, beta) points from even runs at one feature |
 | `boldtailor.reliability.curve_correlations(library, ids_a, ids_b)` | Full-curve Pearson r for a/b, a/canonical, and b/canonical selections (`CORRELATION_NAMES`) |
@@ -643,6 +740,10 @@ These modules operate on fitted arrays and CIFTI axes; none fits a model.
 For `map_blocks` workers: result objects that hold rebuild closures (`SingleTrialResult` with a `SelectedTrialDesign`, `HrfAnalysisResult`) cannot be serialized with the standard `pickle` module; loky's cloudpickle can move them between processes, but workers should prefer returning arrays or dicts to keep transfers small.
 `library_indices`, `finite_mean`, and `validate_n_jobs` are the
 corresponding validation helpers.
+The `summary` rows returned by `compare_hrfs` follow
+`boldtailor.reliability.SUMMARY_NAMES`: `mean_between_session_r`,
+`mean_matched_canonical_r`, `mean_between_minus_canonical_r`, `valid_sessions`,
+and `valid_pairs`.
 
 Lower-level helpers used by the examples are also importable from public
 modules: `expand_events`, `task_columns`, `hrf_model`, and
@@ -663,11 +764,35 @@ front end.
 | Name | Module | Use |
 | --- | --- | --- |
 | `WorkflowSettings` | `boldtailor.workflow.settings` | Frozen, validated settings (paths, HRF library, ridge mode, stages, `existing_results`); `to_dict()` is the JSON form |
-| `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`paths`, `report_path`, `skipped`, `task_model`) |
+| `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`settings`, `paths`, `report_path`, `skipped`, `task_model`, `library_fingerprint`) |
 | `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model, notes) and the `problems` a run would hit (`existing_results` or `input`), without fitting; backs `--dry-run` |
-| `load_session(settings)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events |
+| `load_session(settings, *, hrf_only=False)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events; `hrf_only=True` skips the two-odd/two-even-run requirement of the reliability stages |
 | `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.workflow.inputs` | `response_time`, a categorical `trial_type` (two or more levels), or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors |
 | `task_model_notes(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | Why detection left out a column every run has (a `trial_type` with fewer than two levels) |
+| `InputError` | `boldtailor.workflow.inputs` | `ValueError` subclass for missing or malformed inputs; the CLI maps it to exit code 2 |
+| `WorkflowRun` | `boldtailor.workflow.inputs` | One loaded run: `inputs`, `image`, `events`, `confounds`, `frame_times`, `label`, `number`, and `retained_frames` |
+| `observed_levels(tables, column, labels=None)` | `boldtailor.workflow.inputs` | Canonical non-missing level names of `column` across every events table |
+| `selection_task_model(task_model, include_rt=True)` | `boldtailor.workflow.inputs` | The GLM task model, or the same model without `response_time` for HRF selection |
+| `validate_glm_events(events, task_model)` | `boldtailor.workflow.inputs` | Require an observed positive RT and every categorical level, if modeled |
+| `glm_model(runs, task_model)` | `boldtailor.workflow.inputs` | The OLS `ModelSpec` (SPM HRF, no drift, the runs' confounds) with one contrast per task regressor |
+| `make_blocks(runs, *, block_size=4096, max_grayordinates=None)` | `boldtailor.workflow.inputs` | Feature-index blocks that skip constant signals; exports restore those positions as NaN |
+| `block_signals(runs, indices)` / `load_block(runs, root, indices, task_model)` | `boldtailor.workflow.inputs` | Trimmed signals for one feature block / the block as `AnalysisData` with raw trial rows and sources |
+| `run_summary(runs, task_model)` | `boldtailor.workflow.inputs` | One summary row per run (the `boldtailor_runs.tsv` table) |
+| `discover_runs(settings)` | `boldtailor.workflow.files` | The session's `RunInputs` (events, CIFTI in the settings' space, confounds and BOLD sidecars); every file must exist and CIFTI and events runs must match |
+| `load_runs(inputs)` / `load_inputs(inputs)` | `boldtailor.workflow.files` | `RawRun`s in BIDS run order with one shared `BrainModelAxis` (returned with it) / one run's image, raw events, selected confounds, and sidecar-corrected frame times |
+| `select_confounds(table, metadata)` | `boldtailor.workflow.files` | The fMRIPrep nuisance set: 24 motion terms (`MOTION`), the top six retained combined-mask aCompCor components, cosines, and non-steady-state spikes |
+| `run_sources(run, root, indices)` / `source_ref(path, root, role, **annotations)` | `boldtailor.workflow.files` | `RunSources` for one run's BOLD (with grayordinate indices), events, and confounds / one file's `SourceRef` relative to `root` |
+| `odd_even_parity(runs)`, `reaction_times(runs, *, missing_ok=False)`, `bids_label(value, entity)`, `input_paths(run)` | `boldtailor.workflow.files` | Odd/even BIDS run positions; per-run `response_time` arrays (with `missing_ok`, absent or non-numeric entries are NaN); BIDS label check; a run's five input paths |
+| `select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1, splits=True)` | `boldtailor.workflow.analysis` | Blockwise HRF selection on all runs and, with `splits`, odd/even split evaluations; results keyed by block indices |
+| `selection_maps(selections, n_features)` | `boldtailor.workflow.analysis` | Grayordinate maps of selected IDs and CV R² for `all`, `odd`, `even`, plus `odd_to_even`/`even_to_odd` test R² |
+| `fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1)` | `boldtailor.workflow.analysis` | Blockwise `fit` and `task_delta_r2` with SPM or the selected HRFs: effect, variance, t, and z maps per task regressor, R² rows, designs, and provenance |
+| `fit_beta_series(runs, root, blocks, *, task_model, selections=None, ridge_alpha=0.0, ridge_fraction=None, n_jobs=1)` | `boldtailor.workflow.analysis` | Blockwise single-trial fits at a fixed penalty or fractions, with R² rows, designs, provenance, and RT correlations when RT is modeled |
+| `json_artifact`, `table_artifact`, `npz_artifact`, `figure_artifact` | `boldtailor.workflow.artifacts` | In-memory `Artifact`s: strict indented JSON, TSV with `n/a`, compressed NPZ, 130-dpi PNG |
+| `dataset_description(name)` | `boldtailor.workflow.artifacts` | The derivative's BIDS `dataset_description.json` artifact |
+| `parameter_artifact(brain, library, ids, path)` / `scalar_map(stem, space_entity, brain, descriptor, statistic, values, names)` | `boldtailor.workflow.artifacts` | Dense scalar map of the selected HRFs' parameters and peak time (undefined features NaN) / a `<space>_desc-<descriptor>_stat-<statistic>` dense scalar map |
+| `design_figure`, `library_figure`, `glm_comparison`, `parameter_agreement`, `curve_agreement`, `activation_histogram`, `rt_check_figure`, `fraction_selection_figure` | `boldtailor.workflow.plots` | Report figures (`glm_comparison`, `parameter_agreement`, and `curve_agreement` return `(summary DataFrame, figure)`) from fitted arrays and tables; nothing is refit, shown, or saved |
+| `find_surface_meshes(fmriprep_dir, subject, *, paths=None)` | `boldtailor.workflow.surfaces` | The subject's fsLR 32k midthickness meshes, or explicit `left`/`right` paths; `None` if a hemisphere is missing |
+| `surface_figure(maps, brain, meshes, *, statistic, title=None)` | `boldtailor.workflow.surfaces` | Maps in four cortical views (`VIEWS`) with a shared, unthresholded color scale |
 | `fit_beta_models(runs, root, blocks, settings, library, selections, task_model)` | `boldtailor.workflow.beta_series` | Canonical and selected-HRF trial models (OLS plus the configured ridge mode) over feature blocks |
 | `BetaModel` | `boldtailor.workflow.beta_series` | One beta model: name, HRF, estimator, fit, and (tuned ridge) tuning and outer-split evaluation |
 | `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |

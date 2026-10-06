@@ -127,7 +127,7 @@ def _jobs(blocks, selections):
 
 
 def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
-    """Fit the same three contrasts using SPM or the selected HRF per feature."""
+    """Fit one contrast per task regressor using SPM or the selected HRF per feature."""
     n = runs[0].image.shape[1]
     rows = len(model.task_model.regressor_names)
     result = {
