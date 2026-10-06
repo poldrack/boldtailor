@@ -26,6 +26,7 @@ from experiments.nsd_replication.comparison import (
     reliability_differences,
 )
 from experiments.nsd_replication.config import load_config
+from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
 from experiments.nsd_replication.metrics import (
@@ -418,12 +419,57 @@ def discard_betas(config, source, subject, levels, multiple_subjects=False):
             _mark_discarded(fit_dir(config.output_dir, source, subject, session, level))
 
 
+# --------------------------------------------------------- feature stage
+
+FEATURE_TABLES = ("gate", "rt", "hrf")
+
+
+def _write_missing(config, subject, session, data, fits):
+    paths = {
+        lv: fit_dir(config.output_dir, "ppdata", subject, session, lv) for lv in fits
+    }
+    _check_digests(paths.values(), inputs_digest(data))
+    missing = {lv: f for lv, f in fits.items() if not is_complete(paths[lv])}
+    _write_levels(config, "ppdata", subject, session, data, missing)
+
+
+def _session_features(config, subject, index, session, roi):
+    """Seed ``index`` (the session's position in the config) for the null."""
+    data = _load(config, "ppdata", subject, session)
+    out = session_features(
+        data, roi, index, session, block_size=config.block_size, n_jobs=config.n_jobs
+    )
+    _write_missing(config, subject, session, data, out["fits"])
+    return out
+
+
+def subject_features(config, subject):
+    roi = _subject_roi(config, subject)
+    outs = [
+        _session_features(config, subject, i, s, roi)
+        for i, s in enumerate(config.sessions)
+    ]
+    tables = {
+        f"features_{name}": pd.concat([o[name] for o in outs], ignore_index=True)
+        for name in FEATURE_TABLES
+    }
+    _write_tables(config, "ppdata", subject, tables)
+    return tables
+
+
+def _run_features(config, args, levels):
+    if args.source != "ppdata":
+        raise ValueError("feature experiments run on ppdata only")
+    for subject in config.subjects:
+        subject_features(config, subject)
+
+
 # ---------------------------------------------------------------------- CLI
 
 
 def _parser():
     parser = argparse.ArgumentParser(prog="nsd_replication.run")
-    parser.add_argument("command", choices=("fit", "metrics"))
+    parser.add_argument("command", choices=("fit", "metrics", "features"))
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--source", choices=SOURCES, default="ppdata")
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
@@ -474,7 +520,8 @@ def main(argv=None):
     args = _parser().parse_args(argv)
     config = load_config(args.config)
     levels = tuple(args.levels or _default_levels(args.source))
-    {"fit": _run_fit, "metrics": _run_metrics}[args.command](config, args, levels)
+    commands = {"fit": _run_fit, "metrics": _run_metrics, "features": _run_features}
+    commands[args.command](config, args, levels)
     return 0
 
 

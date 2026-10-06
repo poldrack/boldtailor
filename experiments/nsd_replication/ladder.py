@@ -198,9 +198,14 @@ def _denoising_extras(denoising):
 class _Ladder:
     """Shared, lazily computed ingredients of one session's ladder."""
 
-    def __init__(self, session, task_model, block_size, n_jobs, denoising):
+    def __init__(
+        self, session, task_model, block_size, n_jobs, denoising, ridge_task_model
+    ):
         self.session = session
         self.task_model = session.task_model if task_model is None else task_model
+        self.ridge_task_model = (
+            self.task_model if ridge_task_model is None else ridge_task_model
+        )
         self.block_size = block_size
         self.n_jobs = n_jobs
         self.blocks = _blocks(_n_features(session), block_size)
@@ -284,7 +289,7 @@ def _fit_b4(ladder):
         ladder.session,
         ladder.selection(ladder.library),
         ladder.confounds(),
-        ladder.task_model,
+        ladder.ridge_task_model,
         ladder.library,
     )
     return ladder.fit("b4", out, ladder.library, denoised=True)
@@ -326,6 +331,7 @@ def fit_ladder(
     block_size=4096,
     n_jobs=1,
     denoising=None,
+    ridge_task_model=None,
 ):
     """Fit the requested levels in ladder order; betas are trials x features.
 
@@ -333,12 +339,16 @@ def fit_ladder(
     whose events are not onset-sorted raise. ``denoising`` reuses a
     ``select_session_denoising`` result for b3/b4; when selected here it always
     uses ``session.task_model``, whatever ``task_model`` is passed.
+    ``ridge_task_model`` supplies b4's encoding predictors (default: the task
+    model in effect); encoding ridge CV needs at least one modulator.
     """
     unknown = set(levels) - set(_FITTERS)
     if unknown:
         raise ValueError(f"unknown ladder levels: {sorted(unknown)}")
     _check_sorted_onsets(session)
-    ladder = _Ladder(session, task_model, block_size, n_jobs, denoising)
+    ladder = _Ladder(
+        session, task_model, block_size, n_jobs, denoising, ridge_task_model
+    )
     return {
         level: _FITTERS[level](ladder)
         for level in (*LEVELS, *LSS_LEVELS)

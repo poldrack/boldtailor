@@ -6,7 +6,7 @@ import pytest
 
 from boldtailor.hrf_library import default_hrf_library
 
-from experiments.nsd_replication import features, run
+from experiments.nsd_replication import features, ladder, run
 from experiments.nsd_replication.betas import fit_dir, is_complete
 from experiments.nsd_replication.features import (
     circular_shift,
@@ -232,6 +232,7 @@ def patched(monkeypatch, synthetic_session):
     monkeypatch.setattr(run, "ppdata_brain", lambda *a: synthetic_session.brain)
     monkeypatch.setattr(run, "load_roi", lambda *a: np.arange(30) < 20)
     monkeypatch.setattr(features, "default_hrf_library", lambda: SMALL)
+    monkeypatch.setattr(ladder, "default_hrf_library", lambda: SMALL)
 
 
 def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
