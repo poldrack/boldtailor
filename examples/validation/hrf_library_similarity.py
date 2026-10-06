@@ -287,14 +287,15 @@ pd.DataFrame({
 # Every candidate in the 512-sample timing-space library, with the gamma-box Sobol library of the
 # same size beside it. Each curve is peak-normalised (as stored in the library) and coloured by its
 # realized peak time; canonical SPM (id 0) is drawn in black. The 20 HRFs of the GLMsingle library
-# used for the Natural Scenes Dataset (`glmsingle_hrf_library.tsv`, see
-# `glmsingle_hrf_library.md`; 0.1 s grid, rescaled here to peak one) are overlaid in orange on both panels. The
+# used for the Natural Scenes Dataset (`glmsingle_hrf_curves()`, bundled with boldtailor; 0.1 s
+# grid, rescaled to peak one) are overlaid in orange on both panels. The
 # timing-space panel should fill its box evenly, with troughs spread over 8-19 s; the gamma-box
 # panel shows the pile-up of near-identical waveforms that motivated the timing sampler.
 
 # %%
-NSD_HRFS = np.loadtxt("glmsingle_hrf_library.tsv").T  # 20 HRFs x 501 samples on a 0.1 s grid
-NSD_HRFS = NSD_HRFS / NSD_HRFS.max(axis=1, keepdims=True)  # peak one, like the library curves
+from boldtailor.hrf_library import glmsingle_hrf_curves
+
+NSD_HRFS = glmsingle_hrf_curves()  # 20 HRFs x 501 samples on a 0.1 s grid, each at peak one
 NSD_TIMES = 0.1 * np.arange(NSD_HRFS.shape[1])
 NSD_COLOR = "#C96A2B"
 
