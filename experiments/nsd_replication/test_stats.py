@@ -45,3 +45,16 @@ def test_criterion_three_of_four():
 def test_mean_ci_contains_mean():
     mean, low, high = mean_ci(np.array([1.0, 2.0, 3.0]))
     assert low < mean == 2.0 < high
+
+
+def test_criterion_direction_less():
+    values = {"sub-01": (0.1, 0.2), "sub-02": (0.1, 0.2), "sub-03": (0.3, 0.2)}
+    result = criterion_met(values, minimum=2, direction="less")
+    assert result["replicated"] and result["count"] == 2
+    assert result["per_subject"]["sub-03"] is False
+    assert criterion_met(values, minimum=2)["count"] == 1
+
+
+def test_criterion_rejects_unknown_direction():
+    with pytest.raises(ValueError, match="direction"):
+        criterion_met({"sub-01": (0.1, 0.2)}, minimum=1, direction="up")
