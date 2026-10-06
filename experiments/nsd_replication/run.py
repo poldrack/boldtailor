@@ -1,6 +1,7 @@
 """Resumable fit and metrics stages of the NSD replication experiments."""
 
 import argparse
+from functools import cached_property
 import json
 from importlib.metadata import version
 from pathlib import Path
@@ -30,9 +31,10 @@ from experiments.nsd_replication.figure_stage import make_figures
 from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
+from experiments.nsd_replication.metric_tables import ensure_tables
 from experiments.nsd_replication.metrics import (
     THRESHOLDS,
-    decoding_accuracy,
+    decoding_accuracies,
     lagged_correlation,
     rdm,
     rdm_agreement,
@@ -156,18 +158,19 @@ def _metrics_dir(config, source, subject=None):
     return base if subject is None else base / subject
 
 
-def _level_betas(config, source, subject, level):
-    """Per-session z-scored betas and trial tables for one level."""
+def _level_betas(config, source, subject, level, columns=None):
+    """Per-session z-scored betas (optionally only ``columns``) and trials."""
     pairs = []
     for session in config.sessions:
         path = fit_dir(config.output_dir, source, subject, session, level)
         betas, trials, _ = read_fit(path)
-        pairs.append((zscore(betas), trials))
+        scored = zscore(betas)
+        pairs.append((scored if columns is None else scored[:, columns], trials))
     return pairs
 
 
-def _subject_betas(config, source, subject, level):
-    pairs = _level_betas(config, source, subject, level)
+def _subject_betas(config, source, subject, level, columns=None):
+    pairs = _level_betas(config, source, subject, level, columns)
     betas = np.vstack([b for b, _ in pairs])
     trials = pd.concat([t for _, t in pairs], ignore_index=True)
     return betas, trials
@@ -187,6 +190,49 @@ def _composite(reliabilities):
     return np.vstack(list(reliabilities.values())).mean(axis=0)
 
 
+class SubjectData:
+    """Lazily loaded z-scored betas, trials and reliabilities per version.
+
+    ``load(version)`` returns stacked ``(betas, trials)``; ``roi`` masks the
+    loaded columns.
+    """
+
+    def __init__(self, load, versions, roi):
+        self._load = load
+        self.versions = tuple(versions)
+        self.roi = roi
+
+    @cached_property
+    def _loaded(self):
+        return {v: self._load(v) for v in self.versions}
+
+    @cached_property
+    def betas(self):
+        return {v: b for v, (b, _) in self._loaded.items()}
+
+    @cached_property
+    def trials(self):
+        return self._loaded[self.versions[0]][1]
+
+    @cached_property
+    def images(self):
+        return images_with(self.trials, 3)
+
+    @cached_property
+    def reliabilities(self):
+        return _reliabilities(self.betas, self.trials, self.images)
+
+    @cached_property
+    def out_of_sample(self):
+        return _reliabilities(
+            self.betas, self.trials, out_of_sample_images(self.trials)
+        )
+
+    @cached_property
+    def composite(self):
+        return _composite(self.reliabilities)
+
+
 def _median_table(reliabilities, roi):
     rows = []
     for level, values in reliabilities.items():
@@ -200,11 +246,12 @@ def _mask(roi, composite, threshold):
     return roi & np.isfinite(composite) & (composite >= threshold)
 
 
-def _session_lags(config, source, subject, level, mask):
-    frames = [
-        lagged_correlation(betas, trials, mask)
-        for betas, trials in _level_betas(config, source, subject, level)
-    ]
+def _session_lags(betas, trials, mask):
+    """Lag curve per session (in stacking order), averaged over sessions."""
+    frames = []
+    for session in trials["session"].unique():
+        rows = (trials["session"] == session).to_numpy()
+        frames.append(lagged_correlation(betas[rows], trials[rows], mask))
     return (
         pd.concat(frames)
         .groupby("lag", as_index=False)
@@ -212,27 +259,40 @@ def _session_lags(config, source, subject, level, mask):
     )
 
 
-def _r4_table(config, source, subject, levels, composite, roi, threshold):
-    mask = _mask(roi, composite, threshold)
-    frames = []
-    for level in levels:
-        lags = _session_lags(config, source, subject, level, mask)
-        frames.append(lags.assign(version=level, threshold=threshold))
+def _r4_table(data, threshold):
+    mask = _mask(data.roi, data.composite, threshold)
+    frames = [
+        _session_lags(betas, data.trials, mask).assign(version=v, threshold=threshold)
+        for v, betas in data.betas.items()
+    ]
     columns = ["version", "threshold", "lag", "mean_r", "n_pairs"]
     return pd.concat(frames, ignore_index=True)[columns]
 
 
-def _r6_table(reps, composite, roi):
+def _r6_table(data, n_jobs):
+    masks = [_mask(data.roi, data.composite, t) for t in R6_THRESHOLDS]
     rows = []
-    for level, values in reps.items():
-        for t in R6_THRESHOLDS:
-            result = decoding_accuracy(values, _mask(roi, composite, t))
-            rows.append(dict(version=level, threshold=t, **result))
+    for version, betas in data.betas.items():
+        reps = repetition_array(betas, data.trials, data.images)
+        results = decoding_accuracies(reps, masks, n_jobs=n_jobs)
+        rows += [
+            dict(version=version, threshold=t, **r)
+            for t, r in zip(R6_THRESHOLDS, results)
+        ]
     return pd.DataFrame(rows)
 
 
-def _repetitions(betas, trials, images):
-    return {lv: repetition_array(b, trials, images) for lv, b in betas.items()}
+def _table_builders(n_jobs):
+    """Metric name -> builder(data), cheapest first."""
+    builders = {
+        "r1": lambda d: threshold_curves(d.reliabilities, d.roi),
+        "r1_median": lambda d: _median_table(d.reliabilities, d.roi),
+        "r3b": lambda d: threshold_curves(d.out_of_sample, d.roi),
+    }
+    for t in R4_THRESHOLDS:
+        builders[f"r4_t{t}"] = lambda d, t=t: _r4_table(d, t)
+    builders["r6"] = lambda d: _r6_table(d, n_jobs)
+    return builders
 
 
 def _write_tables(config, source, subject, tables):
@@ -247,27 +307,16 @@ def _subject_roi(config, subject):
     return load_roi(config, subject, brain)
 
 
-def subject_metrics(config, source, subject, levels):
-    roi = _subject_roi(config, subject)
-    loaded = {lv: _subject_betas(config, source, subject, lv) for lv in levels}
-    betas = {lv: b for lv, (b, _) in loaded.items()}
-    trials = loaded[levels[0]][1]
-    images = images_with(trials, 3)
-    rel = _reliabilities(betas, trials, images)
-    composite = _composite(rel)
-    oos = _reliabilities(betas, trials, out_of_sample_images(trials))
-    tables = {
-        "r1": threshold_curves(rel, roi),
-        "r1_median": _median_table(rel, roi),
-        "r3b": threshold_curves(oos, roi),
-        "r6": _r6_table(_repetitions(betas, trials, images), composite, roi),
-    }
-    for t in R4_THRESHOLDS:
-        tables[f"r4_t{t}"] = _r4_table(
-            config, source, subject, levels, composite, roi, t
-        )
-    _write_tables(config, source, subject, tables)
-    return tables
+def subject_metrics(config, source, subject, levels, recompute=False):
+    """Every metric on ROI columns only (betas are z-scored before slicing)."""
+    columns = np.flatnonzero(_subject_roi(config, subject))
+    data = SubjectData(
+        lambda lv: _subject_betas(config, source, subject, lv, columns),
+        levels,
+        np.ones(len(columns), bool),
+    )
+    out = _metrics_dir(config, source, subject)
+    return ensure_tables(out, _table_builders(config.n_jobs), data, recompute)
 
 
 # ------------------------------------------------------- comparison stage
@@ -488,6 +537,7 @@ def _parser():
     parser.add_argument("--source", choices=SOURCES, default="ppdata")
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
     parser.add_argument("--refit", action="store_true")
+    parser.add_argument("--recompute", action="store_true")
     parser.add_argument("--discard-betas-after-metrics", action="store_true")
     return parser
 
@@ -517,7 +567,7 @@ def _run_metrics(config, args, levels):
     if args.source == "comparison":
         return _run_comparison(config)
     for subject in config.subjects:
-        subject_metrics(config, args.source, subject, levels)
+        subject_metrics(config, args.source, subject, levels, args.recompute)
     multiple = len(config.subjects) > 1
     if multiple:
         group_rsa(config, args.source, config.subjects, levels)

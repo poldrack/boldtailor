@@ -5,6 +5,7 @@ from itertools import combinations
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.svm import LinearSVC
 
@@ -105,22 +106,45 @@ def _fit_fold(data, k, labels):
     train = np.delete(data, k, axis=0).reshape(-1, data.shape[2])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConvergenceWarning)
-        model = LinearSVC().fit(train, np.tile(labels, n_reps - 1))
+        model = LinearSVC(random_state=0).fit(train, np.tile(labels, n_reps - 1))
     return model.predict(data[k]) == labels, int(
         np.max(model.n_iter_) >= model.max_iter
     )
 
 
-def decoding_accuracy(reps, mask):
-    n_reps, n_images, _ = reps.shape
+def _decoding_summary(reps, mask, folds):
+    n_images = reps.shape[1]
     result = dict(chance=1 / n_images, n_classes=n_images, n_features=int(mask.sum()))
-    if mask.sum() < MIN_DECODING_FEATURES:
+    if not folds:
         return {**result, "accuracy": np.nan, "n_unconverged": 0}
-    data = np.nan_to_num(reps[:, :, mask])
-    folds = [_fit_fold(data, k, np.arange(n_images)) for k in range(n_reps)]
     correct = np.concatenate([c for c, _ in folds])
     return {
         **result,
         "accuracy": float(correct.mean()),
         "n_unconverged": sum(u for _, u in folds),
     }
+
+
+def decoding_accuracies(reps, masks, n_jobs=1):
+    """``decoding_accuracy`` for each mask; folds x masks run on ``n_jobs``.
+
+    The SVM is seeded, so results do not depend on ``n_jobs``.
+    """
+    labels = np.arange(reps.shape[1])
+    data = {
+        i: np.nan_to_num(reps[:, :, m])
+        for i, m in enumerate(masks)
+        if m.sum() >= MIN_DECODING_FEATURES
+    }
+    jobs = [(i, k) for i in data for k in range(reps.shape[0])]
+    fits = Parallel(n_jobs=n_jobs)(
+        delayed(_fit_fold)(data[i], k, labels) for i, k in jobs
+    )
+    folds = {i: [] for i in range(len(masks))}
+    for (i, _), fold in zip(jobs, fits):
+        folds[i].append(fold)
+    return [_decoding_summary(reps, m, folds[i]) for i, m in enumerate(masks)]
+
+
+def decoding_accuracy(reps, mask):
+    return decoding_accuracies(reps, [mask])[0]
