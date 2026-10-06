@@ -7,7 +7,7 @@
   <a href="https://codecov.io/gh/poldrack/boldtailor"><img src="https://codecov.io/gh/poldrack/boldtailor/branch/main/graph/badge.svg" alt="codecov"></a>
 </p>
 
-Boldtailor fits first-level fMRI models to voxel or grayordinate time series.
+Boldtailor fits first-level fMRI models to voxel or grayordinate time series using optimized hemodynamic responses, building on the methods introduced in [GLMsingle](https://github.com/cvnlab/GLMsingle).
 You can estimate condition contrasts, measure variance explained by a task,
 fit a separate response for every trial, and select an HRF for each brain
 location using prediction across runs.
@@ -142,12 +142,11 @@ across runs.
 The published GLMsingle workflow selects HRFs by in-sample fit, then uses
 repeated conditions to tune data-derived denoising and fractional ridge.
 Boldtailor's HRF selection needs no repeated images, but assumes that the
-task-model response (the mean response under the default `TaskModel()`)
-transfers between runs. Every event's predicted response is scaled to a peak of one (kernels are
+task-model response transfers between runs. Every event's predicted response is scaled to a peak of one (kernels are
 also stored at unit peak). A beta is therefore the peak BOLD response to that
 presentation in signal units, independent of TR, oversampling, and event
 duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given. Its ridge CV predicts trial
+This matches GLMsingle's convention. Boldtailor's ridge CV predicts trial
 beta series from variables such as trial type and RT. Fractional CV scores
 fixed OLS targets; shared-alpha CV scores candidate-regularized targets. Both
 assume that the predictor relationships transfer across runs. See the
