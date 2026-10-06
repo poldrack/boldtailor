@@ -435,3 +435,21 @@ def test_subject_metrics_sliced_to_roi_with_identical_results(
     r1 = run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))["r1"]
     assert widths and set(widths) == {20}
     pd.testing.assert_frame_equal(r1[expected.columns], expected)
+
+
+def test_comparison_metrics_all_tables_share_one_composite(config, patched):
+    _fit_comparison(config)
+    tables = run.comparison_metrics(config, "sub-07")
+    expected = {
+        f"{s}:{lv}" for s in ("ppdata", "released") for lv in ("b1", "b2", "b4")
+    }
+    out = config.output_dir / "metrics/comparison/sub-07"
+    for name in ("r3b", "r4_t0.0", "r4_t0.3", "r6"):
+        assert set(tables[name]["version"]) == expected, name
+        assert (out / f"{name}.tsv").is_file(), name
+    # one shared composite mask: every version sees the same feature count
+    r6 = tables["r6"]
+    assert (r6.groupby("threshold")["n_features"].nunique() == 1).all()
+    r4 = tables["r4_t0.3"]
+    assert (r4.groupby("lag")["n_pairs"].nunique() == 1).all()
+    assert set(r4["threshold"]) == {0.3}
