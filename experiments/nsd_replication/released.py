@@ -75,9 +75,13 @@ def _stat(path):
 
 
 def _current(target, stat):
+    """Indexed from this exact file, with betas still on disk (re-indexing
+    discarded betas is cheap and the comparison needs them)."""
     if not is_complete(target):
         return False
     meta = json.loads((target / "metadata.json").read_text())
+    if meta.get("betas_discarded", False):
+        return False
     return all(meta.get(k) == v for k, v in stat.items())
 
 
