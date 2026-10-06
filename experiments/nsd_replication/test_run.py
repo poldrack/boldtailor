@@ -308,3 +308,18 @@ def test_figures_cli(tmp_path, config):
     _synthetic_metrics(config)
     assert run.main(["figures", "--config", str(config_toml)]) == 0
     assert (config.output_dir / "figures" / "sub-07" / "r1.png").is_file()
+
+
+def test_completed_level_survives_a_later_failure(config, patched, monkeypatch):
+    from experiments.nsd_replication import ladder
+
+    def boom(ladder_):
+        raise RuntimeError("b2 failed")
+
+    monkeypatch.setitem(ladder._FITTERS, "b2", boom)
+    with pytest.raises(RuntimeError, match="b2 failed"):
+        run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1", "b2"))
+    assert is_complete(fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1"))
+    assert not is_complete(
+        fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b2")
+    )

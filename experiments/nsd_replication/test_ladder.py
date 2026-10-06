@@ -91,3 +91,15 @@ def test_unsorted_onsets_raise_with_run_label(synthetic_session):
     session = dataclasses.replace(synthetic_session, events=tuple(events))
     with pytest.raises(ValueError, match=synthetic_session.labels[2]):
         fit_ladder(session, levels=("b1",), block_size=30)
+
+
+def test_on_fit_called_after_each_level_in_order(synthetic_session):
+    seen = []
+    fits = fit_ladder(
+        synthetic_session,
+        levels=("b2", "b1"),
+        block_size=30,
+        on_fit=lambda level, fit: seen.append((level, fit)),
+    )
+    assert [level for level, _ in seen] == ["b1", "b2"]
+    assert all(fit is fits[level] for level, fit in seen)
