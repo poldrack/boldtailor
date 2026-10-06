@@ -36,7 +36,11 @@ from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.hrf_maps import session_consistency
 from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
-from experiments.nsd_replication.metric_tables import ensure_tables
+from experiments.nsd_replication.metric_tables import (
+    COMPOSITE_COLUMN,
+    ensure_tables,
+    stored_levels,
+)
 from experiments.nsd_replication.metrics import (
     THRESHOLDS,
     decoding_accuracies,
@@ -321,7 +325,8 @@ def subject_metrics(config, source, subject, levels, recompute=False):
         np.ones(len(columns), bool),
     )
     out = _metrics_dir(config, source, subject)
-    return ensure_tables(out, _table_builders(config.n_jobs), data, recompute)
+    builders = _table_builders(config.n_jobs)
+    return ensure_tables(out, builders, data, recompute, levels)
 
 
 # ------------------------------------------------- R2 (HRF consistency)
@@ -419,7 +424,8 @@ def comparison_metrics(config, subject, recompute=False):
         _subject_roi(config, subject),
     )
     out = _comparison_dir(config, subject)
-    tables = ensure_tables(out, _table_builders(config.n_jobs), data, recompute)
+    builders = _table_builders(config.n_jobs)
+    tables = ensure_tables(out, builders, data, recompute, VERSIONS)
     _save_differences(out, data, recompute)
     return tables
 
@@ -488,7 +494,7 @@ def _level_rsa(patterns, masks, level):
     return pd.concat(frames, ignore_index=True)[columns]
 
 
-def group_rsa(config, source, subjects, levels):
+def _rsa_inputs(config, source, subjects, levels):
     inputs = {s: _subject_inputs(config, source, s, levels) for s in subjects}
     shared = _shared_images({s: i["trials"] for s, i in inputs.items()})
     patterns = {s: _mean_patterns(i, shared) for s, i in inputs.items()}
@@ -496,12 +502,21 @@ def group_rsa(config, source, subjects, levels):
     masks = {
         s: (lambda t, s=s: _mask(rois[s], inputs[s]["composite"], t)) for s in subjects
     }
-    tables = {lv: _level_rsa(patterns, masks, lv) for lv in levels}
+    return patterns, masks
+
+
+def group_rsa(config, source, subjects, levels, recompute=False):
+    """Per-level RSA tables (recording the composite level set on disk)."""
+    inputs = cache(lambda: _rsa_inputs(config, source, subjects, levels))
+    builders = {
+        f"rsa_{lv}": lambda _, lv=lv: _level_rsa(*inputs(), lv) for lv in levels
+    }
     out = _metrics_dir(config, source)
-    out.mkdir(parents=True, exist_ok=True)
-    for level, table in tables.items():
-        table.to_csv(out / f"rsa_{level}.tsv", sep="\t", index=False)
-    return pd.concat(tables, names=["version"])
+    tables = ensure_tables(out, builders, None, recompute, levels)
+    return pd.concat(
+        {lv: tables[f"rsa_{lv}"].drop(columns=COMPOSITE_COLUMN) for lv in levels},
+        names=["version"],
+    )
 
 
 # ----------------------------------------------------------------- cleanup
@@ -536,6 +551,17 @@ def _check_comparison_done(config, source, subject):
         )
 
 
+def _check_coverage(paths, levels):
+    for path in paths:
+        stored = stored_levels(path) or set()
+        uncovered = [lv for lv in levels if lv not in stored]
+        if uncovered:
+            raise ValueError(
+                f"refusing to discard betas; {path.name} composite levels do not "
+                f"cover {uncovered}"
+            )
+
+
 def discard_betas(config, source, subject, levels, multiple_subjects=False):
     _check_comparison_done(config, source, subject)
     expected = _expected_tables(config, source, subject, levels, multiple_subjects)
@@ -544,6 +570,7 @@ def discard_betas(config, source, subject, levels, multiple_subjects=False):
         raise FileNotFoundError(
             f"refusing to discard betas; missing metrics: {missing}"
         )
+    _check_coverage(expected, levels)
     for session in config.sessions:
         for level in levels:
             _mark_discarded(fit_dir(config.output_dir, source, subject, session, level))
@@ -639,7 +666,7 @@ def _run_metrics(config, args, levels):
             hrf_consistency(config, subject, args.recompute)
     multiple = len(config.subjects) > 1
     if multiple:
-        group_rsa(config, args.source, config.subjects, levels)
+        group_rsa(config, args.source, config.subjects, levels, args.recompute)
     if args.discard_betas_after_metrics:
         for subject in config.subjects:
             discard_betas(config, args.source, subject, levels, multiple)
@@ -650,7 +677,7 @@ def _run_figures(config, args, levels):
 
 
 def _default_levels(source):
-    return tuple(RELEASED) if source == "released" else LEVELS
+    return tuple(RELEASED) if source == "released" else LEVELS + LSS_LEVELS
 
 
 def main(argv=None):
