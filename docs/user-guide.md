@@ -86,75 +86,6 @@ A feature whose signal is constant in a run has NaN for every contrast statistic
 
 Rank-deficient designs are fitted in a full-rank basis of their column space, so variances use `n - rank` degrees of freedom; a warning names the run and its rank.
 
-## Voxelwise HRFs in conventional GLMs
-
-Pass an existing HRF selection to `fit()` to use a different HRF at each voxel
-or grayordinate. The model can contain conditions, amplitude modulators, and
-contrasts just as in a fixed-HRF fit. Confound selection, drift terms, timing,
-and the OLS/AR(1) noise option still come from `ModelSpec`.
-
-```python
-from boldtailor.fit import fit, task_delta_r2
-
-# data contains your target runs; model names their conditions and contrasts.
-# selection was obtained from select_hrfs() using the same feature ordering.
-result = fit(data, model, hrf_selection=selection)
-effects = result.effect("face_gt_house")
-z_scores = result.z_score("face_gt_house")
-r_squared = result.r2
-
-# As with fixed-HRF comparisons, data needs complete source descriptors.
-comparison = task_delta_r2(data, model, result)
-task_added_r2 = comparison.delta_r2
-```
-
-The selection replaces `ModelSpec.hrf_model` entirely, including any derivative
-basis specified there. Each location uses one selected HRF for all its task
-regressors. The final GLM estimates amplitudes independently within each run;
-it does not reuse the amplitudes from HRF selection.
-
-Set `ModelSpec(task_model=...)` to the task model used for selection. The
-GLM then builds its task columns from the same raw events with the same
-Nilearn call, so the fitted task design is the scored task design. `fit()`
-requires the selection's task model to equal the GLM's or to be a subset of
-it with identical modulator settings, so a selection scored without RT can
-still feed a GLM that fits RT; the shared columns are built identically
-either way. `fit()` rejects `oversampling` or `min_onset` values that differ
-from the selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
-to match selection's nuisance exactly, pass every confound column and set
-`drift_model=None`. Without a task model, events are Nilearn-format
-conditions as before, and the selection must have used the default task-only
-model, which scored only the mean stimulus response.
-
-Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
-usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
-`group_design(run_index, hrf_id)`, `group_design_provenance`, `hrf_indices`,
-`hrf_selection`, and `selection_provenance`. It uses `group_design` in place of
-`design_matrices`, since one matrix no longer describes a whole run; designs are
-recompiled on request rather than retained. Run indices
-are zero-based and result arrays preserve the input feature order.
-
-This option is available through the array API and `boldtailor run`; the full
-NSD workflow notebook includes both canonical and selected-HRF conventional
-GLMs. Adapting an image workflow
-also requires saving each grouped design.
-
-The selection can come from separate training runs. If you supplied a
-`feature_signature` when selecting HRFs, also pass the target data's spatial
-signature to `fit()`. Matching feature counts alone do not prove that voxels
-are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
-Selection follows the task-model prediction method (the [mean-response method](#selecting-an-hrf-for-each-location) when the task model is the default);
-for selection input, supply raw per-trial events; the task model expands them for both selection and fitting.
-
-Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
-`task_delta_r2()` also preserves undefined/constant features as NaNs, and compares
-nested OLS fits even if the contrast fit uses AR(1).
-
-Contrast statistics treat the selected HRFs as fixed. If selection used the
-same BOLD data as the contrast fit, those statistics do not account for HRF
-selection uncertainty. Use separate training runs when you need selection to
-be independent of the contrast data.
-
 ## Using your own design matrix
 
 Use `PreparedDesignAnalysis` when you already have a labeled design matrix.
@@ -568,6 +499,76 @@ amplitudes are fixed before scoring test signals. Candidate eligibility may
 use test-run timing and confounds, but not test BOLD. Prediction R² uses
 nuisance-adjusted signals, so it has a different denominator from full-model R².
 Negative scores are retained.
+
+## Voxelwise HRFs in conventional GLMs
+
+Pass an existing HRF selection to `fit()` to use a different HRF at each voxel
+or grayordinate. The model can contain conditions, amplitude modulators, and
+contrasts just as in a fixed-HRF fit. Confound selection, drift terms, timing,
+and the OLS/AR(1) noise option still come from `ModelSpec`.
+
+```python
+from boldtailor.fit import fit, task_delta_r2
+
+# selection is the select_hrfs() result from the previous section; data holds
+# the target runs (multi_run_data, or separate runs with the same feature
+# ordering), and model names their conditions and contrasts.
+result = fit(data, model, hrf_selection=selection)
+effects = result.effect("face_gt_house")
+z_scores = result.z_score("face_gt_house")
+r_squared = result.r2
+
+# As with fixed-HRF comparisons, data needs complete source descriptors.
+comparison = task_delta_r2(data, model, result)
+task_added_r2 = comparison.delta_r2
+```
+
+The selection replaces `ModelSpec.hrf_model` entirely, including any derivative
+basis specified there. Each location uses one selected HRF for all its task
+regressors. The final GLM estimates amplitudes independently within each run;
+it does not reuse the amplitudes from HRF selection.
+
+Set `ModelSpec(task_model=...)` to the task model used for selection. The
+GLM then builds its task columns from the same raw events with the same
+Nilearn call, so the fitted task design is the scored task design. `fit()`
+requires the selection's task model to equal the GLM's or to be a subset of
+it with identical modulator settings, so a selection scored without RT can
+still feed a GLM that fits RT; the shared columns are built identically
+either way. `fit()` rejects `oversampling` or `min_onset` values that differ
+from the selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
+to match selection's nuisance exactly, pass every confound column and set
+`drift_model=None`. Without a task model, events are Nilearn-format
+conditions as before, and the selection must have used the default task-only
+model, which scored only the mean stimulus response.
+
+Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
+usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
+`group_design(run_index, hrf_id)`, `group_design_provenance`, `hrf_indices`,
+`hrf_selection`, and `selection_provenance`. It uses `group_design` in place of
+`design_matrices`, since one matrix no longer describes a whole run; designs are
+recompiled on request rather than retained. Run indices
+are zero-based and result arrays preserve the input feature order.
+
+This option is available through the array API and `boldtailor run`; the full
+NSD workflow notebook includes both canonical and selected-HRF conventional
+GLMs. Adapting an image workflow
+also requires saving each grouped design.
+
+The selection can come from separate training runs. If you supplied a
+`feature_signature` when selecting HRFs, also pass the target data's spatial
+signature to `fit()`. Matching feature counts alone do not prove that voxels
+are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
+Selection follows the task-model prediction method (the [mean-response method](#selecting-an-hrf-for-each-location) when the task model is the default);
+for selection input, supply raw per-trial events; the task model expands them for both selection and fitting.
+
+Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
+`task_delta_r2()` also preserves undefined/constant features as NaNs, and compares
+nested OLS fits even if the contrast fit uses AR(1).
+
+Contrast statistics treat the selected HRFs as fixed. If selection used the
+same BOLD data as the contrast fit, those statistics do not account for HRF
+selection uncertainty. Use separate training runs when you need selection to
+be independent of the contrast data.
 
 ## Comparing HRFs between sets of runs
 
