@@ -19,6 +19,7 @@ from experiments.nsd_replication.betas import (
     zscore,
 )
 from experiments.nsd_replication.comparison import (
+    LEVELS as COMPARED_LEVELS,
     VERSIONS,
     alignment_frame,
     alignment_row,
@@ -342,27 +343,32 @@ def _check_session_tables(config, subject):
         check_trial_tables(tables, session)
 
 
-def _combined_betas(config, subject):
-    loaded = {}
-    for version in VERSIONS:
-        source, level = version.split(":")
-        loaded[version] = _subject_betas(config, source, subject, level)
-    return loaded
+def _version_betas(config, subject, version):
+    source, level = version.split(":")
+    return _subject_betas(config, source, subject, level)
 
 
-def comparison_metrics(config, subject):
+def comparison_metrics(config, subject, recompute=False):
+    """All subject metric tables over the six combined versions, with one
+    shared composite, plus per-level reliability difference maps."""
     _check_session_tables(config, subject)
-    roi = _subject_roi(config, subject)
-    loaded = _combined_betas(config, subject)
-    trials = loaded[VERSIONS[0]][1]
-    betas = {v: b for v, (b, _) in loaded.items()}
-    rel = _reliabilities(betas, trials, images_with(trials, 3))
-    tables = {"r1": threshold_curves(rel, roi), "r1_median": _median_table(rel, roi)}
+    data = SubjectData(
+        lambda v: _version_betas(config, subject, v),
+        VERSIONS,
+        _subject_roi(config, subject),
+    )
     out = _comparison_dir(config, subject)
-    _write_tables(config, "comparison", subject, tables)
-    for level, diff in reliability_differences(rel).items():
-        np.save(out / f"r1_difference_{level}.npy", diff)
+    tables = ensure_tables(out, _table_builders(config.n_jobs), data, recompute)
+    _save_differences(out, data, recompute)
     return tables
+
+
+def _save_differences(out, data, recompute):
+    paths = {lv: out / f"r1_difference_{lv}.npy" for lv in COMPARED_LEVELS}
+    if not recompute and all(p.is_file() for p in paths.values()):
+        return
+    for level, diff in reliability_differences(data.reliabilities).items():
+        np.save(paths[level], diff)
 
 
 def _session_alignment(config, subject, session, roi):
@@ -381,10 +387,10 @@ def alignment_table(config, subject):
     return table
 
 
-def run_comparison(config, subject):
+def run_comparison(config, subject, recompute=False):
     """Alignment first (written even on failure), then the comparison metrics."""
     alignment_table(config, subject)
-    return comparison_metrics(config, subject)
+    return comparison_metrics(config, subject, recompute)
 
 
 # ---------------------------------------------------------------- group RSA
@@ -558,14 +564,14 @@ def _index_all_released(config):
             index_released(config, subject, session)
 
 
-def _run_comparison(config):
+def _run_comparison(config, recompute):
     for subject in config.subjects:
-        run_comparison(config, subject)
+        run_comparison(config, subject, recompute)
 
 
 def _run_metrics(config, args, levels):
     if args.source == "comparison":
-        return _run_comparison(config)
+        return _run_comparison(config, args.recompute)
     for subject in config.subjects:
         subject_metrics(config, args.source, subject, levels, args.recompute)
     multiple = len(config.subjects) > 1
