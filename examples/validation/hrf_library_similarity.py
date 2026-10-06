@@ -46,7 +46,9 @@ N_SAMPLES = 16384  # must be a power of two; the library adds canonical SPM as i
 SEED = 0
 
 library = sobol_hrf_library(n_samples=N_SAMPLES, seed=SEED)
-curves = library.curves.astype(np.float32)  # (n_candidates, n_times) sampled at 0.1 s, peak one
+curves = library.curves.astype(
+    np.float32
+)  # (n_candidates, n_times) sampled at 0.1 s, peak one
 times = library.times
 print(curves.shape, f"{times[-1]:.1f} s grid")
 
@@ -58,6 +60,7 @@ print(curves.shape, f"{times[-1]:.1f} s grid")
 # Pearson correlation first removes each curve's mean. Because every double-gamma kernel shares a
 # large positive lobe, raw cosine is dominated by that lobe and sits close to one for almost any
 # pair; Pearson is more sensitive to differences in timing and undershoot.
+
 
 # %%
 def unit_rows(matrix):
@@ -111,13 +114,26 @@ for ax, (name, s) in zip(axes, measures.items()):
     for q in (0.5, 0.99):
         v = np.quantile(values, q)
         ax.axvline(v, color="#555555", linewidth=1, linestyle=":")
-        ax.text(v, ax.get_ylim()[1] * 0.95, f"{int(q*100)}th pct {v:.3f}", rotation=90,
-                va="top", ha="right", fontsize=8, color="#555555")
+        ax.text(
+            v,
+            ax.get_ylim()[1] * 0.95,
+            f"{int(q*100)}th pct {v:.3f}",
+            rotation=90,
+            va="top",
+            ha="right",
+            fontsize=8,
+            color="#555555",
+        )
     ax.set_title(f"All pairwise similarities, {name}", fontsize=10, loc="left")
     ax.set_xlabel("similarity")
     ax.set_ylabel("pairs")
     ax.spines[["top", "right"]].set_visible(False)
-fig.suptitle(f"{curves.shape[0]:,} Sobol candidates (seed {SEED}) + canonical SPM", fontsize=10, x=0.01, ha="left")
+fig.suptitle(
+    f"{curves.shape[0]:,} Sobol candidates (seed {SEED}) + canonical SPM",
+    fontsize=10,
+    x=0.01,
+    ha="left",
+)
 fig.tight_layout()
 
 # %% [markdown]
@@ -133,13 +149,31 @@ default_curves = default_library.curves.astype(np.float32)
 
 SERIES = {"16k candidates": "#2F5597", "default 512 library": "#C96A2B"}  # fixed order
 fig, axes = plt.subplots(1, 2, figsize=(11, 3.8), sharey=False)
-for ax, (name, center) in zip(axes, [("cosine (raw curves)", False), ("Pearson (centred curves)", True)]):
+for ax, (name, center) in zip(
+    axes, [("cosine (raw curves)", False), ("Pearson (centred curves)", True)]
+):
     big = nearest_neighbour(similarity_matrix(curves, center=center))
     small = nearest_neighbour(similarity_matrix(default_curves, center=center))
     lo = min(big.min(), small.min())
     bins = np.linspace(lo, 1.0, 120)
-    ax.hist(big, bins=bins, density=True, color=SERIES["16k candidates"], alpha=0.85, linewidth=0, label="16k candidates")
-    ax.hist(small, bins=bins, density=True, color=SERIES["default 512 library"], alpha=0.7, linewidth=0, label="default 512 library")
+    ax.hist(
+        big,
+        bins=bins,
+        density=True,
+        color=SERIES["16k candidates"],
+        alpha=0.85,
+        linewidth=0,
+        label="16k candidates",
+    )
+    ax.hist(
+        small,
+        bins=bins,
+        density=True,
+        color=SERIES["default 512 library"],
+        alpha=0.7,
+        linewidth=0,
+        label="default 512 library",
+    )
     ax.set_title(f"Nearest-neighbour similarity, {name}", fontsize=10, loc="left")
     ax.set_xlabel("similarity to closest other candidate")
     ax.set_ylabel("density")
@@ -147,11 +181,19 @@ for ax, (name, center) in zip(axes, [("cosine (raw curves)", False), ("Pearson (
     ax.spines[["top", "right"]].set_visible(False)
 fig.tight_layout()
 
-pd.DataFrame({
-    "16k candidates": pd.Series(nearest_neighbour(cosine)).describe(percentiles=[0.01, 0.5, 0.99]),
-    "default 512, cosine": pd.Series(nearest_neighbour(similarity_matrix(default_curves, center=False))).describe(percentiles=[0.01, 0.5, 0.99]),
-    "default 512, Pearson": pd.Series(nearest_neighbour(similarity_matrix(default_curves, center=True))).describe(percentiles=[0.01, 0.5, 0.99]),
-}).round(4)
+pd.DataFrame(
+    {
+        "16k candidates": pd.Series(nearest_neighbour(cosine)).describe(
+            percentiles=[0.01, 0.5, 0.99]
+        ),
+        "default 512, cosine": pd.Series(
+            nearest_neighbour(similarity_matrix(default_curves, center=False))
+        ).describe(percentiles=[0.01, 0.5, 0.99]),
+        "default 512, Pearson": pd.Series(
+            nearest_neighbour(similarity_matrix(default_curves, center=True))
+        ).describe(percentiles=[0.01, 0.5, 0.99]),
+    }
+).round(4)
 
 
 # %% [markdown]
@@ -162,6 +204,7 @@ pd.DataFrame({
 # pairwise similarity in the chosen set. It answers both questions at once: the most dissimilar
 # library of a given size, and the size at which a desired maximum similarity is no longer
 # attainable from this candidate pool.
+
 
 # %%
 def farthest_point_order(similarity, *, start=0, k=None):
@@ -174,7 +217,9 @@ def farthest_point_order(similarity, *, start=0, k=None):
     for _ in range(k - 1):
         nxt = int(np.argmin(closest))
         chosen.append(nxt)
-        achieved.append(float(closest[nxt]))  # max similarity between the new member and the set
+        achieved.append(
+            float(closest[nxt])
+        )  # max similarity between the new member and the set
         closest = np.maximum(closest, similarity[nxt])
         closest[chosen] = np.inf
     return np.array(chosen), np.array(achieved)
@@ -191,8 +236,14 @@ for (name, s), color in zip(measures.items(), SERIES.values()):
     for target in (0.95, 0.99, 0.995):
         hit = np.argmax(achieved > target)
         if achieved[hit] > target:
-            ax.annotate(f"{target}: k={sizes[hit]}", (sizes[hit], target), fontsize=8,
-                        textcoords="offset points", xytext=(6, -14 if name.startswith("cos") else 6), color=color)
+            ax.annotate(
+                f"{target}: k={sizes[hit]}",
+                (sizes[hit], target),
+                fontsize=8,
+                textcoords="offset points",
+                xytext=(6, -14 if name.startswith("cos") else 6),
+                color=color,
+            )
 ax.set_xscale("log")
 ax.set_xlabel("library size (candidates chosen so far, incl. canonical)")
 ax.set_ylabel("maximum pairwise similarity in the chosen set")
@@ -201,8 +252,17 @@ ax.legend(frameon=False, fontsize=8)
 ax.spines[["top", "right"]].set_visible(False)
 fig.tight_layout()
 
-pd.DataFrame({name: dict(zip([64, 128, 256, 512, 1024, 2048], [achieved[k - 2] for k in (64, 128, 256, 512, 1024, 2048)]))
-              for name, (order, achieved) in curves_by_measure.items()}).rename_axis("library size").round(4)
+pd.DataFrame(
+    {
+        name: dict(
+            zip(
+                [64, 128, 256, 512, 1024, 2048],
+                [achieved[k - 2] for k in (64, 128, 256, 512, 1024, 2048)],
+            )
+        )
+        for name, (order, achieved) in curves_by_measure.items()
+    }
+).rename_axis("library size").round(4)
 
 
 # %% [markdown]
@@ -210,12 +270,18 @@ pd.DataFrame({name: dict(zip([64, 128, 256, 512, 1024, 2048], [achieved[k - 2] f
 #
 # The most similar and the least similar pairs in the default 512 library, to calibrate the numbers.
 
+
 # %%
 def show_pair(ax, lib, i, j, label):
     for idx, color in zip((i, j), SERIES.values()):
         p = lib.candidates[idx].parameters
-        ax.plot(lib.times, lib.curves[idx], color=color, linewidth=2,
-                label=f"id {idx}: delay {p[0]:.2f}, undershoot {p[1]:.1f}, disp {p[2]:.2f}/{p[3]:.2f}, ratio {p[4]:.1f}, onset {p[5]:.2f}")
+        ax.plot(
+            lib.times,
+            lib.curves[idx],
+            color=color,
+            linewidth=2,
+            label=f"id {idx}: delay {p[0]:.2f}, undershoot {p[1]:.1f}, disp {p[2]:.2f}/{p[3]:.2f}, ratio {p[4]:.1f}, onset {p[5]:.2f}",
+        )
     ax.set_title(label, fontsize=10, loc="left")
     ax.set_xlabel("time (s)")
     ax.set_xlim(0, 30)
@@ -226,10 +292,25 @@ def show_pair(ax, lib, i, j, label):
 small_cos = similarity_matrix(default_curves, center=False)
 off = np.where(np.eye(len(small_cos), dtype=bool), -np.inf, small_cos)
 i, j = np.unravel_index(np.argmax(off), off.shape)
-a, b = np.unravel_index(np.argmin(np.where(np.eye(len(small_cos), dtype=bool), np.inf, small_cos)), off.shape)
+a, b = np.unravel_index(
+    np.argmin(np.where(np.eye(len(small_cos), dtype=bool), np.inf, small_cos)),
+    off.shape,
+)
 fig, axes = plt.subplots(1, 2, figsize=(11, 3.8), sharey=True)
-show_pair(axes[0], default_library, int(i), int(j), f"Most similar pair in default library: cosine {small_cos[i, j]:.4f}, Pearson {similarity_matrix(default_curves, center=True)[i, j]:.4f}")
-show_pair(axes[1], default_library, int(a), int(b), f"Least similar pair: cosine {small_cos[a, b]:.4f}, Pearson {similarity_matrix(default_curves, center=True)[a, b]:.4f}")
+show_pair(
+    axes[0],
+    default_library,
+    int(i),
+    int(j),
+    f"Most similar pair in default library: cosine {small_cos[i, j]:.4f}, Pearson {similarity_matrix(default_curves, center=True)[i, j]:.4f}",
+)
+show_pair(
+    axes[1],
+    default_library,
+    int(a),
+    int(b),
+    f"Least similar pair: cosine {small_cos[a, b]:.4f}, Pearson {similarity_matrix(default_curves, center=True)[a, b]:.4f}",
+)
 axes[0].set_ylabel("kernel (peak one)")
 fig.tight_layout()
 
@@ -250,36 +331,74 @@ from boldtailor.hrf_library import timing_hrf_library
 timing_default = timing_hrf_library(n_samples=512, seed=SEED)
 TIMING_POOL = 4096
 timing_pool = timing_hrf_library(n_samples=TIMING_POOL, seed=SEED)
-print(f"timing pool: {len(timing_pool.candidates):,} candidates, {timing_pool.origin['rejected']} infeasible Sobol points skipped")
+print(
+    f"timing pool: {len(timing_pool.candidates):,} candidates, {timing_pool.origin['rejected']} infeasible Sobol points skipped"
+)
 timing_curves = timing_pool.curves.astype(np.float32)
 timing_cosine = similarity_matrix(timing_curves, center=False)
 
-LIBRARIES = {"Sobol (gamma box), 512": default_curves, "timing-space Sobol, 512": timing_default.curves.astype(np.float32)}
+LIBRARIES = {
+    "Sobol (gamma box), 512": default_curves,
+    "timing-space Sobol, 512": timing_default.curves.astype(np.float32),
+}
 COLORS = {"Sobol (gamma box), 512": "#C96A2B", "timing-space Sobol, 512": "#2F5597"}
 fig, axes = plt.subplots(1, 2, figsize=(11, 3.8))
-nn = {name: nearest_neighbour(similarity_matrix(c, center=False)) for name, c in LIBRARIES.items()}
+nn = {
+    name: nearest_neighbour(similarity_matrix(c, center=False))
+    for name, c in LIBRARIES.items()
+}
 bins = np.linspace(min(v.min() for v in nn.values()), 1.0, 100)
 for name, values in nn.items():
-    axes[0].hist(values, bins=bins, density=True, color=COLORS[name], alpha=0.75, linewidth=0, label=name)
+    axes[0].hist(
+        values,
+        bins=bins,
+        density=True,
+        color=COLORS[name],
+        alpha=0.75,
+        linewidth=0,
+        label=name,
+    )
 axes[0].set_title("Nearest-neighbour cosine at matched size", fontsize=10, loc="left")
-axes[0].set_xlabel("similarity to closest other candidate"); axes[0].set_ylabel("density")
-axes[0].legend(frameon=False, fontsize=8); axes[0].spines[["top", "right"]].set_visible(False)
+axes[0].set_xlabel("similarity to closest other candidate")
+axes[0].set_ylabel("density")
+axes[0].legend(frameon=False, fontsize=8)
+axes[0].spines[["top", "right"]].set_visible(False)
 
 order, achieved = farthest_point_order(timing_cosine, k=K_MAX)
 sizes = np.arange(2, K_MAX + 1)
-axes[1].plot(sizes, curves_by_measure["cosine (raw curves)"][1], color=COLORS["Sobol (gamma box), 512"], linewidth=2, label="gamma-box pool, 16k")
-axes[1].plot(sizes, achieved, color=COLORS["timing-space Sobol, 512"], linewidth=2, label=f"timing-space pool, {TIMING_POOL // 1024}k")
-axes[1].set_xscale("log"); axes[1].set_xlabel("library size"); axes[1].set_ylabel("max pairwise cosine in chosen set")
+axes[1].plot(
+    sizes,
+    curves_by_measure["cosine (raw curves)"][1],
+    color=COLORS["Sobol (gamma box), 512"],
+    linewidth=2,
+    label="gamma-box pool, 16k",
+)
+axes[1].plot(
+    sizes,
+    achieved,
+    color=COLORS["timing-space Sobol, 512"],
+    linewidth=2,
+    label=f"timing-space pool, {TIMING_POOL // 1024}k",
+)
+axes[1].set_xscale("log")
+axes[1].set_xlabel("library size")
+axes[1].set_ylabel("max pairwise cosine in chosen set")
 axes[1].set_title("Farthest-point pruning, by candidate pool", fontsize=10, loc="left")
-axes[1].legend(frameon=False, fontsize=8); axes[1].spines[["top", "right"]].set_visible(False)
+axes[1].legend(frameon=False, fontsize=8)
+axes[1].spines[["top", "right"]].set_visible(False)
 fig.tight_layout()
 
-pd.DataFrame({
-    "gamma-box pool": {k: curves_by_measure["cosine (raw curves)"][1][k - 2] for k in (64, 128, 256, 512, 1024)},
-    "timing-space pool": {k: achieved[k - 2] for k in (64, 128, 256, 512, 1024)},
-    "Sobol 512 NN median": {512: float(np.median(nn["Sobol (gamma box), 512"]))},
-    "timing 512 NN median": {512: float(np.median(nn["timing-space Sobol, 512"]))},
-}).rename_axis("library size").round(4)
+pd.DataFrame(
+    {
+        "gamma-box pool": {
+            k: curves_by_measure["cosine (raw curves)"][1][k - 2]
+            for k in (64, 128, 256, 512, 1024)
+        },
+        "timing-space pool": {k: achieved[k - 2] for k in (64, 128, 256, 512, 1024)},
+        "Sobol 512 NN median": {512: float(np.median(nn["Sobol (gamma box), 512"]))},
+        "timing 512 NN median": {512: float(np.median(nn["timing-space Sobol, 512"]))},
+    }
+).rename_axis("library size").round(4)
 
 # %% [markdown]
 # ## The whole default library
@@ -295,7 +414,9 @@ pd.DataFrame({
 # %%
 from boldtailor.hrf_library import glmsingle_hrf_curves
 
-NSD_HRFS = glmsingle_hrf_curves()  # 20 HRFs x 501 samples on a 0.1 s grid, each at peak one
+NSD_HRFS = (
+    glmsingle_hrf_curves()
+)  # 20 HRFs x 501 samples on a 0.1 s grid, each at peak one
 NSD_TIMES = 0.1 * np.arange(NSD_HRFS.shape[1])
 NSD_COLOR = "#C96A2B"
 
@@ -306,15 +427,36 @@ def plot_library(ax, lib, title):
     norm = plt.Normalize(peak_times[1:].min(), peak_times[1:].max())
     cmap = plt.get_cmap("Blues")
     for curve, peak in zip(lib_curves[1:], peak_times[1:]):
-        ax.plot(lib.times, curve, color=cmap(0.25 + 0.75 * norm(peak)), linewidth=0.5, alpha=0.35)
+        ax.plot(
+            lib.times,
+            curve,
+            color=cmap(0.25 + 0.75 * norm(peak)),
+            linewidth=0.5,
+            alpha=0.35,
+        )
     for i, hrf in enumerate(NSD_HRFS):
-        ax.plot(NSD_TIMES, hrf, color=NSD_COLOR, linewidth=1.0, alpha=0.9, label="GLMsingle / NSD library (20)" if i == 0 else None)
-    ax.plot(lib.times, lib_curves[0], color="black", linewidth=1.5, label="canonical SPM (id 0)")
+        ax.plot(
+            NSD_TIMES,
+            hrf,
+            color=NSD_COLOR,
+            linewidth=1.0,
+            alpha=0.9,
+            label="GLMsingle / NSD library (20)" if i == 0 else None,
+        )
+    ax.plot(
+        lib.times,
+        lib_curves[0],
+        color="black",
+        linewidth=1.5,
+        label="canonical SPM (id 0)",
+    )
     ax.axhline(0, color="#888888", linewidth=0.8)
     ax.set_title(f"{title}: {len(lib_curves) - 1} candidates", fontsize=10, loc="left")
-    ax.set_xlabel("time (s)"); ax.set_xlim(0, 32)
+    ax.set_xlabel("time (s)")
+    ax.set_xlim(0, 32)
     ax.spines[["top", "right"]].set_visible(False)
     return plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.2), sharey=True)
 mappables = [
@@ -324,11 +466,15 @@ mappables = [
 axes[0].set_ylabel("response (peak = 1)")
 axes[0].legend(frameon=False, fontsize=8, loc="upper right")
 for ax, mappable in zip(axes, mappables):
-    fig.colorbar(mappable, ax=ax, pad=0.02, fraction=0.04).set_label("peak time (s)", fontsize=8)
+    fig.colorbar(mappable, ax=ax, pad=0.02, fraction=0.04).set_label(
+        "peak time (s)", fontsize=8
+    )
 fig.tight_layout()
 
 timing_realized = timing_default.timing_table
-timing_realized[["peak_time", "response_fwhm", "trough_time", "undershoot_fwhm", "trough_depth"]].iloc[1:].describe().loc[["min", "50%", "max"]].round(3)
+timing_realized[
+    ["peak_time", "response_fwhm", "trough_time", "undershoot_fwhm", "trough_depth"]
+].iloc[1:].describe().loc[["min", "50%", "max"]].round(3)
 
 # %% [markdown]
 # ## Observations (seed 0, 16,384 Sobol samples + canonical)

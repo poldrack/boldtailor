@@ -50,8 +50,11 @@
 from pathlib import Path
 import sys
 
-repo = next(p for p in (Path.cwd(), *Path.cwd().parents)
-            if (p / "src/boldtailor").is_dir() and (p / "pyproject.toml").is_file())
+repo = next(
+    p
+    for p in (Path.cwd(), *Path.cwd().parents)
+    if (p / "src/boldtailor").is_dir() and (p / "pyproject.toml").is_file()
+)
 if str(repo) not in sys.path:
     sys.path.insert(0, str(repo))
 
@@ -63,7 +66,10 @@ from boldtailor.workflow.run import run_workflow
 from examples.NSD.nsd_settings import nsd_paths, nsd_settings
 
 config = dict(
-    subject="sub-07", session="ses-nsd10", bids_root="/Volumes/extdata1/NSD/BIDS", n_jobs=12,
+    subject="sub-07",
+    session="ses-nsd10",
+    bids_root="/Volumes/extdata1/NSD/BIDS",
+    n_jobs=12,
     # max_grayordinates=128, n_jobs=4, block_size=4096, existing_results="overwrite",
     # ridge_mode="fractional_cv",  # "fractional_cv", "cv", "fixed" (with ridge_alpha), or "off"
     # hrf_library="default", hrf_n_samples=512, hrf_seed=0, hrf_selection_rt=True,
@@ -118,7 +124,9 @@ def show(*names):
 # scans. The run table lists trials, retained and dropped scans, and modulator summaries.
 
 # %%
-runs = pd.read_csv(settings.output_dir / f"{settings.stem}_desc-boldtailor_runs.tsv", sep="\t")
+runs = pd.read_csv(
+    settings.output_dir / f"{settings.stem}_desc-boldtailor_runs.tsv", sep="\t"
+)
 display(runs)
 
 # %% [markdown]
@@ -156,7 +164,13 @@ show("Library", "HRFReliability", "HRFCurveReliability")
 # independent; they are unthresholded and uncorrected.
 
 # %%
-show("RidgeTuning", "FractionSelection", "BetaR2Surface", "BetaActivation", "BetaActivationSurface")
+show(
+    "RidgeTuning",
+    "FractionSelection",
+    "BetaR2Surface",
+    "BetaActivation",
+    "BetaActivationSurface",
+)
 
 # %% [markdown]
 # ## 7. Reaction-time associations

@@ -48,8 +48,9 @@
 from pathlib import Path
 import sys
 
-repo = next(p for p in (Path.cwd(), *Path.cwd().parents)
-            if (p / "src/boldtailor").is_dir())
+repo = next(
+    p for p in (Path.cwd(), *Path.cwd().parents) if (p / "src/boldtailor").is_dir()
+)
 if str(repo) not in sys.path:
     sys.path.insert(0, str(repo))
 
@@ -63,22 +64,41 @@ from examples.NSD.multisession_inputs import load_sessions
 from examples.NSD.multisession_analysis import analyze_sessions
 from examples.NSD.multisession_outputs import beta_summary_table, save_multisession
 from examples.NSD.multisession_plots import (
-    METRIC_LABELS, beta_change_figure, comparison_surface, choose_grayordinate,
-    grayordinate_hrf_figure, grayordinate_beta_figure, glm_effect_figures,
+    METRIC_LABELS,
+    beta_change_figure,
+    comparison_surface,
+    choose_grayordinate,
+    grayordinate_hrf_figure,
+    grayordinate_beta_figure,
+    glm_effect_figures,
     peak_time_surface,
 )
 from examples.NSD.session_hrf_plots import agreement_figure
 from boldtailor.workflow.surfaces import find_surface_meshes
 
-config = dict(subject="sub-07", sessions=[f"ses-nsd{i}" for i in range(10, 20)],
-              estimators=["OLS", "FractionalCV"], fit_missing=True,
-              analysis_config={}, surface_maps=True, surface_meshes=None,
-              grayordinate=None, save_results=True)
+config = dict(
+    subject="sub-07",
+    sessions=[f"ses-nsd{i}" for i in range(10, 20)],
+    estimators=["OLS", "FractionalCV"],
+    fit_missing=True,
+    analysis_config={},
+    surface_maps=True,
+    surface_meshes=None,
+    grayordinate=None,
+    save_results=True,
+)
 config.update(globals().get("NSD_MULTI_CONFIG", {}))
-fit_config = resolve_paths({**config["analysis_config"], **nsd_paths(config),
-                            "subject": config["subject"]}, config["sessions"])
-config.update({k: fit_config[k] for k in ("bids_root", "fmriprep_root", "output_root")
-               if k in fit_config})
+fit_config = resolve_paths(
+    {**config["analysis_config"], **nsd_paths(config), "subject": config["subject"]},
+    config["sessions"],
+)
+config.update(
+    {
+        k: fit_config[k]
+        for k in ("bids_root", "fmriprep_root", "output_root")
+        if k in fit_config
+    }
+)
 output = Path(config["output_root"])
 figures = {}
 
@@ -94,16 +114,24 @@ figures = {}
 #
 
 # %%
-status = ensure_session_outputs(fit_config, config["sessions"],
-                                estimators=config["estimators"], fit_missing=config["fit_missing"])
+status = ensure_session_outputs(
+    fit_config,
+    config["sessions"],
+    estimators=config["estimators"],
+    fit_missing=config["fit_missing"],
+)
 display(status)
-loaded = load_sessions(output, config["subject"], config["sessions"],
-                       estimators=config["estimators"])
+loaded = load_sessions(
+    output, config["subject"], config["sessions"], estimators=config["estimators"]
+)
 result = analyze_sessions(loaded)
 brain = loaded["brain"]
 prep = nsd_settings(fit_config, session=config["sessions"][0]).fmriprep_dir
-meshes = (find_surface_meshes(prep, config["subject"],
-                             paths=config["surface_meshes"]) if config["surface_maps"] else None)
+meshes = (
+    find_surface_meshes(prep, config["subject"], paths=config["surface_meshes"])
+    if config["surface_maps"]
+    else None
+)
 print(f"{len(loaded['sessions'])} sessions; {len(brain):,} grayordinates")
 
 
@@ -133,13 +161,22 @@ hrf = result["hrf"]
 figures["HRFAgreement"] = agreement_figure(hrf)
 display(figures["HRFAgreement"])
 plt.close(figures["HRFAgreement"])
-display(pd.DataFrame({"pair": hrf["pair_names"],
-                      "valid_grayordinates": np.isfinite(hrf["pairwise"]).sum(axis=1)}))
+display(
+    pd.DataFrame(
+        {
+            "pair": hrf["pair_names"],
+            "valid_grayordinates": np.isfinite(hrf["pairwise"]).sum(axis=1),
+        }
+    )
+)
 if meshes is not None:
     figures["HRFSurface"] = comparison_surface(
         {"HRF Δr": hrf["summary"][2]},
-        brain, meshes, label="Δr: between-session − canonical baseline",
-        title="Full-HRF shape agreement above canonical baseline")
+        brain,
+        meshes,
+        label="Δr: between-session − canonical baseline",
+        title="Full-HRF shape agreement above canonical baseline",
+    )
     figures["HRFSurface"].axes[-1].yaxis.set_label_position("left")
     display(figures["HRFSurface"])
 
@@ -165,7 +202,9 @@ if meshes is not None:
     figures["HRFPeakTime"] = peak_time_surface(result, brain, meshes)
     display(figures["HRFPeakTime"])
 else:
-    print("Cortical surfaces unavailable; mean peak times and counts will still be saved.")
+    print(
+        "Cortical surfaces unavailable; mean peak times and counts will still be saved."
+    )
 
 
 # %% [markdown]
@@ -196,7 +235,9 @@ if meshes is not None:
     for figure in glm_figures.values():
         display(figure)
 else:
-    print("Cortical surfaces unavailable; GLM coefficient summaries will still be saved.")
+    print(
+        "Cortical surfaces unavailable; GLM coefficient summaries will still be saved."
+    )
 
 
 # %% [markdown]
@@ -234,8 +275,13 @@ if meshes is not None:
         maps = {e: values["difference_mean"][i] for e, values in result["beta"].items()}
         name = "Change_" + metric
         figures[name] = comparison_surface(
-            maps, brain, meshes, label="Optimized − canonical: " + METRIC_LABELS[metric],
-            title="Mean paired session change: " + METRIC_LABELS[metric], t_scale=metric == "task_t")
+            maps,
+            brain,
+            meshes,
+            label="Optimized − canonical: " + METRIC_LABELS[metric],
+            title="Mean paired session change: " + METRIC_LABELS[metric],
+            t_scale=metric == "task_t",
+        )
         display(figures[name])
 
 
@@ -253,7 +299,9 @@ vertex = choose_grayordinate(loaded, result, config["grayordinate"])
 if vertex is None:
     print("No grayordinate has HRF estimates in two sessions.")
 else:
-    print(f"Grayordinate {vertex}: {brain.name[vertex]}, surface vertex {brain.vertex[vertex]}")
+    print(
+        f"Grayordinate {vertex}: {brain.name[vertex]}, surface vertex {brain.vertex[vertex]}"
+    )
     figures["GrayordinateHRFs"] = grayordinate_hrf_figure(loaded, result, vertex)
     display(figures["GrayordinateHRFs"])
     figures["GrayordinateBetas"], detail = grayordinate_beta_figure(loaded, vertex)
@@ -275,8 +323,9 @@ else:
 # %%
 if config["save_results"]:
     paths = save_multisession(output, loaded, result, figures=figures)
-    print(f"Saved {len(paths)} aggregate files under {output / config['subject'] / 'func'}")
+    print(
+        f"Saved {len(paths)} aggregate files under {output / config['subject'] / 'func'}"
+    )
 else:
     paths = ()
     print("Aggregate saving disabled.")
-

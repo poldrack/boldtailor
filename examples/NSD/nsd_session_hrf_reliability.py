@@ -43,7 +43,9 @@
 from pathlib import Path
 import sys
 
-repo = next(p for p in (Path.cwd(), *Path.cwd().parents) if (p / "src/boldtailor").is_dir())
+repo = next(
+    p for p in (Path.cwd(), *Path.cwd().parents) if (p / "src/boldtailor").is_dir()
+)
 if str(repo) not in sys.path:
     sys.path.insert(0, str(repo))
 
@@ -52,15 +54,21 @@ from examples.NSD.nsd_settings import nsd_paths
 overrides = globals().get("HRF_RELIABILITY_CONFIG", {})
 settings = dict(
     reuse_roots=[],
-    subject="sub-07", sessions=[f"ses-nsd{i}" for i in range(10, 20)],
-    hrf_n_samples=512, hrf_seed=0,
+    subject="sub-07",
+    sessions=[f"ses-nsd{i}" for i in range(10, 20)],
+    hrf_n_samples=512,
+    hrf_seed=0,
     hrf_selection_rt=True,  # False scores HRFs without the RT regressor.
-    n_jobs=4, block_size=4096, max_grayordinates=None,
+    n_jobs=4,
+    block_size=4096,
+    max_grayordinates=None,
 )
 settings.update(overrides)
 settings.update(nsd_paths(overrides))
 settings.setdefault("fmriprep_root", None)  # None: derivatives/fmriprep*
-settings.setdefault("output_root", str(Path(settings["bids_root"]) / "derivatives/boldtailor"))
+settings.setdefault(
+    "output_root", str(Path(settings["bids_root"]) / "derivatives/boldtailor")
+)
 
 import numpy as np
 import pandas as pd
@@ -70,10 +78,15 @@ from boldtailor.hrf_library import sobol_hrf_library
 from examples.NSD.session_hrf import estimate_sessions
 from boldtailor.reliability import compare_hrfs, SUMMARY_NAMES
 from examples.NSD.session_hrf_outputs import session_table, save_reliability
-from examples.NSD.session_hrf_plots import agreement_figure, parameter_variability_figure
+from examples.NSD.session_hrf_plots import (
+    agreement_figure,
+    parameter_variability_figure,
+)
 
 library = sobol_hrf_library(settings["hrf_n_samples"], seed=settings["hrf_seed"])
-print(f"{len(settings['sessions'])} sessions; {len(library.candidates)} HRFs; seed {settings['hrf_seed']}")
+print(
+    f"{len(settings['sessions'])} sessions; {len(library.candidates)} HRFs; seed {settings['hrf_seed']}"
+)
 print(f"Library fingerprint: {library.fingerprint}")
 display(library.parameter_table.head())
 
@@ -88,10 +101,16 @@ display(library.parameter_table.head())
 
 # %%
 estimates = estimate_sessions(
-    settings["bids_root"], settings["fmriprep_root"], settings["output_root"],
-    library=library, sessions=settings["sessions"], subject=settings["subject"],
-    n_jobs=settings["n_jobs"], block_size=settings["block_size"],
-    max_grayordinates=settings["max_grayordinates"], reuse_roots=settings["reuse_roots"],
+    settings["bids_root"],
+    settings["fmriprep_root"],
+    settings["output_root"],
+    library=library,
+    sessions=settings["sessions"],
+    subject=settings["subject"],
+    n_jobs=settings["n_jobs"],
+    block_size=settings["block_size"],
+    max_grayordinates=settings["max_grayordinates"],
+    reuse_roots=settings["reuse_roots"],
     include_rt=settings["hrf_selection_rt"],
 )
 display(session_table(estimates))
@@ -111,11 +130,15 @@ display(session_table(estimates))
 
 # %%
 hrf_ids = np.stack([estimate.maps[0] for estimate in estimates])
-comparison = compare_hrfs(library, hrf_ids, [estimate.session for estimate in estimates])
+comparison = compare_hrfs(
+    library, hrf_ids, [estimate.session for estimate in estimates]
+)
 figures = {"agreement": agreement_figure(comparison)}
 plt.show()
 valid = np.isfinite(comparison["summary"][:3]).all(axis=0)
-display(pd.DataFrame(comparison["summary"][:, valid].T, columns=SUMMARY_NAMES).describe())
+display(
+    pd.DataFrame(comparison["summary"][:, valid].T, columns=SUMMARY_NAMES).describe()
+)
 
 
 # %% [markdown]
@@ -142,8 +165,14 @@ plt.show()
 #
 
 # %%
-paths = save_reliability(settings["output_root"], estimates, library, comparison,
-                         subject=settings["subject"], settings=settings, figures=figures)
+paths = save_reliability(
+    settings["output_root"],
+    estimates,
+    library,
+    comparison,
+    subject=settings["subject"],
+    settings=settings,
+    figures=figures,
+)
 print(f"Saved {len(paths)} comparison files under {settings['output_root']}")
 display(pd.DataFrame({"path": [str(path) for path in paths]}))
-
