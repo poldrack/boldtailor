@@ -6,12 +6,46 @@ import pandas as pd
 
 from experiments.nsd_replication import figures
 from experiments.nsd_replication.comparison import LEVELS
+from experiments.nsd_replication.config import session_summary
+from experiments.nsd_replication.metric_tables import SESSIONS_COLUMN
 
 R2_LEVELS = ("b2", "b2-lib20")
 
 
-def _read(path):
-    return pd.read_csv(path, sep="\t") if path.is_file() else None
+def _check_window(table, path, sessions):
+    """A metric table must have been computed over exactly ``sessions``."""
+    stored = set(table[SESSIONS_COLUMN].astype(str))
+    if stored != {"|".join(sessions)}:
+        found = ", ".join(sorted(stored))
+        raise ValueError(
+            f"{path} was computed over sessions {found}, not "
+            f"{'|'.join(sessions)}; run metrics with the same --sessions first"
+        )
+    return table
+
+
+def _select_rows(table, path, sessions):
+    """A feature table keeps only ``sessions``' rows; each must be present."""
+    missing = [s for s in sessions if s not in set(table["session"])]
+    if missing:
+        raise ValueError(
+            f"{path} has no rows for {missing}; run features for those sessions first"
+        )
+    return table[table["session"].isin(sessions)].reset_index(drop=True)
+
+
+def _windowed(table, path, sessions):
+    if SESSIONS_COLUMN in table:
+        return _check_window(table, path, sessions)
+    if "session" in table:
+        return _select_rows(table, path, sessions)
+    raise ValueError(f"{path} records no session window; rerun with --recompute")
+
+
+def _read(path, sessions):
+    if not path.is_file():
+        return None
+    return _windowed(pd.read_csv(path, sep="\t"), path, sessions)
 
 
 def _r4(table):
@@ -40,18 +74,23 @@ def _subject_figures(metrics):
     }
 
 
-def _load_subject_tables(metrics_dir):
+def _load_subject_tables(metrics_dir, sessions):
     names = ("r1", "r3b", "r6", "r4_t0.0", "r4_t0.3", "features_rt", "features_gate")
-    loaded = {n: _read(metrics_dir / f"{n}.tsv") for n in names}
-    loaded["r2"] = _r2_summaries(metrics_dir)
+    loaded = {n: _read(metrics_dir / f"{n}.tsv", sessions) for n in names}
+    loaded["r2"] = _r2_summaries(metrics_dir, sessions)
     return {n: t for n, t in loaded.items() if t is not None}
 
 
-def _r2_summaries(metrics_dir):
+def _r2_summaries(metrics_dir, sessions):
     """ROI summaries of R2, one row per HRF library level found."""
-    found = [_read(metrics_dir / f"r2_{lv}_roi.tsv") for lv in R2_LEVELS]
+    found = [_read(metrics_dir / f"r2_{lv}_roi.tsv", sessions) for lv in R2_LEVELS]
     found = [t for t in found if t is not None]
     return pd.concat(found, ignore_index=True) if found else None
+
+
+def _with_footer(fig, footer):
+    fig.text(0.5, 0.0, footer, ha="center", va="top", fontsize=7, color="0.4")
+    return fig
 
 
 def _save(fig, path):
@@ -60,25 +99,27 @@ def _save(fig, path):
     plt.close(fig)
 
 
-def _render(items, out_dir, label):
+def _render(items, out_dir, label, footer):
     for name, (data, builder) in items.items():
         if data is None or len(data) == 0:
             print(f"skipped {label}/{name}: input tables missing")
             continue
-        _save(builder(data), out_dir / f"{name}.png")
+        _save(_with_footer(builder(data), footer), out_dir / f"{name}.png")
 
 
 def subject_figures(config, subject):
-    metrics = _load_subject_tables(config.output_dir / "metrics" / "ppdata" / subject)
+    metrics_dir = config.output_dir / "metrics" / "ppdata" / subject
+    metrics = _load_subject_tables(metrics_dir, config.sessions)
     out = config.output_dir / "figures" / subject
-    _render(_subject_figures(metrics), out, subject)
+    _render(_subject_figures(metrics), out, subject, session_summary(config))
 
 
 def _parity_table(config):
     frames = []
     for subject in config.subjects:
         median = _read(
-            config.output_dir / "metrics" / "comparison" / subject / "r1_median.tsv"
+            config.output_dir / "metrics" / "comparison" / subject / "r1_median.tsv",
+            config.sessions,
         )
         if median is not None:
             frames.append(_subject_parity(subject, median))
@@ -104,7 +145,8 @@ def _rsa_tables(config):
     group = "group_" + "_".join(config.subjects)
     for level in LEVELS:
         table = _read(
-            config.output_dir / "metrics" / "ppdata" / group / f"rsa_{level}.tsv"
+            config.output_dir / "metrics" / "ppdata" / group / f"rsa_{level}.tsv",
+            config.sessions,
         )
         if table is not None:
             found[level] = table
@@ -117,7 +159,7 @@ def group_figures(config):
         "rsa": (_rsa_tables(config), figures.fig_r5_rsa),
         "parity": (_parity_table(config), figures.fig_parity),
     }
-    _render(items, out, "group")
+    _render(items, out, "group", session_summary(config))
 
 
 def make_figures(config):

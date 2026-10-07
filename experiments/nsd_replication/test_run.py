@@ -761,7 +761,8 @@ def test_failed_run_keeps_record_without_completion(config, monkeypatch):
 
 
 def test_feature_merge_on_a_subset_keeps_config_order(config):
-    full = replace(config, sessions=("ses-a", "ses-b", "ses-c"))
+    sessions = ("ses-a", "ses-b", "ses-c")
+    full = replace(config, sessions=sessions, configured_sessions=None)
     narrowed = select_sessions(full, ["ses-b"])
     rows = lambda *s: pd.DataFrame({"session": list(s), "r": range(len(s))})
     for name in run.FEATURE_TABLES:

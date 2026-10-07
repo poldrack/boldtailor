@@ -141,5 +141,7 @@ def test_configured_sessions_not_a_toml_key(tmp_path):
 
 def test_session_summary(four_sessions):
     selected = select_sessions(four_sessions, ["ses-nsd01", "ses-nsd03"])
-    assert session_summary(selected) == "sessions: ses-nsd01, ses-nsd03 (2 of 4 in config)"
+    assert (
+        session_summary(selected) == "sessions: ses-nsd01, ses-nsd03 (2 of 4 in config)"
+    )
     assert session_summary(four_sessions).endswith("(4 of 4 in config)")
