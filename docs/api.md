@@ -798,7 +798,7 @@ front end.
 | `save_workflow(...)` | `boldtailor.workflow.outputs` | Publish maps, designs, tables, provenance, figures, settings file, and report together |
 | `render_report(settings, *, runs, task_model, ...)` | `boldtailor.workflow.report` | The self-contained HTML report with embedded PNG figures (bytes) and the equivalent command line |
 | `selected_hrfs`, `encoding_scores`, `ridge_boundary`, `input_tables` | `boldtailor.workflow.summaries` | Report tables built from in-memory results |
-| `build_parser`, `settings_from_args`, `main` | `boldtailor.cli` | Argument parser, args to `WorkflowSettings`, and the `boldtailor` entry point (returns the exit code) |
+| `build_parser`, `sessions_from_args`, `settings_from_args`, `main` | `boldtailor.cli` | Argument parser, the requested sessions in run order, args to one session's `WorkflowSettings` (`settings_from_args(args, session)`), and the `boldtailor` entry point (returns the exit code) |
 
 See the [user guide](user-guide.md#running-the-full-workflow) for flags, outputs,
 and exit codes.

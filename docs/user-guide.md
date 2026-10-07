@@ -956,10 +956,26 @@ and BOLD sidecars), then publishes a BIDS derivative and an HTML report:
 uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
 ```
 
-Add `--dry-run` to print the resolved plan (runs, detected task model, notes,
-output directory, stages, and any `problems`) as JSON without fitting. Each
-problem is also printed on stderr, and the dry run exits with the code the real
-run would (see below).
+To analyze several sessions, list them after `--session`. Each session is run
+separately, in sorted order, with its own outputs and its own report, exactly
+as if it had been run alone:
+
+```bash
+uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 ses-nsd02 --task nsdcore
+```
+
+Every listed session is checked for input problems and existing outputs before
+any is fitted, so a problem in a later session stops the command before any
+work is done; each problem names its session. A session listed twice is a
+settings error. After each session the command prints
+`<session>: wrote N files under <output-dir>; report: <path>`, and at the end
+`ran 2 sessions of sub-01 task-nsdcore: ses-nsd01, ses-nsd02`.
+
+Add `--dry-run` to print the resolved plan (session, runs, detected task model,
+notes, output directory, stages, and any `problems`) as JSON without fitting;
+with several sessions it prints a list of plans, one per session. Each problem
+is also printed on stderr, prefixed with its session, and the dry run exits
+with the code the real run would (see below).
 Progress is logged to stderr with timestamps; `--quiet` keeps only warnings. The same analysis is available from
 Python as `WorkflowSettings` and `run_workflow` (see the
 [API reference](api.md#session-workflow-and-command-line)).
@@ -970,7 +986,7 @@ Flags are grouped as in `boldtailor run --help`.
 
 | Group | Flag | Meaning (default) |
 | --- | --- | --- |
-| inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject and session labels such as `sub-01`, `ses-nsd01` |
+| inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject and session labels such as `sub-01`, `ses-nsd01`; `--session` takes one or more sessions, each run separately |
 | inputs | `--fmriprep-dir` | fMRIPrep derivatives (found under `<bids-dir>/derivatives/fmriprep*`) |
 | inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`); may not be the BIDS root or overlap the fMRIPrep directory |
 | inputs | `--space` | Only `fsLR-91k` |
@@ -1109,9 +1125,9 @@ error before fitting.
 
 ### Existing results and exit codes
 
-By default (`--existing-results error`) the command stops before loading any
-data if any `<sub>_<ses>_task-<task>_*` file already exists in the session's
-`func` directory, or the root report exists. With `overwrite`, it replaces the
+By default (`--existing-results error`) the command stops before fitting
+anything if any `<sub>_<ses>_task-<task>_*` file already exists in a listed
+session's `func` directory, or that session's root report exists. With `overwrite`, it replaces the
 files it writes and removes stale files only if the earlier run listed them in
 the `artifacts` field of its `desc-boldtailor_metadata.json`; files boldtailor
 did not write, run inputs, and other sessions are never touched. Sessions

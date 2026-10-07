@@ -109,6 +109,8 @@ plus an HTML report:
 uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
 ```
 
+List several sessions after `--session` (`--session ses-nsd01 ses-nsd02`) to
+run each one separately, with its own outputs and report.
 Results go to `<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`
 unless `--output-dir` is given. Add `--dry-run` to see the resolved plan first.
 The [user guide](docs/user-guide.md#running-the-full-workflow) lists every flag,

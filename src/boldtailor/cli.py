@@ -1,4 +1,4 @@
-"""Command line: `boldtailor run` executes the workflow on one BIDS subject and session."""
+"""Command line: `boldtailor run` executes the workflow on one BIDS subject's sessions."""
 
 import argparse
 import json
@@ -51,7 +51,13 @@ def _add_inputs(run):
     group = run.add_argument_group("inputs")
     group.add_argument("--bids-dir", type=Path, required=True)
     group.add_argument("--subject", required=True)
-    group.add_argument("--session", required=True)
+    group.add_argument(
+        "--session",
+        required=True,
+        nargs="+",
+        metavar="SESSION",
+        help="one or more sessions; each is run separately, in sorted order",
+    )
     group.add_argument("--task", required=True)
     group.add_argument("--fmriprep-dir", type=Path)
     group.add_argument("--output-dir", type=Path)
@@ -121,7 +127,9 @@ def build_parser():
         prog="boldtailor", description="First-level fMRI modelling with tailored HRFs."
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    run = sub.add_parser("run", help="run the full workflow on one subject and session")
+    run = sub.add_parser(
+        "run", help="run the full workflow on one subject's sessions, one at a time"
+    )
     for add in (_add_inputs, _add_hrf, _add_ridge, _add_stages, _add_execution):
         add(run)
     return parser
@@ -141,12 +149,28 @@ def _modulators(args):
     return tuple(args.modulator) if args.modulator else None
 
 
-def settings_from_args(args):
+def sessions_from_args(args):
+    """The requested sessions in run (sorted) order; a repeat is an error."""
+    repeated = sorted({s for s in args.session if args.session.count(s) > 1})
+    if repeated:
+        raise ValueError(f"session {', '.join(repeated)} given more than once")
+    return tuple(sorted(args.session))
+
+
+def _only_session(args):
+    sessions = sessions_from_args(args)
+    if len(sessions) != 1:
+        raise ValueError(f"several sessions given ({', '.join(sessions)}); pick one")
+    return sessions[0]
+
+
+def settings_from_args(args, session=None):
+    """Settings for one session: ``session``, or the only one requested."""
     meshes = dict(args.surface_mesh) if args.surface_mesh else None
     return WorkflowSettings(
         bids_dir=args.bids_dir,
         subject=args.subject,
-        session=args.session,
+        session=session or _only_session(args),
         task=args.task,
         fmriprep_dir=args.fmriprep_dir,
         output_dir=args.output_dir,
@@ -181,31 +205,60 @@ def _configure_logging(quiet):
     logging.getLogger("boldtailor.workflow").setLevel(level)
 
 
-def _run(args, settings):
+def _plan(settings):
     from boldtailor.workflow import run as workflow_run
 
-    _configure_logging(args.quiet)
-    if args.dry_run:
-        plan = dict(
-            settings=settings.to_dict(), **workflow_run.describe_inputs(settings)
-        )
-        print(json.dumps(plan, indent=2))
-        return _plan_status(plan["problems"])
+    return dict(
+        session=settings.session,
+        settings=settings.to_dict(),
+        **workflow_run.describe_inputs(settings),
+    )
+
+
+def _print_plans(plans):
+    print(json.dumps(plans[0] if len(plans) == 1 else plans, indent=2))
+
+
+def _run_session(settings):
+    from boldtailor.workflow import run as workflow_run
+
     result = workflow_run.run_workflow(settings)
     print(
-        f"wrote {len(result.paths)} files under {settings.output_dir}; report: {result.report_path}"
+        f"{settings.session}: wrote {len(result.paths)} files under "
+        f"{settings.output_dir}; report: {result.report_path}"
     )
+
+
+def _summary(sessions):
+    first, names = sessions[0], ", ".join(s.session for s in sessions)
+    noun = "session" if len(sessions) == 1 else "sessions"
+    return f"ran {len(sessions)} {noun} of {first.subject} task-{first.task}: {names}"
+
+
+def _run(args, sessions):
+    """Check every session before fitting any, then run them one at a time."""
+    _configure_logging(args.quiet)
+    plans = [_plan(settings) for settings in sessions]
+    if args.dry_run:
+        _print_plans(plans)
+    status = _plan_status(plans)
+    if args.dry_run or status:
+        return status
+    for settings in sessions:
+        _run_session(settings)
+    print(_summary(sessions))
     return 0
 
 
-def _plan_status(problems):
-    """Report a dry run's problems and exit as the real run would (in run order)."""
-    for problem in problems:
+def _plan_status(plans):
+    """Report the plans' problems and exit as the real run would (in run order)."""
+    problems = [(p["session"], problem) for p in plans for problem in p["problems"]]
+    for session, problem in problems:
         prefix = "input error" if problem["kind"] == "input" else "error"
-        print(f"{prefix}: {problem['message']}", file=sys.stderr)
+        print(f"{prefix}: {session}: {problem['message']}", file=sys.stderr)
     if not problems:
         return 0
-    return 2 if problems[0]["kind"] == "input" else 1
+    return 2 if problems[0][1]["kind"] == "input" else 1
 
 
 def _fail(message, code):
@@ -218,11 +271,11 @@ def _execute(args):
     from boldtailor.workflow.inputs import InputError
 
     try:
-        settings = settings_from_args(args)
+        sessions = [settings_from_args(args, s) for s in sessions_from_args(args)]
     except ValueError as error:
         return _fail(f"error: {error}", 1)
     try:
-        return _run(args, settings)
+        return _run(args, sessions)
     except (InputError, FileNotFoundError) as error:
         return _fail(f"input error: {error}", 2)
     except FileExistsError as error:
