@@ -199,3 +199,14 @@ def copy_task(root, prep, task):
         for source in list(func.glob("*task-nsdcore*")):
             target = source.with_name(source.name.replace("nsdcore", task))
             target.write_bytes(source.read_bytes())
+
+
+def copy_session(root, prep, session):
+    """Duplicate every ses-nsd10 file as another session of the same subject."""
+    for directory in (root, prep):
+        source_dir = directory / "sub-07/ses-nsd10/func"
+        target_dir = directory / "sub-07" / session / "func"
+        target_dir.mkdir(parents=True)
+        for source in source_dir.iterdir():
+            target = target_dir / source.name.replace("ses-nsd10", session)
+            target.write_bytes(source.read_bytes())
