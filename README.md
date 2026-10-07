@@ -12,6 +12,8 @@ You can estimate condition contrasts, measure variance explained by a task,
 fit a separate response for every trial, and select an HRF for each brain
 location using prediction across runs.
 
+**NOTE**:  Boldtailor is still in active development and not ready for prime time.  The API is likely to change without warning and not all features have been validated.
+
 The Python API works with NumPy arrays and pandas tables. The repository also
 includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 
