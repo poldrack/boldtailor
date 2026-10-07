@@ -7,6 +7,7 @@ import pytest
 
 from experiments.nsd_replication import run
 from experiments.nsd_replication.comparison import LEVELS
+from experiments.nsd_replication.config import select_sessions
 from experiments.nsd_replication.betas import fit_dir, is_complete, read_fit, write_fit
 
 
@@ -268,21 +269,31 @@ def _synthetic_metrics(config):
     import pandas as pd
 
     out = config.output_dir / "metrics"
+    window = "|".join(config.sessions)
     curves = pd.DataFrame(
         {
             "version": ["b1", "b4"] * 2,
             "threshold": [0.0, 0.0, 0.2, 0.2],
             "n_features": 9,
             "mean_difference": [0.0, 0.1, 0.0, 0.2],
+            "sessions": window,
         }
     )
     for sub in config.subjects:
         _write_tsv(out / "ppdata" / sub / "r1.tsv", curves)
         versions = [f"{s}:{lv}" for s in ("ppdata", "released") for lv in LEVELS]
-        median = pd.DataFrame({"version": versions, "median": np.arange(6) / 10})
+        median = pd.DataFrame(
+            {"version": versions, "median": np.arange(6) / 10, "sessions": window}
+        )
         _write_tsv(out / "comparison" / sub / "r1_median.tsv", median)
     rsa = pd.DataFrame(
-        {"threshold": [0.0], "subject_a": ["a"], "subject_b": ["b"], "r": [0.3]}
+        {
+            "threshold": [0.0],
+            "subject_a": ["a"],
+            "subject_b": ["b"],
+            "r": [0.3],
+            "sessions": [window],
+        }
     )
     group = "group_" + "_".join(config.subjects)
     _write_tsv(out / "ppdata" / group / "rsa_b4.tsv", rsa)
@@ -305,7 +316,8 @@ def test_figures_cli(tmp_path, config):
     config_toml = tmp_path / "c.toml"
     config_toml.write_text(
         f'bids_dir="{tmp_path}"\noutput_dir="{config.output_dir}"\n'
-        f'freesurfer_dir="{tmp_path}"\nsubjects=["sub-07"]\nsessions=["ses-a"]\n'
+        f'freesurfer_dir="{tmp_path}"\nsubjects=["sub-07"]\n'
+        'sessions=["ses-a", "ses-b"]\n'
     )
     _synthetic_metrics(config)
     assert run.main(["figures", "--config", str(config_toml)]) == 0
@@ -520,6 +532,7 @@ def test_figures_render_r2_summary(config):
                 "mean_pairwise_r": [0.5],
                 "mean_canonical_baseline": [0.2],
                 "n_features": [20],
+                "sessions": ["ses-a|ses-b"],
             }
         )
         _write_tsv(out / f"r2_{level}_roi.tsv", summary)
@@ -686,3 +699,75 @@ def test_session_window_change_requires_recompute(config, patched):
     run.subject_metrics(narrowed, "ppdata", "sub-07", ("b1",), recompute=True)
     r1 = config.output_dir / "metrics/ppdata/sub-07/r1.tsv"
     assert set(pd.read_csv(r1, sep="\t")["sessions"]) == {"ses-a"}
+
+
+@pytest.fixture
+def fitted_sessions(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        run, "fit_session", lambda c, src, sub, ses, levels, refit: seen.append(ses)
+    )
+    return seen
+
+
+def _run_records(config):
+    return sorted((config.output_dir / "run_records").glob("*.json"))
+
+
+def test_main_fit_limited_to_selected_sessions(config, fitted_sessions):
+    toml = _write_config(config)
+    run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
+    assert fitted_sessions == ["ses-b"]
+
+
+def test_main_without_sessions_fits_every_session(config, fitted_sessions):
+    run.main(["fit", "--config", str(_write_config(config)), "--levels", "b1"])
+    assert fitted_sessions == ["ses-a", "ses-b"]
+
+
+def test_main_rejects_unconfigured_session(config, fitted_sessions):
+    toml = _write_config(config)
+    with pytest.raises(ValueError, match="ses-z"):
+        run.main(["fit", "--config", str(toml), "--sessions", "ses-a", "ses-z"])
+    assert fitted_sessions == []
+
+
+def test_main_prints_sessions_run(config, fitted_sessions, capsys):
+    toml = _write_config(config)
+    run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
+    assert "sessions: ses-b (1 of 2 in config)" in capsys.readouterr().out
+
+
+def test_main_writes_completed_run_record(config, fitted_sessions):
+    toml = _write_config(config)
+    run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
+    (path,) = _run_records(config)
+    record = json.loads(path.read_text())
+    assert record["sessions_run"] == ["ses-b"]
+    assert record["config_sessions"] == ["ses-a", "ses-b"]
+    assert record["session_subset"] is True
+    assert "completed_at" in record
+
+
+def test_failed_run_keeps_record_without_completion(config, monkeypatch):
+    def boom(*args):
+        raise RuntimeError("fit failed")
+
+    monkeypatch.setattr(run, "fit_session", boom)
+    with pytest.raises(RuntimeError):
+        run.main(["fit", "--config", str(_write_config(config)), "--levels", "b1"])
+    (path,) = _run_records(config)
+    assert "completed_at" not in json.loads(path.read_text())
+
+
+def test_feature_merge_on_a_subset_keeps_config_order(config):
+    full = replace(config, sessions=("ses-a", "ses-b", "ses-c"))
+    narrowed = select_sessions(full, ["ses-b"])
+    rows = lambda *s: pd.DataFrame({"session": list(s), "r": range(len(s))})
+    for name in run.FEATURE_TABLES:
+        _write_tsv(run._feature_table(full, "sub-07", name), rows("ses-a", "ses-c"))
+    out = {name: rows("ses-b") for name in run.FEATURE_TABLES}
+    run._merge_session(narrowed, "sub-07", "ses-b", out)
+    for name in run.FEATURE_TABLES:
+        merged = pd.read_csv(run._feature_table(full, "sub-07", name), sep="\t")
+        assert list(merged["session"]) == ["ses-a", "ses-b", "ses-c"]
