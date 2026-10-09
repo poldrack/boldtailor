@@ -1,7 +1,6 @@
 """Boldtailor's b1-b4 single-trial ladder for one cortical session."""
 
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,7 @@ from boldtailor.hrf_library import default_hrf_library, glmsingle_hrf_library
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.parallel import map_blocks
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
-from boldtailor.workflow.beta_series import trial_predictors
+from boldtailor.trial_encoding import trial_predictors
 
 from experiments.nsd_replication.inputs import analysis_data
 from experiments.nsd_replication.lss import lss_canonical, lss_selected
@@ -82,11 +81,7 @@ def denoised_confounds(session, result):
 
 
 def _predictors(session, task_model):
-    runs = [
-        SimpleNamespace(events=e, label=label)
-        for e, label in zip(session.events, session.labels)
-    ]
-    return trial_predictors(runs, task_model)
+    return trial_predictors(session.events, task_model, session.labels)
 
 
 def _b1_block(indices, session):

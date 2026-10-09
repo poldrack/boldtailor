@@ -20,7 +20,7 @@ from boldtailor.task_detection import detect_task_model
 from boldtailor.model import Modulator, TaskModel
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
-from boldtailor.trial_encoding import evaluate_trial_encoding
+from boldtailor.trial_encoding import evaluate_trial_encoding, trial_predictors
 from boldtailor.workflow import analysis, beta_series, inputs
 from tests.oracles import glm_run_sources
 
@@ -258,7 +258,7 @@ def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
         subset = [runs[r] for r in indices]
         scores = score_fraction_candidates(
             inputs.load_block(subset, root, np.arange(4), model),
-            beta_series.trial_predictors(subset, model),
+            trial_predictors([r.events for r in subset], model),
             library=library,
             fractions=[0.3, 0.7, 1],
         )
@@ -287,7 +287,7 @@ def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
     mixed = [ols.run_betas[r] if r in test else shrunk.run_betas[r] for r in range(6)]
     outer = evaluate_trial_encoding(
         mixed,
-        beta_series.trial_predictors(runs, model),
+        trial_predictors([r.events for r in runs], model),
         train_runs=train,
         test_runs=test,
     )
@@ -391,7 +391,7 @@ def test_outer_oracle_and_blocks(session, mode, fractional):
     final = result["final"]["provenance"][0]["record"]["activities"][-1]
     assert final["encoding_mode"] == mode
     data = inputs.load_block(runs, root, np.arange(4), model)
-    predictors = beta_series.trial_predictors(runs, model)
+    predictors = trial_predictors([r.events for r in runs], model)
     for scope, train, test in [
         ("odd_to_even", [0, 2, 4], [1, 3, 5]),
         ("even_to_odd", [1, 3, 5], [0, 2, 4]),

@@ -1,7 +1,7 @@
 """Fraction or shared-alpha tuning with independent odd/even evaluation."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from hashlib import sha256
 import logging
 from numbers import Integral, Real
@@ -30,13 +30,13 @@ from boldtailor.ridge_selection import (
 )
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
 from boldtailor.trial_encoding import (
+    trial_predictors,
     evaluate_trial_encoding,
     encoding_metadata,
     validate_encoding_mode,
 )
 from boldtailor.cifti import spatial_signature
 from boldtailor.parallel import map_blocks, validate_n_jobs
-from boldtailor._task_design import categorical_names
 from boldtailor.model import TaskModel
 from boldtailor.workflow import inputs
 from boldtailor.workflow.analysis import fit_beta_series
@@ -44,55 +44,6 @@ from boldtailor.workflow.files import odd_even_parity
 from boldtailor.workflow.inputs import _trimmed_sources, load_block
 
 log = logging.getLogger("boldtailor.workflow")
-
-
-def _indicator_frame(values, modulator, label):
-    """One 0/1 column per non-reference level; missing values become NaN."""
-    try:
-        names = categorical_names(values, replace(modulator, missing="indicator"))
-    except ValueError as error:
-        raise ValueError(f"{label}: {error}") from error
-    levels = [lv for lv in modulator.levels if lv != modulator.reference]
-    columns = {
-        name: [np.nan if n is None else float(n == lv) for n in names]
-        for name, lv in zip(modulator.regressor_names, levels, strict=True)
-    }
-    return pd.DataFrame(columns, index=values.index)
-
-
-def _predictor_frame(run, modulator):
-    if modulator.column not in run.events:
-        raise ValueError(
-            f"{run.label}: encoding needs event column {modulator.column!r}"
-        )
-    values = run.events[modulator.column]
-    if modulator.kind == "categorical":
-        return _indicator_frame(values, modulator, run.label)
-    return pd.to_numeric(values, errors="raise").rename(modulator.column).to_frame()
-
-
-def _censor_response_time(table):
-    if "response_time" in table:
-        rt = table.response_time
-        table.loc[~np.isfinite(rt) | (rt <= 0), "response_time"] = np.nan
-
-
-def trial_predictors(runs, task_model):
-    """Predictor columns per run, named as the task-model regressors after task.
-
-    Unavailable behavior (NaN) excludes only the affected encoding rows.
-    """
-    tables = []
-    for run in runs:
-        frames = [_predictor_frame(run, m) for m in task_model.modulators]
-        table = (
-            pd.concat(frames, axis=1)
-            if frames
-            else pd.DataFrame(index=run.events.index)
-        )
-        _censor_response_time(table)
-        tables.append(table)
-    return tables
 
 
 def _settings(runs, library, alphas, percentile, block_size, maximum, n_jobs):
@@ -538,7 +489,9 @@ def fit_cv_beta_series(
     )
     if fractional:
         alphas = tuple(reversed(alphas))
-    predictors = trial_predictors(runs, task_model)
+    predictors = trial_predictors(
+        [r.events for r in runs], task_model, [r.label for r in runs]
+    )
     result = dict(
         tuning={},
         evaluation={},

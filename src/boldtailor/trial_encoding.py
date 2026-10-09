@@ -1,7 +1,11 @@
 """Predict trial betas with shared slopes and explicit run-baseline semantics."""
 
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
+
+from boldtailor._task_design import categorical_names
 
 from boldtailor._scalars import is_integer
 from boldtailor._single_trial_fit import r_squared
@@ -243,3 +247,56 @@ def evaluate_trial_encoding(
         train_run_intercepts=intercepts,
         scoring_offsets=np.stack([f[3] for f in fits]),
     )
+
+
+def _indicator_frame(values, modulator, label):
+    """One 0/1 column per non-reference level; missing values become NaN."""
+    try:
+        names = categorical_names(values, replace(modulator, missing="indicator"))
+    except ValueError as error:
+        raise ValueError(f"{label}: {error}") from error
+    levels = [lv for lv in modulator.levels if lv != modulator.reference]
+    columns = {
+        name: [np.nan if n is None else float(n == lv) for n in names]
+        for name, lv in zip(modulator.regressor_names, levels, strict=True)
+    }
+    return pd.DataFrame(columns, index=values.index)
+
+
+def _predictor_frame(events, modulator, label):
+    if modulator.column not in events:
+        raise ValueError(f"{label}: encoding needs event column {modulator.column!r}")
+    values = events[modulator.column]
+    if modulator.kind == "categorical":
+        return _indicator_frame(values, modulator, label)
+    return pd.to_numeric(values, errors="raise").rename(modulator.column).to_frame()
+
+
+def _censor_response_time(table):
+    if "response_time" in table:
+        rt = table.response_time
+        table.loc[~np.isfinite(rt) | (rt <= 0), "response_time"] = np.nan
+
+
+def _run_predictors(events, task_model, label):
+    frames = [_predictor_frame(events, m, label) for m in task_model.modulators]
+    table = pd.concat(frames, axis=1) if frames else pd.DataFrame(index=events.index)
+    _censor_response_time(table)
+    return table
+
+
+def trial_predictors(events_tables, task_model, labels=None):
+    """Predictor columns per run, named as the task-model regressors after task.
+
+    Unavailable behavior (NaN) excludes only the affected encoding rows.
+    ``labels`` name the runs in errors (default ``run 1``, ``run 2``, ...).
+    """
+    tables = list(events_tables)
+    if labels is None:
+        labels = [f"run {i}" for i in range(1, len(tables) + 1)]
+    if len(labels) != len(tables):
+        raise ValueError("labels must name every events table")
+    return [
+        _run_predictors(events, task_model, label)
+        for events, label in zip(tables, labels)
+    ]

@@ -314,6 +314,12 @@ for anything other than `"within_run"` or `"absolute"`.
 objective in cross-validation provenance and exported artifacts
 (`encoding_mode`, `encoding_objective_version=2`, `score`, `encoding_model`,
 `predictor_transform`, `validation_intercept`, `prediction_reference`).
+`trial_predictors(events_tables, task_model, labels=None)` builds the
+`predictors` argument: one table per run with the task-model regressors after
+`task`, in model order. Response times that are non-finite or not positive
+become NaN, categorical modulators become 0/1 indicator columns (NaN where the
+level is missing), and a missing event column raises `ValueError` naming the
+run (`labels`, default `run 1`, `run 2`, ...).
 
 Split indices are zero-based. `TrialEncodingResult` contains `coefficients`
 (shape `(1+p, features)`), pooled training `predictor_means`, `predictor_names`,
