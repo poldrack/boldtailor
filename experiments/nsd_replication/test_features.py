@@ -236,8 +236,10 @@ def patched(monkeypatch, synthetic_session):
 
 
 def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
-    assert run.main(["features", "--config", str(config), "--source", "ppdata"]) == 0
-    metrics = tmp_path / "out/metrics/ppdata/sub-07"
+    assert (
+        run.main(["features", "--config", str(config), "--source", "nsdpreproc"]) == 0
+    )
+    metrics = tmp_path / "out/metrics/nsdpreproc/sub-07"
     gate = pd.read_csv(metrics / "features_gate.tsv", sep="\t")
     assert len(gate) == 4
     assert set(gate["session"]) == {"ses-a"}
@@ -252,12 +254,12 @@ def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
     hrf = pd.read_csv(metrics / "features_hrf.tsv", sep="\t")
     assert hrf["skipped"].tolist() == ["released HRF index maps not available"]
     for level in ("b4", "b4-taskonly"):
-        path = fit_dir(tmp_path / "out", "ppdata", "sub-07", "ses-a", level)
+        path = fit_dir(tmp_path / "out", "nsdpreproc", "sub-07", "ses-a", level)
         assert is_complete(path)
 
 
-def test_features_requires_ppdata(config):
-    with pytest.raises(ValueError, match="ppdata"):
+def test_features_requires_nsdpreproc(config):
+    with pytest.raises(ValueError, match="nsdpreproc"):
         run.main(["features", "--config", str(config), "--source", "released"])
 
 
@@ -267,7 +269,7 @@ def _stale_fit(out, level="b4"):
     trials = pd.DataFrame(
         {"session": "ses-a", "run": "r", "trial": [0], "onset": [0.0], "image": [1]}
     )
-    path = fit_dir(out, "ppdata", "sub-07", "ses-a", level)
+    path = fit_dir(out, "nsdpreproc", "sub-07", "ses-a", level)
     write_fit(path, np.zeros((1, 30)), trials, {"level": level, "inputs_digest": "x"})
 
 
@@ -276,7 +278,7 @@ def test_features_check_digest_before_computing(config, patched, tmp_path, monke
     called = []
     monkeypatch.setattr(run, "session_features", lambda *a, **k: called.append(1))
     with pytest.raises(ValueError, match="inputs digest"):
-        run.main(["features", "--config", str(config), "--source", "ppdata"])
+        run.main(["features", "--config", str(config), "--source", "nsdpreproc"])
     assert not called
 
 
@@ -318,7 +320,7 @@ def test_features_keep_finished_sessions_after_a_failure(
     monkeypatch.setattr(run, "session_features", _stub_features(calls, fail={"ses-b"}))
     with pytest.raises(RuntimeError, match="ses-b"):
         run.main(["features", "--config", str(toml)])
-    metrics = tmp_path / "out/metrics/ppdata/sub-07"
+    metrics = tmp_path / "out/metrics/nsdpreproc/sub-07"
     for name in ("gate", "rt", "hrf"):
         table = pd.read_csv(metrics / f"features_{name}.tsv", sep="\t")
         assert set(table["session"]) == {"ses-a"}, name
@@ -335,7 +337,7 @@ def test_features_skip_finished_sessions_unless_recompute(
     monkeypatch.setattr(run, "session_features", _stub_features(calls))
     run.main(["features", "--config", str(toml)])
     assert calls == ["ses-b"]
-    metrics = tmp_path / "out/metrics/ppdata/sub-07"
+    metrics = tmp_path / "out/metrics/nsdpreproc/sub-07"
     gate = pd.read_csv(metrics / "features_gate.tsv", sep="\t")
     assert list(gate["session"]) == ["ses-a", "ses-b"]
     calls.clear()
@@ -351,7 +353,7 @@ def test_features_rerun_session_missing_a_fit(patched, tmp_path, monkeypatch):
     toml, calls = _two_session_config(tmp_path), []
     monkeypatch.setattr(run, "session_features", _stub_features(calls))
     run.main(["features", "--config", str(toml)])
-    path = fit_dir(tmp_path / "out", "ppdata", "sub-07", "ses-a", "b4-taskonly")
+    path = fit_dir(tmp_path / "out", "nsdpreproc", "sub-07", "ses-a", "b4-taskonly")
     (path / "metadata.json").unlink()
     calls.clear()
     run.main(["features", "--config", str(toml)])

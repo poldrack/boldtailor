@@ -93,5 +93,5 @@ def synthetic_session():
             np.arange(N_FEATURES), N_FEATURES, "CIFTI_STRUCTURE_CORTEX_LEFT"
         ),
         task_model=detect_task_model(events, labels=list(labels)),
-        source="ppdata",
+        source="nsdpreproc",
     )

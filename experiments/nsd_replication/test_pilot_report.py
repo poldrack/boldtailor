@@ -29,11 +29,11 @@ def fitted(config, monkeypatch, synthetic_session):
         run, "load_roi", lambda config, subject, brain: np.arange(30) < 20
     )
     for session in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", session, LEVELS)
+        run.fit_session(config, "nsdpreproc", "sub-07", session, LEVELS)
 
 
 def test_variability_columns_and_finite(config, fitted):
-    table = pilot_report.variability(config, "ppdata", LEVELS)
+    table = pilot_report.variability(config, "nsdpreproc", LEVELS)
     assert list(table.columns) == ["version", "loso_sd", "split_sd", "median"]
     assert list(table["version"]) == list(LEVELS)
     assert np.isfinite(table[["loso_sd", "split_sd", "median"]].to_numpy()).all()
@@ -41,7 +41,7 @@ def test_variability_columns_and_finite(config, fitted):
 
 def test_identical_sessions_have_negligible_spread(config, fitted):
     # every synthetic session is identical, so subsets give the same median
-    table = pilot_report.variability(config, "ppdata", LEVELS)
+    table = pilot_report.variability(config, "nsdpreproc", LEVELS)
     assert (table[["loso_sd", "split_sd"]] < 0.05).all().all()
 
 
@@ -56,9 +56,9 @@ subjects = ["sub-07"]
 sessions = ["ses-a", "ses-b", "ses-c"]
 block_size = 16
 """)
-    argv = ["--config", str(toml), "--source", "ppdata", "--levels", *LEVELS]
+    argv = ["--config", str(toml), "--source", "nsdpreproc", "--levels", *LEVELS]
     assert pilot_report.main(argv) == 0
-    path = config.output_dir / "metrics/ppdata/sub-07/variability.tsv"
+    path = config.output_dir / "metrics/nsdpreproc/sub-07/variability.tsv"
     table = pd.read_csv(path, sep="\t")
     assert list(table["version"]) == list(LEVELS)
     assert "loso_sd" in capsys.readouterr().out

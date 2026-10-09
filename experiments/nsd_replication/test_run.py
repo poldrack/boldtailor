@@ -36,31 +36,31 @@ def patched(monkeypatch, synthetic_session):
 
 
 def test_fit_session_writes_and_skips(config, patched):
-    paths = run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    paths = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     assert all(is_complete(p) for p in paths)
     mtime = (paths[0] / "betas.npy").stat().st_mtime_ns
-    run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     assert (paths[0] / "betas.npy").stat().st_mtime_ns == mtime
 
 
 def test_metadata_is_complete_and_trials_use_session_label(config, patched):
-    (path,) = run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    (path,) = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     _, trials, meta = read_fit(path)
     assert set(trials["session"]) == {"ses-a"}
-    assert meta["source"] == "ppdata" and meta["level"] == "b1"
+    assert meta["source"] == "nsdpreproc" and meta["level"] == "b1"
     assert {"inputs_digest", "boldtailor_version", "git_commit", "onsets"} <= set(meta)
     assert len(meta["onsets"]) == len(trials)
 
 
 def test_digest_mismatch_raises_unless_refit(config, patched):
-    (path,) = run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    (path,) = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     meta = path / "metadata.json"
     meta.write_text(
         meta.read_text().replace('"inputs_digest": "', '"inputs_digest": "x')
     )
     with pytest.raises(ValueError, match="inputs digest"):
-        run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
-    run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",), refit=True)
+        run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
+    run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",), refit=True)
 
 
 def test_unfitted_source_is_rejected(config):
@@ -70,25 +70,25 @@ def test_unfitted_source_is_rejected(config):
 
 def test_subject_metrics_end_to_end(config, patched):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2", "b4"))
-    tables = run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2", "b4"))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2", "b4"))
+    tables = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2", "b4"))
     r1 = tables["r1"]
     assert set(r1["version"]) == {"b1", "b2", "b4"}
-    assert (config.output_dir / "metrics/ppdata/sub-07/r1.tsv").is_file()
+    assert (config.output_dir / "metrics/nsdpreproc/sub-07/r1.tsv").is_file()
     assert {"r1", "r1_median", "r3b", "r4_t0.0", "r4_t0.3", "r6"} <= set(tables)
     assert set(tables["r6"]["threshold"]) == {0.0, 0.1, 0.2, 0.3, 0.4}
     assert set(tables["r4_t0.3"]["lag"]) == set(range(1, 16))
     for name in tables:
-        assert (config.output_dir / f"metrics/ppdata/sub-07/{name}.tsv").is_file()
+        assert (config.output_dir / f"metrics/nsdpreproc/sub-07/{name}.tsv").is_file()
 
 
 def test_group_rsa_writes_agreement(config, patched):
     for subject in ("sub-07", "sub-08"):
         for ses in config.sessions:
-            run.fit_session(config, "ppdata", subject, ses, ("b1",))
-    table = run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1",))
+            run.fit_session(config, "nsdpreproc", subject, ses, ("b1",))
+    table = run.group_rsa(config, "nsdpreproc", ("sub-07", "sub-08"), ("b1",))
     assert (
-        config.output_dir / "metrics/ppdata/group_sub-07_sub-08/rsa_b1.tsv"
+        config.output_dir / "metrics/nsdpreproc/group_sub-07_sub-08/rsa_b1.tsv"
     ).is_file()
     assert list(table.columns) == ["threshold", "subject_a", "subject_b", "r"]
     assert set(table["threshold"]) == {0.0, 0.2, 0.4}
@@ -97,28 +97,30 @@ def test_group_rsa_writes_agreement(config, patched):
 
 def _fit_and_measure(config, levels=("b1",)):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, levels)
-    return run.subject_metrics(config, "ppdata", "sub-07", levels)
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, levels)
+    return run.subject_metrics(config, "nsdpreproc", "sub-07", levels)
 
 
 def test_discard_betas_marks_metadata_and_is_not_refit(config, patched):
     _fit_and_measure(config)
-    run.discard_betas(config, "ppdata", "sub-07", ("b1",), multiple_subjects=False)
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    run.discard_betas(config, "nsdpreproc", "sub-07", ("b1",), multiple_subjects=False)
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
     assert json.loads((path / "metadata.json").read_text())["betas_discarded"] is True
     assert is_complete(path)
-    run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1",))
+    run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     assert not (path / "betas.npy").exists()
 
 
 def test_discard_refuses_when_a_metric_is_missing(config, patched):
     _fit_and_measure(config)
-    out = config.output_dir / "metrics/ppdata/sub-07"
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     (out / "r6.tsv").unlink()
     with pytest.raises(FileNotFoundError, match="r6"):
-        run.discard_betas(config, "ppdata", "sub-07", ("b1",), multiple_subjects=False)
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+        run.discard_betas(
+            config, "nsdpreproc", "sub-07", ("b1",), multiple_subjects=False
+        )
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert (path / "betas.npy").exists()
 
 
@@ -131,13 +133,15 @@ subjects = ["sub-07"]
 sessions = ["ses-a", "ses-b"]
 block_size = 16
 """)
-    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b1"]
+    common = ["--config", str(toml), "--source", "nsdpreproc", "--levels", "b1"]
     assert run.main(["fit", *common]) == 0
     for ses in config.sessions:
-        assert is_complete(fit_dir(config.output_dir, "ppdata", "sub-07", ses, "b1"))
+        assert is_complete(
+            fit_dir(config.output_dir, "nsdpreproc", "sub-07", ses, "b1")
+        )
     assert run.main(["metrics", *common, "--discard-betas-after-metrics"]) == 0
-    assert (config.output_dir / "metrics/ppdata/sub-07/r1.tsv").is_file()
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    assert (config.output_dir / "metrics/nsdpreproc/sub-07/r1.tsv").is_file()
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
 
 
@@ -150,7 +154,7 @@ def _fit_released(config, perturb=False):
     for ses in config.sessions:
         for lv in ("b1", "b2", "b4"):
             betas, trials, _ = read_fit(
-                fit_dir(config.output_dir, "ppdata", "sub-07", ses, lv)
+                fit_dir(config.output_dir, "nsdpreproc", "sub-07", ses, lv)
             )
             rng = np.random.default_rng(1)
             noisy = betas + 0.1 * rng.normal(size=betas.shape)
@@ -162,7 +166,7 @@ def _fit_released(config, perturb=False):
 
 def _fit_comparison(config, perturb=False):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2", "b4"))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2", "b4"))
     _fit_released(config, perturb)
 
 
@@ -170,7 +174,7 @@ def test_comparison_metrics_combined_versions(config, patched):
     _fit_comparison(config)
     tables = run.comparison_metrics(config, "sub-07")
     expected = {
-        f"{s}:{lv}" for s in ("ppdata", "released") for lv in ("b1", "b2", "b4")
+        f"{s}:{lv}" for s in ("nsdpreproc", "released") for lv in ("b1", "b2", "b4")
     }
     assert set(tables["r1"]["version"]) == expected
     assert set(tables["r1_median"]["version"]) == expected
@@ -235,8 +239,8 @@ def test_discard_requires_comparison_outputs_when_released_configured(config, pa
     _fit_and_measure(config)
     configured = replace(config, released_dir=config.bids_dir)
     with pytest.raises(FileNotFoundError, match="metrics --source comparison"):
-        run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+        run.discard_betas(configured, "nsdpreproc", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert (path / "betas.npy").exists()
 
 
@@ -245,8 +249,8 @@ def test_discard_succeeds_after_comparison_outputs(config, patched):
     out = config.output_dir / "metrics/comparison/sub-07"
     _write_comparison_outputs(out)
     configured = replace(config, released_dir=config.bids_dir)
-    run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    run.discard_betas(configured, "nsdpreproc", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
 
 
@@ -277,15 +281,15 @@ def _synthetic_metrics(config):
         }
     )
     for sub in config.subjects:
-        _write_tsv(out / "ppdata" / sub / "r1.tsv", curves)
-        versions = [f"{s}:{lv}" for s in ("ppdata", "released") for lv in LEVELS]
+        _write_tsv(out / "nsdpreproc" / sub / "r1.tsv", curves)
+        versions = [f"{s}:{lv}" for s in ("nsdpreproc", "released") for lv in LEVELS]
         median = pd.DataFrame({"version": versions, "median": np.arange(6) / 10})
         _write_tsv(out / "comparison" / sub / "r1_median.tsv", median)
     rsa = pd.DataFrame(
         {"threshold": [0.0], "subject_a": ["a"], "subject_b": ["b"], "r": [0.3]}
     )
     group = "group_" + "_".join(config.subjects)
-    _write_tsv(out / "ppdata" / group / "rsa_b4.tsv", rsa)
+    _write_tsv(out / "nsdpreproc" / group / "rsa_b4.tsv", rsa)
 
 
 def test_figures_command_saves_pngs_and_skips_missing(config, capsys):
@@ -320,39 +324,41 @@ def test_completed_level_survives_a_later_failure(config, patched, monkeypatch):
 
     monkeypatch.setitem(ladder._FITTERS, "b2", boom)
     with pytest.raises(RuntimeError, match="b2 failed"):
-        run.fit_session(config, "ppdata", "sub-07", "ses-a", ("b1", "b2"))
-    assert is_complete(fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1"))
+        run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1", "b2"))
+    assert is_complete(
+        fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
+    )
     assert not is_complete(
-        fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b2")
+        fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b2")
     )
 
 
 def _metric_mtimes(config, names=run.SUBJECT_TABLES):
-    out = config.output_dir / "metrics/ppdata/sub-07"
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     return {n: (out / f"{n}.tsv").stat().st_mtime_ns for n in names}
 
 
 def test_existing_metric_tables_skipped_unless_recompute(config, patched):
     _fit_and_measure(config)
     before = _metric_mtimes(config)
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
     assert _metric_mtimes(config) == before
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1",), recompute=True)
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",), recompute=True)
     after = _metric_mtimes(config)
     assert all(after[n] != before[n] for n in before)
 
 
 def test_metric_tables_written_before_a_later_failure(config, patched, monkeypatch):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
 
     def boom(*args, **kwargs):
         raise RuntimeError("r6 failed")
 
     monkeypatch.setattr(run, "_r6_table", boom)
     with pytest.raises(RuntimeError, match="r6 failed"):
-        run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
-    out = config.output_dir / "metrics/ppdata/sub-07"
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     assert (out / "r1.tsv").is_file() and not (out / "r6.tsv").exists()
 
 
@@ -365,7 +371,7 @@ subjects = ["sub-07"]
 sessions = ["ses-a", "ses-b"]
 block_size = 16
 """)
-    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b1"]
+    common = ["--config", str(toml), "--source", "nsdpreproc", "--levels", "b1"]
     run.main(["fit", *common])
     run.main(["metrics", *common])
     before = _metric_mtimes(config, ("r1",))
@@ -377,12 +383,12 @@ block_size = 16
 
 def test_r6_same_with_one_or_two_jobs(config, patched):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
     tables = {}
     for n_jobs in (1, 2):
         cfg = replace(config, n_jobs=n_jobs)
         tables[n_jobs] = run.subject_metrics(
-            cfg, "ppdata", "sub-07", ("b1", "b2"), recompute=True
+            cfg, "nsdpreproc", "sub-07", ("b1", "b2"), recompute=True
         )["r6"]
     import pandas as pd
 
@@ -391,7 +397,7 @@ def test_r6_same_with_one_or_two_jobs(config, patched):
 
 def test_r6_uses_config_jobs(config, patched, monkeypatch):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
     seen = []
     real = run.decoding_accuracies
 
@@ -400,7 +406,7 @@ def test_r6_uses_config_jobs(config, patched, monkeypatch):
         return real(reps, masks, n_jobs=1)
 
     monkeypatch.setattr(run, "decoding_accuracies", spy)
-    run.subject_metrics(replace(config, n_jobs=3), "ppdata", "sub-07", ("b1",))
+    run.subject_metrics(replace(config, n_jobs=3), "nsdpreproc", "sub-07", ("b1",))
     assert seen and set(seen) == {3}
 
 
@@ -414,11 +420,11 @@ def test_subject_metrics_sliced_to_roi_with_identical_results(
     import pandas as pd
 
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
     full = {}
     for lv in ("b1", "b2"):
         pairs = [
-            read_fit(fit_dir(config.output_dir, "ppdata", "sub-07", s, lv))[:2]
+            read_fit(fit_dir(config.output_dir, "nsdpreproc", "sub-07", s, lv))[:2]
             for s in config.sessions
         ]
         betas = np.vstack([zscore(b) for b, _ in pairs])
@@ -434,7 +440,7 @@ def test_subject_metrics_sliced_to_roi_with_identical_results(
         "voxel_reliability",
         lambda reps: widths.append(reps.shape[-1]) or real(reps),
     )
-    r1 = run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))["r1"]
+    r1 = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))["r1"]
     assert widths and set(widths) == {20}
     pd.testing.assert_frame_equal(r1[expected.columns], expected)
 
@@ -443,7 +449,7 @@ def test_comparison_metrics_all_tables_share_one_composite(config, patched):
     _fit_comparison(config)
     tables = run.comparison_metrics(config, "sub-07")
     expected = {
-        f"{s}:{lv}" for s in ("ppdata", "released") for lv in ("b1", "b2", "b4")
+        f"{s}:{lv}" for s in ("nsdpreproc", "released") for lv in ("b1", "b2", "b4")
     }
     out = config.output_dir / "metrics/comparison/sub-07"
     for name in ("r3b", "r4_t0.0", "r4_t0.3", "r6"):
@@ -461,9 +467,9 @@ def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
     import pandas as pd
 
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b2",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b2",))
     run.hrf_consistency(config, "sub-07")
-    out = config.output_dir / "metrics/ppdata/sub-07"
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     table = pd.read_csv(out / "r2_b2.tsv", sep="\t")
     assert len(table) == 30
     assert {"mean_pairwise_r", "mean_canonical_baseline"} <= set(table.columns)
@@ -479,11 +485,11 @@ def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
 
 def test_hrf_consistency_uses_matching_library(config, patched):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b2-lib20",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b2-lib20",))
     run.hrf_consistency(config, "sub-07")
-    out = config.output_dir / "metrics/ppdata/sub-07"
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     assert (out / "r2_b2-lib20.tsv").is_file()
-    meta = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b2-lib20")
+    meta = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b2-lib20")
     meta = meta / "metadata.json"
     meta.write_text(
         meta.read_text().replace(
@@ -503,16 +509,16 @@ subjects = ["sub-07"]
 sessions = ["ses-a", "ses-b"]
 block_size = 16
 """)
-    common = ["--config", str(toml), "--source", "ppdata", "--levels", "b2"]
+    common = ["--config", str(toml), "--source", "nsdpreproc", "--levels", "b2"]
     run.main(["fit", *common])
     run.main(["metrics", *common])
-    assert (config.output_dir / "metrics/ppdata/sub-07/r2_b2_roi.tsv").is_file()
+    assert (config.output_dir / "metrics/nsdpreproc/sub-07/r2_b2_roi.tsv").is_file()
 
 
 def test_figures_render_r2_summary(config):
     import pandas as pd
 
-    out = config.output_dir / "metrics/ppdata/sub-07"
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
     for level in ("b2", "b2-lib20"):
         summary = pd.DataFrame(
             {
@@ -539,7 +545,7 @@ block_size = 16
     return toml
 
 
-def test_ppdata_default_levels_include_lss(config, monkeypatch):
+def test_nsdpreproc_default_levels_include_lss(config, monkeypatch):
     from experiments.nsd_replication.ladder import LEVELS as ALL, LSS_LEVELS
 
     seen = {}
@@ -566,13 +572,13 @@ def test_metric_tables_record_composite_levels(config, patched):
 
     for subject in ("sub-07", "sub-08"):
         for ses in config.sessions:
-            run.fit_session(config, "ppdata", subject, ses, ("b1", "b2"))
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
-    out = config.output_dir / "metrics/ppdata"
+            run.fit_session(config, "nsdpreproc", subject, ses, ("b1", "b2"))
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))
+    out = config.output_dir / "metrics/nsdpreproc"
     for name in run.SUBJECT_TABLES:
         table = pd.read_csv(out / "sub-07" / f"{name}.tsv", sep="\t")
         assert set(table["composite_levels"]) == {"b1|b2"}, name
-    run.group_rsa(config, "ppdata", ("sub-07", "sub-08"), ("b1", "b2"))
+    run.group_rsa(config, "nsdpreproc", ("sub-07", "sub-08"), ("b1", "b2"))
     rsa = pd.read_csv(out / "group_sub-07_sub-08" / "rsa_b1.tsv", sep="\t")
     assert set(rsa["composite_levels"]) == {"b1|b2"}
     assert set(rsa["sessions"]) == {"ses-a|ses-b"}
@@ -598,35 +604,35 @@ def test_different_level_set_requires_recompute(config, patched):
     import pandas as pd
 
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
     before = _metric_mtimes(config)
     with pytest.raises(ValueError, match="--recompute"):
-        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))
     assert _metric_mtimes(config) == before
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"), recompute=True)
-    r1 = config.output_dir / "metrics/ppdata/sub-07/r1.tsv"
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"), recompute=True)
+    r1 = config.output_dir / "metrics/nsdpreproc/sub-07/r1.tsv"
     assert set(pd.read_csv(r1, sep="\t")["composite_levels"]) == {"b1|b2"}
     # a table without the column (an older run) is not silently replaced
     pd.read_csv(r1, sep="\t").drop(columns="composite_levels").to_csv(
         r1, sep="\t", index=False
     )
     with pytest.raises(ValueError, match="--recompute"):
-        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))
 
 
 def test_discard_requires_tables_covering_requested_levels(config, patched):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
     with pytest.raises(ValueError, match="b2"):
-        run.discard_betas(config, "ppdata", "sub-07", ("b1", "b2"))
+        run.discard_betas(config, "nsdpreproc", "sub-07", ("b1", "b2"))
     for lv in ("b1", "b2"):
-        path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", lv)
+        path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", lv)
         assert (path / "betas.npy").exists()
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"), recompute=True)
-    run.discard_betas(config, "ppdata", "sub-07", ("b1",))
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"), recompute=True)
+    run.discard_betas(config, "nsdpreproc", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert not (path / "betas.npy").exists()
 
 
@@ -634,12 +640,14 @@ def test_subject_metrics_requires_matching_trials_across_levels(config, patched)
     import pandas as pd
 
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1", "b2"))
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-b", "b2") / "trials.tsv"
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
+    path = (
+        fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-b", "b2") / "trials.tsv"
+    )
     trials = pd.read_csv(path, sep="\t")
     trials.assign(image=trials["image"] + 1).to_csv(path, sep="\t", index=False)
     with pytest.raises(ValueError, match="sub-07.*b2"):
-        run.subject_metrics(config, "ppdata", "sub-07", ("b1", "b2"))
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))
 
 
 def _write_comparison_outputs(out, skip=()):
@@ -658,18 +666,18 @@ def test_discard_requires_every_comparison_output(config, patched, missing):
     _write_comparison_outputs(out, skip=(missing,))
     configured = replace(config, released_dir=config.bids_dir)
     with pytest.raises(FileNotFoundError, match=missing):
-        run.discard_betas(configured, "ppdata", "sub-07", ("b1",))
-    path = fit_dir(config.output_dir, "ppdata", "sub-07", "ses-a", "b1")
+        run.discard_betas(configured, "nsdpreproc", "sub-07", ("b1",))
+    path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
     assert (path / "betas.npy").exists()
 
 
 def test_group_rsa_keyed_by_subject_set(config, patched):
     for subject in ("sub-01", "sub-02", "sub-05", "sub-06"):
         for ses in config.sessions:
-            run.fit_session(config, "ppdata", subject, ses, ("b1",))
-    run.group_rsa(config, "ppdata", ("sub-01", "sub-02"), ("b1",))
-    run.group_rsa(config, "ppdata", ("sub-05", "sub-06"), ("b1",))
-    out = config.output_dir / "metrics/ppdata"
+            run.fit_session(config, "nsdpreproc", subject, ses, ("b1",))
+    run.group_rsa(config, "nsdpreproc", ("sub-01", "sub-02"), ("b1",))
+    run.group_rsa(config, "nsdpreproc", ("sub-05", "sub-06"), ("b1",))
+    out = config.output_dir / "metrics/nsdpreproc"
     first = pd.read_csv(out / "group_sub-01_sub-02" / "rsa_b1.tsv", sep="\t")
     second = pd.read_csv(out / "group_sub-05_sub-06" / "rsa_b1.tsv", sep="\t")
     assert set(first["subject_a"]) == {"sub-01"}
@@ -678,11 +686,17 @@ def test_group_rsa_keyed_by_subject_set(config, patched):
 
 def test_session_window_change_requires_recompute(config, patched):
     for ses in config.sessions:
-        run.fit_session(config, "ppdata", "sub-07", ses, ("b1",))
-    run.subject_metrics(config, "ppdata", "sub-07", ("b1",))
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
+    run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
     narrowed = replace(config, sessions=("ses-a",))
     with pytest.raises(ValueError, match="sessions.*--recompute"):
-        run.subject_metrics(narrowed, "ppdata", "sub-07", ("b1",))
-    run.subject_metrics(narrowed, "ppdata", "sub-07", ("b1",), recompute=True)
-    r1 = config.output_dir / "metrics/ppdata/sub-07/r1.tsv"
+        run.subject_metrics(narrowed, "nsdpreproc", "sub-07", ("b1",))
+    run.subject_metrics(narrowed, "nsdpreproc", "sub-07", ("b1",), recompute=True)
+    r1 = config.output_dir / "metrics/nsdpreproc/sub-07/r1.tsv"
     assert set(pd.read_csv(r1, sep="\t")["sessions"]) == {"ses-a"}
+
+
+def test_sources_name_nsdpreproc_not_ppdata():
+    assert run.SOURCES == ("nsdpreproc", "released", "comparison")
+    args = run._parser().parse_args(["fit", "--config", "c.toml"])
+    assert args.source == "nsdpreproc"

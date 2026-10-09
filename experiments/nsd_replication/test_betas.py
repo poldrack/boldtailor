@@ -28,7 +28,7 @@ def _trials():
 
 
 def test_round_trip(tmp_path):
-    path = fit_dir(tmp_path, "ppdata", "sub-07", "ses-nsd10", "b1")
+    path = fit_dir(tmp_path, "nsdpreproc", "sub-07", "ses-nsd10", "b1")
     betas = np.array([[1.0, 2.0], [3.0, 4.0]])
     write_fit(
         path,
@@ -80,7 +80,7 @@ def test_zscore_nonrepresentable_constant_is_nan():
     assert np.isnan(z).all()
 
 
-def _minimal_session(source="ppdata", confound_val=0.0):
+def _minimal_session(source="nsdpreproc", confound_val=0.0):
     """Create a minimal Session for testing inputs_digest."""
     left = nib.cifti2.BrainModelAxis.from_surface(
         np.array([0]), 10, "CIFTI_STRUCTURE_CORTEX_LEFT"
