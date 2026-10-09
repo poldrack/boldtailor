@@ -1,4 +1,4 @@
-"""GLMsingle's polynomial drift basis, used as boldtailor's confounds for ppdata."""
+"""GLMsingle's polynomial drift basis, used as boldtailor's confounds for nsdpreproc."""
 
 import math
 

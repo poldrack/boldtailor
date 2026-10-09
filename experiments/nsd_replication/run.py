@@ -34,7 +34,7 @@ from experiments.nsd_replication.config import load_config
 from experiments.nsd_replication.figure_stage import make_figures
 from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.hrf_maps import session_consistency
-from experiments.nsd_replication.inputs import load_ppdata, ppdata_brain
+from experiments.nsd_replication.inputs import load_nsdpreproc, nsdpreproc_brain
 from experiments.nsd_replication.ladder import LEVELS, LSS_LEVELS, fit_ladder
 from experiments.nsd_replication.metric_tables import (
     COMPOSITE_COLUMN,
@@ -73,7 +73,7 @@ SUBJECT_TABLES = ("r1", "r1_median", "r3b", "r4_t0.0", "r4_t0.3", "r6")
 def _load(config, source, subject, session):
     if source != "ppdata":
         raise ValueError(f"source {source!r} has no fit stage; only ppdata is fitted")
-    return load_ppdata(config, subject, session)
+    return load_nsdpreproc(config, subject, session)
 
 
 def _git_commit():
@@ -323,7 +323,7 @@ def _write_tables(config, source, subject, tables):
 
 
 def _subject_roi(config, subject):
-    brain = ppdata_brain(config, subject, config.sessions[0])
+    brain = nsdpreproc_brain(config, subject, config.sessions[0])
     return load_roi(config, subject, brain)
 
 

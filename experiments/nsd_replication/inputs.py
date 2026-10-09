@@ -1,4 +1,4 @@
-"""Load one NSD ppdata session as cortical-only arrays for boldtailor."""
+"""Load one NSD session from BIDS derivatives/nsdpreproc as cortical-only arrays."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,8 +14,8 @@ from boldtailor.task_detection import detect_task_model
 from experiments.nsd_replication.confounds import glmsingle_polynomials
 
 CORTEX = ("CIFTI_STRUCTURE_CORTEX_LEFT", "CIFTI_STRUCTURE_CORTEX_RIGHT")
-_PPDATA = (
-    "subj{nn}/func1pt8mm/timeseries/{subject}_{session}_task-{task}_{run}"
+_NSDPREPROC = (
+    "{subject}/{session}/func/{subject}_{session}_task-{task}_{run}"
     "_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii"
 )
 
@@ -70,21 +70,15 @@ def _events_files(config, subject, session):
     return files
 
 
-def ppdata_path(config, subject, session, run):
-    if config.ppdata_dir is None:
-        raise ValueError("ppdata_dir is not configured")
-    name = _PPDATA.format(
-        nn=subject.removeprefix("sub-"),
-        subject=subject,
-        session=session,
-        task=config.task,
-        run=run,
+def nsdpreproc_path(config, subject, session, run):
+    name = _NSDPREPROC.format(
+        subject=subject, session=session, task=config.task, run=run
     )
-    return Path(config.ppdata_dir) / name
+    return Path(config.nsdpreproc_dir) / name
 
 
 def _existing_path(config, subject, session, run):
-    path = ppdata_path(config, subject, session, run)
+    path = nsdpreproc_path(config, subject, session, run)
     if not path.is_file():
         raise FileNotFoundError(f"{subject} {session} {run}: missing {path}")
     return path
@@ -104,18 +98,18 @@ def _load_run(config, subject, session, events_path):
 def _check_onsets(events, times, tr, name):
     end = events["onset"] + events["duration"]
     if events["onset"].min() < times[0] - tr or end.max() > times[-1] + tr:
-        raise ValueError(f"{name}: onsets fall outside the ppdata time base")
+        raise ValueError(f"{name}: onsets fall outside the nsdpreproc time base")
 
 
 def _cortex(runs, name):
     brain = runs[0][1].header.get_axis(1)
     for run in runs[1:]:
         if not same_grayordinates(run[1].header.get_axis(1), brain):
-            raise ValueError(f"{name}: ppdata runs differ in grayordinates")
+            raise ValueError(f"{name}: nsdpreproc runs differ in grayordinates")
     return brain, cortical_indices(brain)
 
 
-def load_ppdata(config, subject, session):
+def load_nsdpreproc(config, subject, session):
     files = _events_files(config, subject, session)
     runs = [_load_run(config, subject, session, f) for f in files]
     brain, cortex = _cortex(runs, f"{subject} {session}")
@@ -136,11 +130,11 @@ def load_ppdata(config, subject, session):
         frame_times=tuple(r[2] for r in runs),
         brain=brain[cortex],
         task_model=detect_task_model(events, labels=labels),
-        source="ppdata",
+        source="nsdpreproc",
     )
 
 
-def ppdata_brain(config, subject, session):
+def nsdpreproc_brain(config, subject, session):
     run = _events_files(config, subject, session)[0].name.split("_")[3]
     brain = nib.load(_existing_path(config, subject, session, run)).header.get_axis(1)
     return brain[cortical_indices(brain)]

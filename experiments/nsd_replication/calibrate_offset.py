@@ -1,4 +1,4 @@
-"""Calibrate the constant offset between BIDS onsets and the ppdata time base."""
+"""Calibrate the constant offset between BIDS onsets and the nsdpreproc time base."""
 
 import argparse
 from dataclasses import replace
@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from experiments.nsd_replication.config import load_config
-from experiments.nsd_replication.inputs import load_ppdata
+from experiments.nsd_replication.inputs import load_nsdpreproc
 from experiments.nsd_replication.ladder import fit_ladder
 from experiments.nsd_replication.released import (
     alignment_check,
@@ -32,7 +32,7 @@ def _released_b1(config, subject, session, data):
 
 def _score_offset(config, subject, session, offset):
     config = replace(config, onset_offset=float(offset))
-    data = load_ppdata(config, subject, session)
+    data = load_nsdpreproc(config, subject, session)
     fit = fit_ladder(
         data, levels=("b1",), block_size=config.block_size, n_jobs=config.n_jobs
     )

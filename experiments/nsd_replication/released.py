@@ -10,7 +10,7 @@ import pandas as pd
 from experiments.nsd_replication.betas import fit_dir, is_complete, write_fit
 from experiments.nsd_replication.inputs import (
     cortical_indices,
-    ppdata_brain,
+    nsdpreproc_brain,
     same_grayordinates,
 )
 from experiments.nsd_replication.metrics import columnwise_corr
@@ -45,7 +45,7 @@ def load_released(path, brain, n_trials, name):
     axis = image.header.get_axis(1)
     cortex = cortical_indices(axis)
     if not same_grayordinates(axis[cortex], brain):
-        raise ValueError(f"{name}: grayordinates differ from the ppdata cortex")
+        raise ValueError(f"{name}: grayordinates differ from the nsdpreproc cortex")
     _check_maps(image.header.get_axis(0), n_trials, name)
     values = np.asarray(image.dataobj, dtype=np.float32)[:, cortex]
     if not np.isfinite(values).all():
@@ -99,7 +99,7 @@ def _index_level(config, subject, session, level, brain, trials):
 
 
 def index_released(config, subject, session):
-    brain = ppdata_brain(config, subject, session)
+    brain = nsdpreproc_brain(config, subject, session)
     trials = bids_trials(config, subject, session)
     return [
         _index_level(config, subject, session, level, brain, trials)
