@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from boldtailor.workflow.settings import WorkflowSettings
-from examples.NSD.nsd_settings import nsd_paths, nsd_settings
+from examples.bids_workflow.nsd_settings import nsd_paths, nsd_settings
 
 
 @pytest.fixture

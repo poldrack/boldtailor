@@ -14,7 +14,7 @@ from their named modules; package initializers are empty.
 | [Result migration](result-migration.md) | Unified candidate scores and composed trial results |
 | [Ownership migration](ownership-migration.md) | Ordinary read-only NumPy arrays and editable copies |
 | [GLMsingle comparison](glmsingle-comparison.md) | Method differences and assumptions |
-| [NSD guide](../examples/NSD/README.md) | Dataset-specific commands, notebooks, and saved artifacts |
+| [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md) | Dataset-specific commands, notebooks, and saved artifacts |
 
 ## Current methods
 

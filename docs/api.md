@@ -820,5 +820,5 @@ Run them from the repository checkout:
 | `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
 | `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
 
-See [running the NSD notebooks](../examples/NSD/README.md#run-the-notebooks).
+See [running the NSD notebooks](../examples/bids_workflow/README.md#run-the-notebooks).
 The retired NSD scripts are replaced by [`boldtailor run`](#session-workflow-and-command-line).

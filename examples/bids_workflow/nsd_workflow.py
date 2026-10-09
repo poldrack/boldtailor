@@ -64,7 +64,7 @@ import pandas as pd
 from IPython.display import Image, display
 from boldtailor.workflow.report import command_line
 from boldtailor.workflow.run import run_workflow
-from examples.NSD.nsd_settings import nsd_paths, nsd_settings
+from examples.bids_workflow.nsd_settings import nsd_paths, nsd_settings
 
 config = dict(
     subject="sub-07",

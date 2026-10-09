@@ -1,6 +1,6 @@
 # User guide
 
-[README](../README.md) · [API reference](api.md) · [NSD example](../examples/NSD/README.md)
+[README](../README.md) · [API reference](api.md) · [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md)
 
 ## Preparing your data
 
@@ -166,7 +166,7 @@ The selected-HRF GLM comparison handles undefined locations directly.
 
 Single-trial results already contain `full_r2`, `nuisance_r2`, and `delta_r2`.
 Their difference uses the actual OLS or ridge estimator and retains negative
-values. The [NSD output reference](../examples/NSD/README.md#finding-your-results)
+values. The [NSD output reference](../examples/bids_workflow/README.md#finding-your-results)
 distinguishes these images from HRF-selection and independent prediction scores.
 
 ## Estimating a beta for every trial
@@ -329,7 +329,7 @@ Evaluate the chosen pipeline on separate outer runs before interpreting its
 predictive performance. RT used for tuning is no longer an independent check
 on the same training data.
 
-The [NSD notebook](../examples/NSD/nsd_workflow.py) performs odd-to-even and
+The [NSD notebook](../examples/bids_workflow/nsd_workflow.py) performs odd-to-even and
 even-to-odd outer evaluations, then tunes again on all runs for the final beta
 images. Canonical and optimized HRFs receive separate penalties. Conventional
 GLMs remain OLS, and the HRF reliability analysis is unchanged.
@@ -948,7 +948,7 @@ for an example and the [developer guide](development.md) for storage details.
 
 ## Running the full workflow
 
-`boldtailor run` applies the NSD-style CIFTI analysis to one subject, session,
+`boldtailor run` applies the CIFTI analysis to one subject, session,
 and task of a BIDS dataset with fMRIPrep outputs (fsLR 91k dtseries, confounds,
 and BOLD sidecars), then publishes a BIDS derivative and an HTML report:
 

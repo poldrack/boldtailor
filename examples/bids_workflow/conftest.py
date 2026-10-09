@@ -7,7 +7,7 @@ import nibabel as nib
 import numpy as np
 import pytest
 
-# The examples import their siblings as examples.NSD.*; put the repo root on
+# The examples import their siblings as examples.bids_workflow.*; put the repo root on
 # sys.path so that works under plain `pytest` (pyproject no longer sets pythonpath).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 

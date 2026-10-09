@@ -10,13 +10,13 @@ Use Python 3.12 or later and uv:
 ```bash
 uv sync --group dev
 uv run pytest -q -W error
-uv run black --check src tests examples/NSD
+uv run black --check src tests examples/bids_workflow
 uv run git diff --check
 ```
 
 `uv run pytest` runs the package suite in `tests/`. Example and notebook tests are
-opt-in: `uv run pytest examples/NSD`, `uv run pytest examples/validation`, and
-`uv run pytest --run-notebooks examples/NSD`.
+opt-in: `uv run pytest examples/bids_workflow`, `uv run pytest examples/validation`, and
+`uv run pytest --run-notebooks examples/bids_workflow`.
 Tests use synthetic arrays and small generated imaging fixtures; the example
 data on the external NSD volume are not required for the test suite.
 Notebooks are tracked as jupytext py:percent scripts and paired with gitignored
@@ -28,7 +28,7 @@ CI splits the suites. On every push and pull request it runs the package
 suite in `tests/` with warnings treated as errors, uploads its line coverage
 to Codecov (the README badge), and checks Python formatting on a clean
 Python 3.12 runner. A separate `examples` job, run only on manual dispatch and
-on schedule, runs `examples/NSD` and `examples/validation` with
+on schedule, runs `examples/bids_workflow` and `examples/validation` with
 `--run-notebooks` and warnings as errors. The push job also builds and tests
 the installed wheel in an isolated environment, without the checkout's
 editable installation or notebook development dependencies:
@@ -61,6 +61,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Event-based conventional GLMs | `model`, `design`, `_task_design`, `fit`, `_conventional`, `results` |
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
+| Task-model detection from event tables | `task_detection` |
 | Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
@@ -70,7 +71,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Shared constants and deprecation shims | `_constants`, `_deprecation` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
 | Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
-| Notebook-only dataset helpers | `examples/NSD` |
+| Notebook-only BIDS workflow helpers | `examples/bids_workflow` |
 
 The core numerical functions accept arrays and tables and return results in
 memory. Example workflows own dataset discovery, image loading, spatial axes,
@@ -78,19 +79,19 @@ and image reconstruction. The prepared-design API is the entry point for
 externally compiled designs; it does not perform BIDS parsing or transformations.
 
 The installed `boldtailor.workflow` package and the `boldtailor run` command
-(`boldtailor.cli`) own NSD-style CIFTI discovery, loading, fitting stages,
+(`boldtailor.cli`) own BIDS + fMRIPrep CIFTI discovery, loading, fitting stages,
 output naming, plotting, and the HTML report. Generic CIFTI dense-scalar I/O
 lives in `boldtailor.cifti` (nibabel is a runtime dependency). Package modules
 never import from `examples`. The remaining NSD example modules
 (`nsd_settings.py`, `session_hrf*.py`, `multisession_*.py`) and the notebooks
 import only public modules; plotting uses matplotlib, a runtime dependency.
-Shared NSD test fixtures live in `examples/NSD/conftest.py`; each notebook has
+Shared example fixtures live in `examples/bids_workflow/conftest.py`; each notebook has
 one `@pytest.mark.notebook` kernel smoke test. See the
-[NSD setup instructions](../examples/NSD/README.md#full-workflow-notebook).
+[NSD setup instructions](../examples/bids_workflow/README.md#full-workflow-notebook).
 
 `tests/workflow` runs in the default suite (`uv run pytest -q`) using a small
-synthetic BIDS dataset. `examples/NSD` tests are opt-in
-(`uv run pytest -q examples/NSD`), and the notebook smoke tests additionally
+synthetic BIDS dataset. `examples/bids_workflow` tests are opt-in
+(`uv run pytest -q examples/bids_workflow`), and the notebook smoke tests additionally
 need `--run-notebooks`.
 
 Public numeric arrays are owned, ordinary NumPy arrays marked read-only through
@@ -107,6 +108,18 @@ Prepared fitting reads `PreparedDesignAnalysis._design_matrices` and
 and diagnostics must not mutate them. Public accessors keep returning copies,
 and result construction still makes its own design copies. This avoids copying
 all runs' tables repeatedly inside each run's diagnostics.
+
+## Two kinds of code
+
+- **The `boldtailor run` CLI** (`src/boldtailor/cli.py`, `src/boldtailor/workflow/`)
+  analyses a BIDS dataset: raw BIDS events, fMRIPrep fsLR CIFTI time series, and
+  fMRIPrep confounds. The examples in `examples/bids_workflow/` exercise this path.
+- **The NSD replication** (`experiments/nsd_replication/`) is research code,
+  not shipped in the package. It reads the NSD team's preprocessed CIFTI files
+  from `derivatives/nsdpreproc`, raw BIDS events, and GLMsingle polynomial drift
+  terms, and it uses only boldtailor's public core API. A static test
+  (`experiments/nsd_replication/test_boundary.py`) blocks imports of
+  `boldtailor.workflow`/`boldtailor.cli` and fMRIPrep CIFTI file names.
 
 ## Scientific result schemas
 
@@ -296,7 +309,7 @@ omit exception text. If rollback fails, `PublicationError.recovery_directory`
 names the retained `backup-<uuid>/` (or `stage-<uuid>/` when nothing was backed
 up); `rollback_errors` lists the failures.
 
-## NSD exports and parallel execution
+## Workflow exports and parallel execution
 
 The session workflow (`boldtailor.workflow`) loads feature blocks, preserves CIFTI axes, and
 reconstruct full output arrays in the parent process. `n_jobs>1` uses

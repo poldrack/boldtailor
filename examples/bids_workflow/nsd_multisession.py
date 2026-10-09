@@ -59,12 +59,18 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from IPython.display import display
-from examples.NSD.nsd_settings import nsd_paths, nsd_settings
-from examples.NSD.multisession_workflow import ensure_session_outputs, resolve_paths
-from examples.NSD.multisession_inputs import load_sessions
-from examples.NSD.multisession_analysis import analyze_sessions
-from examples.NSD.multisession_outputs import beta_summary_table, save_multisession
-from examples.NSD.multisession_plots import (
+from examples.bids_workflow.nsd_settings import nsd_paths, nsd_settings
+from examples.bids_workflow.multisession_workflow import (
+    ensure_session_outputs,
+    resolve_paths,
+)
+from examples.bids_workflow.multisession_inputs import load_sessions
+from examples.bids_workflow.multisession_analysis import analyze_sessions
+from examples.bids_workflow.multisession_outputs import (
+    beta_summary_table,
+    save_multisession,
+)
+from examples.bids_workflow.multisession_plots import (
     METRIC_LABELS,
     beta_change_figure,
     comparison_surface,
@@ -74,7 +80,7 @@ from examples.NSD.multisession_plots import (
     glm_effect_figures,
     peak_time_surface,
 )
-from examples.NSD.session_hrf_plots import agreement_figure
+from examples.bids_workflow.session_hrf_plots import agreement_figure
 from boldtailor.workflow.surfaces import find_surface_meshes
 
 config = dict(

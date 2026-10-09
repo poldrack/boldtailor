@@ -1,10 +1,17 @@
-# NSD CIFTI analysis
+# BIDS workflow examples (NSD fMRIPrep data)
 
-These notebooks analyze Natural Scenes Dataset sessions using fMRIPrep CIFTI
-time series. Start with the [full workflow notebook](nsd_workflow.py); the
-other two notebooks reuse or extend its results. The workflow notebook runs the
+These notebooks demonstrate the **BIDS + fMRIPrep** path, the same one the
+`boldtailor run` command uses: raw BIDS events plus fMRIPrep fsLR 91k CIFTI
+time series and confounds. They use the Natural Scenes Dataset's fMRIPrep
+outputs as the example dataset. Start with the [full workflow notebook](nsd_workflow.py);
+the other two notebooks reuse or extend its results. The workflow notebook runs the
 package workflow, `boldtailor.workflow.run.run_workflow`, which is also available
 as the [`boldtailor run` command](#command-line-interface).
+
+The NSD replication experiments are separate. They live in
+[`experiments/nsd_replication/`](../../experiments/nsd_replication/README.md),
+read only the NSD team's preprocessed CIFTI files (`derivatives/nsdpreproc`),
+and never use fMRIPrep CIFTI files.
 
 | Notebook | What you get |
 | --- | --- |
@@ -19,7 +26,7 @@ The notebooks are stored as [jupytext](https://jupytext.readthedocs.io)
 py:percent scripts; only the `.py` files are tracked, and `.ipynb` files are
 gitignored so outputs stay out of git. `uv sync --group dev` installs jupytext.
 In Jupyter, open a `.py` file as a notebook, or create the paired notebook
-with `uv run jupytext --to ipynb examples/NSD/nsd_workflow.py`. The repository's
+with `uv run jupytext --to ipynb examples/bids_workflow/nsd_workflow.py`. The repository's
 `jupytext.toml` pairs every notebook with its script, so saving in Jupyter
 (with jupytext installed in the server environment) updates the `.py` as well.
 Editors that do not run jupytext, such as VS Code, need
@@ -168,7 +175,7 @@ File discovery, settings, fitting stages, artifact writers, surfaces, plots,
 and the report live in the installed `boldtailor.workflow` package. Only the
 notebook configuration helper (`nsd_settings.py`) and the session-reliability
 and multi-session helpers (`session_hrf*.py`, `multisession_*.py`) stay under
-`examples/NSD/`; run these notebooks from a repository checkout with the
+`examples/bids_workflow/`; run these notebooks from a repository checkout with the
 development dependencies. Generic helpers live in the package: `boldtailor.cifti`
 (dense-scalar export and checked reloads, cortical projection, feature
 identity), `boldtailor.diagnostics` (one-sample t maps, RT correlations),

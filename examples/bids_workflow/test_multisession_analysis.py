@@ -10,7 +10,7 @@ import pytest
 
 def api(module):
     try:
-        return importlib.import_module("examples.NSD.multisession_" + module)
+        return importlib.import_module("examples.bids_workflow.multisession_" + module)
     except ModuleNotFoundError:
         pytest.fail(f"Multi-session {module} is not implemented")
 

@@ -28,11 +28,11 @@ includes examples that read fMRIPrep outputs and save NIfTI or CIFTI maps.
 | Estimate one beta per stimulus presentation, with OLS or fixed ridge | [Beta series](docs/user-guide.md#estimating-a-beta-for-every-trial) |
 | Choose a ridge fraction at each grayordinate using held-out trial prediction | [Fractional ridge](docs/user-guide.md#fractional-ridge-at-each-grayordinate) |
 | Select HRFs from continuous parameter samples or a grid using run-wise cross-validation | [HRF selection](docs/user-guide.md#selecting-an-hrf-for-each-location) |
-| Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/NSD/nsd_session_hrf_reliability.py) |
+| Compare HRFs across NSD sessions against canonical SPM | [Session reliability notebook](examples/bids_workflow/nsd_session_hrf_reliability.py) |
 | Compare HRFs selected from separate sets of runs | [HRF reliability](docs/user-guide.md#comparing-hrfs-between-sets-of-runs) |
-| Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [NSD example](examples/NSD/README.md) |
-| Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/NSD/nsd_workflow.py) |
-| Run the whole NSD-style CIFTI analysis from the shell | [Command line](#command-line) |
+| Analyze NSD CIFTIs in notebooks, including RT checks and parallel fitting | [BIDS workflow examples (NSD data)](examples/bids_workflow/README.md) |
+| Compare canonical and optimized HRFs in task/RT/trial-type GLMs | [Full NSD workflow notebook](examples/bids_workflow/nsd_workflow.py) |
+| Run the whole BIDS + fMRIPrep CIFTI analysis from the shell | [Command line](#command-line) |
 | Save analysis records and results together | [Saving results](docs/user-guide.md#saving-results-and-analysis-records) |
 
 ## Install
@@ -118,13 +118,13 @@ the output files, and the exit codes.
 
 ## Working with images
 
-The [NSD guide](examples/NSD/README.md) covers the NSD notebooks: conventional
+The [BIDS workflow examples (NSD data)](examples/bids_workflow/README.md) cover the NSD notebooks: conventional
 and single-trial CIFTI models, optimized HRFs, odd/even HRF parameter maps, and
-their outputs. It explains the notebook settings (`examples/NSD/nsd_settings.py`),
+their outputs. It explains the notebook settings (`examples/bids_workflow/nsd_settings.py`),
 your own data paths, and running several workers. The single-session analysis
 is also available as the [`boldtailor run`](#command-line) command.
 
-The [full NSD workflow notebook](examples/NSD/nsd_workflow.py) fits matched
+The [full NSD workflow notebook](examples/bids_workflow/nsd_workflow.py) fits matched
 GLMs with `task`, `response_time`, and `trial_type`, first with the canonical
 SPM HRF and then with an optimized HRF per grayordinate. It also demonstrates
 HRF reliability, single-trial beta series, nested ridge selection, held-out
@@ -152,6 +152,18 @@ Boldtailor assumes that the task-model response, and the relationship between
 betas and trial variables, transfer across runs. See the
 [GLMsingle comparison](docs/glmsingle-comparison.md) for details.
 
+## Two kinds of code
+
+- **The `boldtailor run` CLI** (`src/boldtailor/cli.py`, `src/boldtailor/workflow/`)
+  analyses a BIDS dataset: raw BIDS events, fMRIPrep fsLR CIFTI time series, and
+  fMRIPrep confounds. The examples in `examples/bids_workflow/` exercise this path.
+- **The NSD replication** (`experiments/nsd_replication/`) is research code,
+  not shipped in the package. It reads the NSD team's preprocessed CIFTI files
+  from `derivatives/nsdpreproc`, raw BIDS events, and GLMsingle polynomial drift
+  terms, and it uses only boldtailor's public core API. A static test
+  (`experiments/nsd_replication/test_boundary.py`) blocks imports of
+  `boldtailor.workflow`/`boldtailor.cli` and fMRIPrep CIFTI file names.
+
 ## Documentation
 
 - [User guide](docs/user-guide.md): model choices, timing, confounds, HRFs, and interpretation.
@@ -159,15 +171,15 @@ betas and trial variables, transfer across runs. See the
 - [Result migration](docs/result-migration.md): current result classes and design access.
 - [Documentation index](docs/README.md): current guides and dated development records.
 - [GLMsingle comparison](docs/glmsingle-comparison.md): HRFs, denoising, regularization, and validation.
-- [NSD guide](examples/NSD/README.md): notebook settings and CIFTI output reference.
+- [BIDS workflow examples (NSD data)](examples/bids_workflow/README.md): notebook settings and CIFTI output reference.
 - [NSD validation](docs/validation/nsd-session.md): recorded numerical checks and benchmarks.
 - [Developer guide](docs/development.md): testing, architecture, provenance, and file-writing conventions.
 
 Boldtailor is under active development. It currently supports t contrasts,
 OLS/AR(1) conventional GLMs, and OLS, fixed-ridge, or encoding-tuned single-trial
 fits. GLMdenoise-style denoising (`select_denoising`) is available through the
-array API but is not part of `boldtailor run`, which handles NSD-style fsLR-91k
-CIFTI sessions; a general BIDS analysis command is not yet available. HRF and encoding-guided ridge selection do not require repeated stimuli.
+array API but is not part of `boldtailor run`, which handles BIDS datasets with fMRIPrep fsLR-91k
+CIFTI outputs. HRF and encoding-guided ridge selection do not require repeated stimuli.
 
 ## License
 

@@ -15,7 +15,7 @@ import pytest
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.workflow.outputs import check_output
 from boldtailor.workflow.settings import WorkflowSettings
-from examples.NSD import multisession_inputs, multisession_workflow
+from examples.bids_workflow import multisession_inputs, multisession_workflow
 
 HERE = Path(__file__).parent
 WORKFLOW_NOTEBOOK = HERE / "nsd_workflow.py"

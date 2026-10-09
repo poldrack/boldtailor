@@ -50,7 +50,7 @@ repo = next(
 if str(repo) not in sys.path:
     sys.path.insert(0, str(repo))
 
-from examples.NSD.nsd_settings import nsd_paths
+from examples.bids_workflow.nsd_settings import nsd_paths
 
 overrides = globals().get("HRF_RELIABILITY_CONFIG", {})
 settings = dict(
@@ -76,10 +76,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from IPython.display import display
 from boldtailor.hrf_library import sobol_hrf_library
-from examples.NSD.session_hrf import estimate_sessions
+from examples.bids_workflow.session_hrf import estimate_sessions
 from boldtailor.reliability import compare_hrfs, SUMMARY_NAMES
-from examples.NSD.session_hrf_outputs import session_table, save_reliability
-from examples.NSD.session_hrf_plots import (
+from examples.bids_workflow.session_hrf_outputs import session_table, save_reliability
+from examples.bids_workflow.session_hrf_plots import (
     agreement_figure,
     parameter_variability_figure,
 )

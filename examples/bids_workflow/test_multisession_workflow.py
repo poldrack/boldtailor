@@ -4,7 +4,7 @@ import nibabel as nib
 import pytest
 
 from boldtailor.workflow.settings import WorkflowSettings
-from examples.NSD import (
+from examples.bids_workflow import (
     multisession_analysis,
     multisession_inputs,
     multisession_outputs,

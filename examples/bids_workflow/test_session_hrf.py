@@ -11,12 +11,12 @@ import pytest
 from boldtailor.hrf_library import sobol_hrf_library
 from boldtailor.task_detection import detect_task_model
 from boldtailor.workflow.inputs import load_session
-from examples.NSD.nsd_settings import nsd_settings
+from examples.bids_workflow.nsd_settings import nsd_settings
 
 
 def session_api():
     try:
-        return importlib.import_module("examples.NSD.session_hrf")
+        return importlib.import_module("examples.bids_workflow.session_hrf")
     except ModuleNotFoundError:
         pytest.fail("The session HRF estimation workflow is not implemented")
 
