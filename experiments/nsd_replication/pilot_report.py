@@ -59,7 +59,9 @@ def variability(config, source, levels, subject=None):
 def _parser():
     parser = argparse.ArgumentParser(prog="nsd_replication.pilot_report")
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--source", choices=("ppdata", "released"), default="ppdata")
+    parser.add_argument(
+        "--source", choices=("nsdpreproc", "released"), default="nsdpreproc"
+    )
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
     return parser
 

@@ -78,20 +78,20 @@ The comparator is NSD's released GLMsingle betas, converted by the user to CIFTI
 - `desc-assumehrf` (b1), `desc-fithrf` (b2) and `desc-fithrfGLMdenoiseRR` (b4). NSD released no GLMdenoise-only version, so b3 has no released counterpart.
 - Files: `sub-NN/ses-nsdYY/func/sub-NN_ses-nsdYY_task-nsdcore_space-fsLR_den-91k_desc-<version>_stat-effect_statmap.dscalar.nii`. Each holds 750 maps named `trial-001`…`trial-750`, in presentation order.
 - Units: percent signal change. NSD's ×300 integer scaling has already been undone.
-- Grid: fsLR 91k. The cortical part is exactly the ppdata grayordinates (same names and vertices).
+- Grid: fsLR 91k. The cortical part is exactly the nsdpreproc grayordinates (same names and vertices).
 - Source: resampled from NSD's native-surface betas with adaptive barycentric resampling.
-- Surface-sampling caveat: the ppdata series are sampled onto the cortical surface at layer B2, whereas the released betas were fitted on NSD's native-surface data and then resampled to fsLR. The two versions therefore differ in surface sampling as well as in GLM pipeline; the alignment check bounds, but does not remove, this difference.
-- Grid rule: a released file whose cortical grayordinates differ from the ppdata grayordinates (names or vertices) is an error, never silently reindexed.
+- Surface-sampling caveat: the nsdpreproc series are sampled onto the cortical surface at layer B2, whereas the released betas were fitted on NSD's native-surface data and then resampled to fsLR. The two versions therefore differ in surface sampling as well as in GLM pipeline; the alignment check bounds, but does not remove, this difference.
+- Grid rule: a released file whose cortical grayordinates differ from the nsdpreproc grayordinates (names or vertices) is an error, never silently reindexed.
 - Also present: subject-level NSD NCSNR maps per version (reference only, not our metric).
 
 ### Data
 
-Boldtailor fits NSD's own preprocessed series (ppdata, `func1pt8mm`), resampled by the user to fsLR 32k on the layer-B2 surface.
-- Files: `derivatives/ppdata/subjNN/func1pt8mm/timeseries/sub-NN_ses-nsdYY_task-nsdcore_run-ZZ_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii`.
+Boldtailor fits NSD's own preprocessed series (NSD's ppdata at 1.8 mm, resampled to fsLR 32k on the layer-B2 surface), read from the BIDS derivative `derivatives/nsdpreproc`. nsdpreproc is the BIDS form of ppdata: the time series are identical. The NSD experiments read only these CIFTI files, never fMRIPrep CIFTI files.
+- Files: `derivatives/nsdpreproc/sub-NN/ses-nsdYY/func/sub-NN_ses-nsdYY_task-nsdcore_run-ZZ_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii`.
 - Timing: TR 4/3 s, 226 volumes per run.
 - Grid: cortex only, 59,412 grayordinates, the same vertices as the released betas' cortex.
 - Why: this is the preprocessing the released betas (and the paper) used, so the comparison isolates the GLM pipeline.
-- Onsets: BIDS onsets map onto the ppdata time base by a constant `onset_offset`, calibrated once in the pilot by maximising the alignment check over candidate offsets.
+- Onsets: BIDS onsets map onto the nsdpreproc time base by a constant `onset_offset`, calibrated once in the pilot by maximising the alignment check over candidate offsets.
 
 ### "On par" (TOST)
 
@@ -137,7 +137,7 @@ Each criterion is directional, evaluated per subject, and must hold in at least 
 
 ### Onset-offset calibration
 
-How BIDS onsets map onto the ppdata time base is checked once, before the full pilot, on sub-07 ses-nsd10:
+How BIDS onsets map onto the nsdpreproc time base is checked once (it was calibrated on ppdata, whose series are identical), before the full pilot, on sub-07 ses-nsd10:
 1. Fit only b1 at each candidate `onset_offset` in `np.round(np.arange(-2, 2.01, 1/3), 4)` seconds.
 2. Compute `alignment_check(ours_b1, released_b1, run_length, roi)` for each candidate (`calibrate_offset.py`).
 3. Set `onset_offset` in every config to the candidate with the largest `true_median`.

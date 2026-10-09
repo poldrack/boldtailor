@@ -69,7 +69,9 @@ def _render(items, out_dir, label):
 
 
 def subject_figures(config, subject):
-    metrics = _load_subject_tables(config.output_dir / "metrics" / "ppdata" / subject)
+    metrics = _load_subject_tables(
+        config.output_dir / "metrics" / "nsdpreproc" / subject
+    )
     out = config.output_dir / "figures" / subject
     _render(_subject_figures(metrics), out, subject)
 
@@ -91,7 +93,7 @@ def _subject_parity(subject, median):
         dict(
             subject=subject,
             level=lv,
-            boldtailor=values[f"ppdata:{lv}"],
+            boldtailor=values[f"nsdpreproc:{lv}"],
             released=values[f"released:{lv}"],
         )
         for lv in LEVELS
@@ -104,7 +106,7 @@ def _rsa_tables(config):
     group = "group_" + "_".join(config.subjects)
     for level in LEVELS:
         table = _read(
-            config.output_dir / "metrics" / "ppdata" / group / f"rsa_{level}.tsv"
+            config.output_dir / "metrics" / "nsdpreproc" / group / f"rsa_{level}.tsv"
         )
         if table is not None:
             found[level] = table

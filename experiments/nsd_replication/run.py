@@ -60,7 +60,7 @@ from experiments.nsd_replication.trials import (
     trial_table,
 )
 
-SOURCES = ("ppdata", "released", "comparison")
+SOURCES = ("nsdpreproc", "released", "comparison")
 R4_THRESHOLDS = (0.0, 0.3)
 R6_THRESHOLDS = (0.0, 0.1, 0.2, 0.3, 0.4)
 RSA_THRESHOLDS = (0.0, 0.2, 0.4)
@@ -71,8 +71,10 @@ SUBJECT_TABLES = ("r1", "r1_median", "r3b", "r4_t0.0", "r4_t0.3", "r6")
 
 
 def _load(config, source, subject, session):
-    if source != "ppdata":
-        raise ValueError(f"source {source!r} has no fit stage; only ppdata is fitted")
+    if source != "nsdpreproc":
+        raise ValueError(
+            f"source {source!r} has no fit stage; only nsdpreproc is fitted"
+        )
     return load_nsdpreproc(config, subject, session)
 
 
@@ -360,7 +362,7 @@ def _check_library(path, library):
 
 def _consistency(config, subject, level):
     library = R2_LIBRARIES[level]()
-    paths = _session_paths(config, "ppdata", subject, level)
+    paths = _session_paths(config, "nsdpreproc", subject, level)
     for path in paths:
         _check_library(path, library)
     indices = np.vstack([read_extra(p, "hrf_indices") for p in paths])
@@ -390,9 +392,9 @@ def hrf_consistency(config, subject, recompute=False):
     if len(config.sessions) < 2:
         return
     roi = cache(lambda: _subject_roi(config, subject))
-    out = _metrics_dir(config, "ppdata", subject)
+    out = _metrics_dir(config, "nsdpreproc", subject)
     for level in R2_LIBRARIES:
-        paths = _session_paths(config, "ppdata", subject, level)
+        paths = _session_paths(config, "nsdpreproc", subject, level)
         if all(is_complete(p) for p in paths):
             builders = _r2_builders(config, subject, level, roi)
             ensure_tables(out, builders, None, recompute, sessions=config.sessions)
@@ -453,7 +455,7 @@ def _save_differences(out, data, recompute):
 
 def _session_alignment(config, subject, session, roi):
     paths = _version_paths(config, subject, session)
-    ours, trials, _ = read_fit(paths["ppdata:b1"])
+    ours, trials, _ = read_fit(paths["nsdpreproc:b1"])
     released, _, _ = read_fit(paths["released:b1"])
     return alignment_row(session, ours, released, trials, roi)
 
@@ -562,7 +564,7 @@ def _comparison_outputs():
 
 
 def _check_comparison_done(config, source, subject):
-    if source != "ppdata" or config.released_dir is None:
+    if source != "nsdpreproc" or config.released_dir is None:
         return
     out = _comparison_dir(config, subject)
     missing = [n for n in _comparison_outputs() if not (out / n).is_file()]
@@ -608,7 +610,7 @@ FEATURE_LEVELS = ("b4", "b4-taskonly")
 
 def _feature_paths(config, subject, session):
     return {
-        lv: fit_dir(config.output_dir, "ppdata", subject, session, lv)
+        lv: fit_dir(config.output_dir, "nsdpreproc", subject, session, lv)
         for lv in FEATURE_LEVELS
     }
 
@@ -616,7 +618,7 @@ def _feature_paths(config, subject, session):
 def _write_missing(config, subject, session, data, fits):
     paths = _feature_paths(config, subject, session)
     missing = {lv: f for lv, f in fits.items() if not is_complete(paths[lv])}
-    _write_levels(config, "ppdata", subject, session, data, missing)
+    _write_levels(config, "nsdpreproc", subject, session, data, missing)
 
 
 def subject_number(subject):
@@ -628,7 +630,7 @@ def subject_number(subject):
 
 def _session_features(config, subject, index, session, roi):
     """The null is seeded [subject number, session index, run index]."""
-    data = _load(config, "ppdata", subject, session)
+    data = _load(config, "nsdpreproc", subject, session)
     _check_digests(
         _feature_paths(config, subject, session).values(), inputs_digest(data)
     )
@@ -641,7 +643,7 @@ def _session_features(config, subject, index, session, roi):
 
 
 def _feature_table(config, subject, name):
-    return _metrics_dir(config, "ppdata", subject) / f"features_{name}.tsv"
+    return _metrics_dir(config, "nsdpreproc", subject) / f"features_{name}.tsv"
 
 
 def _read_table(path):
@@ -688,8 +690,8 @@ def subject_features(config, subject, recompute=False):
 
 
 def _run_features(config, args, levels):
-    if args.source != "ppdata":
-        raise ValueError("feature experiments run on ppdata only")
+    if args.source != "nsdpreproc":
+        raise ValueError("feature experiments run on nsdpreproc only")
     for subject in config.subjects:
         subject_features(config, subject, args.recompute)
 
@@ -701,7 +703,7 @@ def _parser():
     parser = argparse.ArgumentParser(prog="nsd_replication.run")
     parser.add_argument("command", choices=("fit", "metrics", "features", "figures"))
     parser.add_argument("--config", required=True, type=Path)
-    parser.add_argument("--source", choices=SOURCES, default="ppdata")
+    parser.add_argument("--source", choices=SOURCES, default="nsdpreproc")
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
     parser.add_argument("--refit", action="store_true")
     parser.add_argument("--recompute", action="store_true")
@@ -735,7 +737,7 @@ def _run_metrics(config, args, levels):
         return _run_comparison(config, args.recompute)
     for subject in config.subjects:
         subject_metrics(config, args.source, subject, levels, args.recompute)
-        if args.source == "ppdata":
+        if args.source == "nsdpreproc":
             hrf_consistency(config, subject, args.recompute)
     multiple = len(config.subjects) > 1
     if multiple:

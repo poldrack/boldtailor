@@ -5,7 +5,7 @@ import pandas as pd
 from experiments.nsd_replication.released import alignment_check
 
 LEVELS = ("b1", "b2", "b4")
-VERSIONS = tuple(f"{s}:{lv}" for s in ("ppdata", "released") for lv in LEVELS)
+VERSIONS = tuple(f"{s}:{lv}" for s in ("nsdpreproc", "released") for lv in LEVELS)
 
 
 def check_trial_tables(tables_by_version, session):
@@ -21,7 +21,7 @@ def check_trial_tables(tables_by_version, session):
 def reliability_differences(reliabilities):
     """Per-grayordinate boldtailor minus released reliability per level."""
     return {
-        lv: reliabilities[f"ppdata:{lv}"] - reliabilities[f"released:{lv}"]
+        lv: reliabilities[f"nsdpreproc:{lv}"] - reliabilities[f"released:{lv}"]
         for lv in LEVELS
     }
 
