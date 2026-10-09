@@ -777,7 +777,7 @@ front end.
 | `task_model_notes(events_tables, modulators=None)` | `boldtailor.task_detection` | Why detection left out a column every run has (a `trial_type` with fewer than two levels) |
 | `InputError` | `boldtailor.workflow.inputs` | `ValueError` subclass for missing or malformed inputs; the CLI maps it to exit code 2 |
 | `WorkflowRun` | `boldtailor.workflow.inputs` | One loaded run: `inputs`, `image`, `events`, `confounds`, `frame_times`, `label`, `number`, and `retained_frames` |
-| `observed_levels(tables, column, labels=None)` | `boldtailor.workflow.inputs` | Canonical non-missing level names of `column` across every events table |
+| `observed_levels(tables, column, labels=None)` | `boldtailor.task_detection` | Canonical non-missing level names of `column` across every events table |
 | `selection_task_model(task_model, include_rt=True)` | `boldtailor.workflow.inputs` | The GLM task model, or the same model without `response_time` for HRF selection |
 | `validate_glm_events(events, task_model)` | `boldtailor.workflow.inputs` | Require an observed positive RT and every categorical level, if modeled |
 | `glm_model(runs, task_model)` | `boldtailor.workflow.inputs` | The OLS `ModelSpec` (SPM HRF, no drift, the runs' confounds) with one contrast per task regressor |
