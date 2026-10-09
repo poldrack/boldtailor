@@ -10,7 +10,7 @@ Boldtailor's code serves two purposes. This change keeps them apart:
    purely BIDS + fMRIPrep and contains nothing NSD-specific.
 2. **The NSD experiments** (`experiments/nsd_replication/`) are research code
    that is not shipped with the package. They read **only** the NSD team's
-   preprocessed CIFTI files in `derivatives/nsdpreproc`, never fMRIPrep
+   preprocessed CIFTI files in `derivatives/nsdpreproc`, never fMRIPrep CIFTI 
    outputs. They use only boldtailor's public core API, never
    `boldtailor.workflow` or `boldtailor.cli`.
 
