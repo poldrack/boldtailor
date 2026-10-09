@@ -38,6 +38,7 @@ def test_living_docs_point_at_bids_workflow_examples_and_two_kinds_of_code():
     for name in LIVING_DOCS:
         text = (REPO / name).read_text()
         assert "examples/NSD" not in text, name
+        assert "examples.NSD" not in text, name
     assert (REPO / "examples/bids_workflow/README.md").is_file()
     assert not (REPO / "examples/NSD").exists()
     for name in ("README.md", "docs/development.md"):
