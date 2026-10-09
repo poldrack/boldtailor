@@ -50,3 +50,14 @@ def test_living_docs_point_at_bids_workflow_examples_and_two_kinds_of_code():
 def test_living_docs_describe_the_cli_as_bids_not_nsd_style():
     for name in LIVING_DOCS:
         assert "NSD-style" not in (REPO / name).read_text(), name
+
+
+def test_api_reference_places_task_detection_names_in_core():
+    rows = [
+        line
+        for line in (REPO / "docs/api.md").read_text().splitlines()
+        if line.startswith("| `")
+    ]
+    for name in ("detect_task_model(", "task_model_notes(", "observed_levels("):
+        (row,) = [r for r in rows if r.startswith(f"| `{name}")]
+        assert "`boldtailor.task_detection`" in row, row
