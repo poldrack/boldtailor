@@ -24,7 +24,7 @@ def test_load_config_converts_paths_and_tuples(tmp_path):
     assert config.n_jobs == 2
     assert config.image_column == "73k_id"
     assert config.onset_offset == 0.0
-    assert config.ppdata_dir is None
+    assert config.nsdpreproc_dir == Path("/data/BIDS/derivatives/nsdpreproc")
 
 
 @pytest.mark.parametrize(
@@ -78,3 +78,55 @@ def test_shipped_configs(name, subjects):
     assert config.sessions == tuple(f"ses-nsd{i:02d}" for i in range(1, 11))
     assert config.n_jobs == 4
     assert config.released_dir is not None
+    assert config.nsdpreproc_dir == Path(
+        "/Volumes/extdata1/NSD/BIDS/derivatives/nsdpreproc"
+    )
+
+
+def _direct(**extra):
+    values = dict(
+        bids_dir=Path("/b"),
+        output_dir=Path("/o"),
+        freesurfer_dir=Path("/l"),
+        subjects=("sub-07",),
+        sessions=("ses-nsd10",),
+    )
+    return ExperimentConfig(**{**values, **extra})
+
+
+def test_direct_construction_defaults_nsdpreproc_under_bids():
+    assert _direct().nsdpreproc_dir == Path("/b/derivatives/nsdpreproc")
+
+
+def test_explicit_nsdpreproc_dir_is_honoured(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(TOML + 'nsdpreproc_dir = "/elsewhere/nsdpreproc"\n')
+    assert load_config(path).nsdpreproc_dir == Path("/elsewhere/nsdpreproc")
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        'ppdata_dir = "/data/ppdata"\n',
+        'ppdata_dir = "/data/ppdata"\nnsdpreproc_dir = "/data/nsdpreproc"\n',
+    ],
+)
+def test_ppdata_dir_is_rejected_with_the_replacement_key(tmp_path, extra):
+    path = tmp_path / "c.toml"
+    path.write_text(TOML + extra)
+    with pytest.raises(ValueError, match="ppdata_dir.*nsdpreproc_dir"):
+        load_config(path)
+
+
+def test_label_validation_does_not_need_the_workflow():
+    import ast
+
+    source = (Path(__file__).parent / "config.py").read_text()
+    imported = {
+        node.module
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.ImportFrom)
+    }
+    assert not any(m and m.startswith("boldtailor.workflow") for m in imported)
+    with pytest.raises(ValueError, match="subjects"):
+        _direct(subjects=("sub-07_x",))
