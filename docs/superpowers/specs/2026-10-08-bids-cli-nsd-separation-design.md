@@ -53,7 +53,7 @@ These were checked against `/Volumes/extdata1/NSD/BIDS`.
 | NSD events | Raw BIDS `events.tsv` (`onset`, `duration`, `73k_id`, `trial_type`, `response_time`) |
 | NSD time base | `onset_offset = 0.667` s stays; it was calibrated on ppdata, which is identical to nsdpreproc |
 | NSD confounds | GLMsingle polynomial drift basis only (unchanged); nsdpreproc motion TSV not used |
-| NSD CIFTI | nsdpreproc only; nothing under `experiments/` reads `derivatives/fmriprep*` or `derivatives/ppdata` |
+| NSD CIFTI | nsdpreproc only; nothing under `experiments/` reads fMRIPrep CIFTI files (`*_bold.dtseries.nii` under `derivatives/fmriprep*`) or `derivatives/ppdata`. Other fMRIPrep derivatives (confounds, surface meshes) are not banned, though none are used by this change |
 | Coupling | Generic helpers move into public core modules; experiments import only core `boldtailor` |
 | Examples | `examples/NSD/` becomes `examples/bids_workflow/`, relabeled as a BIDS + fMRIPrep CLI demo |
 
@@ -200,14 +200,24 @@ RED-GREEN-Refactor. All new and moved tests are committed failing before any imp
 - `test_inputs.py`:
   - `nsdpreproc_path` gives the BIDS layout;
   - a missing run raises `FileNotFoundError` naming the run;
+  - in a synthetic tree that also holds a decoy fMRIPrep
+    `derivatives/fmriprep/…_space-fsLR_den-91k_bold.dtseries.nii` for the same
+    run, `load_nsdpreproc` opens only files under `nsdpreproc_dir` (paths
+    recorded by wrapping `nibabel.load`);
   - synthetic loads report `source == "nsdpreproc"`.
 - `test_run.py` / `test_figures.py` / `test_pilot_report.py`: the source label
   `nsdpreproc` appears in the output paths and in the CLI choices; `ppdata`
   appears nowhere.
 - `test_boundary.py` (new): parses every `experiments/**/*.py` with `ast`. It fails on:
   - any import of `boldtailor.workflow` or `boldtailor.cli`;
-  - any string literal containing the path fragments `derivatives/fmriprep`,
-    `derivatives/ppdata` or `func1pt8mm`, or the key `fmriprep_dir`.
+  - any string literal containing `den-91k_bold`, the entity sequence of
+    fMRIPrep's CIFTI BOLD files (`*_space-fsLR_den-91k_bold.dtseries.nii`);
+  - any string literal containing the old ppdata path fragments
+    `derivatives/ppdata` or `func1pt8mm`.
+
+  `derivatives/fmriprep` and `fmriprep_dir` are deliberately **not** banned, so
+  that other fMRIPrep derivatives, such as confounds or surface meshes, stay
+  available to future experiments. Only the CIFTI time series are off-limits.
 
   `test_boundary.py` itself is excluded from the scan. Prose mentions of
   "ppdata" in docstrings are allowed, for example to say that nsdpreproc is
