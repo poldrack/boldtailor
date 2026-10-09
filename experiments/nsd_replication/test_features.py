@@ -229,7 +229,7 @@ block_size = 16
 @pytest.fixture
 def patched(monkeypatch, synthetic_session):
     monkeypatch.setattr(run, "_load", lambda *a: synthetic_session)
-    monkeypatch.setattr(run, "ppdata_brain", lambda *a: synthetic_session.brain)
+    monkeypatch.setattr(run, "nsdpreproc_brain", lambda *a: synthetic_session.brain)
     monkeypatch.setattr(run, "load_roi", lambda *a: np.arange(30) < 20)
     monkeypatch.setattr(features, "default_hrf_library", lambda: SMALL)
     monkeypatch.setattr(ladder, "default_hrf_library", lambda: SMALL)

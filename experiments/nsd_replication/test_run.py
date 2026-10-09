@@ -29,7 +29,7 @@ def patched(monkeypatch, synthetic_session):
     monkeypatch.setattr(
         run, "_load", lambda config, source, subject, session: synthetic_session
     )
-    monkeypatch.setattr(run, "ppdata_brain", lambda *a: synthetic_session.brain)
+    monkeypatch.setattr(run, "nsdpreproc_brain", lambda *a: synthetic_session.brain)
     monkeypatch.setattr(
         run, "load_roi", lambda config, subject, brain: np.arange(30) < 20
     )

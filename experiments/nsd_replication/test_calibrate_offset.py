@@ -30,11 +30,11 @@ def _shifted(session, offset):
 
 @pytest.fixture
 def patched(monkeypatch, synthetic_session):
-    """ppdata at onset_offset o has frame times shifted by o; released is offset 0."""
+    """nsdpreproc at onset_offset o has frame times shifted by o; released is offset 0."""
     released = fit_ladder(synthetic_session, levels=("b1",), block_size=16)["b1"].betas
     monkeypatch.setattr(
         calibrate_offset,
-        "load_ppdata",
+        "load_nsdpreproc",
         lambda config, subject, session: _shifted(
             synthetic_session, config.onset_offset
         ),

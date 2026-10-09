@@ -83,13 +83,13 @@ def test_resampling_inputs_missing_key_raises():
 
 
 @pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
-def test_pilot_roi_on_ppdata_cortex(tmp_path):
+def test_pilot_roi_on_nsdpreproc_cortex(tmp_path):
     import shutil
 
     if shutil.which("wb_command") is None:
         pytest.skip("Connectome Workbench not installed")
     from experiments.nsd_replication.config import ExperimentConfig
-    from experiments.nsd_replication.inputs import ppdata_brain
+    from experiments.nsd_replication.inputs import nsdpreproc_brain
     from experiments.nsd_replication.roi import load_roi
 
     config = ExperimentConfig(
@@ -97,11 +97,10 @@ def test_pilot_roi_on_ppdata_cortex(tmp_path):
         output_dir=tmp_path,
         freesurfer_dir=DATA / "derivatives/freesurfer-NSD",
         released_dir=DATA / "derivatives/betas-fsLR",
-        ppdata_dir=DATA / "derivatives/ppdata",
         subjects=("sub-07",),
         sessions=("ses-nsd10",),
     )
-    mask = load_roi(config, "sub-07", ppdata_brain(config, "sub-07", "ses-nsd10"))
+    mask = load_roi(config, "sub-07", nsdpreproc_brain(config, "sub-07", "ses-nsd10"))
     assert mask.shape == (59412,)
     assert 0.05 < mask.mean() < 0.4
 

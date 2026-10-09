@@ -80,20 +80,19 @@ def test_alignment_check_detects_shift():
 
 
 @pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
-def test_pilot_released_matches_ppdata_axis():
+def test_pilot_released_matches_nsdpreproc_axis():
     from experiments.nsd_replication.config import ExperimentConfig
-    from experiments.nsd_replication.inputs import ppdata_brain
+    from experiments.nsd_replication.inputs import nsdpreproc_brain
 
     config = ExperimentConfig(
         bids_dir=DATA,
         output_dir=DATA / "derivatives/nsd-replication",
         freesurfer_dir=DATA / "derivatives/freesurfer-NSD",
-        ppdata_dir=DATA / "derivatives/ppdata",
         released_dir=DATA / "derivatives/betas-fsLR",
         subjects=("sub-07",),
         sessions=("ses-nsd10",),
     )
-    brain = ppdata_brain(config, "sub-07", "ses-nsd10")
+    brain = nsdpreproc_brain(config, "sub-07", "ses-nsd10")
     trials = bids_trials(config, "sub-07", "ses-nsd10")
     path = released_path(config, "sub-07", "ses-nsd10", "b4")
     got = load_released(path, brain, len(trials), "sub-07 ses-nsd10 b4")
