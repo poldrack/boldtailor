@@ -816,9 +816,9 @@ Run them from the repository checkout:
 
 | Module / function | Use |
 | --- | --- |
-| `examples.NSD.nsd_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
-| `examples.NSD.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
-| `examples.NSD.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
+| `examples.bids_workflow.nsd_settings` | Workflow-notebook settings from defaults, overrides, and data paths |
+| `examples.bids_workflow.session_hrf.estimate_sessions` | Select and cache HRFs separately for several sessions |
+| `examples.bids_workflow.multisession_workflow.ensure_session_outputs` | Reuse complete session results or fit missing ones with the workflow notebook |
 
 See [running the NSD notebooks](../examples/bids_workflow/README.md#run-the-notebooks).
 The retired NSD scripts are replaced by [`boldtailor run`](#session-workflow-and-command-line).
