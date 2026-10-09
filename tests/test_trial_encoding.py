@@ -366,3 +366,87 @@ def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
         encoding_mode=encoding_mode,
     )
     np.testing.assert_allclose(actual.r2, expected.r2, atol=1e-7)
+
+
+# --- trial_predictors -------------------------------------------------------
+
+from boldtailor.model import Modulator, TaskModel
+
+RT = Modulator("response_time", missing="indicator")
+TT = Modulator("trial_type", kind="categorical", levels=("0", "1"))
+
+
+def predictors(*args, **kwargs):
+    from boldtailor.trial_encoding import trial_predictors
+
+    return trial_predictors(*args, **kwargs)
+
+
+@pytest.fixture
+def trial_events():
+    return pd.DataFrame(
+        {
+            "onset": [8.0, 22.0, 38.0, 60.0, 90.0, 112.0],
+            "duration": [3.0] * 6,
+            "trial_type": [0, 1, 0, 1, 1, 0],
+            "response_time": [0.5, 1.0, 2.5, 1.5, 3.0, 0.5],
+        }
+    )
+
+
+def test_trial_predictors_select_modulator_columns_in_model_order(trial_events):
+    tables = predictors([trial_events, trial_events], TaskModel((RT, TT)))
+    assert [list(t.columns) for t in tables] == [["response_time", "trial_type[1]"]] * 2
+    assert all(len(t) == len(trial_events) for t in tables)
+    assert tables[0]["trial_type[1]"].tolist() == [0.0, 1.0, 0.0, 1.0, 1.0, 0.0]
+
+
+def test_trial_predictors_follow_the_task_model(trial_events):
+    (table,) = predictors([trial_events], TaskModel((TT,)))
+    assert list(table.columns) == ["trial_type[1]"]
+
+
+def test_trial_predictors_make_nonpositive_or_missing_rt_nan(trial_events):
+    events = trial_events.copy()
+    events.loc[:2, "response_time"] = [-1.0, 0.0, np.nan]
+    (table,) = predictors([events], TaskModel((RT, TT)))
+    assert table.response_time.iloc[:3].isna().all()
+    assert table.response_time.iloc[3:].notna().all()
+
+
+def test_trial_predictors_leave_other_columns_untouched():
+    events = pd.DataFrame(dict(effort=[-1.0, 0.0, 2.0]))
+    (table,) = predictors([events], TaskModel((Modulator("effort"),)))
+    assert table.effort.tolist() == [-1.0, 0.0, 2.0]
+
+
+def test_trial_predictors_missing_column_names_the_run(trial_events):
+    broken = trial_events.drop(columns="response_time")
+    with pytest.raises(ValueError, match="run-02.*response_time"):
+        predictors(
+            [trial_events, broken], TaskModel((RT,)), labels=["run-01", "run-02"]
+        )
+    with pytest.raises(ValueError, match="run 1.*response_time"):
+        predictors([broken], TaskModel((RT,)))
+
+
+def test_trial_predictors_reject_nonbinary_trial_type(trial_events):
+    with pytest.raises(ValueError, match="trial_type"):
+        predictors([trial_events.assign(trial_type=3)], TaskModel((TT,)))
+
+
+def test_trial_predictors_emit_indicator_columns_with_missing_as_nan(trial_events):
+    mod = Modulator(
+        "trial_type", kind="categorical", levels=("0", "1"), missing="indicator"
+    )
+    events = trial_events.astype({"trial_type": float})
+    events.loc[0, "trial_type"] = np.nan
+    (table,) = predictors([events], TaskModel((mod,)))
+    assert list(table.columns) == ["trial_type[1]"]
+    assert np.isnan(table.iloc[0, 0])
+    assert set(table.iloc[1:, 0]) <= {0.0, 1.0}
+
+
+def test_trial_predictors_labels_must_match_the_tables(trial_events):
+    with pytest.raises(ValueError, match="labels"):
+        predictors([trial_events, trial_events], TaskModel((RT,)), labels=["run-01"])
