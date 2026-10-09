@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.design import expand_events
+from boldtailor.task_detection import detect_task_model
 from boldtailor.model import Modulator, TaskModel
 from boldtailor.workflow import inputs
 
@@ -25,7 +26,7 @@ def test_run_missing_a_level_is_an_input_error_naming_the_run(four_runs, setting
 def test_run_summary_counts_each_level(four_runs, settings_for):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     summary = inputs.run_summary(runs, model)
     assert {"n_trial_type_0", "n_trial_type_1"} <= set(summary.columns)
     assert (summary.n_trial_type_0 + summary.n_trial_type_1 == summary.trials).all()
@@ -34,7 +35,7 @@ def test_run_summary_counts_each_level(four_runs, settings_for):
 def test_load_session_detects_the_model_and_builds_the_glm(four_runs, settings_for):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     glm = inputs.glm_model(runs, model)
     assert (
         glm.task_model == model and glm.noise_model == "ols" and glm.drift_model is None
@@ -57,7 +58,7 @@ def test_task_only_session_has_no_rt_columns(four_runs, settings_for):
             path, sep="\t", index=False
         )
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     assert model == TaskModel()
     assert set(inputs.glm_model(runs, model).contrasts) == {"task"}
     summary = inputs.run_summary(runs, model)
@@ -73,7 +74,7 @@ def test_hrf_only_loading_needs_two_runs_not_two_per_parity(dataset, settings_fo
 
 @pytest.mark.parametrize("column,value", [("trial_type", 2), ("trial_type", np.nan)])
 def test_invalid_glm_covariates_fail_explicitly(events, column, value):
-    model = inputs.detect_task_model([events])
+    model = detect_task_model([events])
     events.loc[0, column] = value
     with pytest.raises(ValueError, match=column):
         inputs.validate_glm_events(events, model)
@@ -101,7 +102,7 @@ def test_nonpositive_rt_becomes_missing_with_indicator(
     run = next(r for r in runs if r.number == 1)
     assert np.isnan(run.events.response_time.iloc[1])
     assert np.isfinite(run.events.response_time.drop(index=1)).all()
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     expanded = expand_events(run.events, model)
     indicator = expanded.loc[
         expanded.trial_type == "missing_response_time", "modulation"
@@ -112,14 +113,14 @@ def test_nonpositive_rt_becomes_missing_with_indicator(
 
 
 def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
-    model = inputs.detect_task_model([events])
+    model = detect_task_model([events])
     events["response_time"] = np.nan
     with pytest.raises(ValueError, match="response_time.*positive.*finite"):
         inputs.validate_glm_events(events, model)
 
 
 def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
-    model = inputs.detect_task_model([events])
+    model = detect_task_model([events])
     events["response_time"] = events.response_time.astype(object)
     events.loc[1, "response_time"] = "invalid"
     with pytest.raises(ValueError, match="response_time"):
@@ -131,7 +132,7 @@ def test_trimming_keeps_acquisition_times_and_matches_confounds(
 ):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     data = inputs.load_block(runs, root, [0, 2], model)
     assert [len(t) for t in data.frame_times] == [95, 94, 93, 95]
     for run, y, dropped in zip(runs, data.signals, (1, 2, 3, 1), strict=True):
@@ -160,7 +161,7 @@ def test_interior_nonsteady_flag_is_rejected(four_runs, settings_for):
 
 
 def test_selection_task_model_switch_drops_only_rt(events):
-    model = inputs.detect_task_model([events])
+    model = detect_task_model([events])
     assert inputs.selection_task_model(model, True) == model
     without_rt = inputs.selection_task_model(model, False)
     assert without_rt == TaskModel((TT,))
@@ -214,7 +215,7 @@ def test_trimming_errors_name_the_bids_run(four_runs, settings_for):
 def test_no_modulators_means_a_task_only_model(four_runs, settings_for):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root, modulators=()))
-    assert inputs.detect_task_model([r.events for r in runs], ()) == TaskModel()
+    assert detect_task_model([r.events for r in runs], ()) == TaskModel()
 
 
 REMEDY = "--modulator trial_type:categorical,indicator"

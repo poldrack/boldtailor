@@ -9,7 +9,7 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor.model import TaskModel
-from boldtailor.workflow.inputs import detect_task_model
+from boldtailor.task_detection import detect_task_model
 
 from experiments.nsd_replication.confounds import glmsingle_polynomials
 

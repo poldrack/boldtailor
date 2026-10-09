@@ -15,7 +15,7 @@ from boldtailor.hrf_library import (
     spm_parameters,
     timing_parameters,
 )
-from boldtailor.workflow.inputs import detect_task_model
+from boldtailor.task_detection import detect_task_model
 
 from experiments.nsd_replication.confounds import glmsingle_polynomials
 from experiments.nsd_replication.inputs import Session

@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 
 from boldtailor.workflow import analysis
+from boldtailor.task_detection import detect_task_model
 from boldtailor.workflow.inputs import (
-    detect_task_model,
     load_session,
     make_blocks,
     selection_task_model,

@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
+from boldtailor.task_detection import detect_task_model
 from boldtailor.model import Modulator
 from boldtailor.publication import publish_artifact_set
 from boldtailor.workflow import analysis, artifacts, beta_series, inputs, outputs
@@ -25,7 +26,7 @@ SPLIT_DESCRIPTORS = (
 
 def _session(settings):
     runs = inputs.load_session(settings)
-    model = inputs.detect_task_model([r.events for r in runs], settings.modulators)
+    model = detect_task_model([r.events for r in runs], settings.modulators)
     return runs, model, runs[0].image.header.get_axis(1)
 
 
@@ -245,7 +246,7 @@ def test_beta_model_writer_covers_every_estimator(
         root, ridge_mode="fractional_cv", ridge_fractions=(0.4, 1.0), block_size=4
     )
     runs = inputs.load_session(settings)
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=4)
     brain = runs[0].image.header.get_axis(1)
     selections = analysis.select_hrfs(runs, root, blocks, cv_library, task_model=model)

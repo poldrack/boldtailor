@@ -9,7 +9,8 @@ import pandas as pd
 import pytest
 
 from boldtailor.hrf_library import sobol_hrf_library
-from boldtailor.workflow.inputs import detect_task_model, load_session
+from boldtailor.task_detection import detect_task_model
+from boldtailor.workflow.inputs import load_session
 from examples.NSD.nsd_settings import nsd_settings
 
 

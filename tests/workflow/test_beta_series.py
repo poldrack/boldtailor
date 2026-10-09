@@ -16,6 +16,7 @@ from boldtailor.fractional_ridge import (
     select_ridge_fractions,
 )
 from boldtailor.hrf_selection import select_hrfs
+from boldtailor.task_detection import detect_task_model
 from boldtailor.model import Modulator, TaskModel
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
@@ -36,7 +37,7 @@ def encoded(events):
 def session(six_run_dataset, settings_for):
     root, _ = six_run_dataset
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     return root, list(runs), model
 
 
@@ -673,7 +674,7 @@ def test_fit_beta_models_yields_one_model_per_hrf_and_estimator(
         block_size=4,
     )
     runs = inputs.load_session(settings)
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=4)
     selections = analysis.select_hrfs(runs, root, blocks, cv_library, task_model=model)
     models = beta_series.fit_beta_models(
@@ -709,7 +710,7 @@ def test_cv_models_keep_rt_in_fits_and_predictors_when_selection_excludes_it(
         hrf_selection_rt=False,
     )
     runs = inputs.load_session(settings)
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=4)
     models = beta_series.fit_beta_models(
         runs, root, blocks, settings, cv_library, None, model
@@ -725,7 +726,7 @@ def test_fixed_ridge_model_uses_the_setting_alpha(
     root, _ = six_run_dataset
     settings = settings_for(root, ridge_mode="fixed", ridge_alpha=0.5, block_size=4)
     runs = inputs.load_session(settings)
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=4)
     models = beta_series.fit_beta_models(
         runs, root, blocks, settings, None, None, model

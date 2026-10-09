@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from nilearn.glm.first_level import compute_regressor
 
+from boldtailor.task_detection import detect_task_model
 from boldtailor.workflow import analysis, inputs
 from tests.oracles import scaled_condition
 
@@ -67,7 +68,7 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
         events.loc[1, "response_time"] = np.nan
         events.to_csv(path, sep="\t", index=False)
     runs = inputs.load_session(settings_for(root))
-    task_model = inputs.detect_task_model([r.events for r in runs])
+    task_model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2)
     assert [list(b) for b in blocks] == [
         [0, 1],
@@ -112,7 +113,7 @@ def test_glm_model_and_selection_share_the_detected_task_model(
 
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
-    model_task = inputs.detect_task_model([r.events for r in runs])
+    model_task = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
     model = inputs.glm_model(runs, model_task)
     assert model.task_model == model_task
@@ -139,7 +140,7 @@ def test_select_hrfs_without_rt_still_feeds_the_full_glm(
 ):
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
-    model_task = inputs.detect_task_model([r.events for r in runs])
+    model_task = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
     narrow = inputs.selection_task_model(model_task, False)
     selections = analysis.select_hrfs(
@@ -173,7 +174,7 @@ def test_beta_series_without_response_time_has_no_rt_correlations(
             path, sep="\t", index=False
         )
     runs = inputs.load_session(settings_for(root))
-    model = inputs.detect_task_model([r.events for r in runs])
+    model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2)
     result = analysis.fit_beta_series(runs, root, blocks, task_model=model)
     assert result["rt"] is None and len(result["betas"]) == 4
@@ -184,7 +185,7 @@ def test_select_hrfs_without_splits_selects_on_all_runs_only(
 ):
     root, *_ = dataset
     runs = inputs.load_session(settings_for(root), hrf_only=True)
-    model_task = inputs.detect_task_model([r.events for r in runs])
+    model_task = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2, max_grayordinates=4)
     alone = analysis.select_hrfs(
         runs, root, blocks, small_library, task_model=model_task, splits=False

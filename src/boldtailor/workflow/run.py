@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from boldtailor.diagnostics import one_sample_t
+from boldtailor.task_detection import detect_task_model, task_model_notes
 from boldtailor.model import TaskModel
 from boldtailor.reliability import curve_correlations
 from boldtailor.workflow import (
@@ -94,10 +95,11 @@ def _session(settings):
     with _input_errors():
         runs = inputs.load_session(settings, hrf_only=True)
         events = [r.events for r in runs]
-        task_model = inputs.detect_task_model(
+        task_model = detect_task_model(
             events, settings.modulators, labels=[r.label for r in runs]
         )
-    return runs, task_model, inputs.task_model_notes(events, settings.modulators)
+        notes = task_model_notes(events, settings.modulators)
+    return runs, task_model, notes
 
 
 def describe_inputs(settings):

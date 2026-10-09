@@ -767,8 +767,8 @@ front end.
 | `run_workflow(settings)` | `boldtailor.workflow.run` | Run all enabled stages and publish; returns a `WorkflowResult` (`settings`, `paths`, `report_path`, `skipped`, `task_model`, `library_fingerprint`) |
 | `describe_inputs(settings)` | `boldtailor.workflow.run` | Resolved plan (runs, task model, notes) and the `problems` a run would hit (`existing_results` or `input`), without fitting; backs `--dry-run` |
 | `load_session(settings, *, hrf_only=False)` | `boldtailor.workflow.inputs` | Load, trim, and validate the session's CIFTI runs and events; `hrf_only=True` skips the two-odd/two-even-run requirement of the reliability stages |
-| `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.workflow.inputs` | `response_time`, a categorical `trial_type` (two or more levels), or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors |
-| `task_model_notes(events_tables, modulators=None)` | `boldtailor.workflow.inputs` | Why detection left out a column every run has (a `trial_type` with fewer than two levels) |
+| `detect_task_model(events_tables, modulators=None, labels=None)` | `boldtailor.task_detection` | `response_time`, a categorical `trial_type` (two or more levels), or explicit modulators (`()` for task-only) to a `TaskModel`; `labels` name runs in errors; raises `ValueError` (the workflow reports it as `InputError`) |
+| `task_model_notes(events_tables, modulators=None)` | `boldtailor.task_detection` | Why detection left out a column every run has (a `trial_type` with fewer than two levels) |
 | `InputError` | `boldtailor.workflow.inputs` | `ValueError` subclass for missing or malformed inputs; the CLI maps it to exit code 2 |
 | `WorkflowRun` | `boldtailor.workflow.inputs` | One loaded run: `inputs`, `image`, `events`, `confounds`, `frame_times`, `label`, `number`, and `retained_frames` |
 | `observed_levels(tables, column, labels=None)` | `boldtailor.workflow.inputs` | Canonical non-missing level names of `column` across every events table |

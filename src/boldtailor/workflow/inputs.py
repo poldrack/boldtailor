@@ -9,7 +9,8 @@ import pandas as pd
 
 from boldtailor.data import from_arrays
 from boldtailor._task_design import categorical_names
-from boldtailor.model import ModelSpec, Modulator, TaskModel, level_name
+from boldtailor.model import ModelSpec, TaskModel, level_name
+from boldtailor.task_detection import detect_task_model
 from boldtailor.workflow.files import (
     discover_runs,
     load_runs,
@@ -20,80 +21,6 @@ from boldtailor.workflow.files import (
 
 class InputError(ValueError):
     """Inputs are missing or malformed; the CLI maps this to exit code 2."""
-
-
-TRIAL_TYPE_NOTE = "trial_type has fewer than two levels; not used as a modulator"
-
-
-def _table_levels(table, column, label):
-    try:
-        return {level_name(v) for v in table[column]}
-    except ValueError as error:
-        raise InputError(f"{label}: {column!r}: {error}") from error
-
-
-def observed_levels(tables, column, labels=None):
-    """Canonical non-missing level names of ``column`` across every table."""
-    labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
-    names = set()
-    for table, label in zip(tables, labels, strict=True):
-        names |= _table_levels(table, column, label)
-    names.discard(None)
-    return names
-
-
-def _everywhere(column, tables):
-    return bool(tables) and all(column in t.columns for t in tables)
-
-
-def _automatic(tables, labels):
-    modulators = []
-    if _everywhere("response_time", tables):
-        modulators.append(Modulator("response_time", missing="indicator"))
-    if _everywhere("trial_type", tables):
-        levels = observed_levels(tables, "trial_type", labels)
-        if len(levels) >= 2:
-            modulators.append(
-                Modulator("trial_type", kind="categorical", levels=tuple(levels))
-            )
-    return tuple(modulators)
-
-
-def _resolved(modulator, tables, labels):
-    if modulator.resolved:
-        return modulator
-    try:
-        levels = observed_levels(tables, modulator.column, labels)
-        return modulator.with_levels(levels)
-    except ValueError as error:
-        raise InputError(f"modulator {modulator.column!r}: {error}") from error
-
-
-def detect_task_model(events_tables, modulators=None, labels=None):
-    """The task model from event columns, or explicit modulators checked per run.
-
-    Detection takes ``response_time`` and a categorical ``trial_type`` with at
-    least two levels; unresolved categorical modulators take their levels from
-    every run. ``labels`` (BIDS run labels) name the run in errors.
-    """
-    tables = list(events_tables)
-    labels = labels or [f"run {i}" for i in range(1, len(tables) + 1)]
-    if modulators is None:
-        modulators = _automatic(tables, labels)
-    for label, table in zip(labels, tables, strict=True):
-        missing = [m.column for m in modulators if m.column not in table.columns]
-        if missing:
-            raise InputError(f"{label} events lack modulator column(s) {missing}")
-    return TaskModel(tuple(_resolved(m, tables, labels) for m in modulators))
-
-
-def task_model_notes(events_tables, modulators=None):
-    """Why automatic detection left out a column that every run has."""
-    tables = list(events_tables)
-    if modulators is None and _everywhere("trial_type", tables):
-        if len(observed_levels(tables, "trial_type")) < 2:
-            return [TRIAL_TYPE_NOTE]
-    return []
 
 
 def selection_task_model(task_model, include_rt=True):
@@ -219,14 +146,22 @@ def _trim(run, task_model, automatic=False):
     )
 
 
+def _session_task_model(raw_runs, modulators):
+    """Detect the model; event problems become InputError (CLI exit code 2)."""
+    try:
+        return detect_task_model(
+            [r.events for r in raw_runs],
+            modulators,
+            labels=[r.label for r in raw_runs],
+        )
+    except ValueError as error:
+        raise InputError(str(error)) from error
+
+
 def load_session(settings, *, hrf_only=False):
     """Keep original event onsets and acquisition times when dropping NSS scans."""
     raw_runs, _ = load_runs(discover_runs(settings))
-    task_model = detect_task_model(
-        [r.events for r in raw_runs],
-        settings.modulators,
-        labels=[r.label for r in raw_runs],
-    )
+    task_model = _session_task_model(raw_runs, settings.modulators)
     automatic = settings.modulators is None
     runs = [_trim(run, task_model, automatic) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:

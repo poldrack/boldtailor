@@ -9,7 +9,8 @@ import pytest
 from boldtailor.publication import publish_artifact_set
 from boldtailor.workflow.analysis import select_hrfs
 from boldtailor.workflow.beta_series import fit_beta_models
-from boldtailor.workflow.inputs import detect_task_model, load_session, make_blocks
+from boldtailor.task_detection import detect_task_model
+from boldtailor.workflow.inputs import load_session, make_blocks
 from boldtailor.workflow.outputs import beta_model_artifacts
 from examples.NSD.nsd_settings import nsd_settings
 
