@@ -44,11 +44,22 @@ def test_allowed_sources_pass(source):
     assert violations(source) == []
 
 
+def _checked(path):
+    """Test modules may name forbidden files (e.g. decoys) but never import them."""
+    return violations(path.read_text(), check_strings=not path.name.startswith("test_"))
+
+
 def test_experiments_respect_the_boundary():
     found = {
         str(path.relative_to(ROOT)): problems
         for path in sorted(ROOT.rglob("*.py"))
         if path.name not in {"test_boundary.py", "boundary.py"}
-        and (problems := violations(path.read_text()))
+        and (problems := _checked(path))
     }
     assert found == {}
+
+
+def test_test_modules_are_still_checked_for_imports(tmp_path):
+    path = tmp_path / "test_decoy.py"
+    path.write_text('import boldtailor.workflow\nP = "x_den-91k_bold.dtseries.nii"\n')
+    assert _checked(path) == ["line 1: imports boldtailor.workflow"]
