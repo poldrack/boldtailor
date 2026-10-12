@@ -87,6 +87,16 @@ def test_missing_template_found_in_local_templateflow(tmp_path, monkeypatch):
     assert inputs["L"]["target_sphere"] == tmp_path / "tpl-fsLR" / recorded.name
 
 
+def test_unfetched_templateflow_stub_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path))
+    recorded = Path("/gone/templateflow/tpl-fsLR/tpl-fsLR_hemi-L_sphere.surf.gii")
+    stub = tmp_path / "tpl-fsLR" / recorded.name
+    stub.parent.mkdir()
+    stub.touch()
+    with pytest.raises(FileNotFoundError, match="not been fetched"):
+        resampling_inputs(_sidecar(recorded))
+
+
 def test_existing_template_path_is_kept(tmp_path, monkeypatch):
     monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path / "home"))
     recorded = tmp_path / "tpl-fsLR" / "tpl-fsLR_hemi-L_sphere.surf.gii"
