@@ -36,12 +36,20 @@ def _templateflow_home():
 def _local(path):
     """The betas were made with TemplateFlow in a scratch directory, so a
     recorded template file that is gone is looked up in the local TemplateFlow
-    home under the same ``tpl-*`` relative path."""
+    home under the same ``tpl-*`` relative path. TemplateFlow keeps empty
+    stubs for files it has not downloaded yet, so an empty local file is an
+    error rather than a template."""
     path = Path(path)
     template = next((i for i, p in enumerate(path.parts) if p.startswith("tpl-")), None)
     if path.exists() or template is None:
         return path
-    return _templateflow_home().joinpath(*path.parts[template:])
+    local = _templateflow_home().joinpath(*path.parts[template:])
+    if local.is_file() and local.stat().st_size == 0:
+        raise FileNotFoundError(
+            f"{local} is an empty TemplateFlow stub: the template has not been "
+            "fetched (use templateflow.api.get to download it)"
+        )
+    return local
 
 
 def resampling_inputs(sidecar):
