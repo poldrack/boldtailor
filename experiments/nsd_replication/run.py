@@ -291,21 +291,26 @@ def _r4_table(data, threshold):
     return pd.concat(frames, ignore_index=True)[columns]
 
 
-def _r6_table(data, n_jobs):
+def _r6_table(data, version, n_jobs):
+    """R6 for one version; its own parallel run, so a failure loses only it."""
     masks = [_mask(data.roi, data.composite, t) for t in R6_THRESHOLDS]
-    rows = []
-    for version, betas in data.betas.items():
-        reps = repetition_array(betas, data.trials, data.images)
-        results = decoding_accuracies(reps, masks, n_jobs=n_jobs)
-        rows += [
-            dict(version=version, threshold=t, **r)
-            for t, r in zip(R6_THRESHOLDS, results)
-        ]
+    reps = repetition_array(data.betas[version], data.trials, data.images)
+    results = decoding_accuracies(reps, masks, n_jobs=n_jobs)
+    rows = [
+        dict(version=version, threshold=t, **r) for t, r in zip(R6_THRESHOLDS, results)
+    ]
     return pd.DataFrame(rows)
 
 
-def _table_builders(n_jobs):
-    """Metric name -> builder(data), cheapest first."""
+def _r6_name(version):
+    """Per-version R6 table name; ":" (comparison versions) is not portable."""
+    return "r6_" + version.replace(":", "-")
+
+
+def _table_builders(n_jobs, versions, out):
+    """Metric name -> builder(data), cheapest first. R6 is written one version
+    at a time, so a rerun resumes from the first missing version, then
+    combined into ``r6``."""
     builders = {
         "r1": lambda d: threshold_curves(d.reliabilities, d.roi),
         "r1_median": lambda d: _median_table(d.reliabilities, d.roi),
@@ -313,7 +318,12 @@ def _table_builders(n_jobs):
     }
     for t in R4_THRESHOLDS:
         builders[f"r4_t{t}"] = lambda d, t=t: _r4_table(d, t)
-    builders["r6"] = lambda d: _r6_table(d, n_jobs)
+    for v in versions:
+        builders[_r6_name(v)] = lambda d, v=v: _r6_table(d, v, n_jobs)
+    builders["r6"] = lambda _: pd.concat(
+        [pd.read_csv(out / f"{_r6_name(v)}.tsv", sep="\t") for v in versions],
+        ignore_index=True,
+    )
     return builders
 
 
@@ -339,7 +349,7 @@ def subject_metrics(config, source, subject, levels, recompute=False):
         subject,
     )
     out = _metrics_dir(config, source, subject)
-    builders = _table_builders(config.n_jobs)
+    builders = _table_builders(config.n_jobs, levels, out)
     return ensure_tables(out, builders, data, recompute, levels, config.sessions)
 
 
@@ -439,7 +449,7 @@ def comparison_metrics(config, subject, recompute=False):
         subject,
     )
     out = _comparison_dir(config, subject)
-    builders = _table_builders(config.n_jobs)
+    builders = _table_builders(config.n_jobs, VERSIONS, out)
     tables = ensure_tables(out, builders, data, recompute, VERSIONS, config.sessions)
     _save_differences(out, data, recompute)
     return tables
