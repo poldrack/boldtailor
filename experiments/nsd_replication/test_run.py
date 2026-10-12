@@ -362,6 +362,44 @@ def test_metric_tables_written_before_a_later_failure(config, patched, monkeypat
     assert (out / "r1.tsv").is_file() and not (out / "r6.tsv").exists()
 
 
+def test_r6_written_per_level_then_combined(config, patched):
+    tables = _fit_and_measure(config, ("b1", "b2"))
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
+    parts = [pd.read_csv(out / f"r6_{lv}.tsv", sep="\t") for lv in ("b1", "b2")]
+    assert [set(p["version"]) for p in parts] == [{"b1"}, {"b2"}]
+    pd.testing.assert_frame_equal(tables["r6"], pd.concat(parts, ignore_index=True))
+
+
+def test_r6_resumes_from_the_level_that_failed(config, patched, monkeypatch):
+    for ses in config.sessions:
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
+    real = run.decoding_accuracies
+    calls = []
+
+    def fails_second(reps, masks, n_jobs=1):
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("b2 failed")
+        return real(reps, masks, n_jobs=n_jobs)
+
+    monkeypatch.setattr(run, "decoding_accuracies", fails_second)
+    with pytest.raises(RuntimeError, match="b2 failed"):
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))
+    out = config.output_dir / "metrics/nsdpreproc/sub-07"
+    assert (out / "r6_b1.tsv").is_file()
+    assert not (out / "r6_b2.tsv").exists() and not (out / "r6.tsv").exists()
+    mtime = (out / "r6_b1.tsv").stat().st_mtime_ns
+
+    calls.clear()
+    monkeypatch.setattr(
+        run, "decoding_accuracies", lambda *a, **k: calls.append(1) or real(*a, **k)
+    )
+    r6 = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2"))["r6"]
+    assert len(calls) == 1
+    assert (out / "r6_b1.tsv").stat().st_mtime_ns == mtime
+    assert list(r6["version"].unique()) == ["b1", "b2"]
+
+
 def test_main_metrics_recompute_flag(config, patched):
     toml = config.bids_dir / "config.toml"
     toml.write_text(f"""bids_dir = "{config.bids_dir}"
@@ -461,6 +499,9 @@ def test_comparison_metrics_all_tables_share_one_composite(config, patched):
     r4 = tables["r4_t0.3"]
     assert (r4.groupby("lag")["n_pairs"].nunique() == 1).all()
     assert set(r4["threshold"]) == {0.3}
+    # per-version R6 tables, named without ":" (not portable in file names)
+    assert (out / "r6_released-b4.tsv").is_file()
+    assert not any(":" in p.name for p in out.iterdir())
 
 
 def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
