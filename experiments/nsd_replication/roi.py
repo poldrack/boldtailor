@@ -28,12 +28,28 @@ def label_paths(config, subject):
     return {"L": label / "lh.nsdgeneral.mgz", "R": label / "rh.nsdgeneral.mgz"}
 
 
+def _templateflow_home():
+    default = Path.home() / ".cache" / "templateflow"
+    return Path(os.environ.get("TEMPLATEFLOW_HOME", default))
+
+
+def _local(path):
+    """The betas were made with TemplateFlow in a scratch directory, so a
+    recorded template file that is gone is looked up in the local TemplateFlow
+    home under the same ``tpl-*`` relative path."""
+    path = Path(path)
+    template = next((i for i, p in enumerate(path.parts) if p.startswith("tpl-")), None)
+    if path.exists() or template is None:
+        return path
+    return _templateflow_home().joinpath(*path.parts[template:])
+
+
 def resampling_inputs(sidecar):
     missing = [key for key in _KEYS.values() if key not in sidecar]
     if missing:
         raise ValueError(f"beta sidecar lacks resampling inputs: {missing}")
     return {
-        hemi: {name: Path(sidecar[key][i]) for name, key in _KEYS.items()}
+        hemi: {name: _local(sidecar[key][i]) for name, key in _KEYS.items()}
         for i, hemi in enumerate(("L", "R"))
     }
 
