@@ -71,6 +71,30 @@ def test_resampling_inputs_and_command():
     ]
 
 
+def _sidecar(target_sphere):
+    return {
+        "SourceSpheres": ["/s/lh.sphere", "/s/rh.sphere"],
+        "TargetSpheres": [str(target_sphere), "/t/R.sphere"],
+        "SourceAreaMetrics": ["/s/lh.area", "/s/rh.area"],
+        "TargetAreaMetrics": ["/t/L.area", "/t/R.area"],
+    }
+
+
+def test_missing_template_found_in_local_templateflow(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path))
+    recorded = Path("/gone/templateflow/tpl-fsLR/tpl-fsLR_hemi-L_sphere.surf.gii")
+    inputs = resampling_inputs(_sidecar(recorded))
+    assert inputs["L"]["target_sphere"] == tmp_path / "tpl-fsLR" / recorded.name
+
+
+def test_existing_template_path_is_kept(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path / "home"))
+    recorded = tmp_path / "tpl-fsLR" / "tpl-fsLR_hemi-L_sphere.surf.gii"
+    recorded.parent.mkdir()
+    recorded.touch()
+    assert resampling_inputs(_sidecar(recorded))["L"]["target_sphere"] == recorded
+
+
 def test_resampling_inputs_missing_key_raises():
     with pytest.raises(ValueError, match="TargetAreaMetrics"):
         resampling_inputs(
