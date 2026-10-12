@@ -11,9 +11,9 @@
 #
 #SBATCH --job-name=nsd-replication
 #SBATCH --partition=russpold,normal
-#SBATCH --time=24:00:00
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
+#SBATCH --time=48:00:00
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --chdir=/oak/stanford/groups/russpold/data/NSD/boldtailor
 #SBATCH --output=/oak/stanford/groups/russpold/data/NSD/boldtailor/experiments/nsd_replication/slurm/logs/%x-%j.out
 
@@ -25,7 +25,9 @@ ml python/3.12.1 uv/0.10.8
 ml biology workbench
 
 # The config's n_jobs workers share the allocation; split the remaining
-# cores between them as BLAS threads instead of oversubscribing.
+# cores between them as BLAS threads instead of oversubscribing. R6 has 15
+# jobs per level (5 masks x 3 folds) on single-threaded liblinear, so
+# n_jobs = 15 with 16 cores keeps every worker busy.
 N_JOBS=$(sed -n 's/^n_jobs *= *\([0-9]*\).*/\1/p' "$CONFIG")
 THREADS=$(( SLURM_CPUS_PER_TASK / ${N_JOBS:-1} ))
 (( THREADS < 1 )) && THREADS=1
