@@ -43,6 +43,15 @@ def test_fit_session_writes_and_skips(config, patched):
     assert (paths[0] / "betas.npy").stat().st_mtime_ns == mtime
 
 
+def test_fit_session_logs_fitted_and_skipped_levels(config, patched, caplog):
+    caplog.set_level("INFO", logger="experiments.nsd_replication")
+    run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
+    run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("sub-07 ses-a" in m and "wrote b1" in m for m in messages)
+    assert any("sub-07 ses-a" in m and "already fitted" in m for m in messages)
+
+
 def test_metadata_is_complete_and_trials_use_session_label(config, patched):
     (path,) = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     _, trials, meta = read_fit(path)

@@ -6,7 +6,12 @@ composite reliability (``composite_levels``) and the session window
 level set or session window is never silently reused or replaced.
 """
 
+import logging
+import time
+
 import pandas as pd
+
+log = logging.getLogger(__name__)
 
 COMPOSITE_COLUMN = "composite_levels"
 SESSIONS_COLUMN = "sessions"
@@ -72,8 +77,12 @@ def ensure_tables(out, builders, data, recompute=False, levels=None, sessions=No
     for name, build in builders.items():
         path = _path(out, name)
         if path.is_file() and not recompute:
+            log.info("kept existing %s", path)
             tables[name] = pd.read_csv(path, sep="\t")
             continue
+        log.info("building %s/%s", out, name)
+        start = time.monotonic()
         tables[name] = _build(build, data, recorded)
         tables[name].to_csv(path, sep="\t", index=False)
+        log.info("wrote %s in %.0fs", path, time.monotonic() - start)
     return tables

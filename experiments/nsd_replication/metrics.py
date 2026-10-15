@@ -1,5 +1,7 @@
 """Prince et al. (2022) NSD metrics on z-scored single-trial betas."""
 
+import logging
+import time
 import warnings
 from itertools import combinations
 
@@ -11,6 +13,8 @@ from sklearn.svm import LinearSVC
 
 THRESHOLDS = np.round(np.arange(-0.2, 0.6001, 0.05), 2)
 MIN_DECODING_FEATURES = 10
+
+log = logging.getLogger(__name__)
 
 
 def columnwise_corr(a, b):
@@ -101,13 +105,29 @@ def rdm_agreement(rdms):
     return pd.DataFrame(rows, columns=["subject_a", "subject_b", "r"])
 
 
+def _fold_inputs(train, test):
+    """``(train, test, dual)`` for the SVM. With more features than training
+    samples the linear SVM's dual depends on the data only through inner
+    products with training rows, so both sets are projected onto the training
+    rows' span: the same problem, solved along the same path, at a fraction of
+    the cost. ``dual`` is pinned to what ``"auto"`` picks for the original
+    data, which the narrower projection would otherwise change."""
+    if train.shape[1] <= train.shape[0]:
+        return train, test, "auto"
+    _, _, basis = np.linalg.svd(train, full_matrices=False)
+    return train @ basis.T, test @ basis.T, True
+
+
 def _fit_fold(data, k, labels):
     n_reps = data.shape[0]
     train = np.delete(data, k, axis=0).reshape(-1, data.shape[2])
+    train, test, dual = _fold_inputs(train, data[k])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ConvergenceWarning)
-        model = LinearSVC(random_state=0).fit(train, np.tile(labels, n_reps - 1))
-    return model.predict(data[k]) == labels, int(
+        model = LinearSVC(random_state=0, dual=dual).fit(
+            train, np.tile(labels, n_reps - 1)
+        )
+    return model.predict(test) == labels, int(
         np.max(model.n_iter_) >= model.max_iter
     )
 
@@ -137,13 +157,34 @@ def decoding_accuracies(reps, masks, n_jobs=1):
         if m.sum() >= MIN_DECODING_FEATURES
     }
     jobs = [(i, k) for i in data for k in range(reps.shape[0])]
-    fits = Parallel(n_jobs=n_jobs)(
-        delayed(_fit_fold)(data[i], k, labels) for i, k in jobs
+    fits = Parallel(n_jobs=n_jobs, return_as="generator_unordered")(
+        delayed(_indexed_fold)(data[i], i, k, labels) for i, k in jobs
     )
+    start = time.monotonic()
+    done = {}
+    for i, k, fold in fits:
+        done[i, k] = fold
+        log.info(
+            "decoding fold %d/%d, %d features, %d classes: accuracy %.3f%s "
+            "(%d/%d done, %.0fs)",
+            k + 1,
+            reps.shape[0],
+            data[i].shape[2],
+            len(labels),
+            fold[0].mean(),
+            ", not converged" if fold[1] else "",
+            len(done),
+            len(jobs),
+            time.monotonic() - start,
+        )
     folds = {i: [] for i in range(len(masks))}
-    for (i, _), fold in zip(jobs, fits):
-        folds[i].append(fold)
+    for i, k in jobs:
+        folds[i].append(done[i, k])
     return [_decoding_summary(reps, m, folds[i]) for i, m in enumerate(masks)]
+
+
+def _indexed_fold(data, i, k, labels):
+    return i, k, _fit_fold(data, k, labels)
 
 
 def decoding_accuracy(reps, mask):

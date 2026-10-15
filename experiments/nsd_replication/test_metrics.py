@@ -134,3 +134,44 @@ def test_decoding_accuracies_parallel_matches_serial():
     pd.testing.assert_frame_equal(pd.DataFrame(parallel), pd.DataFrame(serial))
     pd.testing.assert_frame_equal(pd.DataFrame(serial), pd.DataFrame(single))
     assert np.isnan(serial[0]["accuracy"]) and np.isfinite(serial[3]["accuracy"])
+
+
+def test_decoding_logs_each_fold(caplog):
+    from experiments.nsd_replication.metrics import decoding_accuracies
+
+    caplog.set_level("INFO", logger="experiments.nsd_replication")
+    reps = _decoding_reps()
+    decoding_accuracies(reps, [np.arange(30) < 12, np.arange(30) < 30], n_jobs=2)
+    folds = [r.getMessage() for r in caplog.records if "decoding fold" in r.message]
+    assert len(folds) == 6
+    assert any("6/6" in m for m in folds)
+    assert any("30 features" in m for m in folds)
+
+
+@pytest.mark.parametrize("n_features", [8, 200])
+def test_fold_matches_plain_linear_svc(n_features):
+    """Projecting wide data onto the training rows' span leaves the fit
+    unchanged; narrow data is fitted as is."""
+    import warnings
+
+    from sklearn.exceptions import ConvergenceWarning
+    from sklearn.svm import LinearSVC
+
+    from experiments.nsd_replication.metrics import _fit_fold, _fold_inputs
+
+    rng = np.random.default_rng(2)
+    labels = np.arange(6)
+    data = rng.normal(size=(6, n_features))[None] + rng.normal(size=(3, 6, n_features))
+    train = np.delete(data, 1, axis=0).reshape(-1, n_features)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ConvergenceWarning)
+        plain = LinearSVC(random_state=0).fit(train, np.tile(labels, 2))
+    expected = plain.decision_function(data[1])
+    model_train, model_test, dual = _fold_inputs(train, data[1])
+    assert model_train.shape[1] == min(n_features, len(train))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ConvergenceWarning)
+        model = LinearSVC(random_state=0, dual=dual).fit(model_train, np.tile(labels, 2))
+    np.testing.assert_allclose(model.decision_function(model_test), expected, atol=1e-8)
+    correct, _ = _fit_fold(data, 1, labels)
+    assert correct.tolist() == (expected.argmax(1) == labels).tolist()

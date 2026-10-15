@@ -4,8 +4,10 @@ import argparse
 from functools import cache, cached_property
 import json
 from importlib.metadata import version
+import logging
 from pathlib import Path
 import subprocess
+import sys
 
 import numpy as np
 import pandas as pd
@@ -59,6 +61,8 @@ from experiments.nsd_replication.trials import (
     repetition_array,
     trial_table,
 )
+
+log = logging.getLogger(__name__)
 
 SOURCES = ("nsdpreproc", "released", "comparison")
 R4_THRESHOLDS = (0.0, 0.3)
@@ -132,6 +136,7 @@ def _level_writer(config, source, subject, session, data):
         path = fit_dir(config.output_dir, source, subject, session, level)
         meta = _metadata(source, session, digest, fit)
         write_fit(path, fit.betas, trials, meta, fit.extras)
+        log.info("fit %s %s: wrote %s", subject, session, level)
 
     return write
 
@@ -151,7 +156,13 @@ def fit_session(config, source, subject, session, levels, refit=False):
     if not refit:
         _check_digests(paths.values(), inputs_digest(data))
     missing = [lv for lv in levels if refit or not is_complete(paths[lv])]
-    if missing:
+    if not missing:
+        log.info("fit %s %s: all levels already fitted", subject, session)
+    else:
+        done = [lv for lv in levels if lv not in missing]
+        if done:
+            log.info("fit %s %s: %s already fitted", subject, session, ", ".join(done))
+        log.info("fit %s %s: fitting %s", subject, session, ", ".join(missing))
         fit_ladder(
             data,
             levels=missing,
@@ -224,7 +235,10 @@ class SubjectData:
 
     @cached_property
     def _loaded(self):
-        loaded = {v: self._load(v) for v in self.versions}
+        loaded = {}
+        for v in self.versions:
+            log.info("%s: loading %s betas", self.label, v)
+            loaded[v] = self._load(v)
         check_trial_tables({v: t for v, (_, t) in loaded.items()}, self.label)
         return loaded
 
@@ -765,8 +779,17 @@ def _default_levels(source):
     return tuple(RELEASED) if source == "released" else LEVELS + LSS_LEVELS
 
 
+def _configure_logging():
+    """Timestamped progress on stderr, which a Slurm log captures unbuffered."""
+    logging.basicConfig(
+        level=logging.WARNING, stream=sys.stderr, format="%(asctime)s %(message)s"
+    )
+    logging.getLogger("experiments.nsd_replication").setLevel(logging.INFO)
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
+    _configure_logging()
     config = load_config(args.config)
     levels = tuple(args.levels or _default_levels(args.source))
     commands = {
