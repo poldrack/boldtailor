@@ -14,6 +14,11 @@
 #SBATCH --time=48:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
+# AVX-512 nodes only: NumPy's SIMD kernels differ in the last bit between
+# AVX2 (Rome, Milan, Broadwell) and AVX-512 CPUs, which changes the HRF
+# library fingerprint and makes fits from different nodes incompatible.
+# SKX and SIE both reproduce the fingerprint of the existing fits.
+#SBATCH --constraint=CPU_GEN:SKX|CPU_GEN:SIE
 #SBATCH --chdir=/oak/stanford/groups/russpold/data/NSD/boldtailor
 #SBATCH --output=/oak/stanford/groups/russpold/data/NSD/boldtailor/experiments/nsd_replication/slurm/logs/%x-%j.out
 
