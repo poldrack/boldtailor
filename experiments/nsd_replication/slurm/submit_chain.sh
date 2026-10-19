@@ -1,11 +1,11 @@
 #!/bin/bash
-# Submit one run_subject.sbatch job per configured subject, then
-# run_group.sbatch once all of them have succeeded. Only submits; run it from
+# Submit run_subject.sbatch per configured subject (its fits, then the rest
+# once the fits succeed), then run_group.sbatch once every subject is done. Only submits; run it from
 # a login node or an interactive session.
 #
 #   experiments/nsd_replication/slurm/submit_chain.sh <config.toml> [sub-NN=JOBID ...]
 #
-# A sub-NN=JOBID argument makes that subject's job wait for JOBID to succeed
+# A sub-NN=JOBID argument makes that subject's fits wait for JOBID to succeed
 # (e.g. the betaconvert job producing its released betas).
 
 set -euo pipefail
@@ -24,10 +24,12 @@ ids=()
 for subject in $SUBJECTS; do
     dep=()
     [[ -n ${AFTER[$subject]:-} ]] && dep=(--dependency="afterok:${AFTER[$subject]}")
-    id=$(sbatch --parsable "${dep[@]}" --job-name="nsd-$subject" \
-        "$DIR/run_subject.sbatch" "$CONFIG" "$subject")
-    echo "$subject: job $id ${dep[*]}"
-    ids+=("$id")
+    fit=$(sbatch --parsable ${dep[@]+"${dep[@]}"} --time=40:00:00 \
+        --job-name="nsd-$subject-fit" "$DIR/run_subject.sbatch" "$CONFIG" "$subject" fit)
+    rest=$(sbatch --parsable --dependency="afterok:$fit" --time=24:00:00 \
+        --job-name="nsd-$subject-rest" "$DIR/run_subject.sbatch" "$CONFIG" "$subject" rest)
+    echo "$subject: fit job $fit ${dep[*]+${dep[*]}}, rest job $rest (after $fit)"
+    ids+=("$rest")
 done
 
 deps=$(IFS=:; echo "${ids[*]}")

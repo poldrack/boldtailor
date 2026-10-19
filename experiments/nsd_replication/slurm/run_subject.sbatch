@@ -1,15 +1,17 @@
 #!/bin/bash
-# Per-subject part of the replication chain: fits, metrics, features, and the
-# released and comparison stages for one configured subject. Group stages
-# (RSA, pilot report, figures) run afterwards in run_group.sbatch; submit both
-# with submit_chain.sh. Every stage skips work already written, so a
-# resubmission resumes.
+# Per-subject part of the replication chain for one configured subject, in
+# two jobs that each fit the 48-hour QOS limit: "fit" runs the nsdpreproc
+# fits (~2.75 h per session), "rest" the metrics, features, and the released
+# and comparison stages. Group stages (RSA, pilot report, figures) run
+# afterwards in run_group.sbatch; submit_chain.sh submits all of them. Every
+# stage skips work already written, so a resubmission resumes.
 #
-#   sbatch experiments/nsd_replication/slurm/run_subject.sbatch <config.toml> <sub-NN>
+#   sbatch --time=40:00:00 experiments/nsd_replication/slurm/run_subject.sbatch <config.toml> <sub-NN> fit
+#   sbatch --time=24:00:00 experiments/nsd_replication/slurm/run_subject.sbatch <config.toml> <sub-NN> rest
 #
 #SBATCH --job-name=nsd-subject
 #SBATCH --partition=russpold,normal
-#SBATCH --time=72:00:00
+#SBATCH --time=40:00:00
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 # AVX-512 nodes only, as in run_all.sbatch: the HRF library fingerprint
@@ -22,6 +24,7 @@ set -euo pipefail
 
 CONFIG=$1
 SUBJECT=$2
+PART=$3
 
 ml python/3.12.1 uv/0.10.8
 ml biology workbench
@@ -39,10 +42,20 @@ run() {
         --config "$CONFIG" --subjects "$SUBJECT"
 }
 
-run fit      --source nsdpreproc
-run metrics  --source nsdpreproc
-run features
-run fit      --source released
-run metrics  --source released
-run metrics  --source comparison
-echo "=== $(date '+%F %T') $SUBJECT done"
+case $PART in
+    fit)
+        run fit      --source nsdpreproc
+        ;;
+    rest)
+        run metrics  --source nsdpreproc
+        run features
+        run fit      --source released
+        run metrics  --source released
+        run metrics  --source comparison
+        ;;
+    *)
+        echo "part must be fit or rest, not $PART" >&2
+        exit 2
+        ;;
+esac
+echo "=== $(date '+%F %T') $SUBJECT $PART done"
