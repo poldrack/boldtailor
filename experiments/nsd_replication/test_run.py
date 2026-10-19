@@ -33,6 +33,17 @@ def patched(monkeypatch, synthetic_session):
     monkeypatch.setattr(
         run, "load_roi", lambda config, subject, brain: np.arange(30) < 20
     )
+    monkeypatch.setattr(
+        run,
+        "bids_trials",
+        lambda config, subject, session: _synthetic_trials(synthetic_session, session),
+    )
+
+
+def _synthetic_trials(session_data, session):
+    from experiments.nsd_replication.trials import trial_table
+
+    return trial_table(session_data.events, session_data.labels, session, "73k_id")
 
 
 def test_fit_session_writes_and_skips(config, patched):
@@ -750,3 +761,54 @@ def test_sources_name_nsdpreproc_not_ppdata():
     assert run.SOURCES == ("nsdpreproc", "released", "comparison")
     args = run._parser().parse_args(["fit", "--config", "c.toml"])
     assert args.source == "nsdpreproc"
+
+
+def _without_images(monkeypatch, synthetic_session, subject, images):
+    """``subject``'s events lack ``images``; every other subject sees them all."""
+
+    def trials(config, s, session):
+        table = _synthetic_trials(synthetic_session, session)
+        return table[~table["image"].isin(images)] if s == subject else table
+
+    monkeypatch.setattr(run, "bids_trials", trials)
+
+
+def test_r6_classes_are_images_every_subject_saw_three_times(
+    config, patched, monkeypatch, synthetic_session
+):
+    """As in the paper, R6 decodes only the images all configured subjects saw
+    three times in the window, read from each subject's BIDS events."""
+    config = replace(config, subjects=("sub-07", "sub-08"))
+    _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
+    for ses in config.sessions:
+        run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
+    r6 = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))["r6"]
+    assert set(r6["n_classes"]) == {30}
+    assert r6["chance"].to_numpy() == pytest.approx(1 / 30)
+
+
+def test_r6_with_one_subject_decodes_its_own_images(config, patched):
+    r6 = _fit_and_measure(config)["r6"]
+    assert set(r6["n_classes"]) == {40}
+
+
+def test_existing_r6_from_another_class_set_raises_unless_recompute(
+    config, patched, monkeypatch, synthetic_session
+):
+    _fit_and_measure(config)
+    config = replace(config, subjects=("sub-07", "sub-08"))
+    _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
+    with pytest.raises(ValueError, match="r6_b1.*40 classes.*--recompute"):
+        run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
+    r6 = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",), recompute=True)
+    assert set(r6["r6"]["n_classes"]) == {30}
+
+
+def test_comparison_r6_uses_the_shared_classes(
+    config, patched, monkeypatch, synthetic_session
+):
+    _fit_comparison(config)
+    config = replace(config, subjects=("sub-07", "sub-08"))
+    _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
+    r6 = run.comparison_metrics(config, "sub-07")["r6"]
+    assert set(r6["n_classes"]) == {30}
