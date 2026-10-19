@@ -855,3 +855,25 @@ def test_main_subjects_refuses_discard_before_group_stages(config, patched):
         run.main(
             ["metrics", *common, "--subjects", "sub-08", "--discard-betas-after-metrics"]
         )
+
+
+def test_group_rsa_loads_only_roi_columns(config, patched, monkeypatch):
+    """RSA masks never leave the ROI, so it loads ROI columns only (four
+    subjects' full-brain betas at every level would not fit in memory)."""
+    for subject in ("sub-07", "sub-08"):
+        for ses in config.sessions:
+            run.fit_session(config, "nsdpreproc", subject, ses, ("b1",))
+    full = run.group_rsa(config, "nsdpreproc", ("sub-07", "sub-08"), ("b1",))
+    loaded = []
+    real = run._subject_betas
+
+    def spy(config, source, subject, level, columns=None):
+        loaded.append(columns)
+        return real(config, source, subject, level, columns)
+
+    monkeypatch.setattr(run, "_subject_betas", spy)
+    again = run.group_rsa(
+        config, "nsdpreproc", ("sub-07", "sub-08"), ("b1",), recompute=True
+    )
+    assert loaded and all(np.array_equal(c, np.arange(20)) for c in loaded)
+    pd.testing.assert_frame_equal(again, full)
