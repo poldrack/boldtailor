@@ -544,7 +544,11 @@ def _shared_images(trials_by_subject):
 
 
 def _subject_inputs(config, source, subject, levels):
-    loaded = {lv: _subject_betas(config, source, subject, lv) for lv in levels}
+    """ROI columns only: RSA masks never leave the ROI."""
+    columns = np.flatnonzero(_subject_roi(config, subject))
+    loaded = {
+        lv: _subject_betas(config, source, subject, lv, columns) for lv in levels
+    }
     betas = {lv: b for lv, (b, _) in loaded.items()}
     trials = loaded[levels[0]][1]
     rel = _reliabilities(betas, trials, images_with(trials, 3))
@@ -573,7 +577,7 @@ def _rsa_inputs(config, source, subjects, levels):
     inputs = {s: _subject_inputs(config, source, s, levels) for s in subjects}
     shared = _shared_images({s: i["trials"] for s, i in inputs.items()})
     patterns = {s: _mean_patterns(i, shared) for s, i in inputs.items()}
-    rois = {s: _subject_roi(config, s) for s in subjects}
+    rois = {s: np.ones(len(i["composite"]), bool) for s, i in inputs.items()}
     masks = {
         s: (lambda t, s=s: _mask(rois[s], inputs[s]["composite"], t)) for s in subjects
     }
