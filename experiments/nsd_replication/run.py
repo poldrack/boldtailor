@@ -756,7 +756,7 @@ def subject_features(config, subject, recompute=False):
 def _run_features(config, args, levels):
     if args.source != "nsdpreproc":
         raise ValueError("feature experiments run on nsdpreproc only")
-    for subject in config.subjects:
+    for subject in _selected(config, args):
         subject_features(config, subject, args.recompute)
 
 
@@ -772,39 +772,65 @@ def _parser():
     parser.add_argument("--refit", action="store_true")
     parser.add_argument("--recompute", action="store_true")
     parser.add_argument("--discard-betas-after-metrics", action="store_true")
+    parser.add_argument(
+        "--subjects",
+        nargs="+",
+        help="run the per-subject stages for these configured subjects only; "
+        "group stages need a run over every configured subject",
+    )
     return parser
+
+
+def _selected(config, args):
+    """Subjects this run processes: ``--subjects`` (configured ones only) or all."""
+    subjects = tuple(args.subjects or config.subjects)
+    unknown = sorted(set(subjects) - set(config.subjects))
+    if unknown:
+        raise ValueError(f"--subjects {unknown} are not in the config's subjects")
+    return subjects
+
+
+def _all_selected(config, args):
+    return set(_selected(config, args)) == set(config.subjects)
 
 
 def _run_fit(config, args, levels):
     if args.source == "released":
-        return _index_all_released(config)
+        return _index_all_released(config, _selected(config, args))
     if args.source == "comparison":
         raise ValueError("comparison has no fit stage")
-    for subject in config.subjects:
+    for subject in _selected(config, args):
         for session in config.sessions:
             fit_session(config, args.source, subject, session, levels, args.refit)
 
 
-def _index_all_released(config):
-    for subject in config.subjects:
+def _index_all_released(config, subjects):
+    for subject in subjects:
         for session in config.sessions:
             index_released(config, subject, session)
 
 
-def _run_comparison(config, recompute):
-    for subject in config.subjects:
+def _run_comparison(config, subjects, recompute):
+    for subject in subjects:
         run_comparison(config, subject, recompute)
 
 
 def _run_metrics(config, args, levels):
+    subjects = _selected(config, args)
+    complete = _all_selected(config, args)
+    if args.discard_betas_after_metrics and not complete:
+        raise ValueError(
+            "--discard-betas-after-metrics needs a run over every configured "
+            "subject, after the group stages"
+        )
     if args.source == "comparison":
-        return _run_comparison(config, args.recompute)
-    for subject in config.subjects:
+        return _run_comparison(config, subjects, args.recompute)
+    for subject in subjects:
         subject_metrics(config, args.source, subject, levels, args.recompute)
         if args.source == "nsdpreproc":
             hrf_consistency(config, subject, args.recompute)
     multiple = len(config.subjects) > 1
-    if multiple:
+    if multiple and complete:
         group_rsa(config, args.source, config.subjects, levels, args.recompute)
     if args.discard_betas_after_metrics:
         for subject in config.subjects:

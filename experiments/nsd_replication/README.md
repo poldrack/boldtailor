@@ -24,6 +24,7 @@ uv run pytest experiments/nsd_replication -W error
 
 Run each stage with `uv run python -m experiments.nsd_replication.run <fit|metrics|features|figures> --config <toml> --source <nsdpreproc|released|comparison>`.
 Required order: nsdpreproc fit and metrics, released fit and metrics, `metrics --source comparison`, and only then `--discard-betas-after-metrics` for nsdpreproc.
+`--subjects sub-NN ...` limits a run to some configured subjects; group RSA and `--discard-betas-after-metrics` need a run over every configured subject. On Slurm, `slurm/submit_chain.sh <config>` submits one `run_subject.sbatch` job per subject and a `run_group.sbatch` job after all of them (`sub-NN=JOBID` arguments make a subject wait for another job).
 With `released_dir` configured, discarding nsdpreproc betas is refused until every comparison output exists: `alignment.tsv`, the six comparison tables (`r1`, `r1_median`, `r3b`, `r4_t0.0`, `r4_t0.3`, `r6`) and `r1_difference_{b1,b2,b4}.npy`.
 The comparison writes `alignment.tsv` first and stops before the other tables if any session is below `alignment_floor`.
 It computes R1, R3B, R4 and R6 over nsdpreproc and released b1, b2 and b4 with one shared composite, under `metrics/comparison/<subject>/`.
