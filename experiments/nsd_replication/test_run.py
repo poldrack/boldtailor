@@ -812,3 +812,46 @@ def test_comparison_r6_uses_the_shared_classes(
     _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
     r6 = run.comparison_metrics(config, "sub-07")["r6"]
     assert set(r6["n_classes"]) == {30}
+
+
+def _two_subject_toml(config):
+    toml = config.bids_dir / "config.toml"
+    toml.write_text(f"""bids_dir = "{config.bids_dir}"
+output_dir = "{config.output_dir}"
+freesurfer_dir = "{config.freesurfer_dir}"
+subjects = ["sub-07", "sub-08"]
+sessions = ["ses-a", "ses-b"]
+block_size = 16
+""")
+    return ["--config", str(toml), "--source", "nsdpreproc", "--levels", "b1"]
+
+
+def test_main_subjects_runs_only_those_subjects_and_skips_group_stages(config, patched):
+    """One Slurm job per subject: --subjects limits the per-subject stages, and
+    group RSA waits for a run over every configured subject."""
+    common = _two_subject_toml(config)
+    assert run.main(["fit", *common, "--subjects", "sub-08"]) == 0
+    assert run.main(["metrics", *common, "--subjects", "sub-08"]) == 0
+    metrics = config.output_dir / "metrics/nsdpreproc"
+    assert is_complete(fit_dir(config.output_dir, "nsdpreproc", "sub-08", "ses-a", "b1"))
+    assert not fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1").exists()
+    assert (metrics / "sub-08/r1.tsv").is_file() and not (metrics / "sub-07").exists()
+    assert not (metrics / "group_sub-07_sub-08").exists()
+    assert run.main(["fit", *common]) == 0
+    assert run.main(["metrics", *common]) == 0
+    assert (metrics / "group_sub-07_sub-08/rsa_b1.tsv").is_file()
+
+
+def test_main_subjects_must_be_configured(config, patched):
+    common = _two_subject_toml(config)
+    with pytest.raises(ValueError, match="sub-09"):
+        run.main(["fit", *common, "--subjects", "sub-09"])
+
+
+def test_main_subjects_refuses_discard_before_group_stages(config, patched):
+    common = _two_subject_toml(config)
+    run.main(["fit", *common, "--subjects", "sub-08"])
+    with pytest.raises(ValueError, match="discard"):
+        run.main(
+            ["metrics", *common, "--subjects", "sub-08", "--discard-betas-after-metrics"]
+        )
