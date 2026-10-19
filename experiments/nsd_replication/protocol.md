@@ -3,6 +3,7 @@
 ## 1. Windows and subjects
 
 - **Pilot:** sub-07, ses-nsd10–ses-nsd19 (10 sessions).
+- **Development:** subjects 01–04, ses-nsd11–ses-nsd20 (10 sessions each). The complete analysis runs here first, so the primary window is not analysed until the analysis is fixed. Configured in `configs/dev.toml`, with its own output directory.
 - **Primary replication:** subjects 01–04, ses-nsd01–ses-nsd10 (10 sessions each).
 - **Extension:** subjects 05, 06, 08, ses-nsd01–ses-nsd10 (10 sessions each).
 
@@ -39,7 +40,9 @@ For each subject, the RDM is 1 − Pearson r between repetition-averaged ROI pat
 
 ### R6. Image decoding
 
-Linear SVM (`sklearn.svm.LinearSVC`, default C, one-vs-rest) over images with ≥ 3 presentations. Three folds: train on two presentations, test on the third. Report accuracy and chance (1 / number of classes). Masks: composite ≥ 0, 0.1, 0.2, 0.3 and 0.4, skipped when fewer than 10 grayordinates remain.
+Linear SVM (`sklearn.svm.LinearSVC`, default C, one-vs-rest). The classes are the images that every subject in the run saw ≥ 3 times in the window, read from the BIDS events; the paper used "the images that overlapped across the 10 available sessions from subj01-04". A one-subject run (the pilot) decodes that subject's images. Three folds: train on two presentations, test on the third. Report accuracy and chance (1 / number of classes). Masks: composite ≥ 0, 0.1, 0.2, 0.3 and 0.4, skipped when fewer than 10 grayordinates remain.
+
+- *Deviation:* the paper reports 82 classes. This rule gives 76 for subjects 01–04, ses-nsd01–ses-nsd10 (89 for ses-nsd11–ses-nsd20); no reading of the events we tried (≥ 1, 2 or 3 presentations; exactly 3) gives 82.
 
 ### R2. HRF consistency
 

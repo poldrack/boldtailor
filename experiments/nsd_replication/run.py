@@ -53,7 +53,7 @@ from experiments.nsd_replication.metrics import (
     threshold_curves,
     voxel_reliability,
 )
-from experiments.nsd_replication.released import RELEASED, index_released
+from experiments.nsd_replication.released import RELEASED, bids_trials, index_released
 from experiments.nsd_replication.roi import load_roi
 from experiments.nsd_replication.trials import (
     images_with,
@@ -305,10 +305,40 @@ def _r4_table(data, threshold):
     return pd.concat(frames, ignore_index=True)[columns]
 
 
-def _r6_table(data, version, n_jobs):
+def decoding_images(config):
+    """R6 classes, as in the paper: the images every configured subject saw at
+    least three times in the window, read from each subject's BIDS events."""
+    sets = []
+    for subject in config.subjects:
+        trials = [bids_trials(config, subject, s) for s in config.sessions]
+        sets.append(set(images_with(pd.concat(trials, ignore_index=True), 3)))
+    return np.array(sorted(set.intersection(*sets)))
+
+
+def _check_r6_classes(out, versions, n_classes):
+    """Existing R6 tables decoded the same number of classes, or raise."""
+    for name in [_r6_name(v) for v in versions] + ["r6"]:
+        path = out / f"{name}.tsv"
+        if not path.is_file():
+            continue
+        stored = set(pd.read_csv(path, sep="\t")["n_classes"])
+        if stored != {n_classes}:
+            found = "|".join(str(n) for n in sorted(stored))
+            raise ValueError(
+                f"{path} was computed with {found} classes, not {n_classes}; "
+                "pass --recompute to overwrite it"
+            )
+
+
+def _r6_table(data, version, n_jobs, images):
     """R6 for one version; its own parallel run, so a failure loses only it."""
+    missing = np.setdiff1d(images, data.images)
+    if len(missing):
+        raise ValueError(
+            f"{data.label}: {len(missing)} decoding images lack three presentations"
+        )
     masks = [_mask(data.roi, data.composite, t) for t in R6_THRESHOLDS]
-    reps = repetition_array(data.betas[version], data.trials, data.images)
+    reps = repetition_array(data.betas[version], data.trials, images)
     results = decoding_accuracies(reps, masks, n_jobs=n_jobs)
     rows = [
         dict(version=version, threshold=t, **r) for t, r in zip(R6_THRESHOLDS, results)
@@ -321,10 +351,10 @@ def _r6_name(version):
     return "r6_" + version.replace(":", "-")
 
 
-def _table_builders(n_jobs, versions, out):
-    """Metric name -> builder(data), cheapest first. R6 is written one version
-    at a time, so a rerun resumes from the first missing version, then
-    combined into ``r6``."""
+def _table_builders(n_jobs, versions, out, images):
+    """Metric name -> builder(data), cheapest first. R6 decodes ``images`` and
+    is written one version at a time, so a rerun resumes from the first
+    missing version, then combined into ``r6``."""
     builders = {
         "r1": lambda d: threshold_curves(d.reliabilities, d.roi),
         "r1_median": lambda d: _median_table(d.reliabilities, d.roi),
@@ -333,7 +363,7 @@ def _table_builders(n_jobs, versions, out):
     for t in R4_THRESHOLDS:
         builders[f"r4_t{t}"] = lambda d, t=t: _r4_table(d, t)
     for v in versions:
-        builders[_r6_name(v)] = lambda d, v=v: _r6_table(d, v, n_jobs)
+        builders[_r6_name(v)] = lambda d, v=v: _r6_table(d, v, n_jobs, images)
     builders["r6"] = lambda _: pd.concat(
         [pd.read_csv(out / f"{_r6_name(v)}.tsv", sep="\t") for v in versions],
         ignore_index=True,
@@ -363,7 +393,10 @@ def subject_metrics(config, source, subject, levels, recompute=False):
         subject,
     )
     out = _metrics_dir(config, source, subject)
-    builders = _table_builders(config.n_jobs, levels, out)
+    images = decoding_images(config)
+    if not recompute:
+        _check_r6_classes(out, levels, len(images))
+    builders = _table_builders(config.n_jobs, levels, out, images)
     return ensure_tables(out, builders, data, recompute, levels, config.sessions)
 
 
@@ -463,7 +496,10 @@ def comparison_metrics(config, subject, recompute=False):
         subject,
     )
     out = _comparison_dir(config, subject)
-    builders = _table_builders(config.n_jobs, VERSIONS, out)
+    images = decoding_images(config)
+    if not recompute:
+        _check_r6_classes(out, VERSIONS, len(images))
+    builders = _table_builders(config.n_jobs, VERSIONS, out, images)
     tables = ensure_tables(out, builders, data, recompute, VERSIONS, config.sessions)
     _save_differences(out, data, recompute)
     return tables
