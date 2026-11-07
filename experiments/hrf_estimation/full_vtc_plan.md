@@ -55,3 +55,23 @@ User authorized the REML analysis across sessions 10–19. Input preflight verif
 Keep the scientific specification and c79a2a5 execution checkout unchanged: RT amplitude, all 12 runs per session, original REML plus AR1/components/shared/combined, all-run fits and one complementary 6/6 partition. The existing queue owns sessions 11/12; the new one-worker queue owns sessions 10,13,14,15,16,17,18,19. Both write distinct subdirectories under `outputs/full-vtc-reml`. The original 20-split full-study proposal is not silently enabled by this session expansion.
 
 New queue: `outputs/reml-sessions10to19.log`; exact command/PID/settings: `outputs/reml-sessions10to19-launch.json`. Existing sessions: `outputs/full-vtc-reml.log` and `outputs/reml-launch.json`. This launches computation; it is not a completed ten-session result.
+
+## Requested notebook refresh after completion (2026-11-07)
+
+User request: “once the earlier analyses are done then revise the results notebook to reflect these new results rather than the older ones.”
+
+Pending: replace the older pilot comparisons in `results.ipynb` with the completed full-VTC L-BFGS-B/library comparisons, expanded REML results for sessions 10–19, and noise/RT sensitivity results. Keep the separate `autodiff_results.ipynb` benchmark and link it for context. The earlier pilot results should no longer be presented as the current results. Preserve a copy of the current notebook before replacement, including existing user edits.
+
+Before refreshing, verify all expected outputs and completion markers: 16 full-VTC comparison units in `outputs/full-vtc-lbfgsb`, 288 cases in each of `outputs/noise-rt-lbfgsb` and `outputs/noise-rt-reml`, and all ten session outputs in `outputs/full-vtc-reml` (sessions 10–19, original REML plus four variants). Validate the expected methods, vertices, evaluations, provenance and failed-fit diagnostics; process exit alone is not evidence of successful completion. Use matched valid vertices and pooled SSE for aggregate R², retain within-session split interpretation, and distinguish RT modes and library scopes. Execute the refreshed notebook and verify its tables against saved outputs.
+
+At request time, all five queues were still running. This is a recorded follow-up, not an installed automatic notebook refresh or scheduler.
+
+## Autodiff replacement launch (2026-11-07, 15:44 local)
+
+User authorized stopping the finite-difference full-VTC queue and restarting unfinished continuous fits with autodiff. The old queue and its descendants were terminated; REML queues were left running. All artifact hashes for the three completed library units were verified before reuse. No completed result was overwritten.
+
+The replacement queue uses frozen commit `eed72b76e66943efe5ed9f2672b4b4490123c959` in `/tmp/boldtailor-hrf-autodiff-run`, pinned JAX/jaxlib 0.12.0.1 in an isolated uv overlay, CPU float64, four workers, and `gradient="autodiff"` for every continuous fit including inner regularization tuning. All other settings, split definitions, initialization, and optimizer budgets are preserved. Nine autodiff/tuning tests passed in that frozen environment before launch; worker startup confirmed the pinned JAX environment.
+
+Use `outputs/full-vtc-lbfgsb` for completed jobs 0–2 only (session 11 amplitude full baseline, parametric CV, parametric REML). Use `outputs/full-vtc-autodiff` for remaining jobs 3–15, including all four continuous units and remaining library units. The incomplete finite-difference continuous directory remains historical and must not be included as a completed result. These two roots together define the 16-unit comparison for the pending notebook refresh. Noise/RT sensitivity outputs and expanded REML output locations remain unchanged.
+
+Launch metadata, exact command, script hash, source revision, and environment overrides: `outputs/autodiff-launch.json`. Execution log: `outputs/full-vtc-autodiff.log`. The launcher is saved at `outputs/full-vtc-autodiff-launch.py`. Nested tuning runtime has not yet been measured; the eight-vertex speedup is not a guaranteed full-workflow speedup.
