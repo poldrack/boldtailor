@@ -36,41 +36,58 @@ def test_pilot_records_refit_scores_and_preserves_unprocessed_vertices(
     assert (tmp_path / "COMPLETE.json").exists()
 
 
-def test_comparison_supports_experimental_estimators(planted_runs,tmp_path):
-    runs,library=planted_runs
-    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
-    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
-    table=fn(runs,library,brain,tmp_path,methods=('reml','continuouslbfgsb','continuouspowell'),
-             settings={'lambda':0,'max_starts':1,'maxiter':5,'maxfun':50})
-    assert set(table.method)=={'reml','continuouslbfgsb','continuouspowell'}
-    assert len(table)==18
+def test_comparison_supports_experimental_estimators(planted_runs, tmp_path):
+    runs, library = planted_runs
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
+    fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
+    table = fn(
+        runs,
+        library,
+        brain,
+        tmp_path,
+        methods=("reml", "continuouslbfgsb", "continuouspowell"),
+        settings={"lambda": 0, "max_starts": 1, "maxiter": 5, "maxfun": 50},
+    )
+    assert set(table.method) == {"reml", "continuouslbfgsb", "continuouspowell"}
+    assert len(table) == 18
     assert table.r2_full.notna().all()
 
 
-def test_duration_manifest_records_actual_model(planted_runs,tmp_path):
-    runs,library=planted_runs
-    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
-    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
-    kwargs={'methods':('canonical',),'settings':{'rt_mode':'duration'}}
-    fn(runs,library,brain,tmp_path,**kwargs)
-    assert json.loads((tmp_path/'manifest.json').read_text())['rt_mode']=='duration'
+def test_duration_manifest_records_actual_model(planted_runs, tmp_path):
+    runs, library = planted_runs
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
+    fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
+    kwargs = {"methods": ("canonical",), "settings": {"rt_mode": "duration"}}
+    fn(runs, library, brain, tmp_path, **kwargs)
+    assert json.loads((tmp_path / "manifest.json").read_text())["rt_mode"] == "duration"
 
 
-def test_verified_resume_rejects_changed_data(planted_runs,tmp_path):
-    runs,library=planted_runs
-    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
-    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
-    kwargs={'methods':('canonical',)}
-    first=fn(runs,library,brain,tmp_path,**kwargs)
-    stamp=(tmp_path/'scores.tsv').stat().st_mtime_ns
-    second=fn(runs,library,brain,tmp_path,**kwargs)
-    assert (tmp_path/'scores.tsv').stat().st_mtime_ns==stamp
-    np.testing.assert_allclose(first.r2_full,second.r2_full)
+def test_verified_resume_rejects_changed_data(planted_runs, tmp_path):
+    runs, library = planted_runs
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
+    fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
+    kwargs = {"methods": ("canonical",)}
+    first = fn(runs, library, brain, tmp_path, **kwargs)
+    stamp = (tmp_path / "scores.tsv").stat().st_mtime_ns
+    second = fn(runs, library, brain, tmp_path, **kwargs)
+    assert (tmp_path / "scores.tsv").stat().st_mtime_ns == stamp
+    np.testing.assert_allclose(first.r2_full, second.r2_full)
     # A marker alone must not make a corrupted/incomplete run reusable.
-    (tmp_path/'scores.tsv').write_text('corrupt')
-    recovered=fn(runs,library,brain,tmp_path,**kwargs)
-    np.testing.assert_allclose(first.r2_full,recovered.r2_full)
+    (tmp_path / "scores.tsv").write_text("corrupt")
+    recovered = fn(runs, library, brain, tmp_path, **kwargs)
+    np.testing.assert_allclose(first.r2_full, recovered.r2_full)
     # New data must not be mixed into an old analysis directory.
-    runs[0].signals[0,0]+=1
-    with pytest.raises(ValueError,match='different'):
-        fn(runs,library,brain,tmp_path,**kwargs)
+    runs[0].signals[0, 0] += 1
+    with pytest.raises(ValueError, match="different"):
+        fn(runs, library, brain, tmp_path, **kwargs)
+
+
+def test_export_axis_must_match_run_anatomy(planted_runs, tmp_path):
+    from dataclasses import replace
+    runs,library=planted_runs
+    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
+    runs=tuple(replace(r,brain_axis=brain[r.feature_ids]) for r in runs)
+    wrong=brain[np.array([0,1,2,3,7,5,6,4,8,9])]
+    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
+    with pytest.raises(ValueError,match='export.*anatom'):
+        fn(runs,library,wrong,tmp_path,methods=('canonical',))
