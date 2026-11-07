@@ -156,3 +156,39 @@ def test_harness_dispatches_and_persists_all_reml_variants(planted_runs, tmp_pat
         details = json.loads(path.read_text())
         assert details["variant"] == method.removeprefix("reml")
         assert len(details["noise"]["training_run_ids"]) == 2
+
+
+def test_nuisance_overlap_cannot_be_rescaled_into_random_effects(planted_runs):
+    import pandas as pd
+    runs, library = planted_runs
+    changed = []
+    rng = np.random.default_rng(83)
+    for run in runs:
+        parts = build_design(run, library.candidates[1])
+        c = pd.DataFrame(np.column_stack([parts.nuisance, parts.task, parts.junk]))
+        changed.append(replace(run, confounds=c, signals=rng.normal(size=run.signals.shape)))
+    terms = api().component_terms(tuple(changed), library.candidates[1],
+                                   api().prepare_common(tuple(changed)), separate=True, shared=True)
+    np.testing.assert_array_equal(terms["gram"], np.zeros_like(terms["gram"]))
+    fit = api().fit_components(terms, 0, {})
+    np.testing.assert_array_equal(fit["ratios"], np.zeros(5))
+    assert fit["at_zero"]
+
+
+def test_empty_junk_component_is_fixed_at_zero(planted_runs):
+    runs, library = planted_runs
+    rng = np.random.default_rng(93)
+    changed = []
+    for run in runs:
+        clean = replace(run, events=run.events.assign(missing_data=0,is_correct=1,
+                                                      response_time=run.events.response_time.fillna(.8)))
+        parts = build_design(clean, library.candidates[0])
+        x = np.column_stack([parts.nuisance, parts.task])
+        y = rng.normal(size=run.signals.shape)
+        changed.append(replace(clean, signals=y-x@np.linalg.lstsq(x,y,rcond=None)[0]))
+    terms = api().component_terms(tuple(changed),library.candidates[0],
+                                   api().prepare_common(tuple(changed)),separate=True,shared=True)
+    fit = api().fit_components(terms, 0, {})
+    assert fit["ratios"][2] == 0.
+    assert fit["inactive"][2]
+    assert fit["at_zero"]
