@@ -15,9 +15,10 @@ def fit_components(terms, feature, settings):
     valid = terms["energy"][feature] > 64*np.finfo(float).eps*terms["raw_energy"][feature]
     if not valid:
         return dict(valid=False, criterion=np.inf, ratios=[0.]*count,
-                    sigma2=np.nan, converged=False, at_zero=True, at_upper=False)
+                    sigma2=np.nan, converged=False, at_zero=True, at_upper=False, inactive=[False]*count)
     scale = np.array([np.diag(terms["gram"])[terms["groups"] == k].sum()/terms["n"]
                       for k in range(count)])
+    inactive = scale == 0
     scale = np.where(scale > 0, scale, 1.)
     upper = np.log1p(settings.get("variance_bound", 1e6))
     def objective(unit):
@@ -27,9 +28,9 @@ def fit_components(terms, feature, settings):
     best = np.zeros(count)
     value = objective(best)[0]
     converged = bool(np.all(objective(best)[1] >= 0))
-    for start in (np.zeros(count), np.full(count, np.log(2.))):
+    for start in (np.zeros(count), np.where(inactive,0.,np.log(2.))):
         result = minimize(objective, start, jac=True, method="L-BFGS-B",
-                          bounds=[(0., upper)]*count,
+                          bounds=[(0.,0. if absent else upper) for absent in inactive],
                           options=dict(maxiter=settings.get("reml_maxiter", 200),
                                        ftol=1e-12, gtol=1e-7))
         if np.isfinite(result.fun) and result.fun <= value:
@@ -38,7 +39,7 @@ def fit_components(terms, feature, settings):
     _, _, sigma = component_objective(ratios, terms, feature)
     return dict(valid=True, criterion=value, ratios=ratios.tolist(), sigma2=float(sigma),
                 converged=converged, at_zero=bool(np.all(best == 0)),
-                at_upper=bool(np.any(best >= upper-1e-6)))
+                at_upper=bool(np.any(best >= upper-1e-6)), inactive=inactive.tolist())
 
 
 def _configuration(runs, settings):
@@ -93,7 +94,7 @@ def fit_extended_reml(runs, library, settings):
     gap[finite] = second[finite]-best[finite]
     details = dict(variant=variant, noise=noise, component_names=names,
                    library_fingerprint=library.fingerprint, candidate_gap=gap.tolist())
-    for key in ("ratios", "sigma2", "criterion", "converged", "at_zero", "at_upper"):
+    for key in ("ratios", "sigma2", "criterion", "converged", "at_zero", "at_upper", "inactive"):
         details[key] = [None if fit is None else fit[key] for fit in fits]
     return HrfEstimate(runs[0].feature_ids.copy(), tuple(kernels), tuple(status),
                        tuple(r.run_id for r in runs), details, runs[0].brain_axis)

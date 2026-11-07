@@ -46,20 +46,23 @@ The complete ten-session, 20-split comparison, extended noise/RT/library-coverag
 
 ## Full-VTC continuous and sensitivity stage
 
-See [full_vtc_plan.md](full_vtc_plan.md) for the matched 20-job empirical queue
+See [full_vtc_plan.md](full_vtc_plan.md) for the matched 16-job empirical queue
 and 288-case factorial noise/RT simulation design. The empirical stage uses
 sessions 11–12, the entire 1,750-vertex anatomical fusiform ROI, both RT
-formulations, full and parametric-only library comparisons, and both continuous
-optimizers with nested regularization selection. The simulation scores are a
+formulations, full and parametric-only library comparisons, and L-BFGS-B
+with nested regularization selection. The simulation scores are a
 separate recovery analysis, not empirical VTC benchmarks.
 
-Launch metadata are in `outputs/full-vtc-launch.json`; progress logs are
-`outputs/full-vtc-continuous.log` and `outputs/noise-rt-sensitivity.log`.
+Launch metadata are in `outputs/lbfgsb-launch.json`; progress logs are
+`outputs/full-vtc-lbfgsb.log` and `outputs/noise-rt-lbfgsb.log`.
 Only a verified `COMPLETE.json` denotes a finished restart unit. A partial
 directory is not a completed result. Current long-running jobs use the fixed
-`8b428ac` checkout at `/tmp/boldtailor-hrf-full-vtc-run`, with outputs written
+`bcebcfb` checkout at `/tmp/boldtailor-hrf-lbfgsb-run`, with outputs written
 into this checkout. Preserve that execution worktree while the queues run.
 
 The existing results notebook describes the earlier completed pilots; it does
-not yet include this running stage. REML stability proposals are documented in
-[reml_model.md](reml_model.md); they do not alter the baseline selector.
+not yet include this running stage. The authorized REML extensions are documented in
+[reml_model.md](reml_model.md), implemented as `remlar1`, `remlcomponents`,
+`remlshared`, and `remlcombined`. They retain `reml` as the original baseline.
+Powell remains available for historical reproducibility but is excluded from
+both active queues at the user’s request.

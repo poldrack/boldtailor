@@ -87,6 +87,10 @@ def _estimate(runs, library, method, settings):
         from experiments.hrf_estimation.reml import fit_library_reml
 
         return fit_library_reml(runs, library, settings)
+    if method in ("remlar1", "remlcomponents", "remlshared", "remlcombined"):
+        from experiments.hrf_estimation.reml_extensions import fit_extended_reml
+
+        return fit_extended_reml(runs, library, {**settings, "variant": method.removeprefix("reml")})
     if method in ("continuouslbfgsb", "continuouspowell"):
         from experiments.hrf_estimation.continuous import fit_continuous
 

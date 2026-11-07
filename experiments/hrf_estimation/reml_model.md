@@ -31,7 +31,7 @@ Priority: diagnose likelihood flatness and variance boundaries, then test tempor
 
 The user authorized all three proposed extensions. Expose separately named variants `remlar1`, `remlcomponents`, `remlshared`, and `remlcombined`, retaining `reml` unchanged.
 
-AR(1): estimate a single robust training-fold coefficient as the median lag-one residual correlation over valid run/vertex pairs, clipped to [-.8,.8]. Residualize against C plus a fixed three-HRF task/junk basis (fast, canonical-like, slow); this is a noise-estimation device fixed before HRF selection, not candidate-dependent REML fixed effects. Record rho, estimation run IDs, and valid count. Prewhiten y, C and all random designs using W y = [sqrt(1-rho²)y0, y1-rho*y0, ...]. The resulting fixed-effect space remains common to candidate HRFs. Candidate-independent transformation constants can be omitted within a variant; restricted likelihood values are not compared between noise variants.
+AR(1): estimate a single robust training-fold coefficient from lag-one residual correlations over valid run/vertex pairs, corrected for reference-design projection and then median-pooled and clipped to [-.8,.8]. Residualize against C plus a fixed three-HRF task/junk basis (fast, canonical-like, slow); this is a noise-estimation device fixed before HRF selection, not candidate-dependent REML fixed effects. Record rho, estimation run IDs, and valid count. Prewhiten y, C and all random designs using W y = [sqrt(1-rho²)y0, y1-rho*y0, ...]. The resulting fixed-effect space remains common to candidate HRFs. Candidate-independent transformation constants can be omitted within a variant; restricted likelihood values are not compared between noise variants.
 
 Independent-run component model: separate condition (two columns), RT (one column), and junk (two columns) variances. Scaling conventions remain unit-peak event responses and RT seconds. Empty components are zero covariance.
 
@@ -40,3 +40,15 @@ Shared model: b_r = b_shared + u_r for the three valid-task columns; junk effect
 Compute restricted likelihood with fixed nuisance removed, V = I + B diag(ratio_by_column) Bᵀ. Use exact low-rank determinant/Woodbury identities, analytic variance gradients, and explicit zero boundaries; validate against dense restricted covariance and numerical gradients. Optimize variance ratios with bounded L-BFGS-B in log1p scaled coordinates, two deterministic starts (zero and unit normalized variance), retaining the best finite point. Scaling changes optimization coordinates only; record ratios in original design units, convergence, boundaries, and top-two candidate likelihood gap. No shape pooling across held-out runs or sessions is introduced.
 
 Ruling: one robust pooled AR coefficient reduces the number of estimated noise parameters and is common across candidates. Cost: it cannot represent vertex/run-specific temporal covariance or arbitrary resampling-induced noise. Treat this as an AR(1) sensitivity, not established whitening adequacy. Dense-reference tests and small VTC pilots precede any expanded queue launch.
+
+### Projection correction for the AR estimate
+
+The raw lag-one correlation of fitted residuals was substantially biased downward in a known AR(.6) simulation (about .35 after the specified nuisance/reference design). The implementation therefore matches its moment to the residual-maker expectation. For M = I - X X⁺, R(rho)[i,j] = rho^|i-j|, lag matrix L with .5 on the two first off-diagonals, and D selecting all but the final sample, use:
+
+    expected residual lag ratio = tr(M L M R(rho)) / tr(M D M R(rho)).
+
+Trace coefficients are precomputed as sums along covariance diagonals; invert the moment on a fixed [-.95,.95] grid, then take the robust median and clip the final coefficient to [-.8,.8]. This corrects projection effects in the covariance moments; it is not a claim of exact finite-sample unbiasedness of the ratio estimator. A dense-trace test and seeded AR(.6) calibration test cover the implementation. The raw and corrected medians are both recorded.
+
+### Numerical boundary rules
+
+Before constructing component covariances, remove projected event directions below a tolerance referenced to the original whitened nuisance/event design scale. Zero numerically absent columns. This prevents nuisance-projection roundoff from being amplified by variance normalization. Components with exactly zero Gram trace are inactive, fixed to zero in both optimization starts, and reported with an `inactive` mask. They cannot prevent a genuine zero-random-variance optimum from being flagged. The first real validation attempts were stopped before completion for these review fixes; they are not final validation results.
