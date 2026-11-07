@@ -125,6 +125,20 @@ def test_noise_estimate_tracks_correlated_errors_without_signal():
     assert estimate["rho"] == pytest.approx(.6, abs=.15)
 
 
+def test_projected_noise_moments_match_dense_trace():
+    rng = np.random.default_rng(77)
+    x = np.column_stack([np.ones(24), rng.normal(size=(24, 3))])
+    coefficients = api().noise_moments(x)
+    m = np.eye(24)-x@np.linalg.pinv(x)
+    for rho in (-.4, 0, .6):
+        covariance = rho**np.abs(np.subtract.outer(np.arange(24),np.arange(24)))
+        residual_covariance = m@covariance@m
+        expected = np.diag(residual_covariance,1).sum()/np.diag(residual_covariance)[:-1].sum()
+        numerator, denominator = coefficients
+        actual = np.polynomial.polynomial.polyval(rho,numerator)/np.polynomial.polynomial.polyval(rho,denominator)
+        assert actual == pytest.approx(expected, abs=1e-12)
+
+
 def test_harness_dispatches_and_persists_all_reml_variants(planted_runs, tmp_path):
     import json
     import nibabel as nib
