@@ -30,6 +30,12 @@ The ROI file contains both all 1,750 fusiform vertices and the seeded 256-vertex
 
 ## Outputs and restart
 
+Open [results.ipynb](results.ipynb) for the executed session-11/session-12 VTC
+comparison, HRF curves and stability, and the separate continuous-optimizer
+smoke test. Figures and tables are embedded; standalone PNGs are in
+`reports/figures/`. Rerunning the notebook reads the saved `outputs/` artifacts
+and verifies their hashes without refitting models or loading raw NSD data.
+
 Each comparison writes total/partial/incremental task R² in `scores.tsv`, run-level SSE/rank tables, cortical partial-task-R² maps, HRF curves/parameters, diagnostic JSON, and a manifest. Unprocessed cortical vertices are NaN. `COMPLETE.json` is written last and records output hashes. Repeating an identical completed run verifies those hashes before reuse; incomplete/corrupted outputs are recomputed. Changed data/settings/scientific code require a new output directory. Restart currently operates on a whole session comparison, not individual feature chunks.
 
 `input_inventory.tsv` verifies all 120 matched runs for sessions 10–19. Pilot output directories distinguish the initial canonical/library check, the REML extension, the reduced four-vertex continuous smoke check, and the expanded session-11/session-12 VTC checks. Reduced-library continuous smoke results are not a fair final ranking against the 533-kernel library methods.
