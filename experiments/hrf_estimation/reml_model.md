@@ -26,3 +26,17 @@ These are proposed sensitivities; the matched baseline remains the scalar indepe
 4. **Weak shape shrinkage or candidate averaging.** Stabilize near-tied HRF candidates with a declared reference/prior and tune its strength within training folds. Pooling a reference across the very sessions/halves used to assess stability would contaminate that assessment; any cross-session training requires a separate held-out-session design. Averaging shapes would also need an explicit kernel representation and an independently labelled estimator.
 
 Priority: diagnose likelihood flatness and variance boundaries, then test temporal covariance; add only a small number of component variances before considering shape pooling. Stability must be evaluated alongside transfer fit and recovery bias: shrinkage can improve correlation simply by making every HRF similar.
+
+## Authorized implementation: three stability extensions
+
+The user authorized all three proposed extensions. Expose separately named variants `remlar1`, `remlcomponents`, `remlshared`, and `remlcombined`, retaining `reml` unchanged.
+
+AR(1): estimate a single robust training-fold coefficient as the median lag-one residual correlation over valid run/vertex pairs, clipped to [-.8,.8]. Residualize against C plus a fixed three-HRF task/junk basis (fast, canonical-like, slow); this is a noise-estimation device fixed before HRF selection, not candidate-dependent REML fixed effects. Record rho, estimation run IDs, and valid count. Prewhiten y, C and all random designs using W y = [sqrt(1-rho²)y0, y1-rho*y0, ...]. The resulting fixed-effect space remains common to candidate HRFs. Candidate-independent transformation constants can be omitted within a variant; restricted likelihood values are not compared between noise variants.
+
+Independent-run component model: separate condition (two columns), RT (one column), and junk (two columns) variances. Scaling conventions remain unit-peak event responses and RT seconds. Empty components are zero covariance.
+
+Shared model: b_r = b_shared + u_r for the three valid-task columns; junk effects have only run-specific components. The shared component yields off-diagonal cross-run covariance. With separate components enabled, shared conditions and shared RT have separate variances too (five variance ratios total: independent conditions/RT/junk, shared conditions/RT). Without separate components, use the original scalar independent variance plus one shared-task variance.
+
+Compute restricted likelihood with fixed nuisance removed, V = I + B diag(ratio_by_column) Bᵀ. Use exact low-rank determinant/Woodbury identities, analytic variance gradients, and explicit zero boundaries; validate against dense restricted covariance and numerical gradients. Optimize variance ratios with bounded L-BFGS-B in log1p scaled coordinates, two deterministic starts (zero and unit normalized variance), retaining the best finite point. Scaling changes optimization coordinates only; record ratios in original design units, convergence, boundaries, and top-two candidate likelihood gap. No shape pooling across held-out runs or sessions is introduced.
+
+Ruling: one robust pooled AR coefficient reduces the number of estimated noise parameters and is common across candidates. Cost: it cannot represent vertex/run-specific temporal covariance or arbitrary resampling-induced noise. Treat this as an AR(1) sensitivity, not established whitening adequacy. Dense-reference tests and small VTC pilots precede any expanded queue launch.
