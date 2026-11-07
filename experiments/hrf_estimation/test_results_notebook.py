@@ -23,7 +23,10 @@ def results_notebook():
 def test_notebook_is_fully_executed_without_errors(results_notebook):
     cells = [cell for cell in results_notebook.cells if cell.cell_type == "code"]
     assert cells
-    assert [cell.execution_count for cell in cells] == list(range(1, len(cells) + 1))
+    # A full rerun in an existing kernel need not restart its counter at one.
+    counts = [cell.execution_count for cell in cells]
+    assert all(isinstance(count, int) and count >= 1 for count in counts)
+    assert counts == list(range(counts[0], counts[0] + len(cells)))
     assert not [output for cell in cells for output in cell.outputs
                 if output.output_type == "error"]
 
