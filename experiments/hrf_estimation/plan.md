@@ -85,3 +85,11 @@ The user selected direct REML HRF-library comparison with random task effects. I
 ## Execution-scope clarification (2026-11-07)
 
 The user chose to continue staged VTC pilots locally rather than launch the full VTC comparison or prepare a cluster run at this stage.
+
+
+### Follow-up decisions: continuous comparison and REML stability
+
+- User: “proceed with the full-VTC continuous optimization and extended noise/RT sensitivity checks so that we can directly compare optimization to the library methods.” Implementation continues the matched sessions-11/12 stage with the entire anatomical fusiform ROI, identical run splits and scores, and full versus parametric-only library comparisons. The ten-session repeated-split study remains separate.
+- User: “why not drop powell and either just use L-BGFS-B or find another method that is faster than powell?” Decision: remove Powell from the active empirical and simulation queues, retaining L-BFGS-B. Historical Powell code/results remain available for reproducibility.
+- User: “your three suggestions for REML sound good, implement those.” Authorized extensions: training-only temporal-noise modeling, separate condition/RT/junk variance components, and a shared valid-task component across training runs with independent run deviations. Implement and label each variant separately and a combined variant, preserving original REML as the baseline.
+- Operational choices are documented in reml_model.md: pooled projection-corrected AR(1) estimation, candidate-independent nuisance space, exact low-rank restricted likelihood, variance boundaries/inactive-component diagnostics, and unchanged unwhitened HRF-transfer R² with held-out amplitudes refitted. These choices are implementation decisions, not additional user-specified noise assumptions.
