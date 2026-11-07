@@ -66,3 +66,28 @@ def test_fast_parallel_fit_matches_reference(offgrid):
 
 
 from experiments.hrf_estimation.test_continuous import offgrid
+
+
+def test_task_inside_nuisance_space_does_not_fit_projection_roundoff(planted_runs):
+    import pandas as pd
+    runs, library = planted_runs
+    truth = library.candidates[1]
+    rng = np.random.default_rng(51)
+    changed = []
+    for run in runs:
+        parts = build_design(run, truth)
+        confounds = pd.DataFrame(np.column_stack([parts.nuisance, parts.junk, parts.task]))
+        changed.append(replace(run, confounds=confounds,
+                               signals=rng.normal(size=run.signals.shape)))
+    api = importlib.import_module("experiments.hrf_estimation.prepared")
+    prepared = api.prepare_profile(tuple(changed), "amplitude")
+    assert api.prepared_loss(prepared, 0, truth.parameters) == pytest.approx(1., abs=1e-12)
+    np.testing.assert_allclose(api.library_losses(prepared, [truth.parameters]), 1., atol=1e-12)
+
+
+def test_prepared_rejects_unsupported_event_onsets(planted_runs):
+    runs, _ = planted_runs
+    run = replace(runs[0], events=runs[0].events.assign(onset=-100.))
+    api = importlib.import_module("experiments.hrf_estimation.prepared")
+    with pytest.raises(ValueError, match="onset"):
+        api.prepare_profile((run,), "amplitude")
