@@ -56,7 +56,7 @@ def profile_loss(runs, feature, parameters, rt_mode="amplitude"):
     return float(sse / energy)
 
 
-def _starts(runs, feature, library, settings):
+def _parameters(library):
     candidates = [
         (*c.parameters[:5], 0.0, 36.0)
         for c in library.candidates
@@ -65,9 +65,14 @@ def _starts(runs, feature, library, settings):
     candidates = [
         p for p in candidates if np.all(_encode(p) >= 0) and np.all(_encode(p) <= 1)
     ]
+    return candidates
+
+
+def _starts(runs, feature, library, settings, losses=None):
+    candidates = _parameters(library)
     if not candidates:
         raise ValueError("initial library has no bounded double-gamma candidates")
-    losses = [
+    losses = losses if losses is not None else [
         profile_loss(runs, feature, p, settings.get("rt_mode", "amplitude"))
         for p in candidates
     ]
@@ -80,14 +85,16 @@ def _starts(runs, feature, library, settings):
     return chosen, _encode(candidates[order[0]])
 
 
-def _optimize_feature(runs, feature, library, settings):
-    starts, reference = _starts(runs, feature, library, settings)
+def _optimize_feature(runs, feature, library, settings, prepared=None, losses=None):
+    starts, reference = _starts(runs, feature, library, settings, losses)
     strength = settings["lambda"]
 
     def objective(unit):
-        loss = profile_loss(
-            runs, feature, _decode(unit), settings.get("rt_mode", "amplitude")
-        )
+        if prepared is None:
+            loss = profile_loss(runs, feature, _decode(unit), settings.get("rt_mode", "amplitude"))
+        else:
+            from experiments.hrf_estimation.prepared import prepared_loss
+            loss = prepared_loss(prepared, feature, _decode(unit))
         return (
             loss + strength * np.sum((unit - reference) ** 2)
             if np.isfinite(loss)
@@ -133,16 +140,15 @@ def fit_continuous(runs, settings):
     library = settings.get("library")
     if library is None:
         library = default_hrf_library()
+    fitted = _fit_features(runs, library, settings)
     kernels, status, diagnostics = [], [], []
-    for feature in range(len(runs[0].feature_ids)):
-        if _energy(runs, feature) == 0:
+    for feature, result in enumerate(fitted):
+        if result is None:
             kernels.append(None)
             status.append("no_signal")
             diagnostics.append((np.nan, np.nan, False, 0))
             continue
-        parameters, value, initial, converged, calls = _optimize_feature(
-            runs, feature, library, settings
-        )
+        parameters, value, initial, converged, calls = result
         kernels.append(HrfCandidate(feature, "double_gamma", parameters))
         status.append("ok" if converged else "not_converged")
         diagnostics.append((value, initial, converged, calls))
@@ -156,6 +162,7 @@ def fit_continuous(runs, settings):
         {
             "lambda": settings["lambda"],
             "optimizer": settings.get("optimizer", "L-BFGS-B"),
+            "prepared": settings.get("prepared", True),
         }
     )
     details.update(
@@ -201,3 +208,25 @@ def _shape_diagnostics(runs, kernels, mode):
         near_lower_bound=lower,
         near_upper_bound=upper,
     )
+
+
+def _one_feature(runs, feature, library, settings, prepared, losses):
+    if _energy(runs, feature) == 0:
+        return None
+    return _optimize_feature(runs, feature, library, settings, prepared,
+                             None if losses is None else losses[:, feature])
+
+
+def _fit_features(runs, library, settings):
+    from joblib import Parallel, delayed, parallel_config
+    from experiments.hrf_estimation.prepared import prepare_profile, library_losses
+
+    prepared = losses = None
+    if settings.get("prepared", True):
+        prepared = prepare_profile(runs, settings.get("rt_mode", "amplitude"))
+        losses = library_losses(prepared, _parameters(library))
+    jobs = int(settings.get("n_jobs", 1))
+    with parallel_config(backend="loky", inner_max_num_threads=1):
+        return Parallel(n_jobs=jobs, verbose=settings.get("verbose", 0))(
+            delayed(_one_feature)(runs, f, library, settings, prepared, losses)
+            for f in range(len(runs[0].feature_ids)))

@@ -86,3 +86,25 @@ def prepared_loss(prepared, feature, parameters):
         error, _ = residuals(z, item["y"][:, feature])
         sse += np.sum(error**2)
     return float(sse / energy)
+
+
+def library_losses(prepared, parameters):
+    """All vertex losses per candidate, with a single design decomposition."""
+    energy = sum(item["energy"] for item in prepared)
+    raw = sum(item["raw"] for item in prepared)
+    valid = energy > 64 * np.finfo(float).eps * raw
+    result = np.full((len(parameters), len(energy)), np.inf)
+    for i, values in enumerate(parameters):
+        if not valid_shape(values):
+            continue
+        candidate = HrfCandidate(0, "double_gamma", tuple(values))
+        sse = np.zeros(len(energy))
+        for item in prepared:
+            z = event_design(item, candidate)
+            q = item["q"]
+            z -= q @ (q.T @ z)
+            u, s, _ = np.linalg.svd(z, full_matrices=False)
+            rank = np.sum(s > s[0] * max(z.shape) * np.finfo(float).eps) if s[0] else 0
+            sse += np.maximum(0, item["energy"] - np.sum((u[:, :rank].T @ item["y"])**2, axis=0))
+        result[i, valid] = sse[valid] / energy[valid]
+    return result
