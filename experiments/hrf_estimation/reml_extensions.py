@@ -105,3 +105,13 @@ def component_objective(ratios, terms, feature):
     determinant = 2*np.log(np.diag(factor[0])).sum()
     value = terms["n"]*np.log(q/terms["n"]) + determinant
     return float(value), np.asarray(gradient), q/terms["n"]
+
+
+def fit_components(terms, feature, settings):
+    from experiments.hrf_estimation.reml_extended_fit import fit_components as fit
+    return fit(terms, feature, settings)
+
+
+def fit_extended_reml(runs, library, settings):
+    from experiments.hrf_estimation.reml_extended_fit import fit_extended_reml as fit
+    return fit(runs, library, settings)

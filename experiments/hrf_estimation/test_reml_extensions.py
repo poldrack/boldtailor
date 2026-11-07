@@ -114,3 +114,31 @@ def test_variance_boundary_is_exactly_zero(planted_runs):
                                    api().prepare_common(tuple(changed)), separate=True, shared=True)
     fit = api().fit_components(terms, 0, {})
     np.testing.assert_array_equal(fit["ratios"], np.zeros(5))
+
+
+def test_noise_estimate_tracks_correlated_errors_without_signal():
+    from experiments.hrf_estimation.sensitivity import synthetic_templates, ar1_noise
+    rng = np.random.default_rng(123)
+    runs = tuple(replace(r, signals=np.column_stack([ar1_noise(226,.6,rng) for _ in range(20)]),
+                         feature_ids=np.arange(20)) for r in synthetic_templates())
+    estimate = api().estimate_noise(runs, "amplitude")
+    assert estimate["rho"] == pytest.approx(.6, abs=.15)
+
+
+def test_harness_dispatches_and_persists_all_reml_variants(planted_runs, tmp_path):
+    import json
+    import nibabel as nib
+    from experiments.hrf_estimation.pilot import run_comparison
+    runs, library = planted_runs
+    rng = np.random.default_rng(68)
+    runs = tuple(replace(r, signals=r.signals+rng.normal(0,.2,r.signals.shape)) for r in runs)
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,"CortexLeft")
+    methods = ("remlar1", "remlcomponents", "remlshared", "remlcombined")
+    scores = run_comparison(runs, library, brain, tmp_path, methods=methods)
+    assert set(scores.method) == set(methods)
+    assert scores.r2_task_partial.notna().all()
+    for method in methods:
+        path = next(tmp_path.glob(f"*desc-{method}transfer01_diagnostics.json"))
+        details = json.loads(path.read_text())
+        assert details["variant"] == method.removeprefix("reml")
+        assert len(details["noise"]["training_run_ids"]) == 2
