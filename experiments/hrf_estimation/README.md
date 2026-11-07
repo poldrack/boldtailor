@@ -66,3 +66,12 @@ not yet include this running stage. The authorized REML extensions are documente
 `remlshared`, and `remlcombined`. They retain `reml` as the original baseline.
 Powell remains available for historical reproducibility but is excluded from
 both active queues at the user’s request.
+
+
+The completed [REML extension validation](reml_validation.md) records all 100
+passing tests and the four-vertex/two-session real-data check. Full-ROI REML
+variant comparisons (primary RT-amplitude model) and the matching 288-case
+synthetic checks run from c79a2a5 in `/tmp/boldtailor-hrf-reml-run`. Their exact
+commands and PIDs are in `outputs/reml-launch.json`; logs are
+`outputs/full-vtc-reml.log` and `outputs/noise-rt-reml.log`. These are separate
+from the ongoing L-BFGS-B queues and from the earlier completed notebook.
