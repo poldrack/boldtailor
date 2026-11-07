@@ -43,3 +43,23 @@ Each comparison writes total/partial/incremental task R² in `scores.tsv`, run-l
 ## Remaining full-study work
 
 The complete ten-session, 20-split comparison, extended noise/RT/library-coverage simulations, and between-session reporting are not yet finished. The current runner is serial within a session and has no cluster submission layer. Select the compute scope before launching full-ROI nested continuous optimization. All scientific routines remain under this experiment directory; every `__init__.py` is untouched.
+
+## Full-VTC continuous and sensitivity stage
+
+See [full_vtc_plan.md](full_vtc_plan.md) for the matched 20-job empirical queue
+and 288-case factorial noise/RT simulation design. The empirical stage uses
+sessions 11–12, the entire 1,750-vertex anatomical fusiform ROI, both RT
+formulations, full and parametric-only library comparisons, and both continuous
+optimizers with nested regularization selection. The simulation scores are a
+separate recovery analysis, not empirical VTC benchmarks.
+
+Launch metadata are in `outputs/full-vtc-launch.json`; progress logs are
+`outputs/full-vtc-continuous.log` and `outputs/noise-rt-sensitivity.log`.
+Only a verified `COMPLETE.json` denotes a finished restart unit. A partial
+directory is not a completed result. Current long-running jobs use the fixed
+`8b428ac` checkout at `/tmp/boldtailor-hrf-full-vtc-run`, with outputs written
+into this checkout. Preserve that execution worktree while the queues run.
+
+The existing results notebook describes the earlier completed pilots; it does
+not yet include this running stage. REML stability proposals are documented in
+[reml_model.md](reml_model.md); they do not alter the baseline selector.
