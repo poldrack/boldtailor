@@ -44,3 +44,31 @@ def test_parametric_library_is_exact_full_library_subset():
     assert all(c.kind != "glmsingle" for c in subset.candidates)
     assert [(c.kind, c.parameters) for c in subset.candidates] == [
         (c.kind, c.parameters) for c in library.candidates if c.kind != "glmsingle"]
+
+
+def test_synthetic_templates_include_motion_junk_and_valid_timing():
+    api = importlib.import_module("experiments.hrf_estimation.sensitivity")
+    runs = api.synthetic_templates(seed=9)
+    assert len(runs) == 4
+    for run in runs:
+        assert run.signals.shape == (226, 1)
+        assert run.confounds.shape == (226, 32)
+        assert run.events.missing_data.sum() > 0
+        assert (run.events.is_correct == 0).sum() > 0
+        assert run.events.onset.max() < run.frame_times[-1]
+    again = api.synthetic_templates(seed=9)
+    np.testing.assert_array_equal(runs[0].confounds, again[0].confounds)
+
+
+def test_full_vtc_jobs_match_scopes_and_keep_tuning_nested():
+    api = importlib.import_module("experiments.hrf_estimation.full_vtc")
+    jobs = api.comparison_jobs()
+    assert len(jobs) == 20
+    assert {j["session"] for j in jobs} == {11, 12}
+    assert {j["rt_mode"] for j in jobs} == {"amplitude", "duration"}
+    assert {j["library"] for j in jobs} == {"full", "parametric"}
+    settings = api.estimator_settings("amplitude", 4)
+    assert "lambda" not in settings
+    assert settings["lambda_grid"] == [0, .001, .01, .1, 1]
+    assert settings["max_starts"] == 4
+    assert settings["maxfun"] == 5000
