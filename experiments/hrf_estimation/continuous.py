@@ -110,11 +110,14 @@ def _optimize_feature(runs, feature, library, settings, prepared=None, losses=No
     options["maxfun" if method == "L-BFGS-B" else "maxfev"] = settings.get(
         "maxfun", 5000
     )
+    use_gradient = settings.get("gradient", "finite_difference") == "autodiff"
+    function = _gradient_objective(prepared, feature, strength, reference) if use_gradient else objective
     for parameters in starts:
         result = minimize(
-            objective,
+            function,
             _encode(parameters),
             method=method,
+            jac=True if use_gradient else None,
             bounds=[(0.0, 1.0)] * 5,
             options=options,
         )
@@ -131,6 +134,7 @@ def fit_continuous(runs, settings):
         raise ValueError("runs must have identical feature identities/order")
     validate_features(runs, runs[0].feature_ids, runs[0].brain_axis)
     settings = dict(settings)
+    _validate_gradient_settings(settings)
     if "lambda" not in settings:
         from experiments.hrf_estimation.tuning import choose_regularization
 
@@ -163,8 +167,12 @@ def fit_continuous(runs, settings):
             "lambda": settings["lambda"],
             "optimizer": settings.get("optimizer", "L-BFGS-B"),
             "prepared": settings.get("prepared", True),
+            "gradient": settings.get("gradient", "finite_difference"),
         }
     )
+    if settings.get("gradient") == "autodiff":
+        from experiments.hrf_estimation.autodiff import environment
+        details["autodiff_environment"] = environment()
     details.update(
         _shape_diagnostics(runs, kernels, settings.get("rt_mode", "amplitude"))
     )
@@ -230,3 +238,26 @@ def _fit_features(runs, library, settings):
         return Parallel(n_jobs=jobs, verbose=settings.get("verbose", 0))(
             delayed(_one_feature)(runs, f, library, settings, prepared, losses)
             for f in range(len(runs[0].feature_ids)))
+
+
+def _validate_gradient_settings(settings):
+    mode = settings.get("gradient", "finite_difference")
+    if mode not in ("finite_difference", "autodiff"):
+        raise ValueError("gradient must be finite_difference or autodiff")
+    if mode == "autodiff":
+        if not settings.get("prepared", True):
+            raise ValueError("autodiff requires prepared=True")
+        if settings.get("optimizer", "L-BFGS-B") != "L-BFGS-B":
+            raise ValueError("autodiff is supported for L-BFGS-B only")
+
+
+def _gradient_objective(prepared, feature, strength, reference):
+    from experiments.hrf_estimation.autodiff import make_value_gradient
+    evaluate = make_value_gradient(prepared, feature)
+    def objective(unit):
+        value, gradient = evaluate(unit)
+        if not np.isfinite(value):
+            return 1e10, np.zeros(5)
+        return (value + strength*np.sum((unit-reference)**2),
+                gradient + 2*strength*(unit-reference))
+    return objective

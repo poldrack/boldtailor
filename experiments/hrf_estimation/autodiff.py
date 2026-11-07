@@ -86,3 +86,11 @@ def value_gradient(prepared,feature,unit):
 
 def design_value(unit,item):
     return np.asarray(design(jnp.asarray(unit),item))
+
+
+def environment():
+    import jaxlib
+    import scipy
+    return dict(jax=jax.__version__, jaxlib=jaxlib.__version__, numpy=np.__version__,
+                scipy=scipy.__version__, enable_x64=bool(jax.config.jax_enable_x64),
+                backend=jax.default_backend())
