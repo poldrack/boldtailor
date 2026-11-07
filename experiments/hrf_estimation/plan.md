@@ -8,7 +8,7 @@ One note: The NSD dataset contains 7T fMRI data which have substantially faster 
 
 ## Data:
 
-We will use the Natural Scenes Dataset. The data are in /Volumes/extdata1/NSD - for these experiments we will focus on the NSD preprocessed data for sub-07, which are in /Volumes/extdata1/NSD/BIDS/derivatives/nsdpreproc/sub-07.  We will use sessions 11-20, using the CIFTI data (e.g. sub-07_ses-nsd11_task-nsdcore_run-09_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii) and the events files in the standard BIDS location (e.g. BIDS/sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_run-09_events.tsv).
+We will use the Natural Scenes Dataset. The data are in /Volumes/extdata1/NSD - for these experiments we will focus on the NSD preprocessed data for sub-07, which are in /Volumes/extdata1/NSD/BIDS/derivatives/nsdpreproc/sub-07.  We will use sessions 10-19, using the CIFTI data (e.g. sub-07_ses-nsd11_task-nsdcore_run-09_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii) and the events files in the standard BIDS location (e.g. BIDS/sub-07/ses-nsd10/func/sub-07_ses-nsd10_task-nsdcore_run-09_events.tsv).
 
 Use the motion confounds from the NSD-preprocessed derivatives, matched to each run (e.g. BIDS/derivatives/nsdpreproc/sub-07/ses-nsd11/func/sub-07_ses-nsd11_task-nsdcore_run-12_desc-confounds_timeseries.tsv). Do not use the fMRIPrep confounds: the NSD-preprocessed BOLD data were temporally resampled. Construct the agreed 24-parameter motion model from the NSD-preprocessed motion parameters, verifying alignment with the corresponding CIFTI time points. Generate cosine basis functions separately within the model on each run's CIFTI sampling grid for high-pass filtering.
 
@@ -73,3 +73,11 @@ The following answers clarify the experimental plan above.
 
 Following inspection of the different temporal sampling grids, the user specified that motion confounds must come from the NSD-preprocessed data rather than fMRIPrep. Cosine basis functions for high-pass filtering will be generated separately within the model. This supersedes the original fMRIPrep confound-source choice and the proposal in `implementation_plan.md` to interpolate fMRIPrep confounds onto the CIFTI grid. The 24-parameter motion model, no-censoring policy, and separate missing/incorrect-response junk regressors remain in effect. The user subsequently specified an 80-second high-pass cutoff (0.0125 Hz).
 
+
+## Session-range amendment (2026-11-07)
+
+The user specified that only sessions 10–19 should be used, replacing the original sessions 11–20 scope after session-20 events were found to be missing. Session 11 remains the initial pilot session.
+
+## REML-model clarification (2026-11-07)
+
+The user selected direct REML HRF-library comparison with random task effects. Intercepts, motion, and cosine drifts remain a common HRF-independent fixed-effect nuisance model; HRF-dependent task and junk effects are modeled as random effects. Outer evaluation still freezes only the HRF and refits task/nuisance amplitudes on held-out runs.

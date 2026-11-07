@@ -1,110 +1,121 @@
-session	run	status	scans	motion_rows	nuisance_columns	events	missing_codes	correct_codes
-11	sub-07_ses-nsd11_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-11	sub-07_ses-nsd11_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-11	sub-07_ses-nsd11_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-11	sub-07_ses-nsd11_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-11	sub-07_ses-nsd11_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-11	sub-07_ses-nsd11_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-11	sub-07_ses-nsd11_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-11	sub-07_ses-nsd11_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-11	sub-07_ses-nsd11_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-11	sub-07_ses-nsd11_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-11	sub-07_ses-nsd11_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-11	sub-07_ses-nsd11_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-12	sub-07_ses-nsd12_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-12	sub-07_ses-nsd12_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-12	sub-07_ses-nsd12_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-12	sub-07_ses-nsd12_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[ 1.  0. nan]
-12	sub-07_ses-nsd12_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[ 1.  0. nan]
-12	sub-07_ses-nsd12_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-12	sub-07_ses-nsd12_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-13	sub-07_ses-nsd13_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-13	sub-07_ses-nsd13_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-13	sub-07_ses-nsd13_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-13	sub-07_ses-nsd13_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[ 1.  0. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-13	sub-07_ses-nsd13_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-13	sub-07_ses-nsd13_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[ 1.  0. nan]
-13	sub-07_ses-nsd13_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-14	sub-07_ses-nsd14_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-14	sub-07_ses-nsd14_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-14	sub-07_ses-nsd14_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-14	sub-07_ses-nsd14_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-14	sub-07_ses-nsd14_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-14	sub-07_ses-nsd14_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-14	sub-07_ses-nsd14_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-15	sub-07_ses-nsd15_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-15	sub-07_ses-nsd15_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-15	sub-07_ses-nsd15_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-15	sub-07_ses-nsd15_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-15	sub-07_ses-nsd15_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-16	sub-07_ses-nsd16_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-16	sub-07_ses-nsd16_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-16	sub-07_ses-nsd16_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-16	sub-07_ses-nsd16_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-16	sub-07_ses-nsd16_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[ 1.  0. nan]
-16	sub-07_ses-nsd16_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-16	sub-07_ses-nsd16_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-16	sub-07_ses-nsd16_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-16	sub-07_ses-nsd16_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-16	sub-07_ses-nsd16_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-16	sub-07_ses-nsd16_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-16	sub-07_ses-nsd16_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-17	sub-07_ses-nsd17_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-17	sub-07_ses-nsd17_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-17	sub-07_ses-nsd17_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-17	sub-07_ses-nsd17_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-17	sub-07_ses-nsd17_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-17	sub-07_ses-nsd17_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-17	sub-07_ses-nsd17_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-17	sub-07_ses-nsd17_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[ 0.  1. nan]
-17	sub-07_ses-nsd17_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[ 0.  1. nan]
-17	sub-07_ses-nsd17_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-17	sub-07_ses-nsd17_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-17	sub-07_ses-nsd17_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[ 1.  0. nan]
-18	sub-07_ses-nsd18_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-18	sub-07_ses-nsd18_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-18	sub-07_ses-nsd18_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-18	sub-07_ses-nsd18_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-18	sub-07_ses-nsd18_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-18	sub-07_ses-nsd18_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-19	sub-07_ses-nsd19_task-nsdcore_run-01	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-19	sub-07_ses-nsd19_task-nsdcore_run-02	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-03	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-04	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-19	sub-07_ses-nsd19_task-nsdcore_run-05	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-06	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-07	aligned	226.0	226.0	32.0	63.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-08	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-09	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-19	sub-07_ses-nsd19_task-nsdcore_run-10	aligned	226.0	226.0	32.0	62.0	[0]	[1 0]
-19	sub-07_ses-nsd19_task-nsdcore_run-11	aligned	226.0	226.0	32.0	63.0	[0]	[0 1]
-19	sub-07_ses-nsd19_task-nsdcore_run-12	aligned	226.0	226.0	32.0	62.0	[0]	[0 1]
-20		missing matched file: /Volumes/extdata1/NSD/BIDS/sub-07/ses-nsd20/func/sub-07_ses-nsd20_task-nsdcore_run-01_events.tsv						
+run	status	scans	motion_rows	nuisance_columns	events
+sub-07_ses-nsd10_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd10_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd10_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd10_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd10_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd10_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd10_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd11_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd11_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd12_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd12_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd13_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd13_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd14_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd14_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd15_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd15_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd16_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd16_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd17_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd17_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd18_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd18_task-nsdcore_run-12	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-01	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-02	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-03	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-04	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-05	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-06	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-07	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-08	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-09	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-10	aligned	226	226	32	62
+sub-07_ses-nsd19_task-nsdcore_run-11	aligned	226	226	32	63
+sub-07_ses-nsd19_task-nsdcore_run-12	aligned	226	226	32	62

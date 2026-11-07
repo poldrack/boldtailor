@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from experiments.hrf_estimation.design import build_design
+from experiments.hrf_estimation.estimators import validate_features
 
 
 @dataclass(frozen=True)
@@ -28,13 +29,14 @@ def kernel_groups(estimate):
     return groups.values()
 
 
-def score_hrfs(runs, estimate, rt_mode='amplitude'):
+def score_hrfs(runs, estimate, rt_mode="amplitude"):
     if not runs or len(estimate.kernels) != len(estimate.feature_ids):
-        raise ValueError('runs and one kernel per feature are required')
+        raise ValueError("runs and one kernel per feature are required")
+    validate_features(runs, estimate.feature_ids, estimate.brain_axis)
     rows = []
     for run in runs:
         if not np.array_equal(run.feature_ids, estimate.feature_ids):
-            raise ValueError('feature identities/order differ from fitted HRFs')
+            raise ValueError("feature identities/order differ from fitted HRFs")
         for kernel, indices in kernel_groups(estimate):
             parts = build_design(run, kernel, rt_mode)
             rows.extend(_run_scores(run, parts, indices))
@@ -50,31 +52,47 @@ def _run_scores(run, parts, indices):
     error, rank = residuals(full, y)
     nuisance_error, null_rank = residuals(null, y)
     c_error, _ = residuals(parts.nuisance, y)
-    values = dict(sse_full=np.sum(error**2, axis=0),
-                  sse_nuisance=np.sum(nuisance_error**2, axis=0),
-                  sse_c=np.sum(c_error**2, axis=0),
-                  sst=np.sum((y-y.mean(axis=0))**2, axis=0),
-                  energy=np.sum(y**2, axis=0))
-    return [dict(run_id=run.run_id, feature_id=int(run.feature_ids[index]),
-                 rank_full=rank, rank_nuisance=null_rank, residual_dof=len(y)-rank,
-                 **{name: value[j] for name, value in values.items()})
-            for j, index in enumerate(indices)]
+    values = dict(
+        sse_full=np.sum(error**2, axis=0),
+        sse_nuisance=np.sum(nuisance_error**2, axis=0),
+        sse_c=np.sum(c_error**2, axis=0),
+        sst=np.sum((y - y.mean(axis=0)) ** 2, axis=0),
+        energy=np.sum(y**2, axis=0),
+    )
+    return [
+        dict(
+            run_id=run.run_id,
+            feature_id=int(run.feature_ids[index]),
+            rank_full=rank,
+            rank_nuisance=null_rank,
+            residual_dof=len(y) - rank,
+            **{name: value[j] for name, value in values.items()},
+        )
+        for j, index in enumerate(indices)
+    ]
 
 
 def _summarize(per_run, estimate):
-    summary = pd.DataFrame(index=pd.Index(estimate.feature_ids, name='feature_id'))
+    summary = pd.DataFrame(index=pd.Index(estimate.feature_ids, name="feature_id"))
     if per_run.empty:
-        for name in ('sse_full', 'sse_nuisance', 'sse_c', 'sst', 'energy'):
+        for name in ("sse_full", "sse_nuisance", "sse_c", "sst", "energy"):
             summary[name] = np.nan
     else:
-        totals = per_run.groupby('feature_id')[['sse_full', 'sse_nuisance', 'sse_c', 'sst', 'energy']].sum()
+        totals = per_run.groupby("feature_id")[
+            ["sse_full", "sse_nuisance", "sse_c", "sst", "energy"]
+        ].sum()
         summary = summary.join(totals)
     tolerance = np.finfo(float).eps * 64 * summary.energy
     total_valid = summary.sst > tolerance
     task_valid = summary.sse_nuisance > tolerance
-    summary['r2_full'] = (1-summary.sse_full/summary.sst).where(total_valid)
-    summary['r2_task_partial'] = (1-summary.sse_full/summary.sse_nuisance).where(task_valid)
-    summary['delta_r2_task'] = ((summary.sse_nuisance-summary.sse_full)/summary.sst).where(total_valid)
-    summary['status'] = estimate.status
-    summary.loc[~total_valid & summary.sst.notna(), 'status'] = 'zero_variance'
+    summary["r2_full"] = (1 - summary.sse_full / summary.sst).where(total_valid)
+    summary["r2_task_partial"] = (1 - summary.sse_full / summary.sse_nuisance).where(
+        task_valid
+    )
+    summary["delta_r2_task"] = (
+        (summary.sse_nuisance - summary.sse_full) / summary.sst
+    ).where(total_valid)
+    summary["status"] = estimate.status
+    summary.loc[total_valid & ~task_valid, "status"] = "zero_task_variance"
+    summary.loc[~total_valid & summary.sst.notna(), "status"] = "zero_variance"
     return summary

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax. Execution started after the user requested continuation; amendments in plan.md take precedence.
 
-**Goal:** Compare library CV, experimental library REML, and regularized continuous HRF estimation for sub-07, sessions 11–20, accounting for trial type, RT, motion, and drift.
+**Goal:** Compare library CV, experimental library REML, and regularized continuous HRF estimation for sub-07, sessions 10–19, accounting for trial type, RT, motion, and drift.
 
 **Architecture:** Keep experimental methods and the comparison harness under `experiments/hrf_estimation`. Share event construction, nuisance handling, convolution, splits, and scoring across methods. Reuse package primitives where their semantics match; do not change the production evaluation API to implement this experiment.
 
@@ -45,7 +45,7 @@ Discover runs by subject/session/task/run entities, not sorted-file pairing. Req
 
 **Proposed pilot:** bilateral anatomical fusiform cortex as an operational VTC subset, using `freesurfer-NSD/subj07/label/{lh,rh}.aparc.annot`. Verify source surfaces and the exact registration used to generate the target CIFTIs before resampling categorical labels. Map labels using hemisphere and surface vertex IDs, never array position alone. Broader VTC is a later configurable mask. Do not select the pilot vertices by their observed R².
 
-Begin with session 11, four runs, and up to 256 vertices balanced across hemispheres, sampled deterministically with seed 20261107. Then use all 12 runs in sessions 11 and 12 and the full pilot ROI before extending to sessions 11–20. Full-cortex execution remains a separate scaling decision after resource measurement.
+Begin with session 11, four runs, and up to 256 vertices balanced across hemispheres, sampled deterministically with seed 20261107. Then use all 12 runs in sessions 11 and 12 and the full pilot ROI before extending to sessions 10–19. Full-cortex execution remains a separate scaling decision after resource measurement.
 
 ### Common task model
 
@@ -86,9 +86,7 @@ Call the held-out metric **HRF-transfer R² with refitted amplitudes**. It is no
 
 **Library CV:** preserve the package's inner leave-one-run-out predictive selection principle. Train on outer-training runs only. Build an experimental adapter if the package TaskModel cannot represent the exact valid/junk partition and run-profiled junk columns. Verify agreement with `select_hrfs` on the subset of models both support; never approximate the specified design merely to reuse an API.
 
-**Library REML — mathematical design prerequisite:** derive and document the actual random-effects model before implementation. The prototype's trial-shrinkage criterion is not automatically an HRF-selection criterion. Candidate-specific task/junk fixed effects change the restricted data space; their raw restricted likelihoods must not simply be compared across HRFs. Candidate-dependent determinant terms cannot be discarded as constants.
-
-The proposed route to investigate is common fixed nuisance C with an HRF-dependent random-effects covariance that explicitly represents trial type, common RT effects, junk responses, and trial deviations. The alternative is REML variance-component fitting within candidates followed by an inner predictive selection criterion; that must be labeled `reml_innercv`, not direct REML library selection. Before coding this estimator, write `reml_model.md` with the chosen mean/covariance, parameter sharing across runs, coefficient scaling/prior assumptions, exact objective, boundary behavior, and justification for comparability. If direct REML cannot preserve the intended task effects, bring this specific scientific choice back to the user instead of silently substituting maximum likelihood or RSS. Other tasks can proceed independently of this choice.
+**Library REML:** the user selected direct REML with random task effects. The implemented initial model uses common HRF-independent fixed nuisance C and five HRF-dependent random task/junk coefficients, independent across runs, with one shared random-effect variance and one shared noise variance across training runs. No separate single-trial deviation component is included in this initial task-level comparison. See [reml_model.md](reml_model.md) for the complete covariance, profiled objective, boundary rules, and dense-reference validation. Outer evaluation still uses the common refitted-amplitude OLS scorer.
 
 **Continuous double-gamma optimization:** use variable projection: solve run-specific linear coefficients exactly at each HRF parameter vector, then optimize a regularized training SSE. This shares a single HRF across conditions, following the shared-shape principle in the supplied Pedregosa paper, but is not claimed to reproduce its rank-1 basis model.
 
@@ -122,7 +120,7 @@ Report paired method differences per session, descriptive distributions across s
 
 All paths below are relative to `experiments/hrf_estimation/`. Use function-based tests with pytest fixtures in `conftest.py`. Do not add dependencies or scaffold modules during planning.
 
-For **each coding task**, follow this exact sequence: write the stated tests; run `uv run pytest experiments/hrf_estimation/test_<name>.py -q` and verify failure for the missing behavior; stage and commit only that task's failing tests/fixtures; implement; rerun that command to GREEN; refactor and rerun affected tests; commit implementation. Unrelated existing changes must remain untouched.
+For **each coding task**, follow this exact sequence: write the stated tests; run `uv run python -m pytest experiments/hrf_estimation/test_<name>.py -q` and verify failure for the missing behavior; stage and commit only that task's failing tests/fixtures; implement; rerun that command to GREEN; refactor and rerun affected tests; commit implementation. Unrelated existing changes must remain untouched.
 
 ### Task 1: Input manifest, temporal alignment, and anatomical pilot
 
@@ -168,9 +166,9 @@ Define frozen RunSpec/RunData records in `inputs.py` carrying run identity, sour
 ### Task 5: Experimental REML
 
 **Files:** `reml_model.md`, `reml.py`, `test_reml.py`.
-**Interface:** `fit_library_reml(runs, library: HrfLibrary, settings: dict) -> HrfEstimate` after the model is settled.
+**Interface:** `fit_library_reml(runs, library: HrfLibrary, settings: dict) -> HrfEstimate` using the model in `reml_model.md`.
 
-- [ ] Resolve the mathematical prerequisite above and document whether this is direct REML or REML plus inner predictive selection. This task is not implementation-ready until that objective is defined.
+- [ ] Implement the user-selected direct REML model documented in `reml_model.md`; compare its objective against a dense restricted-covariance reference.
 - [ ] Write dense small-matrix reference tests for the complete chosen objective, variance-zero boundary, scale convention, candidate-dependent terms, and multi-run parameter sharing; require equality with the optimized computation.
 - [ ] Test planted-HRF simulations, zero-signal failure flags, and outer-test perturbation invariance.
 - [ ] Commit failing tests before adapting prototype formulas; then GREEN/refactor. Record which prototype components were reused and which assumptions changed.
@@ -192,8 +190,8 @@ Define frozen RunSpec/RunData records in `inputs.py` carrying run identity, sour
 
 - [ ] Tests assert end-to-end synthetic outputs preserve cortical vertex IDs, invalid/unprocessed vertices remain NaN, interrupted writes cannot masquerade as complete, and resumed results match fresh results.
 - [ ] Test stability on identical and deliberately shifted curves, undefined trough handling, and session/feature alignment.
-- [ ] Complete RED/commit/GREEN/refactor; run `uv run pytest experiments/hrf_estimation -q` and affected package tests. The default pytest testpaths do not include these experiment tests.
-- [ ] Execute in stages: synthetic validation; four-run/256-vertex smoke pilot; full VTC in sessions 11–12; then sessions 11–20 after timing, convergence, and resource checks.
+- [ ] Complete RED/commit/GREEN/refactor; run `uv run python -m pytest experiments/hrf_estimation -q` and affected package tests. The default pytest testpaths do not include these experiment tests.
+- [ ] Execute in stages: synthetic validation; four-run/256-vertex smoke pilot; full VTC in sessions 11–12; then sessions 10–19 after timing, convergence, and resource checks.
 
 ## Outputs and execution readiness
 
@@ -201,7 +199,7 @@ Write under `experiments/hrf_estimation/outputs/<analysis-id>/`, using names suc
 
 Save a manifest, source hashes, code revision and dirty-state record, uv lock hash, library fingerprint, masks, configuration, split IDs, timing transformation, optimizer logs, and run-level sums of squares. Write outputs atomically and make cache keys depend on all scientific settings. Proposed local default: one worker, 256-feature chunks, bounded candidate batches; measure runtime/RSS and estimate the ten-session cost before larger execution. No full-cortex runtime commitment is made here.
 
-Implementation may begin with the input/design/scoring tasks after the plan is accepted. Real-data fitting requires verified temporal alignment and anatomical mapping. REML fitting additionally requires the explicit, comparable objective described in Task 5. These are concrete prerequisites, not grounds to substitute easier scientific requirements.
+Implementation may begin with the input/design/scoring tasks after the plan is accepted. Real-data fitting requires verified temporal alignment and anatomical mapping. The direct REML objective in Task 5 has now been specified and verified against a dense reference. These are concrete prerequisites, not grounds to substitute easier scientific requirements.
 
 ## Local references
 
@@ -209,3 +207,11 @@ Implementation may begin with the input/design/scoring tasks after the plan is a
 - [Pedregosa et al. (2015)](references/pedregosa2015.pdf): shared HRF/rank-1 formulation and optimization sections; motivation rather than an exact implementation recipe.
 - [Package HRF selection](../../src/boldtailor/hrf_selection.py), [kernel construction](../../src/boldtailor/_hrf_design.py), and [HRF libraries](../../src/boldtailor/hrf_library.py).
 - Neighboring prototype: `../boldtailor_testing/src/boldtailor_testing/reml.py` relative to the repository root; inspected read-only.
+
+## Execution status (2026-11-07)
+
+Implemented and tested: entity-matched NSD inputs, 24 motion terms, 80-second cosine drifts, exclusive trial categories, shared-HRF designs, within-session splits, all three estimator families (both continuous optimizers), training-only lambda tuning, frozen-HRF transfer scoring, waveform stability, cortical map export, and verified whole-analysis restart with input/code/settings identities. Independent review led to additional anatomical identity, rank-deficiency, boundary, zero-variance, and RT-metadata checks.
+
+Executed: session-11 four-run/256-vertex canonical/library/REML pilot; a four-vertex continuous-optimizer smoke check with a smaller initialization library. Full-VTC 12-run pilots for sessions 11 and 12 are the next scaling check. The full ten-session/20-split experiment and comprehensive Monte Carlo sensitivity suite are not yet complete. The current runner handles one session at a time; a cluster scheduler/configuration layer is not implemented.
+
+Implementation files differ slightly from the initial decomposition: `pilot.py` contains the comparison runner and atomic exports; `provenance.py` owns content hashes and verified restart; `tuning.py` owns the common lambda choice across the supplied feature subset. No production package API has been changed. Cosine generation replaces the obsolete interpolation task. The initial anatomical pilot is bilateral fusiform cortex (1,750 mapped vertices); categorical label mapping uses nearest vertices on registered spheres, with hashes and original CIFTI registration provenance retained.

@@ -84,10 +84,11 @@ def test_verified_resume_rejects_changed_data(planted_runs, tmp_path):
 
 def test_export_axis_must_match_run_anatomy(planted_runs, tmp_path):
     from dataclasses import replace
-    runs,library=planted_runs
-    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
-    runs=tuple(replace(r,brain_axis=brain[r.feature_ids]) for r in runs)
-    wrong=brain[np.array([0,1,2,3,7,5,6,4,8,9])]
-    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
-    with pytest.raises(ValueError,match='export.*anatom'):
-        fn(runs,library,wrong,tmp_path,methods=('canonical',))
+
+    runs, library = planted_runs
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
+    runs = tuple(replace(r, brain_axis=brain[r.feature_ids]) for r in runs)
+    wrong = brain[np.array([0, 1, 2, 3, 7, 5, 6, 4, 8, 9])]
+    fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
+    with pytest.raises(ValueError, match="export.*anatom"):
+        fn(runs, library, wrong, tmp_path, methods=("canonical",))

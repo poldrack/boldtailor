@@ -83,26 +83,39 @@ def test_zero_signal_and_failed_budget_are_explicit(offgrid):
 
 
 def test_continuous_reports_nonidentifiable_task_effects(offgrid):
-    runs,library,_=offgrid
-    changed=tuple(replace(r,events=r.events.assign(response_time=1.)) for r in runs)
-    fit=importlib.import_module('experiments.hrf_estimation.continuous').fit_continuous
-    result=fit(changed,{'library':library,'lambda':0,'maxiter':5,'maxfun':50,'max_starts':1})
-    assert result.status==('rank_deficient',)
-    assert result.diagnostics['min_task_rank']==[2]
+    runs, library, _ = offgrid
+    changed = tuple(replace(r, events=r.events.assign(response_time=1.0)) for r in runs)
+    fit = importlib.import_module(
+        "experiments.hrf_estimation.continuous"
+    ).fit_continuous
+    result = fit(
+        changed,
+        {"library": library, "lambda": 0, "maxiter": 5, "maxfun": 50, "max_starts": 1},
+    )
+    assert result.status == ("rank_deficient",)
+    assert result.diagnostics["min_task_rank"] == [2]
 
 
 def test_continuous_records_parameter_boundary_proximity(offgrid):
     from boldtailor.hrf_library import HrfLibrary
-    runs,_,_=offgrid
-    parameters=(2.,12.,.8,1.5,6.,0.,36.)
-    library=HrfLibrary.from_parameters([parameters])
-    truth=HrfCandidate(1,'double_gamma',parameters)
-    changed=[]
+
+    runs, _, _ = offgrid
+    parameters = (2.0, 12.0, 0.8, 1.5, 6.0, 0.0, 36.0)
+    library = HrfLibrary.from_parameters([parameters])
+    truth = HrfCandidate(1, "double_gamma", parameters)
+    changed = []
     for run in runs:
-        parts=build_design(run,truth)
-        y=parts.task@np.array([2,5,1.5])+parts.junk@np.array([1,3])+20
-        changed.append(replace(run,signals=y[:,None]))
-    fit=importlib.import_module('experiments.hrf_estimation.continuous').fit_continuous
-    result=fit(tuple(changed),{'library':library,'lambda':0,'maxiter':5,'maxfun':50,'max_starts':1})
-    assert result.diagnostics['near_lower_bound'][0][0]
-    assert result.diagnostics['normalized_bound_distance'][0][0]==pytest.approx(0,abs=1e-6)
+        parts = build_design(run, truth)
+        y = parts.task @ np.array([2, 5, 1.5]) + parts.junk @ np.array([1, 3]) + 20
+        changed.append(replace(run, signals=y[:, None]))
+    fit = importlib.import_module(
+        "experiments.hrf_estimation.continuous"
+    ).fit_continuous
+    result = fit(
+        tuple(changed),
+        {"library": library, "lambda": 0, "maxiter": 5, "maxfun": 50, "max_starts": 1},
+    )
+    assert result.diagnostics["near_lower_bound"][0][0]
+    assert result.diagnostics["normalized_bound_distance"][0][0] == pytest.approx(
+        0, abs=1e-6
+    )
