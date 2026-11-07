@@ -68,3 +68,49 @@ def test_noise_estimation_uses_training_only_and_is_candidate_independent(plante
     assert first == second
     assert first["training_run_ids"] == [r.run_id for r in runs[:3]]
     assert -.8 <= first["rho"] <= .8
+
+
+def test_component_optimizer_reduces_to_original_scalar_reml(planted_runs):
+    from experiments.hrf_estimation.reml import prepare_terms, estimate_ratio
+    runs, library = planted_runs
+    rng = np.random.default_rng(31)
+    runs = tuple(replace(r, signals=r.signals + rng.normal(0, .4, r.signals.shape)) for r in runs)
+    kernel = library.candidates[1]
+    reference = estimate_ratio(prepare_terms(runs, kernel))
+    terms = api().component_terms(runs, kernel, api().prepare_common(runs))
+    for f in range(2):
+        fit = api().fit_components(terms, f, {})
+        assert fit["criterion"] == pytest.approx(reference["criterion"][f], abs=1e-6)
+        assert fit["ratios"][0] == pytest.approx(reference["ratio"][f], rel=2e-4)
+
+
+@pytest.mark.parametrize("variant", ["ar1", "components", "shared", "combined"])
+def test_variants_recover_shapes_and_keep_training_metadata(planted_runs, variant):
+    runs, library = planted_runs
+    rng = np.random.default_rng(49)
+    noisy = tuple(replace(r, signals=r.signals + rng.normal(0, .1, r.signals.shape)) for r in runs)
+    estimate = api().fit_extended_reml(noisy, library, {"variant": variant})
+    assert [k.id for k in estimate.kernels] == [0, 1]
+    assert estimate.training_run_ids == tuple(r.run_id for r in noisy)
+    assert "candidate_gap" in estimate.diagnostics
+    assert estimate.diagnostics["variant"] == variant
+    assert len(estimate.diagnostics["component_names"]) == {"ar1":1,"components":3,"shared":2,"combined":5}[variant]
+    constant = tuple(replace(r, signals=np.ones_like(r.signals)) for r in runs)
+    invalid = api().fit_extended_reml(constant, library, {"variant": variant})
+    assert invalid.kernels == (None, None)
+    assert invalid.status == ("no_signal", "no_signal")
+
+
+def test_variance_boundary_is_exactly_zero(planted_runs):
+    runs, library = planted_runs
+    rng = np.random.default_rng(3)
+    changed = []
+    for r in runs:
+        parts = build_design(r, library.candidates[0])
+        x = np.column_stack([parts.nuisance, parts.task, parts.junk])
+        y = rng.normal(size=r.signals.shape)
+        changed.append(replace(r, signals=y-x@np.linalg.lstsq(x,y,rcond=None)[0]))
+    terms = api().component_terms(tuple(changed), library.candidates[0],
+                                   api().prepare_common(tuple(changed)), separate=True, shared=True)
+    fit = api().fit_components(terms, 0, {})
+    np.testing.assert_array_equal(fit["ratios"], np.zeros(5))
