@@ -18,7 +18,7 @@ from experiments.hrf_estimation.scoring import score_hrfs
 from experiments.hrf_estimation.sensitivity import parametric_library, simulate_runs, synthetic_templates
 
 METHODS = ("canonical", "librarycv", "reml", "parametriccv", "parametricreml",
-           "continuouslbfgsb", "continuouspowell")
+           "continuouslbfgsb")
 
 
 def simulation_cases():

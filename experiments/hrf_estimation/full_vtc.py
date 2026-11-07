@@ -22,8 +22,7 @@ def comparison_jobs():
     groups = [("fullbaseline", "full", ("canonical", "librarycv", "reml")),
               ("parametriccv", "parametric", ("librarycv",)),
               ("parametricreml", "parametric", ("reml",)),
-              ("continuouslbfgsb", "full", ("continuouslbfgsb",)),
-              ("continuouspowell", "full", ("continuouspowell",))]
+              ("continuouslbfgsb", "full", ("continuouslbfgsb",))]
     return [dict(session=session, rt_mode=mode, name=name, library=library, methods=methods)
             for mode in ("amplitude", "duration") for session in (11, 12)
             for name, library, methods in groups]
@@ -34,7 +33,7 @@ def main():
     parser.add_argument("--bids-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--job", type=int, choices=range(20))
+    parser.add_argument("--job", type=int, choices=range(16))
     args = parser.parse_args()
     if args.workers < 1:
         parser.error("workers must be positive")
