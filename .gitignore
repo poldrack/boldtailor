@@ -11,3 +11,4 @@ dist/
 .env
 *.ipynb
 logs
+.DS_Store
