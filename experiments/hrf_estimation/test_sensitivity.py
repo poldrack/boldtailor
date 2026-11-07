@@ -63,7 +63,8 @@ def test_synthetic_templates_include_motion_junk_and_valid_timing():
 def test_full_vtc_jobs_match_scopes_and_keep_tuning_nested():
     api = importlib.import_module("experiments.hrf_estimation.full_vtc")
     jobs = api.comparison_jobs()
-    assert len(jobs) == 20
+    assert len(jobs) == 16
+    assert all("continuouspowell" not in j["methods"] for j in jobs)
     assert {j["session"] for j in jobs} == {11, 12}
     assert {j["rt_mode"] for j in jobs} == {"amplitude", "duration"}
     assert {j["library"] for j in jobs} == {"full", "parametric"}

@@ -36,3 +36,10 @@ def test_case_saves_held_out_scores_recovery_and_verified_restart(planted_runs, 
     again = api.evaluate_case(runs, library, case, tmp_path, settings,
                               methods=("canonical", "librarycv"))
     np.testing.assert_allclose(result.r2_task_partial, again.r2_task_partial)
+
+
+def test_powell_is_excluded_from_active_sensitivity_methods():
+    api = importlib.import_module("experiments.hrf_estimation.sensitivity_runner")
+    assert "continuouspowell" not in api.METHODS
+    assert "continuouslbfgsb" in api.METHODS
+    assert len(api.METHODS) == 6
