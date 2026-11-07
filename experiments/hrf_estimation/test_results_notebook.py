@@ -63,6 +63,9 @@ def test_notebook_includes_verified_reml_validation(results_notebook):
     actual = pd.DataFrame(summaries[0]["records"]).sort_values(["session", "method"])
     expected = pd.read_csv(Path(__file__).parent / "reports/reml_validation_summary.tsv", sep="\t")
     expected = expected.sort_values(["session", "method"])
+    # Notebook JSON serialization sorts object keys; table column order is separate.
+    assert set(actual.columns) == set(expected.columns)
+    actual = actual[expected.columns]
     pd.testing.assert_frame_equal(actual.reset_index(drop=True), expected.reset_index(drop=True),
                                   check_exact=False, rtol=1e-12, atol=1e-12)
     text = "\n".join(c.source for c in results_notebook.cells if c.cell_type == "markdown")
