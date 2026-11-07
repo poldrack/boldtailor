@@ -38,3 +38,31 @@ def test_prepared_zero_signal_and_invalid_shape(planted_runs):
     assert np.isnan(api.prepared_loss(p, 0, (6, 16, 1, 1, 6, 0, 36)))
     p = api.prepare_profile(runs, "amplitude")
     assert np.isinf(api.prepared_loss(p, 0, (10, 8, 1, 1, 6, 0, 36)))
+
+
+def test_library_losses_are_batched_without_changing_values(planted_runs):
+    runs, library = planted_runs
+    api = importlib.import_module("experiments.hrf_estimation.prepared")
+    prepared = api.prepare_profile(runs, "amplitude")
+    parameters = [(*c.parameters[:5], 0, 36) for c in library.candidates]
+    losses = api.library_losses(prepared, parameters)
+    expected = [[profile_loss(runs, f, p) for f in range(2)] for p in parameters]
+    np.testing.assert_allclose(losses, expected, atol=1e-12)
+
+
+def test_fast_parallel_fit_matches_reference(offgrid):
+    from experiments.hrf_estimation.continuous import fit_continuous
+
+    runs, library, _ = offgrid
+    settings = dict(library=library, **{"lambda": 0}, max_starts=2,
+                    maxiter=100, maxfun=1500)
+    reference = fit_continuous(runs, {**settings, "prepared": False})
+    fast = fit_continuous(runs, {**settings, "prepared": True, "n_jobs": 2})
+    assert fast.diagnostics["prepared"] is True
+    assert fast.training_run_ids == reference.training_run_ids
+    assert profile_loss(runs, 0, fast.kernels[0].parameters) < 1e-7
+    np.testing.assert_allclose(fast.kernels[0].kernel(.1, 1),
+                               reference.kernels[0].kernel(.1, 1), atol=2e-3)
+
+
+from experiments.hrf_estimation.test_continuous import offgrid
