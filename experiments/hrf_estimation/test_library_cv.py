@@ -77,3 +77,30 @@ def test_cv_agrees_with_package_for_compatible_task_model(planted_runs):
         task_model=TaskModel((Modulator('response_time'),Modulator('trial_type'))))
     assert [k.id for k in ours.kernels] == package.hrf_indices.tolist()
     np.testing.assert_allclose(ours.diagnostics['selected_cv_r2'],package.cv_r2,atol=1e-8)
+
+
+@pytest.mark.parametrize('problem',['constant_rt','missing_condition'])
+def test_rank_failure_is_not_reported_as_no_signal(planted_runs,problem):
+    runs,library=planted_runs
+    changed=[]
+    for run in runs:
+        events=run.events.copy()
+        if problem=='constant_rt':
+            events.loc[events.response_time.notna(),'response_time']=1.
+        else:
+            events['trial_type']=0
+        changed.append(replace(run,events=events))
+    fit=importlib.import_module('experiments.hrf_estimation.library_cv').fit_library_cv
+    result=fit(tuple(changed),library,{})
+    assert result.status==('rank_deficient','rank_deficient')
+
+
+def test_training_rejects_mismatched_anatomy_at_same_columns(planted_runs):
+    import nibabel as nib
+    runs,library=planted_runs
+    a=nib.cifti2.BrainModelAxis.from_surface([4,7],10,'CortexLeft')
+    b=nib.cifti2.BrainModelAxis.from_surface([7,4],10,'CortexLeft')
+    changed=(replace(runs[0],brain_axis=a),replace(runs[1],brain_axis=b))
+    fit=importlib.import_module('experiments.hrf_estimation.library_cv').fit_library_cv
+    with pytest.raises(ValueError,match='anatom'):
+        fit(changed,library,{})

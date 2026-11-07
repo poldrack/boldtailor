@@ -78,3 +78,24 @@ def test_partial_and_total_r2_separate_nuisance_from_task(signal_run):
     assert result.summary.loc[8,'r2_task_partial'] == pytest.approx(1-full_sse/null_sse)
     assert result.summary.loc[8,'r2_full'] == pytest.approx(1-full_sse/sst)
     assert result.summary.loc[8,'delta_r2_task'] == pytest.approx((null_sse-full_sse)/sst)
+
+
+def test_zero_task_denominator_has_explicit_reason(signal_run):
+    drift=np.linspace(-1,1,len(signal_run.frame_times))
+    run=replace(signal_run,signals=np.column_stack([drift,drift]),
+        confounds=signal_run.confounds.assign(drift=drift))
+    score=importlib.import_module('experiments.hrf_estimation.scoring').score_hrfs((run,),estimate())
+    assert score.summary.r2_task_partial.isna().all()
+    assert (score.summary.status=='zero_task_variance').all()
+
+
+def test_evaluation_checks_anatomy_against_training_estimate(signal_run):
+    import nibabel as nib
+    a=nib.cifti2.BrainModelAxis.from_surface([8,3],10,'CortexLeft')
+    b=nib.cifti2.BrainModelAxis.from_surface([3,8],10,'CortexLeft')
+    cls=importlib.import_module('experiments.hrf_estimation.estimators').HrfEstimate
+    base=estimate()
+    fitted=cls(base.feature_ids,base.kernels,base.status,base.training_run_ids,{},brain_axis=a)
+    score=importlib.import_module('experiments.hrf_estimation.scoring').score_hrfs
+    with pytest.raises(ValueError,match='anatom'):
+        score((replace(signal_run,brain_axis=b),),fitted)
