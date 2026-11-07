@@ -4,7 +4,7 @@ import numpy as np
 
 from boldtailor._hrf_design import _boxcar_sampling, _count_scales, frame_tr, OVERSAMPLING
 from boldtailor.hrf_library import HrfCandidate
-from experiments.hrf_estimation.design import partition_events
+from experiments.hrf_estimation.design import partition_events, build_design
 from experiments.hrf_estimation.scoring import residuals
 
 
@@ -22,6 +22,8 @@ def prepare_profile(runs, mode):
 
 
 def _prepare_run(run, mode):
+    # Preserve the original design validation before caching its sampling grid.
+    build_design(run, HrfCandidate(0, "double_gamma", (6, 16, 1, 1, 6, 0, 36)), mode)
     events = partition_events(run.events)
     valid = events.category.to_numpy() == "valid"
     weights = np.column_stack([
@@ -40,7 +42,8 @@ def _prepare_run(run, mode):
     return dict(sampling=_sampling(events, run.frame_times), weights=weights,
                 duration=_sampling(duration, run.frame_times) if valid.any() else None,
                 tr=frame_tr(run.frame_times), mode=mode, q=q, y=y,
-                energy=np.sum(y**2, axis=0), raw=np.sum(run.signals**2, axis=0))
+                energy=np.sum(y**2, axis=0), raw=np.sum(run.signals**2, axis=0),
+                c=c, signals=run.signals, c_norm=s[0] if len(s) else 0.)
 
 
 def _sampled_response(sampling, kernel, normalize):
@@ -81,9 +84,11 @@ def prepared_loss(prepared, feature, parameters):
     sse = 0.0
     for item in prepared:
         z = event_design(item, candidate)
-        q = item["q"]
-        z = z - q @ (q.T @ z)
-        error, _ = residuals(z, item["y"][:, feature])
+        projected = _project_design(item, z)
+        if projected is None:
+            error, _ = residuals(np.column_stack([item["c"], z]), item["signals"][:, feature])
+        else:
+            error, _ = residuals(projected, item["y"][:, feature])
         sse += np.sum(error**2)
     return float(sse / energy)
 
@@ -101,10 +106,24 @@ def library_losses(prepared, parameters):
         sse = np.zeros(len(energy))
         for item in prepared:
             z = event_design(item, candidate)
-            q = item["q"]
-            z -= q @ (q.T @ z)
+            projected = _project_design(item, z)
+            if projected is None:
+                error, _ = residuals(np.column_stack([item["c"], z]), item["signals"])
+                sse += np.sum(error**2, axis=0)
+                continue
+            z = projected
             u, s, _ = np.linalg.svd(z, full_matrices=False)
             rank = np.sum(s > s[0] * max(z.shape) * np.finfo(float).eps) if s[0] else 0
             sse += np.maximum(0, item["energy"] - np.sum((u[:, :rank].T @ item["y"])**2, axis=0))
         result[i, valid] = sse[valid] / energy[valid]
     return result
+
+
+def _project_design(item, z):
+    projected = z - item["q"] @ (item["q"].T @ z)
+    # If projection removes a task direction, solve the original system rather
+    # than letting a relative tolerance interpret floating-point debris as signal.
+    threshold = (max(item["c"].shape[0], item["c"].shape[1] + z.shape[1])
+                 * np.finfo(float).eps * max(item["c_norm"], np.linalg.norm(z, 2)))
+    rank = np.sum(np.linalg.svd(projected, compute_uv=False) > threshold)
+    return None if rank < np.linalg.matrix_rank(z) else projected
