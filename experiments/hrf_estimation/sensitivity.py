@@ -46,3 +46,25 @@ def _simulate_run(template, truth, mode, rho, snr, rng):
     nuisance = (c / np.where(norms > 0, norms, 1)) @ rng.normal(0, .3, c.shape[1])
     noise = ar1_noise(len(signal), rho, rng) * np.std(signal) / snr
     return replace(run, signals=(20 + signal + nuisance + noise)[:, None])
+
+
+def synthetic_templates(seed=20261107):
+    """Synthetic NSD-like timing, explicitly not a reconstruction of NSD data."""
+    import pandas as pd
+    from experiments.hrf_estimation.inputs import RunData
+    from experiments.hrf_estimation.timing import MOTION_COLUMNS, build_nuisance
+
+    rng = np.random.default_rng(seed)
+    runs = []
+    times = np.arange(226) * 4 / 3
+    for i in range(4):
+        events = pd.DataFrame(dict(onset=np.arange(8, 260, 4.), duration=3.,
+                                   trial_type=rng.integers(0, 2, 63),
+                                   response_time=rng.uniform(.4, 1.8, 63),
+                                   is_correct=1, missing_data=0))
+        events.loc[[5, 18], "missing_data"] = 1
+        events.loc[[9, 25, 42], "is_correct"] = 0
+        motion = pd.DataFrame({c: ar1_noise(226, .8, rng) for c in MOTION_COLUMNS})
+        runs.append(RunData(f"synthetic_run-{i+1:02}", np.zeros((226, 1)), events,
+                            times, build_nuisance(motion, times), np.array([0])))
+    return tuple(runs)
