@@ -1,6 +1,7 @@
 """Map an independently defined surface ROI onto CIFTI columns."""
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 
 def vtc_indices(brain_axis, labels_by_hemisphere):
@@ -18,3 +19,24 @@ def vtc_indices(brain_axis, labels_by_hemisphere):
     if not mask.any():
         raise ValueError('VTC ROI is empty on the CIFTI axis')
     return np.flatnonzero(mask)
+
+
+def resample_mask(source_sphere, target_sphere, source_mask):
+    """Nearest-vertex categorical mapping on aligned registered spheres."""
+    source = _unit_sphere(source_sphere)
+    target = _unit_sphere(target_sphere)
+    mask = np.asarray(source_mask)
+    if mask.shape != (len(source),) or not np.isin(mask, [0, 1]).all():
+        raise ValueError('source mask must be binary and match source sphere size')
+    _, nearest = cKDTree(source).query(target)
+    return mask[nearest].astype(bool)
+
+
+def _unit_sphere(points):
+    points = np.asarray(points, dtype=float)
+    if points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
+        raise ValueError('sphere coordinates must be finite N by 3 arrays')
+    radii = np.linalg.norm(points, axis=1)
+    if np.any(radii <= 0):
+        raise ValueError('sphere points must have positive radii')
+    return points/radii[:, None]
