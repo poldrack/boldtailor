@@ -58,3 +58,23 @@ def test_feature_order_mismatch_fails(signal_run):
     score = importlib.import_module('experiments.hrf_estimation.scoring').score_hrfs
     with pytest.raises(ValueError, match='feature'):
         score((replace(signal_run, feature_ids=np.array([3,8])),), estimate())
+
+
+def test_partial_and_total_r2_separate_nuisance_from_task(signal_run):
+    rng = np.random.default_rng(9)
+    drift = np.linspace(-1, 1, len(signal_run.frame_times))
+    nuisance = signal_run.confounds.assign(drift=drift)
+    events = signal_run.events.copy()
+    events.loc[2, 'is_correct'] = 0
+    run = replace(signal_run, confounds=nuisance, events=events)
+    parts = build_design(run, estimate().kernels[0])
+    y = 20*drift + parts.task @ [1, 3, 2] + parts.junk[:,1]*4 + rng.normal(size=len(drift))
+    run = replace(run, signals=np.column_stack([y,y]))
+    result = importlib.import_module('experiments.hrf_estimation.scoring').score_hrfs((run,), estimate())
+    null = np.column_stack([parts.nuisance, parts.junk])
+    full = np.column_stack([null, parts.task])
+    sse = lambda x: np.sum((y-x@np.linalg.lstsq(x,y,rcond=None)[0])**2)
+    full_sse, null_sse, sst = sse(full), sse(null), np.sum((y-y.mean())**2)
+    assert result.summary.loc[8,'r2_task_partial'] == pytest.approx(1-full_sse/null_sse)
+    assert result.summary.loc[8,'r2_full'] == pytest.approx(1-full_sse/sst)
+    assert result.summary.loc[8,'delta_r2_task'] == pytest.approx((null_sse-full_sse)/sst)
