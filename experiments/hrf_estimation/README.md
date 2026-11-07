@@ -75,3 +75,12 @@ synthetic checks run from c79a2a5 in `/tmp/boldtailor-hrf-reml-run`. Their exact
 commands and PIDs are in `outputs/reml-launch.json`; logs are
 `outputs/full-vtc-reml.log` and `outputs/noise-rt-reml.log`. These are separate
 from the ongoing L-BFGS-B queues and from the earlier completed notebook.
+
+
+The primary REML comparison has been expanded to **sessions 10–19**, all 120
+runs and all 1,750 VTC vertices. Sessions 11/12 continue in their existing
+queue; 10 and 13–19 run in a separate one-worker queue using identical frozen
+code and settings. See `outputs/reml-sessions10to19.log` and
+`outputs/reml-sessions10to19-launch.json`. The preflight inventory is
+`reports/reml_sessions10to19_inventory.tsv`. This stage retains one
+complementary 6/6 split pair per session, not the planned twenty-split study.

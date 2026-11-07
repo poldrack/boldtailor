@@ -47,3 +47,11 @@ Update: user reports the NSD drive mounted again. Both sessions discovered with 
 Review outcome: projection-roundoff covariance and inactive-junk boundary defects fixed with RED/GREEN tests. Full experiment suite: 100 tests pass. Reviewer found no blocker for the configured real validation. Minor (deferred): at extremely large variance bounds, activation of the numerical Q floor makes the analytic gradient inconsistent with the floored objective; the reproduced case is outside the default normalized 1e6 bound for these twelve-run fits. Do not enlarge that bound without floor-activation handling and tests.
 
 Completed final validation: `outputs/reml-final-session11` and `outputs/reml-final-session12`, frozen c79a2a5 checkout, all 120 vertex/evaluation records status ok and all selected extended fits converged. See reml_validation.md and reports/reml_validation_*.tsv. The pre-fix `reml-validation-session*` attempts remain incomplete and excluded. Launched full 1750-vertex primary-amplitude REML variant comparisons for sessions 11/12 and a separate 288-case synthetic REML-variant sweep; exact processes/commands are in outputs/reml-launch.json. These queues retain the baseline and test the three extensions individually and combined.
+
+## Expansion to all sessions 10–19
+
+User authorized the REML analysis across sessions 10–19. Input preflight verified all 120 matched runs, 226 samples/motion rows per run, 80 s nuisance construction, event categories/timing, and identical identities for all 1,750 mask vertices. Inventory: `reports/reml_sessions10to19_inventory.tsv`.
+
+Keep the scientific specification and c79a2a5 execution checkout unchanged: RT amplitude, all 12 runs per session, original REML plus AR1/components/shared/combined, all-run fits and one complementary 6/6 partition. The existing queue owns sessions 11/12; the new one-worker queue owns sessions 10,13,14,15,16,17,18,19. Both write distinct subdirectories under `outputs/full-vtc-reml`. The original 20-split full-study proposal is not silently enabled by this session expansion.
+
+New queue: `outputs/reml-sessions10to19.log`; exact command/PID/settings: `outputs/reml-sessions10to19-launch.json`. Existing sessions: `outputs/full-vtc-reml.log` and `outputs/reml-launch.json`. This launches computation; it is not a completed ten-session result.
