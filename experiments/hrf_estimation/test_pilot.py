@@ -5,6 +5,7 @@ import json
 
 import nibabel as nib
 import numpy as np
+import pytest
 
 from experiments.hrf_estimation.test_library_cv import planted_runs
 
@@ -44,3 +45,32 @@ def test_comparison_supports_experimental_estimators(planted_runs,tmp_path):
     assert set(table.method)=={'reml','continuouslbfgsb','continuouspowell'}
     assert len(table)==18
     assert table.r2_full.notna().all()
+
+
+def test_duration_manifest_records_actual_model(planted_runs,tmp_path):
+    runs,library=planted_runs
+    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
+    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
+    kwargs={'methods':('canonical',),'settings':{'rt_mode':'duration'}}
+    fn(runs,library,brain,tmp_path,**kwargs)
+    assert json.loads((tmp_path/'manifest.json').read_text())['rt_mode']=='duration'
+
+
+def test_verified_resume_rejects_changed_data(planted_runs,tmp_path):
+    runs,library=planted_runs
+    brain=nib.cifti2.BrainModelAxis.from_surface(np.arange(10),10,'CortexLeft')
+    fn=importlib.import_module('experiments.hrf_estimation.pilot').run_comparison
+    kwargs={'methods':('canonical',)}
+    first=fn(runs,library,brain,tmp_path,**kwargs)
+    stamp=(tmp_path/'scores.tsv').stat().st_mtime_ns
+    second=fn(runs,library,brain,tmp_path,**kwargs)
+    assert (tmp_path/'scores.tsv').stat().st_mtime_ns==stamp
+    np.testing.assert_allclose(first.r2_full,second.r2_full)
+    # A marker alone must not make a corrupted/incomplete run reusable.
+    (tmp_path/'scores.tsv').write_text('corrupt')
+    recovered=fn(runs,library,brain,tmp_path,**kwargs)
+    np.testing.assert_allclose(first.r2_full,recovered.r2_full)
+    # New data must not be mixed into an old analysis directory.
+    runs[0].signals[0,0]+=1
+    with pytest.raises(ValueError,match='different'):
+        fn(runs,library,brain,tmp_path,**kwargs)
