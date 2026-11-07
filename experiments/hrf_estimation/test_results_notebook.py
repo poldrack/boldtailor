@@ -53,3 +53,20 @@ def test_notebook_contains_rendered_result_figures(results_notebook):
             assert picture.width >= 600 and picture.height >= 300
             pixels = np.asarray(picture.convert("RGB"))
             assert pixels.std() > 5, "a result figure is blank"
+
+
+def test_notebook_includes_verified_reml_validation(results_notebook):
+    bundles = [o.get("data", {}).get("application/json", {})
+               for c in results_notebook.cells if c.cell_type == "code" for o in c.outputs]
+    summaries = [b for b in bundles if b.get("kind") == "reml_validation_summary"]
+    assert len(summaries) == 1
+    actual = pd.DataFrame(summaries[0]["records"]).sort_values(["session", "method"])
+    expected = pd.read_csv(Path(__file__).parent / "reports/reml_validation_summary.tsv", sep="\t")
+    expected = expected.sort_values(["session", "method"])
+    pd.testing.assert_frame_equal(actual.reset_index(drop=True), expected.reset_index(drop=True),
+                                  check_exact=False, rtol=1e-12, atol=1e-12)
+    text = "\n".join(c.source for c in results_notebook.cells if c.cell_type == "markdown")
+    assert "four-vertex REML validation" in text
+    figures = [o for c in results_notebook.cells if c.cell_type == "code"
+               for o in c.outputs if "image/png" in o.get("data", {})]
+    assert len(figures) >= 13
