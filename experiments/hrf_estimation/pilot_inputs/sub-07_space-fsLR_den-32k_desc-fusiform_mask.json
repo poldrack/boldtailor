@@ -1,0 +1,26 @@
+{
+  "roi": "bilateral anatomical fusiform (aparc)",
+  "mapping": "nearest native vertex on fsaverage-registered unit spheres",
+  "source_hashes": {
+    "L": {
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/label/lh.aparc.annot": "e5901f6f0ae9c2596b511f61602f2b719cab61cb1d557a03ead5c0e7ec9b4d05",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/surf/lh.sphere.reg": "49c16c87488ab78892666b2867a0f793d5eba6576f8ee412b61092715874022c",
+      "experiments/hrf_estimation/pilot_inputs/tpl-fsLR_space-fsaverage_hemi-L_den-32k_sphere.surf.gii": "31987d139b6cdf1040188d1795bf23c213c57f8e84fb45f2c04823d996b0defc"
+    },
+    "R": {
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/label/rh.aparc.annot": "1f41630f4a27884c80f271f33422346bd10bdf9c5f07e794eeced8bddaf944a5",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/surf/rh.sphere.reg": "50d98773c26f07d6bb07d3d49ab4855636a9edf4f717c134dd04714e980c1bdd",
+      "experiments/hrf_estimation/pilot_inputs/tpl-fsLR_space-fsaverage_hemi-R_den-32k_sphere.surf.gii": "8c1f67fa8fb3024ad3b292be995d5c9bae07dc4dbdd53fbac48e511e1366553d"
+    }
+  },
+  "seed": 20261107,
+  "n_roi": 1750,
+  "n_pilot": 256,
+  "template_url": "https://templateflow.s3.amazonaws.com/tpl-fsLR/",
+  "cifti_parent_provenance": {
+    "ParentProvenance": "/lscratch/russpold/tmp4p4scp10/L.32k_fs_LR.func.gii:\nwb_command -metric-resample /lscratch/russpold/tmp4p4scp10/L.native.func.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/lh.sphere.reg.native.surf.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/fs_LR-deformed_to-fsaverage.L.sphere.32k_fs_LR.surf.gii ADAP_BARY_AREA /lscratch/russpold/tmp4p4scp10/L.32k_fs_LR.func.gii -area-surfs /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/lh.midthickness.native.surf.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/L.midthickness.32k_fs_LR.surf.gii\n\n/lscratch/russpold/tmp4p4scp10/R.32k_fs_LR.func.gii:\nwb_command -metric-resample /lscratch/russpold/tmp4p4scp10/R.native.func.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/rh.sphere.reg.native.surf.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/fs_LR-deformed_to-fsaverage.R.sphere.32k_fs_LR.surf.gii ADAP_BARY_AREA /lscratch/russpold/tmp4p4scp10/R.32k_fs_LR.func.gii -area-surfs /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/rh.midthickness.native.surf.gii /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/subj07/R.midthickness.32k_fs_LR.surf.gii",
+    "ProgramProvenance": "Connectome Workbench\nType: Command Line Application\nVersion: 1.3.1\nQt Compiled Version: 5.9.1\nQt Runtime Version: 5.9.1\nCommit: unknown\nCommit Date: unknown\nCompiled with OpenMP: YES\nCompiler: c++ (/bin)\nCompiler Version: 4.8.5\nCompiled Debug: NO\nOperating System: Linux",
+    "Provenance": "wb_command -cifti-create-dense-timeseries /oak/stanford/groups/russpold/data/NSD/ppdata/subj07/func1pt8mm/timeseries/sub-07_ses-nsd11_task-nsdcore_run-01_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii -left-metric /lscratch/russpold/tmp4p4scp10/L.32k_fs_LR.func.gii -roi-left /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/L.atlasroi.32k_fs_LR.shape.gii -right-metric /lscratch/russpold/tmp4p4scp10/R.32k_fs_LR.func.gii -roi-right /oak/stanford/groups/russpold/data/NSD/templates/fs_LR_32k/R.atlasroi.32k_fs_LR.shape.gii -timestep 1.3333333730697632",
+    "WorkingDirectory": "/oak/stanford/groups/russpold/data/NSD/nsdcode"
+  }
+}

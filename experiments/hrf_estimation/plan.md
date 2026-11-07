@@ -81,3 +81,7 @@ The user specified that only sessions 10–19 should be used, replacing the orig
 ## REML-model clarification (2026-11-07)
 
 The user selected direct REML HRF-library comparison with random task effects. Intercepts, motion, and cosine drifts remain a common HRF-independent fixed-effect nuisance model; HRF-dependent task and junk effects are modeled as random effects. Outer evaluation still freezes only the HRF and refits task/nuisance amplitudes on held-out runs.
+
+## Execution-scope clarification (2026-11-07)
+
+The user chose to continue staged VTC pilots locally rather than launch the full VTC comparison or prepare a cluster run at this stage.
