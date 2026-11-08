@@ -17,6 +17,7 @@ def notebook():
 def records(notebook, kind):
     bundles=[o.get("data",{}).get("application/json",{})
              for c in notebook.cells if c.cell_type=="code" for o in c.outputs]
+    bundles += notebook.metadata.get("comparison_records", [])
     return next(b["records"] for b in bundles if b.get("kind")==kind)
 
 
@@ -71,3 +72,22 @@ def test_empirical_selection_report_has_counts_and_session_agreement(notebook):
     assert pairs.family_agreement.between(0,1).all()
     assert pairs.empirical_jaccard.between(0,1).all()
     assert (pairs.n_same_empirical_id<=pairs.n_both_empirical).all()
+
+
+def test_long_outputs_disabled_by_default(notebook):
+    setup = next(c.source for c in notebook.cells if c.cell_type == "code")
+    assert "no_long_text_outputs = True" in setup
+    outputs = [o for c in notebook.cells if c.cell_type == "code" for o in c.outputs]
+    assert not any("application/json" in o.get("data", {}) for o in outputs)
+    assert all(len(o.get("data", {}).get("text/plain", "")) < 2000 for o in outputs)
+    assert sum("image/png" in o.get("data", {}) for o in outputs) >= 11
+    namespace = {"display": lambda *args, **kwargs: calls.append(args)}
+    helper = setup[setup.index("def display_long_output"):setup.index("root=next")]
+    exec(helper, namespace)
+    calls = []
+    namespace["no_long_text_outputs"] = True
+    namespace["display_long_output"]("long output")
+    assert calls == []
+    namespace["no_long_text_outputs"] = False
+    namespace["display_long_output"]("long output")
+    assert calls == [("long output",)]
