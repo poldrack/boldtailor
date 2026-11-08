@@ -57,3 +57,10 @@ def test_prior_modeling_approaches_are_included(notebook):
             "Parametric REML","Continuous L-BFGS-B"} <= available
     historical=pd.DataFrame(records(notebook,"historical_models"))
     assert "Powell" in set(historical.method)
+
+
+def test_baseline_comparators_cover_all_ar1_sessions(notebook):
+    coverage=pd.DataFrame(records(notebook,"model_coverage"))
+    for method in ["Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"]:
+        completed=coverage.query("mode == 'amplitude' and state == 'complete' and method == @method")
+        assert set(completed.session)==set(range(10,20)), method
