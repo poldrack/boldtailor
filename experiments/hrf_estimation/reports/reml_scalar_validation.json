@@ -1,0 +1,22 @@
+{
+  "source_commit": "f3b95bf",
+  "session": 11,
+  "rt_mode": "amplitude",
+  "training_runs": 12,
+  "paired_subset": {
+    "vertices": 128,
+    "candidates": 32,
+    "generic_seconds": 10.282025124994107,
+    "scalar_seconds": 0.7067449579481035,
+    "speedup": 14.548423740929069
+  },
+  "full_validation": {
+    "seconds": 37.99521358299535,
+    "matched_winners": 1750,
+    "vertices": 1750,
+    "max_absolute_criterion_difference": 5.4569682106375694e-12,
+    "max_criterion_increase": 5.4569682106375694e-12,
+    "noise_equal": true
+  },
+  "previous_full_generic_seconds": 2372.3
+}

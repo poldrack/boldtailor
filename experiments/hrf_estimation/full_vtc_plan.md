@@ -85,3 +85,9 @@ Validation: all 113 experiment tests passed with pinned JAX. A 128-vertex, all-1
 To avoid discarding the active queue's completed tuning work, a one-shot supervisor is waiting for the current session-11 amplitude continuous comparison's COMPLETE marker, verifies all artifact hashes and its 5,250 score rows, then stops only the old queue process group and launches jobs 4–15 from frozen commit `24315f8` in `/tmp/boldtailor-hrf-cached-run`. It stops with a recorded error if the original queue exits early or cannot be safely terminated. Status: `outputs/cache-handoff-state.json`; supervisor log: `outputs/cache-handoff.log`; metadata: `outputs/cached-autodiff-launch.json`. It does not automatically revise the notebook.
 
 Notebook inputs after handoff: original `full-vtc-lbfgsb` jobs 0–2, `full-vtc-autodiff` job 3, and `full-vtc-autodiff-cached` jobs 4–15. New queue log: `outputs/full-vtc-autodiff-cached.log`; persistent cache: `/tmp/boldtailor-jax-compilation-cache`. Current work and REML queues remain unchanged until that verified boundary.
+
+## Stop and AR(1) scalar-solver correction (2026-11-08)
+
+User requested killing the ongoing jobs and fixing the unnecessary AR(1) solver overhead. Terminated the cached full-VTC queue and both REML queues, including worker descendants; verified no analysis launchers remained. Preserved all existing results and both user-edited notebooks. No full queue was restarted.
+
+Implemented a vectorized scalar restricted-likelihood solver for the AR(1)-only variant, preserving its noise model and normalized variance bounds. See `reml_scalar_validation.md` and `reports/reml_scalar_validation.json`: full session-11 validation finished in 38 seconds with identical HRF winners at all 1,750 vertices and likelihood differences below 5.5e-12. Other expanded variants still use the generic solver. Future restarts must use fresh provenance directories because implementation fingerprints have changed.
