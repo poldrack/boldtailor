@@ -105,3 +105,11 @@ def test_python_only_checkout_needs_no_rendered_notebooks(repo):
     commit_pair(repo)
     (repo/"experiments/hrf_estimation/demo.ipynb").unlink()
     assert sync(repo).returncode == 0
+
+
+def test_ci_rejects_committed_rendered_notebooks(repo):
+    git(repo,"add","-f","experiments/hrf_estimation/demo.ipynb")
+    git(repo,"commit","-m","accidental rendered notebook")
+    result=subprocess.run([sys.executable,str(SCRIPT),"--root",str(repo),"--check-tracked"],capture_output=True,text=True)
+    assert result.returncode == 1
+    assert "demo.ipynb" in result.stdout+result.stderr
