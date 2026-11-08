@@ -79,8 +79,10 @@ def test_pilot_persists_paired_scores_rho_and_whitening(planted_runs, tmp_path):
     import pandas as pd
     runner = importlib.import_module("experiments.hrf_estimation.regularized_pilot")
     runs, library = planted_runs
+    import nibabel as nib
+    brain = nib.cifti2.BrainModelAxis.from_surface(np.array([4,7]),10,"CortexLeft")
     rng = np.random.default_rng(88)
-    runs = tuple(replace(r, signals=r.signals+rng.normal(0,.3,r.signals.shape)) for r in runs)
+    runs = tuple(replace(r, signals=r.signals+rng.normal(0,.3,r.signals.shape), brain_axis=brain) for r in runs)
     runner.run_pilot(runs, library, np.eye(2), np.arange(2), tmp_path)
     scores = pd.read_csv(tmp_path/"scores.tsv", sep="\t")
     assert len(scores) == 12

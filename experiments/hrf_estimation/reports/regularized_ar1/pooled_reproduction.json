@@ -1,0 +1,26 @@
+[
+  {
+    "session": 11,
+    "evaluation": "transfer01",
+    "same_candidate_fraction": 1.0,
+    "max_curve_difference": 0.0
+  },
+  {
+    "session": 11,
+    "evaluation": "transfer02",
+    "same_candidate_fraction": 1.0,
+    "max_curve_difference": 0.0
+  },
+  {
+    "session": 16,
+    "evaluation": "transfer01",
+    "same_candidate_fraction": 1.0,
+    "max_curve_difference": 0.0
+  },
+  {
+    "session": 16,
+    "evaluation": "transfer02",
+    "same_candidate_fraction": 1.0,
+    "max_curve_difference": 0.0
+  }
+]
