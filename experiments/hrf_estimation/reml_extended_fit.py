@@ -63,7 +63,11 @@ def _select(runs, library, settings, common, variant, mode):
             terms = component_terms(runs, candidate, common,
                                     separate=variant in ("components", "combined"),
                                     shared=variant in ("shared", "combined"), mode=mode)
-            results = parallel(delayed(fit_components)(terms, f, settings) for f in range(count))
+            if variant == "ar1":
+                from experiments.hrf_estimation.reml_scalar import fit_scalar_components
+                results = fit_scalar_components(terms, settings)
+            else:
+                results = parallel(delayed(fit_components)(terms, f, settings) for f in range(count))
             for f, result in enumerate(results):
                 value = result["criterion"]
                 if value < best[f]:
