@@ -234,8 +234,16 @@ def _fit_features(runs, library, settings):
         prepared = prepare_profile(runs, settings.get("rt_mode", "amplitude"))
         losses = library_losses(prepared, _parameters(library))
     jobs = int(settings.get("n_jobs", 1))
+    runtime = {}
+    if settings.get("gradient") == "autodiff" and settings.get("compilation_cache_dir"):
+        from experiments.hrf_estimation.autodiff_runtime import configure_worker
+        arguments = (settings.get("worker_memory_growth_bytes", int(3e8)),
+                     settings["compilation_cache_dir"])
+        runtime = dict(initializer=configure_worker, initargs=arguments)
+        if jobs == 1:
+            configure_worker(*arguments)
     with parallel_config(backend="loky", inner_max_num_threads=1):
-        return Parallel(n_jobs=jobs, verbose=settings.get("verbose", 0))(
+        return Parallel(n_jobs=jobs, verbose=settings.get("verbose", 0), **runtime)(
             delayed(_one_feature)(runs, f, library, settings, prepared, losses)
             for f in range(len(runs[0].feature_ids)))
 
