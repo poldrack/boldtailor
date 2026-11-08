@@ -72,3 +72,25 @@ def test_whitening_diagnostics_detect_correct_ar1_filter(planted_runs):
     diagnostic = api().whitening_diagnostics(noisy, np.array([.6,.6]))
     assert diagnostic.after_abs_lag1.mean() < diagnostic.before_abs_lag1.mean() * .5
     assert len(diagnostic) == 8
+
+
+def test_pilot_persists_paired_scores_rho_and_whitening(planted_runs, tmp_path):
+    import json
+    import pandas as pd
+    runner = importlib.import_module("experiments.hrf_estimation.regularized_pilot")
+    runs, library = planted_runs
+    rng = np.random.default_rng(88)
+    runs = tuple(replace(r, signals=r.signals+rng.normal(0,.3,r.signals.shape)) for r in runs)
+    runner.run_pilot(runs, library, np.eye(2), np.arange(2), tmp_path)
+    scores = pd.read_csv(tmp_path/"scores.tsv", sep="\t")
+    assert len(scores) == 12
+    assert set(scores.method) == {"pooled", "shrinkage", "surface"}
+    assert set(scores.evaluation) == {"transfer01", "transfer02"}
+    assert scores.r2_task_partial.notna().all()
+    whitening = pd.read_csv(tmp_path/"whitening.tsv", sep="\t")
+    assert len(whitening) == 24
+    for path in tmp_path.glob("*_diagnostics.json"):
+        d = json.loads(path.read_text())
+        assert len(d["training_run_ids"]) == 2
+        assert len(d["rho"]) == 2
+    assert (tmp_path/"COMPLETE.json").exists()
