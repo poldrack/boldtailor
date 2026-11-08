@@ -1,0 +1,17 @@
+session	unit	rows	methods	hashes_verified	inputs_match_ar1
+10	session10-amplitude-fullbaseline	10500	canonical,librarycv	True	True
+10	session10-amplitude-parametriccv	5250	librarycv	True	True
+13	session13-amplitude-fullbaseline	10500	canonical,librarycv	True	True
+13	session13-amplitude-parametriccv	5250	librarycv	True	True
+14	session14-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+14	session14-amplitude-parametriccv	5250	librarycv	True	True
+15	session15-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+15	session15-amplitude-parametriccv	5250	librarycv	True	True
+16	session16-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+16	session16-amplitude-parametriccv	5250	librarycv	True	True
+17	session17-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+17	session17-amplitude-parametriccv	5250	librarycv	True	True
+18	session18-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+18	session18-amplitude-parametriccv	5250	librarycv	True	True
+19	session19-amplitude-fullbaseline	15750	canonical,librarycv,reml	True	True
+19	session19-amplitude-parametriccv	5250	librarycv	True	True

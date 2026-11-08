@@ -1,0 +1,1122 @@
+[
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "f2191747b8a136761831c88212667491e13a3def34421e6c6ac4d56ff6ab1475",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "6b45540e7604f04c27b90e14626c45483906e5e811cef5efd937c5af88a405ce",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "aeec1be71a411b5fda43386207c40f1b8b0dfcc14d6c63da1a6deaf3ffd4c0df",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "698bfcd3541eabe5c84378757efbd1ec59df993c8a0891aa9166b736b6a53a49",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "9e2c23f7da1305e0fd802b60cc37f80116f94f6b8e5ddfdb1cd9787a4cb37fc5",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "5b335d06539c573b6cdcf798fc2741ab69a8eb8723cd9cc08d718c8adb80b709",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "4d57a6e710a5f56bdd887e329a6654b6e9ac7cbfc05d91106e8ee3697bac4955"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "f2191747b8a136761831c88212667491e13a3def34421e6c6ac4d56ff6ab1475",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "f0f06364b92c7c375aa62dafd8ef18eecbc9d100a55dd5ffa1479962ecbd3471",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "1162dcd5ec2bff5e56e17981839667c78c4519f4578bd2e578c09cb412f22d36",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "6f675b625e57102f161e8551eaee0d3d650c92e90f30bea7a8bfbff53c49f3d9",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "0672cdb69e42682aa3d7aa27ca4ef945c086af77bd9b0d6c23c8624f6055a4a9",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "1255d2dff2a601759521ce05c5f5e779110280efd95a17e51fe3665d79ff63c0",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "9aa62f4b6565c3c3457a42a5ef4809b39f28313eec55e46709ee8896dff5adb9",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "3e6bd20a6ae0cfc1349e317a594d054f2b97481b98a4c66f7115a3d5b820ba88",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "b5a8434563a71cbcc4fcaec8191520486a6b656f4fc6d05fdb9c7c2ada450cec",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "25927883a7e741768c935b5254fd809f11e22dc3d15949314b14206f71c67f90"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "f2191747b8a136761831c88212667491e13a3def34421e6c6ac4d56ff6ab1475",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "ef67fd046fcaf90ad8d6e54ebb671632f350ad6de542c4580e7d3c5ec84ede59",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "30667315ba6a752a25f6aa4362596b3ff2920f269e7c177e9b69b6a78055ed30",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "a9a8ab4503c14cce1cdbc1917956878f2b7fa7d34189edb16b4de39724417f7b",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "c4d913dca3f72fb092bf6bced26ffab24a836d09938241a1e852a0ce7161736b",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "edbade5898471dac7bb7b4d74b4b3e5f30974119576f510dffb2c207707bcc60",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "b90f3ad8f0fe6aef7c130c46039c9e5932d6311df62bc7e8d4757a07f478f164",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "15ca7a9585439cffbc5d596163a2ce01f5793728f9b77724043e0623558ed75b",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "90294c12f6508d65d138c4638cb3a7ae774e33fa3e679c4856b0760355105a26",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-fullbaseline/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "043585e8874772d083cb029d5302171b6a1b72d14743e6c17c8188d12a7538db"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "f2191747b8a136761831c88212667491e13a3def34421e6c6ac4d56ff6ab1475",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "36395e178235f653a69259abd655db3bb8f855a1076c3d8a99a02e72616dd49d",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "0e4559ab11a5b13dab3e0e0e1ef2214ce224ee3e59f9f11dfb191d17485907e4",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "a9c8737a866bd11cac61b4c5bc3f31ba7a7aa0b108cceaed091d912d9d905e3e",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "c3dc583ed65d3856989581254a8683317f759909aabd6e38912d294fe3cbb065",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "f1ebcef1d10546a672d3a40a820b059ebdc79286f8d19984edda29d2fa1b1313",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "e17e18c07badbb526461ef6aa1cf2258852cf75856c6698a9cbfd8bbc07f7018",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "b85a1ed6a2b1202256e75f055a292cdb264610b0eb1b88735693c0887af2a5ab",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "a6e4a6f6054861ab07d2d3cdfad5aee08b7ab458996a26ee6a4e6ad2e6451f3c",
+      "outputs/full-vtc-lbfgsb/session11-amplitude-parametriccv/sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "2a47c104800f30f4ccc910aeab80cacb12d7d262da12bdca810ed00f010cd2d7"
+    }
+  },
+  {
+    "session": 12,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline",
+    "whole_directory_complete": false,
+    "implementation_fingerprint": "0ac3855917ceab8c459b8fc387b6e7a85cebbfab71adcff853b7e59e858ba7eb",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "89556eb419bde05aab890dbbb98ad51b88aee1a0e8bf2feaf34be5595ece0669",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "01bfb9f2feb3eeb6db65e798469c8dcbc4314652dc0f92c26ae7b0d0f1ada801",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "667d202d1ba104c6ef8e5d0af2faf4aa24a4512039b11b5d78baa7f684a1852d",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "d401db02cd512cfab0d1c592a75033b7394d87e1b6a963507697a6ba85ffe1e0",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "43f35d190200279715a4503f53ff678c9477c558bda3e3d4e9b0a7e424c8e6f3",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-autodiff/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "73057a2f87cab8bf3105c82d51f3224f4569d2f4d5255e3f473fb391e177f136"
+    }
+  },
+  {
+    "session": 12,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "cdd94ae0c32babad10fdbaab1d747b5b66af2a2d10c768c26077a965863bf30d",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "5814f944510fd9ad85fa0f7acac4fbf021312fc2dd62fc8daf92cbbd18a078ce",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "da8a779f0d65583d847994d3bd5e99700b8513e32a9cd52e7e5512f1ed92ac72",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "090b74504e78d79132918a742dae4818ab38fb5f68c1487cbeae39fc218444fd",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "95c020cdcffe832c86c6ec321df7ed02b6f8cdc0440e0dbf9e3a40b3eea93723",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "cbe93f55aae6796a115a754279f1647ac25888143285b9c999d2adf532e0549f",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "c2a02cbc09ddf936bef52721e43fdf6e91b70b01838addd47f580fd3fdb72999",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "de9f79f515924de7e2fd34691525332a36321515391cf1ff675468499efd8530",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "1f94ea2e59524dbebbf771fa2ac014b9d61d8de7ad98b4a512a3006bd54ce1a2",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "ae956e4d04383098952ee2a56a48a20aa7555a4d18e104d700438948c3aee791"
+    }
+  },
+  {
+    "session": 12,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "cdd94ae0c32babad10fdbaab1d747b5b66af2a2d10c768c26077a965863bf30d",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "c8808aad0c935a1082647c06da128fd009ad2bdcd1ad73e7c1305dbc2da6137a",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "4de622b59ebbeee806d8751018cdfc5a781294472243692b0e2cb0930cfb3ba5",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "06882abc48e87f723ddb121b188dd7107f04f9edf48fddce028169a3f55f968d",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "fc6122af68b606e043b915cb3cf15e6c1946982c946fcec554f8ba6df2ae27a1",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "3f68afcddf45b27cbf69a7e2ba6898beb8b4e5bd72a2df4da5bb158569ccf85a",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "88cc2e11841514d66ed806111adbdeda55b57570161228801fd56f1ee5410158",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "187cb9a4160547ebd0b713e0b3464611fb1d968a9cff0ae981288d9892d860af",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "bd3a539aa542902ea7510451e7faf93ffcee8ba190de4c15a8927c0458881877",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-fullbaseline/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "53e60bf6d9260c08834361b229395431fe9742b1c8d72cf2605a9fb3d531586b"
+    }
+  },
+  {
+    "session": 12,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "cdd94ae0c32babad10fdbaab1d747b5b66af2a2d10c768c26077a965863bf30d",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "c3841ddaa99d0d0f8336e43f93bff2bd961d332828d95fe041e21deddc89537d",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "cdb26a64d2d4a53cd712fe1d9ad51e59ee3064c1ccfb328b77fe897ade6ac4e2",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "ea27b8104f00fcca9a259cd84d834b5ac2fc7c60b6000c850157b2a7d5e8345a",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "dfaa7800e368efc765513df3508b1a785840caf9d7fc850d9b689a5ec7b2453c",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "4b138784f99669840673a80f6dd80b1a4085f611c1de1bbe235a2cacffd59f87",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "672b3a5c62d044876b91858312fd9a4ffb332c906d19f1b7eb729af455b9f5ec",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "997d6efae1cff42a422ba523507b4dd2fddab3d268bf7cccbcd7a52be9aab256",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "99df623fd476020467fac0c319a606388f5ccf10c5a735604b2b1cbcc2625760",
+      "outputs/full-vtc-autodiff-cached/session12-amplitude-parametriccv/sub-07_ses-nsd12_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "8b845839d64081fcf80dae10c2cde03146de2d47dbd3e6e1ae512c63435d24f9"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-reml/session10-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "c947d74520c6faccd98c6dd2acda0c2b20f3cd5fefb45e1f35b5c0131ed14944",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "db58b49d8490cf272c081f925f495c5e8fb41b20b695fbcf2668fcff83518d56",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "d9dc6436903d8054f7ada9daa425c628a5f75d9132bd54ed0a92ea25259a8b11",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "4bea41eaa34e5a544b5d095af7dfcea0d9eba9faa646236dbd94fc40f35d56fc",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "c88947f51190e85708ce543fb5d6f1c2a2d67f1535d41045c8f76ddee58e5464",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "c169dd9fb99e51551ae8f3a8e815854dfab6104671fc89193d663342e8f95e5b",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "58c1fdeb476acd4ddbf93d0a60e66415658578a48b370e941903a475e5ae28ef",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "dd922b657c9c1c4b0a2fbe626d450bb03d14513d70bb9b8282d3290cf2f48003",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "779b6ae7a44956323c6b1b19274a026e9435e1626b45b49bf40eb6d165675ccb"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-reml/session10-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "0241c940303e5fad64a649961432e057b450edccd01a602496261bdd881e54af",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "3ba7452ff7a7d5e14b58cc1ddaa105217bd59446224e059190c3950e7cd0e2c0",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "40d9e533f0985621214e0ceacf592969c7f211e4c5f7b5687fa0b5fe50e24e70",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "e00b73a0f7be46b5a0a15ab263635fa366214a443c68890246d948e4f5b97700",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "f485c78e33f9430d460c184aea7385f2e0f1f82b8e920d5ac6e2c44d4b3226e8",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "6d3d9ea5d977fdc1f12057681866d25bc06ddd49246892f1365f0096a238787f",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "18a1c72f629b692a8a4cc084808427b2389d505bbffb4659e8f8e0ea3fb5941a",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "77f50ee813051254834ab35b79918f8c97a4d7b234e7b4f671f34c0af7d8b7b8",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "4fb5f229fce408bf17bdd3f2935eb4e857b50769b5aca16d5bf9c24ecf7b7972"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Separate components",
+    "source": "outputs/full-vtc-reml/session10-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentsinsample_hrf.npz": "dfffd4fbe574d390a6565efee0d668829c64499bbb0c952069c75fa1d6d7560a",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentsinsample_diagnostics.json": "45cd7ac33ffc99f6d0b612d84dff0ffb50bfb7b4564574fe6e108703c453f80b",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentsinsample_runmetrics.tsv": "85fb7f457d6b919549799846fbb7a2651bc6787849cb5ec2640df8dde92decfb",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer01_hrf.npz": "3b454c6133ab566074984a54e965871ceeb09d43fa0e695f43eafc739226cbb7",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer01_diagnostics.json": "88e9ef57e3c783e1e988833455fd4e0ea71de4d7e0d06969cb019cc997ba0d5e",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer01_runmetrics.tsv": "aca137438b6d73329523dcf99c111e079dac3be93c853ec62bf219d41b72020c",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer02_hrf.npz": "edf9a25e612d196ef124b52a1c5e81ab907f15455a5fadd7525d710a8dc3d296",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer02_diagnostics.json": "8163dcbfc4463012adc110d4cf9789188ce31bcffc9c6fb749d819125fade806",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcomponentstransfer02_runmetrics.tsv": "7f506c761a582455a2758d090eaeefce1ab051f545134296d2171b1acf7d4a06"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Shared effects",
+    "source": "outputs/full-vtc-reml/session10-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedinsample_hrf.npz": "c6f0fddc8267973eeadcbb0851b704a83489f5e3d2d94c069cf075d1143b318b",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedinsample_diagnostics.json": "cf8148e1bc0f0af9aa36dec064bd613a77f5bf294ced28deb659d1df3cb9ca91",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedinsample_runmetrics.tsv": "5720a5c01adeec36ce5dd4ccf159723fbba32fa9cee54fa7da75ebe559124b74",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer01_hrf.npz": "2e6d43e766b4f0b24f27e0fc11ca2ecbcaa71ef3d1425353ab2bb6f3170bea83",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer01_diagnostics.json": "fde3419d297778183dd4970716e4c82df9df238c7005e6c3519c2fe077a2882f",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer01_runmetrics.tsv": "5f26c1bd29881f6162979f8056175785342bddeee5154ebcf3b3bf72d9e20899",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer02_hrf.npz": "7a96b54f4bdf65d1da9c0d03ff5487d1f06f5eb45cb9bc6be50ffac8a33aebd3",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer02_diagnostics.json": "5f93314e55e93b4a1c82de897a61eb9c83305960ef643797f239ac3bb7383cf4",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlsharedtransfer02_runmetrics.tsv": "6fd2f93809e356dc70a55fe2627c7fb66da0bf86166d4125ad65a255e897d698"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Combined",
+    "source": "outputs/full-vtc-reml/session10-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedinsample_hrf.npz": "8655877a0a375294229445ba3d644b38e12526b78259ebed26958761c60b3475",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedinsample_diagnostics.json": "a4952c1788b920b657da6c70cda4aa27456abf9a0d5943e3570df3c9779e0a44",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedinsample_runmetrics.tsv": "2ed30b75ff9bf2d277ec6e5cf482b8bb8cfdaa65f8a8c479814cd49abb32d098",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer01_hrf.npz": "94d21e12e2cfdfdf682bab4c6e47c9a1373ed6412c3b6f1ebcfe420710a0d3a7",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer01_diagnostics.json": "7cca57df05ab205b6def1927397861c514fe9e9d81af40849a2d5f8fe0fc269e",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer01_runmetrics.tsv": "717b8af8d6568bbf41e1124be29d2ba122efb36ba00041efed73c43fe1b9a833",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer02_hrf.npz": "a83428d4f703550fb3daf8d36784d1853165dc5ae1c170bd3021353e7876ee35",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer02_diagnostics.json": "c4ffd5458a3c4a99c05a7a93c4420898cb5b443dd0e1a3790a5ba0d4462d35ab",
+      "outputs/full-vtc-reml/session10-amplitude/sub-07_ses-nsd10_space-fsLR_den-32k_desc-remlcombinedtransfer02_runmetrics.tsv": "0be8e21c98754f509f4920656433b1068859c3a5a8fa4670d1864b1fd87a4543"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-reml/session11-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "b8440dee69dc1ccf756cdf9fdb7ab7ef4931eb90b110499582b9197a4cc8098f",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "90e26d7c164f1449db5b8585971a053f5bc53e01c150b1e612f7fbb5313b83a3",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "f0ce743c0473d05b8e2662dfd411e42b7030d90d8449a5c0d386ed2d93addabf",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "fe3e0c295259c01878e1692ded0dc81226f1da31a16dfa5cebd4efd8a8070055",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "043d8531c83c4e36577beda2654f402e538c9b859e770e5593f13d8ecd1cc02f",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "276c1b2a346e70311e6a4ab03fd33a71705ddb5a0a1c0a2ee7d7365a84e26d46",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "5eae18f25788544cd9071aa7f99955c9afab3dad1522eb3f5a11197a0139dfd1",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "ec27cdc9fee8a086d49a835e471a684649a989cdf2d0be0256b35cba16e25aa4",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "ba7356938e499d91b1a803051dd55bd354049c7015e67df1643f0d6692106b68"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Separate components",
+    "source": "outputs/full-vtc-reml/session11-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentsinsample_hrf.npz": "541033582ec843d1cc5a4c70d325a4f80eafb4564cae1810efc32b4fa9b2bd2c",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentsinsample_diagnostics.json": "8fb6c84026127455c45c0ff8f8283310e9fa12c10cb240e2effd0b5d5abc7241",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentsinsample_runmetrics.tsv": "543d2715199fabe9e5dbf2881119237d092a7f148251b80619736e38718a4192",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer01_hrf.npz": "2e42ea3df25a65e49b03b87bda91addd0bac4156c2d8082336f1565098eb2a58",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer01_diagnostics.json": "fff6bb6a26e188802689732225de6028d9f2190e9c87f59a032fee80b37fc8c9",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer01_runmetrics.tsv": "297c79d12c68b52d380387de904bc7236a0c1ee7391cdf1c66d387d77faf2fd7",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer02_hrf.npz": "e0fb0fc04b045c96dbd1494c347d3bcf27a9dad6b54345ebff30337ec31129c4",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer02_diagnostics.json": "76f56ec7a7e36a67e70a691ac21cf5e56b2b138fc784709ff3fa42d26f12bfae",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentstransfer02_runmetrics.tsv": "12036ea2f5a158425b3e3e7b0239d44dd6d9e7b13695f21b7c33e63fe1458d2e"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Shared effects",
+    "source": "outputs/full-vtc-reml/session11-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedinsample_hrf.npz": "ded6183968fe9ed3c10655820830b26ef61e2ee60a65c77b21c23dc7f779c1e8",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedinsample_diagnostics.json": "35cb543b67f364ee41954d230b7897b9f030639e35a6198aafc1b932198fb15f",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedinsample_runmetrics.tsv": "2a6be4d118b452708e97f7b3b615339a8b67c6181a1002088da25281e87c8f4e",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer01_hrf.npz": "4418b31e4068b40eaa45e816bb2f9a40c17a2d9c4a190c69341ee2a5dabd9ef6",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer01_diagnostics.json": "9163adcbf2b0630dcbc136eb287699113fc45b35dd349132072b698eda755956",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer01_runmetrics.tsv": "5d55df79707a4645b319ee4bbb75eb24e0145f4a937ece26833b7b0ef3e53567",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer02_hrf.npz": "508bc8a5adad5e970bde39be8039d325d0dc7238d5aabb6562199c16bc9ea0d1",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer02_diagnostics.json": "c98720db8227ca8bd3232e81b1184007dd0e77b3184c5a84101210c5b2ebc494",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedtransfer02_runmetrics.tsv": "ba1a6bcab06d397c8b06fd1028227e45f31d5f2571ec510e813a33fee6643377"
+    }
+  },
+  {
+    "session": 11,
+    "mode": "amplitude",
+    "method": "Combined",
+    "source": "outputs/full-vtc-reml/session11-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedinsample_hrf.npz": "916007422441cb53bda1d279794303c125f955aa548a39083b11dbc06fbf3bcc",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedinsample_diagnostics.json": "086f8f78d1bf9e9e1c8dfc5dfc3717a088bf70d68df471a26b52a2ed51d048b4",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedinsample_runmetrics.tsv": "a3daff9fa09eb1077543e51489371af6c93778c013342431237a1f0cb83dade5",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer01_hrf.npz": "ed5aea7ec39a294ee6ed4e58b414e874f122c6c8362e1e7c094cf2b9500f0073",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer01_diagnostics.json": "700dc1c809c5951bae3e3fbaef0a3709de0762e6b7f4a069eb11e4893b5b69b5",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer01_runmetrics.tsv": "c38012a91e8dfb7f0ef1cd660d72036f5df1f51fbb3deffc2e571c331cbcb2e2",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer02_hrf.npz": "db3306eb6b51382e412e6e37aec3a3dc54905581cf0d60bc061f9c6ca2eb5fd6",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer02_diagnostics.json": "3645fc66836a0c740e368c4db626b4c071c12fa3145e5c51208d966d6707ae8a",
+      "outputs/full-vtc-reml/session11-amplitude/sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedtransfer02_runmetrics.tsv": "2a6f98669dfbd7ef1d8dba0bf4e8c0d299684a7082d61910849bf74612beec1b"
+    }
+  },
+  {
+    "session": 12,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-reml/session12-amplitude",
+    "whole_directory_complete": false,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "60237a4cf9afe8b4df32412254fa94eb7d25cbf6b13a796be566b5333766895c",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "cc4f760c3e87b07a314a3eba6a09564766b729ccae4511be19391d9f02b74673",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "210061e1f937da1bff6859638ae65b12965aba2e7346bfc6c25b771ea7835be8",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "871266d51096297109dfc29637a87d01bae5ac6d2e216d7f353045d5ee26bf94",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "e44ceb0de171ac1635b0d4768acbdbf3e197f64c5cd4c2c070d92e610727cc3c",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "13508d6d5ca8bca52c9b67e38028740fd070daddafd570c75f5bfdf3d9305c5c",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "6f1069cecc40b4915a75e6627e7c46deee959189337eaa5337fe2c02d6556259",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "e36a7e207c857b6ea04f24f5b14820a68008b6a46525c5c8d0643eac322b5139",
+      "outputs/full-vtc-reml/session12-amplitude/sub-07_ses-nsd12_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "7e58f8b7585362d013e2e4c2d02a851e546ebcf14cefa2208967b8bc2d9f565c"
+    }
+  },
+  {
+    "session": 13,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-reml/session13-amplitude",
+    "whole_directory_complete": false,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "067ca06e601738bdc376571d53f85b9d9c10aa923a9ef24053bdd878f62f0ef0",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "0afdc45d7786b4b64534f7c15655ba542a5f53e12e8e62a415f602a311401440",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "08a61769b4ab5d28f072cafdf4aa1f7d68883b63c06f6b526ce07e23b50338de",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "40a50a0354b4ac0748a7241bf2c6dd3de9568640400c981221ea543efdce7a02",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "ac0b749b1cd75ff609e6e33cade76b5b8d4dd664113d0aa7db69b5100f53a7a0",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "48eb4fddf48b31454b5a358632a986b59092456bff7a7a05bca6852e236dc18f",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "5dbd49dc21cc75682c934f9dd959eb5fdb7639d6b76d0b8dfc6637400436ff05",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "3b76d7b614a7209fa136b4f5fcfac92ace0030427e394aba8e175d4e281fc532",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "ff690c760b225274af122537854cbb681fc5f7b8fee80da64e52a83aa5c1861b"
+    }
+  },
+  {
+    "session": 13,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-reml/session13-amplitude",
+    "whole_directory_complete": false,
+    "implementation_fingerprint": "536ebd8160e641d6cd6517a32d7ace5383dd182ddef0c546ec1f1bc59b6a6aaf",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "a70d1d8398876a1564f34453a2357b452a1a107c491239f1a201f3fbf13addca",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "712621328e65e552fa3dbbcaed8dd3a6bb480cea6b96bc427e3f23501a23928d",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "c1b80514637f4ee5b3486b10ece6a9cadd866d78ae856e85a5db151aaca708e2",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "037e4a2881f0d71f0adbe61117da2fd85b55a5b784e57da360659b5bcbca0135",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "3bfe2f903b5c2d163c4c1a71fb5b8b7343ebaaf99d8fd539068ffd705004d740",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "01b4a48d9aa59c8c68448808f7df6d5e393eebc8053825ca813f5dbec3d5cb5c",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "8ca7cdcad170b8e9c8204534dc08db80d1af0a9be92bc269a16b891e6d208540",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "2efcb0a6cb552747787c5f5e25476ca2d440640eb2199f50b2a6f76ca8ae280b",
+      "outputs/full-vtc-reml/session13-amplitude/sub-07_ses-nsd13_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "8a4cc7594e0234af3f140e067c4198d10d559cea7821ec5a49dfdc009a7c006e"
+    }
+  },
+  {
+    "session": 14,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session14-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "529300c4926fc35b5d9eb47d08d790fc987e4166fdd0961ba346b2b3959d6e06",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "829644900d3a1d8786c3f4ec43706a91b41f5f36bfe3102b1311221fe39806c4",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "72bde1adf64b6478e0c43be62933c58310b51221d17245feb404c3b58239cf40",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "2f1312376de5b86b13db43365cece592c9a0a22374af6de431c3484ffbc5ab4b",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "166c0c0966b1c8e9d75976023386de51182b50d881343fa47f749e10bbb1439a",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "1239e23b84dc64dae5138c2fbf207d8dd52a8c94cd77888b8e9334d223e79f97",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "e2ab1fc8ec26667ec3607dfb6a9f12a7b13e36e15d836c3fbc9a3adf923bde61",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "994fc9d1c8b8c298befd3d5288ddca7ef0cab5dd3263a7148a2e42af9f49b01f",
+      "outputs/full-vtc-ar1-scalar/session14-amplitude/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "6699c0b39f1447f7c8acb3922456c5d3af621831b4ae3750f0d323590e991896"
+    }
+  },
+  {
+    "session": 15,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session15-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "1da7ede07444cb22f2a72f923145711ca09cd98fe6381c0d58ae0362ef04d1b9",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "11420868792a11075da80511f604b642fbe3da10cf56e2081e6d9271f8deb6d5",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "a8f7452ca19a2ae67f0eddf7a2966013c3cc3e6ce8ead7d6a139027f782e771e",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "988996384a39ef28ea34054fa53b12fd9b1588da09cd3235091c59fceebe0e20",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "c39480db6169e6410787a097ed5a490c987b2feda38b4d862d50839c78d7945a",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "c56da7dc5b5b0c9f3aa027cd417d2e70687e1668dfbe2ac47501cd6246257323",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "6889f92b401bd073c0a34f670ab638207907d5f58381771c199be2c7e79a4be1",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "28e7e6dc9191e7162e5f7fa36bb66eb801ec7d8b5bd37a932d0e71480187cbe1",
+      "outputs/full-vtc-ar1-scalar/session15-amplitude/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "f332df7d84bffbe5b780ca8195870a15fecf1103fef0cfa17dc53f47d279ea68"
+    }
+  },
+  {
+    "session": 16,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session16-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "6231b135cf875d46a2af1605d614968caadba82b64a8a17b82991d0690525cc0",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "dc2912d30ab3ecc71881b4ec30e64a2748e28010ce1b76d6fe170267f81568f5",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "9a167533cdd387328824f41e82adeb00cb3f449455f529d76618f6f52c1b6fef",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "633c6c173cdcb53c813c7ce89d8268cd46fb05b7d6c17aa78137c93645b33080",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "8be486bba2fdfb44f4505911d6de8ed97a4ec7c3bf611ba163df18c95ebe845c",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "981c9a3aec3780fdf3dfe4811fbb1247d2038924fb04f0ab7d88110fac8fba3f",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "21d085ad3d4f5b2e55cd9750ac7dde72a4af18310e5683daed19856551652763",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "69a27fe8669b31388e49ee79d016837a7e28e0659d3d215626ac445a9d4ed64e",
+      "outputs/full-vtc-ar1-scalar/session16-amplitude/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "8699ab685de2195b016e57e51f2c52d83bba686c8540033a6bcdae07d83fe2e4"
+    }
+  },
+  {
+    "session": 17,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session17-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "166fed5311ab656cc3a6aa08e2fefb076c79f2a07f9ffdde712aa44b2e330f78",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "b4df967ea82fb284c469fa0ece452838e635b9ee0486e047e3865049983d2ce6",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "ce6efb18f67344e9fa36e312f0c37dd7e56f45b2be7b7cdb927e3d748027697e",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "d0f4de5ce935c577d89d26abaa0621149b809553a6249e68d28c8fc3e749c039",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "a7522e6cd698b4bbaf16e5a35e18f8cd99d4080f6cf7207b6f5a7de6f3efb138",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "3cca877ab4a4b161f55679f051be5b2c6a10a3d1e84149a5748083a3d7923c46",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "21025560547688ebb0a5b9370240c0ca5242d0391f1a5b4642fab0b498807f8e",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "e2f0f4941afce1ebd8c908b9c170b1eb94021cefaa87efe0104cc0ddb9072bc2",
+      "outputs/full-vtc-ar1-scalar/session17-amplitude/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "fb3c60506d90855d0fbba183e59d6767094eeae21172264f4edab59f210d13e2"
+    }
+  },
+  {
+    "session": 18,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session18-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "014e85ff92bfb4769e46bc7e0eecf8ea3427fc4e75078d852ad9524c8c244fc5",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "e9f332e7247ee9c6f677e08b7d37689a8be130ba86846dc9e8bb320a42070b17",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "b8d676f936a9018fffadce15636dd8b62758ff6ccf69bdb4df8497e510a7015a",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "cc56778a5140ebe61d138d50a15b9bef9fc48eb550cf15d9fad18ba442c63c9a",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "c842560f7fb08ee0de136847056dd2ea0c528299ecb50e7353aec978d2ed09e7",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "f144564fdb8112ed2553d20cd56144ce5ba04feffdb628e1b5fd45b91d4e0380",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "43c922b71e641cd15ddbc1bb61651d1163c49ed2e3980654c9f40e7ca6266dbe",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "92e9f1547f4607f7679e6b5c30161e7410b3c8040d36aabb04ee92ea2f3d99aa",
+      "outputs/full-vtc-ar1-scalar/session18-amplitude/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "ce38688493d592ea1f55ff63fb9e15b4b37153b355257d010606bcd0128e19b0"
+    }
+  },
+  {
+    "session": 19,
+    "mode": "amplitude",
+    "method": "AR(1) REML",
+    "source": "outputs/full-vtc-ar1-scalar/session19-amplitude",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "1d9f09048305fdbb816448ea75a7cb0e5ca3dc8118671e4bb485145815452813",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1insample_diagnostics.json": "67052d2c921538d6bc809dff8f2df0dbe15151fa62ed02dd9975260d92fe4e54",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1insample_runmetrics.tsv": "5ed680905464b8282dc6062b19208a9ddd4449596561f0be9c3781121f9b1bc1",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer01_hrf.npz": "ee713d3360798d63298c0a07bf5503387a303183cb9dd7474de3f1da54aa3da9",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer01_diagnostics.json": "492d44c0552a9a871b8c2b0372f27ae04563ff16ddad02fd03425aeca2cf4bad",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer01_runmetrics.tsv": "f64ac92969595f648b86c7058b542af05db394cd9eb8634007fbfb8ec6daa3e5",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer02_hrf.npz": "9cb8a1a6ea81110bfd78f8bb82f9a3b86df2853ba15171228517e95a19334568",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer02_diagnostics.json": "a23c4d188a53d8092c7e65c9e7fdb4cfb0b046ffdcd60b15517b8911882af2a7",
+      "outputs/full-vtc-ar1-scalar/session19-amplitude/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlar1transfer02_runmetrics.tsv": "21fa1e549bcaa4dc95fc99b7a7c1e283f3dae01eb8f64912e6343dcf1d4e3089"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "089b825e290dce6dc0b6fe112c1f1071efb38b627a5630e13185ac57926d37f3",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "c211fa269eb0d188243c382d6af1cd17aa7aabd9d5086b532012677f23de6ea3",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "3f75716e411d8115392d0bf8c46b669fa32d44f5816ce61e5ace1df1613d66d0",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "52698f8873b02fa8555e9463e8266b4493b6eb8953975edfdbd2a964683f316c",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "1e15d05f9a89c76fab4c899dcea1a07fe949cba68a523cb89a14fafbf8831132",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "bca9cb41b417ddfa14cfb68632294f40baaa16718aa07b5342f3f5fd1bffc5f8"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "d3fc0149410ab53db621a20278464dd9e424e7ede4378a277fa573be470fee27",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "1cbb8b27610c49456aaa50786b996662ae7431a617505bf4fb70da3a28f8aa0e",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "7e5959b58dddb057f1d69a974a15980939060ec48cb83cf0963fe7e3a03b8acb",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "11e4a516234f5c34f9ccdb4d0aab6cbb4f4f0e6d90f51385056791c93ba3e0b6",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "27dd29224414d90f8c3a9366584090b382df9671b9eb38e7ab0c6b7089eacfe9",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "b2519cb450684c410c1f0cccef920340de58b5d6d21534eca66f44b8efaa2a35",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "a6cc31e360ebe785e5f9dddd973a9f320c9f1723d29cbe5b5d0f986aca008a93",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "740aaa72a3685daceb2b2f3056d21868ee984914a7cb8bbf9b8066e24af417a4",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-fullbaseline/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "486369d3ce8993ee69892dc5e6b3fcdc1fefb0a1fba0bd513f7510fbf1025ddf"
+    }
+  },
+  {
+    "session": 10,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "58e6b011c922e9338a2fa3f4c3cd1d4321130e1500d3f25ef7706798fc1d347f",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "450028de60181d7884f73761758252183d9d7d52c944634b01ced4f76a419069",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "0faeae3c418ee7089077fc11e0bca1629f29602afae07a4ad0bcb5caf08f88fa",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "5471ad4e5f696f9073dcf03c6f3b1c19e12db2af44f14b39cc023e21f5f236cb",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "5b472d09ce6c9f35ea5fd1f02fcc23acf763ff1c355db8b9d0ce549e723bef9f",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "b572642a7637c5c6148477d96161a5f625694bd000191847bf79ea2dbc2fd261",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "5ddf36d84121db92c7d3a527ffad28f873e67fdf388e1aea6d9b01c6c650aeb2",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "52d2ea34caac49118efabc997df7374245a55e22a166df273e7b93a2f9817e44",
+      "outputs/full-vtc-all-session-baselines/session10-amplitude-parametriccv/sub-07_ses-nsd10_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "962b9d44c97e385fc04655692b051170b2f7838000854a0f68b57561b6cbecd7"
+    }
+  },
+  {
+    "session": 13,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "e97ce24493859125841688019d690712d72733e2608c17fa3fe3bc0965be9436",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "18b666c303c70ba34ea9675503eb02f78bfbae0f8663089ba88f7e824cc3a8fb",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "afd1852566c4441364e41650eac4ab89e143a68adf4fc062631c73e8d001121e",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "5f1baf955e2b013da3f3579ed6467d8a897a09214b9908c1e5dd84ce53434316",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "530ca412685b19c79bbf8b26dabf9d0843dcda4d78a991bfd515ab2551029e48",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "b1195da50c39636ef77d22996ebe4d02b29da432579a15b562b1df8db453c3e5"
+    }
+  },
+  {
+    "session": 13,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "292fc33bb920a0856ebb5e4d882744bd35c53fd97c464910fd32fe32d5ea94b5",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "ce1e3e208338ae5f116736a7329ca9637a008750637265af9bdfd83e45a09f86",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "01f6d506d5e4c0338b1024621c360245ff030c9355768612b933c1f6d365cfaf",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "35bd5339812d60dfa3c6c0357119e3afe4694de450792c9a7773b3ae4a76053f",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "412df9cbbfb28198650a0468a7c55ea7072ec22f6d42ddfbdf39d140099cdff3",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "5f322da8c0a1e9404bd7cbb8925275ae052e2fa417b3d4d6b97b60f94d3f6fc8",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "0eb7b306d5d09404c7edba8d7441d37a7999540c054d27fa042e0b90a75c1c36",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "de9769c4739a307d4e9735784641550136b90b4bdc310112983430866f65eb8e",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-fullbaseline/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "7dc99993ce92e4753c472d925644b38316abebee04598dcc97af1e108a4210dc"
+    }
+  },
+  {
+    "session": 13,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "230ec0eb5ca9326b78dde6a47f60f97f034a4e14366fc2d2b0bd70507797cc6a",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "b5037ab126a25d605924b4375f0e77de4966f87baca0a4b6985153549a060ac8",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "a3a02174e989400734c03a23e822b484439eec9ae796ff28bfb70d45aa467ed0",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "6e917254cdecd0fa7447586c5264e0cbda783b629e57b0b9146b1f329f3e6085",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "77d6df1e2e841f9f5164b48299bccd4844de3bf20c4e5df7a90061280e353a3d",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "709c784acac2abe1a47b757c9b9416ceb859e040ce1f2f32b3489fcbf297822e",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "d01b65896d5982fd24c2c15d5f2d8a69801c01fe66505729bf888a3de6d179f9",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "7685da618c2edfe56e2e78f81078eb24dfb19bf6406c60fde3334bb26fc8b521",
+      "outputs/full-vtc-all-session-baselines/session13-amplitude-parametriccv/sub-07_ses-nsd13_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "06d73d4e155b2a1f079631b82ef1e4c2b6d3014da0ed43e106c8ac24d6b189ca"
+    }
+  },
+  {
+    "session": 14,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "168b988c72b8170a89ec2d06d8cedfaf0a9994c0d00ebe467076667685a1e49c",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "1a2e02349c73a1b326df05baae959960c2ee1c318a07b0ebfa710ff1d3e0e610",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "db4d81e88c25db650723ef23136f8f2cfe16e0625a77d74869d7cc6bdb6efd31",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "99ea7b8339ed840294a82fdfd468fbdcb68bbda755af7c2f4eade0bffacb709c",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "4fa682372937b579982d3940c0c91e2a3e2e9242c64a24221fa79c084833c424",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "c1149dd422eaa66790f2ea6132cb4410ac82c677b2c314a014a05d0deb10909b"
+    }
+  },
+  {
+    "session": 14,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "ffad7f19195f49f1e893ed0b7ee6a9ba310936884ddd9f415e8d85b581271ec2",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "0d54254cebc56ed822a991ec1dd16730117989f7691c10c5c641b5040552f6e3",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "cb87fe766d28de2da684aa5d138d4c0f836a91dc6adf1eb2f9bc64b4001fea16",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "59dc1b9e624ee0066be771365555ca85c159bf7c2ec73026fabf36be0bb6bab0",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "e8fe983af29d3cddfef5b9535346af2f0d84ab9d394bfd6a1312cfef33d946fb",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "8547d077e0709f454cc8967a3520228dbbb8c5e1f77db99e5fba09173c35b13c",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "e876078fc61c1c0a400ca9aba803a5d96f55b9fbf284a8fee0cc1f62e705a46f",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "9965c28e4bf72c04e7c9c01b64758a2a8cb8a726e7c6722f30cc2561c84c9989",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "c6d76058c60052f8f707446dea06678725a9f7c81e5c822d9f2f80d21a4c5127"
+    }
+  },
+  {
+    "session": 14,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "727e7ea6a64bcd7325c704f8b0f0a07dcf2e7c123d9b6239d0ddec33711bf6c6",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "cb590c8ff8570c3959fe6e16cf6c4141e6c12ee625240f49cc1eb65688cceb84",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "7061c4a4bb43e9d32ee1f8b746c38c3647c9015be6aa062df85a9f2679092c92",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "d02c2642b72f3bbbf6b44154ca3b47befaca5fc6c7235740c217c13f66218567",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "23c71232df233943935fe37dfcb1cd6cccab7f61e18309eabeb7cd65c7dd8e4e",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "683201d23d4cae46ea0794599744ded08db2bcc02d029ba7ff68f5d8d16070aa",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "1dd74369acf9582607b4627b26822a6a2c125691b8d906651aaca39e4cceff5f",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "c95b1171979215206eb149ee26ecc6fc81339b88b97569d47bcffb3d6e34de52",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-fullbaseline/sub-07_ses-nsd14_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "1de11edd1c120db298bc33f6be7c6dcb226d3d90c3e6ea68372bdb408e06e6f8"
+    }
+  },
+  {
+    "session": 14,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "015082a10cd69740f18f87ec2644958c9a4113e962563c9462308b7be6c13a0f",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "f62c254592afaaf69f9e0d7663c11233c7b73c7213ce52642360301124a0a90e",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "390fe3273fc5568abe6bc74e758eb3e06c58993317f227e2d8f7318214d954ea",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "dfbd66226f128e4b0db1b7c5495ab5081cd7a08ebc9ab24e39d344f37b5d9b67",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "dc72fc80aafae3463f960481d7ddf12de17b8a3dda5081648a823f130b6ac094",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "46ebb39613f281440dfa0a959d988505c2a3cb0bcea3abdf4b8c51a7e17bcbfe",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "d52468d8e12a494c677776bbcbc68ed69a76b8c9e73de703c66d72902ad5ac5f",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "29d7a8b9676c3eab091ad7e2443f34734e0792888222637f9fcfd07885df6b58",
+      "outputs/full-vtc-all-session-baselines/session14-amplitude-parametriccv/sub-07_ses-nsd14_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "6901ba80a2feb1c137184ef0b0635c621b0a491e824bf3b38e7efd37ec613892"
+    }
+  },
+  {
+    "session": 15,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "3233f09a2bad06ed29ea0085c78fa06c76c14b7ebcf30fe9e24e957a7fd667e3",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "b96e66b1a08acdf832b97c177a9c53e4c90a42649300ab7ebf24cd717ae4899b",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "53798cdfeb29ee969a768b1fbd6b659474bf0dbf2b8678a7fe70a1cab1603291",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "e610f8cec77fd33b03f6007a76c6bdce70b3b36eb874fc79f1c9c12ee3b87169",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "e6abc2c3cabff1fca2dfa94e5bb9435e69cc20357ee24d3b5b2427599c495e62",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "782058a0a98b15d1212d784943317a396b030046a502171a08e6c3fa0c55a295"
+    }
+  },
+  {
+    "session": 15,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "2199d29812443c15eba00d5100ab426d394013d07b325547a709891efb9de684",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "a358fcbeb12fbaf5d82e04e94964fdaf33023a62312ececd31e8fb3ac1facb4e",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "4ab035a4698f94b4cab542b84f5ea4e680f2c29be358d4c9e0682dadc52cc7b4",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "be14e38aba2bd28d5c296c05c13c3e3566fb7a4c7f9853c0de14e95e65b4e9a8",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "df9b41377e4b660d80561660034a86b434db3278ef09eaad16b1b294861337d2",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "9af5e6c54bea5dbcbd0d6f022d013c7ae194093382d4e3f252da825677ebe236",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "04ab4feebf7d211bd915a688ebb61bcf71a33282c0ca7af88c3cc060baafe92e",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "bdd475d2ad5f78ba12c25b0e6c1078dd3b66a7497ea6778179251720979f875f",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "8032f8f7606d5ce0ae24ae26c9674b768d240aa5dbd74eab6d9dfb2e7add6516"
+    }
+  },
+  {
+    "session": 15,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "41ce8dcf8da6261e6048cca82094a046d1a53e472f74a991eef7d3930f1eae0e",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "5b91e93dceed2a96cdca1ec13a897822de2d33a0c88a41fa78676859ce2d9d6d",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "84bcc94105c07408da4379c49b0b3728390a69fbacd2c9ca773f17bae7ce601a",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "e6f557082ebcd6270164c96b05fc58943c6ae40ea5122c3291e0d427254e4d28",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "8320c91052f5675de5566a3886125eebfb7329a54af00990d79c2ad2eaa8ea7e",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "3799ecbbd4100bca74694a8d0f08a019cd8135a2c517cb70a5b1c9334a1672c8",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "3c2188eaee7ecba7a9b1e191ab8bc8b13842176e967179fc69b199aae707c01a",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "4d3173c36f2f8407340e54af5c033fed62d635f499c1ade9c6a85e97502bf795",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-fullbaseline/sub-07_ses-nsd15_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "a07e8fb06d2177ce6a271c250311d387f420b0076e6656e9212c72ed7c40c30d"
+    }
+  },
+  {
+    "session": 15,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "3d1ea575b82c56f4bc6566c791065f9f494726de442c925ec0fc61b948602a15",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "99bebee173e75202117d5756c86ec6625b65d8e5cf02a9e7561ef8be8343efb2",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "05c6e401c2c7d179c85e75216250d567a7ba1d83b99cf59770535be4eab6d2f4",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "18b4472811aa8055ba0190d3218cb03977bab176156f4ea794d6441e2d0aacc8",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "8aa3a023e310094ee2e5a84e81e4f42f66d2892d9a761d06d58e57149eb53650",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "c5d234caa997262e2aa6ee3723c01435ff0efbbb8fe668cd31f987e9f5b31d81",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "f6e2da70920ade5c1576bfeb1a98f2df2ab32035fa11479ad198f81347cfe74d",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "d21d0babbf26704bbe6ebe261fbae3325ce8fe7daf042de06a1629b2ef4dd198",
+      "outputs/full-vtc-all-session-baselines/session15-amplitude-parametriccv/sub-07_ses-nsd15_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "a45ef133b77b64e393440e0d05a7e909fd2299636d680bdb61f9dd406adfa29f"
+    }
+  },
+  {
+    "session": 16,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "e58e353e27de5cbe4793170f0a0100a04a737f3200cf54268b6dc67b1b935173",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "11c90c4534ed751e7b7896764d8e1cf279ab13c8e6d551675414efea4d8dbe0f",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "abd0c78530cfa6ce63ba1b71221911e66b86f784010d1617c9daac98fdaa24e1",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "b83be53bc0f681c4ada60eee66225e0742545f992898e8bfb0250351aaf7866e",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "9d888f5180985bfe5fe76e516c9449b7d9ce7b4214e124078fd12670ea52f911",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "5194776ee2e4273271871eb9378556670dba31fbd020d6e87704ec1990c48339"
+    }
+  },
+  {
+    "session": 16,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "cecefa5ae6f5986f021a40f4868e4e38f788fdfdecd88316213127423e2d2f29",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "f64c59e8ceea088afed79fb7c36d4701e767ce65f883bbe41a9541a45ec6bf22",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "a5580f86cd79faeac4fb78ee627b1f2d9af020b373cb6137f9ac86dd75d8b687",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "a50fb8f3b2d31be7c9ebec583ea7b729a9e36a6cb32cdf123ba706eccb3a2c81",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "e779737d2201b267d91d51f88a52d63bf4d630459893f75463f97b38fa72c8dc",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "b77caa20f85444c76e32225219ecf60587641d418e7d3673923a8876cbaf4344",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "9456a1bc15832acc0566b659138086064401a29616895851407bc3a886fd3f06",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "7ab885dc1b70cee7198b2697f8f7120fec02d53fd359a8d2f1dd7b1f3509be91",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "efb5bba44d391cde602eb388ba89d85371ade7313a5d51cc1498fcc115e20a20"
+    }
+  },
+  {
+    "session": 16,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "81a8e2e6ea61dac5977327542fd8a52cca6f1ad4c5f0c8374c2edecf9d901888",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "1d11c8a77279810c53d9443b909953d483ca4b3d5cdc3c2525cec94a2d17f20f",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "028ddbe8eff28bef3d6c9524b6c121e524a8f8be50aff0472696e6b4c662c795",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "aeb56b51f2a2ca69988528287427232a90e0b550fd02c3aaddc07e5663ac1997",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "57ba8661991b59e94cc34989a72d19b4e0b2e78505d78e7c383e2ce603503e3e",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "4d5be5f600fc8fded2e26c31b34e42594801d60425ca9bba97b6f0007df4535d",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "03ff0aded3db1ff83b933b8cdcfcb2f2f79dce25695ce4c2a22ee9ecd61e4ef1",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "815b292b40ef0bb89b509a951331ec8bc039d6b3acbc9ea47bce4cc3469cba59",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-fullbaseline/sub-07_ses-nsd16_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "0925a3e1e2e320719764098871ddd39a1bce55b7aaca465ddbfef15daa967048"
+    }
+  },
+  {
+    "session": 16,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "d5f5449941ffe4cce130afbfdaf2c9645bf6b2f4ffcdbb8e0d1607b1b3f988a3",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "84deece0cee5027f635512053920e54547512a133f365dcfebc5aefe1176d3af",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "b880c6dcd37ea8b94b6457b5fac6c5977f460bbdcc6c5badc86af926adf04835",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "5b1b32efd403959b61bafdee87970434d55ba2f174b37585d56d09dc835d17ea",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "022f8755009be3dd3b0015fd9f08442d131be26446e6452d66baf57637389fa6",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "26ddd2fd84b219566fe2ce23b64efa93927352d63250bd6f69853d876a559123",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "1547af0af9d258d0263fa708fde0aa87a32347d5b1db68826a038c17b95e016d",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "1817ec901cf4f6ab7d7fa736038bb006fb49fd18f6d3c86dbfdc09000039c89e",
+      "outputs/full-vtc-all-session-baselines/session16-amplitude-parametriccv/sub-07_ses-nsd16_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "4900e5e637e8a89d4321a565a778d468e0da2bfd79a395436419a0b16d2a00bc"
+    }
+  },
+  {
+    "session": 17,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "668037e8c168025cc6e271a1345ed2c2e4b1a087d1a727d183ee57ffe341f37d",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "f3da6d61df7c2d564aab685a44510ba4cf7ae7e121362aab549395316e2f199b",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "b2eee926d227c8f167092415340c94d2f9f1ad94081b6fb6ddd05c6edf4d8fee",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "f13af58732d2c1e3da97ae9e74b3d1fb1576f30fb14c9d47ec53222d07aea8f1",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "dc6f8ac7c84141b4df2462c699ba421b4194fa4ce363666b663c0b57f36c2d94",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "b9424ca293d98a26fd713b5b11d94c71ce2ed49f9d90307fd9f1560e297683bb"
+    }
+  },
+  {
+    "session": 17,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "d58cffb57936031c934b07f44094340240d381a75a0c34601dfbe06e4ba98944",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "97458d0b7c3122e7cba8bad0c48ee52b3831a2ea0d9b79f777e939e6567c53ae",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "bf796ce62cc8273e75572f48eae5158842b8a9fa632533fa513601fd05749736",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "cf4377706b7485edc3aab3bf44e83921fe8450695e696c1c6246e4f79a67b8db",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "ea77ee6717e4d2a128e3687e641a3123116ef02bb4be4f6816776c01e7c92301",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "9d6cb8f336d4c7689b43f97cdcf9dbf6f6cbc0da384a8c71252dc4c4d0840c5c",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "c6fe5f9975d6fa26872e1879da7dca1d07867763f251b34c123c575b8927e7a0",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "c40c649f2270e6a86a2330f58229aeec726d9e6840b151672c0a37fac3bcc7fd",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "7b73abf456612948bd56807c3a2a18b59bf900cc01b6afcca9210e31fce6b1e9"
+    }
+  },
+  {
+    "session": 17,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "e779c8ae2e330e2161f12995c11d026ed8dc23efdb5d5fa2e5e96a47f32d61bd",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "719fcd48587c96bc48cb67c6167dabad1afc29bc27813e98a6910135aec8ba98",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "6cfa05bfcbf83da53b108ee22602731cd4444adde126a44f9238a3d1c6f099d3",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "5b1b9ca9c77233dc0e76eb41bf9e7d48efc7d742a49d8607db3f7c7f4ef1e76f",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "308bd009fe08fd4e27a0b18abffd3f9d89ffba703afcba64d6f380605d47cb7e",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "f4ff4df5ede3b8b1266776e592f163260a12a9efb99191fb030ecaad63f14e37",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "0601a872c22fa5abbaaeab6bc8adb32df06978a5df098e5763fc6c9cd67b5746",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "a3e9c1377185f48a13ae4e6b1c504486084f84641bfae4bb4fed34020e4ac456",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-fullbaseline/sub-07_ses-nsd17_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "7dd5d10a6f3427d004fcd2d32c6786e2aa5dceb4aedeec2071825062cc8e36ad"
+    }
+  },
+  {
+    "session": 17,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "be725b24cea39842a034c0cc20fe1919423610f85e9200e1b084a29a7d58480c",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "8a9044066af63df424aaf3f9adc2e3eb36eaa6ab90876d3b70e08d2852f5c360",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "920c21e0697dfa83b50b9e9103b3586548b17734c5c4b2e50e12018b2682d6bd",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "c23f548ee95bac1c4652eb6a1a202ffda4cb2d20bebfe3b013f67c22088f921b",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "498c26d2870756faa29b033f71965ae5b8157526d8ee4772905f6fa597b54ba9",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "f14cb39d367efe48a6a529b293624dc217f4c446efdbfdc9204d673670f5eb10",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "6b60963438ded5a9468b9972979e62b360365b78aa3b7ff10e02129c753c254d",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "05117e6a51a2b96b738cb2632867e79c219fa1f9d4cb56f35331ed2e25be351c",
+      "outputs/full-vtc-all-session-baselines/session17-amplitude-parametriccv/sub-07_ses-nsd17_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "95d05bba68ff14a8a8ec0823cd9d6f99d5681c93719af57920c7d4286e3fce46"
+    }
+  },
+  {
+    "session": 18,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "f94267453b80deb16c3869528b33fbe19c02178634c74945f4315348fe9e7cad",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "74b52a63b76c8a9fec1cce446767e935d0d5a467310861df59b13e4ecbb2a6e1",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "8ce7eb873c125eb733d8bb5d95d6ae1485bc573ee35d658f706a529b61ff40d4",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "aa963a885c0685d7f695ac487b43d4be08fb212b73e8135d6c9930a6f9d6e44c",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "024a7f05f446f59efef9d8fa29606ae4d0cda865760277b8becf410c3192a2b8",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "620cb548a0055ec529874ecdc33197d66002f6c8b6cd223438ad5dd68d349c9c"
+    }
+  },
+  {
+    "session": 18,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "9426cc5e7b9072e8a16d88eb8948d44ff918dd6ab2b7d152b541b5286ebd368a",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "5c78f3e9703d5f84eff1edd89daf30af69cd1cad184f001ff27462ede7764bf3",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "de6ef408b39ecd06ab77c728a315845ccacbc3237bb62a7ec06ba579b316c7ac",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "039c8ab27f844f85bf53422a45904b2b5c53f63504092107fe9a56b926987516",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "1af521ba26e9cf4377840a142376e0d5e62df1d252f892a8918b725a543f00fd",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "86b76014bdded2abcf675b948c32c3dd99b8cb817c0f0f6f5b4b9dba10b4faac",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "13557c6faf14ca0ca9fd2e22640970a7eefb7fd6168764312962c6605c49792a",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "1ffc31c1787e8bd82ccbcde8cc67f2eaf82f5301adc8782aee5b672e93dee663",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "f312a8a6fcd7f1683a71ae9dfe543d2eb6b1d6022e2ab66b2a32dbfdbadd7b6e"
+    }
+  },
+  {
+    "session": 18,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "1d80bc157c7fe914fb3015c9c425b41a27c8e0699451e67ab4699d57c1966ab6",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "f253ef3bd3f04ce3db3d262752b25d0dee7b00a51963246a78249f3cdcce6eb4",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "3325174a6c4782dc0a8aea3c3bb3d8e6dd2bd28edeb727657073b517a0db594b",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "fe7a7abbe5cf742099ab4dc44d972bdc1af902936b757c9a5dfaac6fdd92d969",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "aaf9a71a0992d2b35f118b426cec34dfb55f24f35619dccc89a28c13ce49b313",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "11e631da7905f43e9997ee7d3e3bc8a66166fe45112953a28589ca6ca57cc0fd",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "cbf631d7ae4b8675202411def66e6edd5abdcf6304e35eb2d325c33b15b09ed3",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "0872e971b76f1a509f2bf19a928d9ade8d64cb5b1720c88da5a4e78e7749349e",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-fullbaseline/sub-07_ses-nsd18_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "df618e02afc10bf6b9894aae1bfb0a1cba7638b48a17a84a8968291c61dc4360"
+    }
+  },
+  {
+    "session": 18,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "a21486c2362fac78288f84e74db644edc8c685256444cd75ce70b3220f7ecf02",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "b656483e1e9d093c79a4ef1de47391642bda8017d105fb5bccc4ceb1d72fa34e",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "ba5fec53eea28305ad9024d4523133ebcf642bb4ca63df47aea31af3a153b923",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "8cffa5a2bd016beb702c2cc079104bb78e871c4f54bd9fc342b0bee6fab4774d",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "0ab976ce71376fa290d2afff4bc5c5165b292bbfa85b3cc8333f7517fe0e74dd",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "5552c1441ae2296768c10833bdc0b4af0d4c6da7856894824e628d5e3f74addf",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "b6fa671485b282b143aec607a8af11df22d1726dddab2caf27a1f971591a92fd",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "e5dab75c91adc93d50d7301b17c1b337a2a6db251d7ba1fea6b8631161b910e1",
+      "outputs/full-vtc-all-session-baselines/session18-amplitude-parametriccv/sub-07_ses-nsd18_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "9cf044d2a19afdd787734c14df3b57a3bf52878980a6a6a0bfb93f671b7c2a6e"
+    }
+  },
+  {
+    "session": 19,
+    "mode": "amplitude",
+    "method": "Canonical",
+    "source": "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "129be7c2f3c1a3b7817635d3587b385ed12c89da4682739fdb024eb0b4179b4a",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicalinsample_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicalinsample_runmetrics.tsv": "e1a78177ba3c3c0326b34371e933d4b390f7df6ceba4e2f0497cfc97d1dd0dbb",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer01_hrf.npz": "21fbf2fb4707946048f7d89fd47e742fa017aed9f55145e88309d13276afa1c7",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer01_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer01_runmetrics.tsv": "47cb1209cfa039d9b61da353089b22f2a2cec8a9ab561bed63217e247ef6a123",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer02_hrf.npz": "6bb38375a91f3df6821f7ed712eea7740a3849dfe9f943c64c3984b52fb5c3be",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer02_diagnostics.json": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-canonicaltransfer02_runmetrics.tsv": "e3b13d3fd4e1fc490e390e821f8f775bc79f07e569aa61406f608bf3b85a0c7f"
+    }
+  },
+  {
+    "session": 19,
+    "mode": "amplitude",
+    "method": "Library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "850a8e20b229ad9c81659f7f07e0a435cb21793a224d66a3961906f68bb983da",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "d0589d56665b3b2316a8d8751300f0464898aedf2903aae2ed1dc80306b434e5",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "517a6c7e57b0dde33bf216f12ec731c786967ca102e71aa72313d0699ba49852",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "455a9fcb5e098a925ccc4e35ee617b9bbc890075ab7ec0b743aa7d7bbf9293e2",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "83e024c7e39c7d8eb696e1694fec5c675ca66b57e403584cfde6088cfa8b60ee",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "41adf7a64d92522ee441d641a82df0a840e6e57c7ae82e89eb84ee916eb13c68",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "49e341e925c1e28ca3417441a7d5fb24fb5b085f796be87a11b127f33cbea3f0",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "03588f56b9d1ea78e43d2ad53fd6fa0a5d418e58fbee3489748855c6114a1df4",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "b8d96cff6a35585489079c7ec1f936d2802e2f247a7d0b202deb373105ca1562"
+    }
+  },
+  {
+    "session": 19,
+    "mode": "amplitude",
+    "method": "Original REML",
+    "source": "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "6edeebde4571a5c67c3becba8971e8bb558a8b71cfb1fa3072951daec49aa2a4",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlinsample_diagnostics.json": "c8695345ae3c856a29875768e7d85324054eed6760fa35dff4db054e8a664da0",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remlinsample_runmetrics.tsv": "bd9f98f25e04026ab800063efccdd7a13352d6566ec86f0321179bb616999654",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer01_hrf.npz": "9a6b29e7fded6c43f19e2c6c82df7e12d46df81fd6a3e1f87e1ca9f0806e3c5c",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer01_diagnostics.json": "741e29571d6b905574972a20b54f774ec03748e9a5608ff94cef73da1326ceca",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer01_runmetrics.tsv": "d6b9f646025b1d52a6b75b676b041cd088c0cda6bd230b247a9b3be37faf0bad",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer02_hrf.npz": "fa26789787799cc442c8c8d810ba59aa222aecfd664247e3443d225fcf1d71c9",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer02_diagnostics.json": "4da6556dd736e3cf3363476921d45c15c61640f58fd954168bf1d379da9000c0",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-fullbaseline/sub-07_ses-nsd19_space-fsLR_den-32k_desc-remltransfer02_runmetrics.tsv": "1249132a34265e7bdea94f21f27dae0ac02713176563c0189ad8c6c4ee2cc37e"
+    }
+  },
+  {
+    "session": 19,
+    "mode": "amplitude",
+    "method": "Parametric library CV",
+    "source": "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv",
+    "whole_directory_complete": true,
+    "implementation_fingerprint": "bfda81c1401809deb6fd4bd65f64d953ba4a8ab73571d792418e4e5db17b4a33",
+    "library_fingerprint": "efe922141dda173c76c88b8a524d9d45f1046b7572e91c21502ba4ef3923d557",
+    "artifact_hashes": {
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "20dbe59ede56bb52d54dfbef0ddbdf5dddca31ebbbcdd8e049ed0973ed57c395",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_diagnostics.json": "bab3be7a57d4523a3ec695c705d011cc1f042c854d8df585cdb51493f3eb9232",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvinsample_runmetrics.tsv": "dd4c7bb931bdd50a2fcf7ab5905bcb1b857cc06c6a88b7b9d70185adae0aaa77",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_hrf.npz": "cd51266e1ecb839477b3749e08d957e839954e8ccfbdc3a10c646c4b7a76a001",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_diagnostics.json": "24a06a59960ce26a07873a545e097e7906b30565e7ffab432af915cde541901e",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer01_runmetrics.tsv": "a2db845ee0b15444caa4312c1562b9e6ab2b5cacc266d03e085c7eb232be9019",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_hrf.npz": "d0925cad374f6cae862fef1be3e02dd5c7f3eb781d397030db4b1aa3bfbdf925",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_diagnostics.json": "0b3575903afac218f0e298aea751b2c6d1dda98f0964d19d71d663515e4c6da4",
+      "outputs/full-vtc-all-session-baselines/session19-amplitude-parametriccv/sub-07_ses-nsd19_space-fsLR_den-32k_desc-librarycvtransfer02_runmetrics.tsv": "011cfb767259cdd3be0b664e06495dd64fdb3a236e5c162e6260d7aaaeea4f6b"
+    }
+  }
+]
