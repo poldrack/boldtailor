@@ -1,0 +1,27 @@
+{
+  "library_samples": 32,
+  "lambda_grid": [
+    0.0,
+    0.01,
+    1.0
+  ],
+  "max_starts": 2,
+  "maxiter": 150,
+  "maxfun": 1500,
+  "feature_ids": [
+    19761,
+    19764,
+    52598,
+    52608
+  ],
+  "train": [
+    "sub-07_ses-nsd11_task-nsdcore_run-01",
+    "sub-07_ses-nsd11_task-nsdcore_run-02"
+  ],
+  "test": [
+    "sub-07_ses-nsd11_task-nsdcore_run-03",
+    "sub-07_ses-nsd11_task-nsdcore_run-04"
+  ],
+  "cutoff_seconds": 80,
+  "scope": "four-vertex optimizer smoke check; not full method comparison"
+}

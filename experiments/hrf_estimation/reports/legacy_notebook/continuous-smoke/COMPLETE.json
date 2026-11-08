@@ -1,0 +1,8 @@
+{
+  "artifact_hashes": {
+    "config.json": "2ce88d6adf4a7c6dfbbeb83f24308133b19c2ce25bafa991a68fc2e71d315cc7",
+    "scores.tsv.gz": "5db5a52d07d9186e7bc6169f8d2443d026a54f34e15066b32b19f05b3c3308c4"
+  },
+  "snapshot": true,
+  "transforms": "scores gzip; HRFs summarized as original median of individually peak-normalized curves"
+}

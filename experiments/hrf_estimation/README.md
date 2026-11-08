@@ -30,11 +30,57 @@ The ROI file contains both all 1,750 fusiform vertices and the seeded 256-vertex
 
 ## Outputs and restart
 
-Open [results.ipynb](results.ipynb) for the executed session-11/session-12 VTC
-comparison, HRF curves and stability, and the separate continuous-optimizer
-smoke test. Figures and tables are embedded; standalone PNGs are in
-`reports/figures/`. Rerunning the notebook reads the saved `outputs/` artifacts
-and verifies their hashes without refitting models or loading raw NSD data.
+Report sources are Jupytext percent-format Python files:
+
+- [session_comparison.py](session_comparison.py): complete ten-session methods and REML variants in sessions 10/11.
+- [regularized_ar1_results.py](regularized_ar1_results.py): pooled, shrinkage, and surface AR(1) pilot.
+- [all_methods_results.py](all_methods_results.py): broader historical coverage.
+- [autodiff_results.py](autodiff_results.py): autodiff benchmark.
+- [results.py](results.py): initial VTC and REML validation results.
+
+Only `.py` inputs are tracked; local `.ipynb` files retain outputs and are ignored.
+All five reports read committed tables/curve summaries and can be rerun without
+raw NSD data or local fit directories. The oldest report uses a compact verified
+snapshot under `reports/legacy_notebook`. Regenerated figure files go to ignored
+`outputs/notebook-figures`.
+
+### Notebook workflow
+
+After cloning, install dependencies and enable the tracked Git safeguard:
+
+```sh
+uv sync --group dev
+uv run git config core.hooksPath .githooks
+```
+
+Create a local notebook from a Python source:
+
+```sh
+uv run jupytext --to ipynb experiments/hrf_estimation/session_comparison.py
+```
+
+In Jupyter with the Jupytext integration, saving a paired notebook updates its
+Python source automatically. Other editors may require explicit synchronization:
+
+```sh
+uv run python scripts/notebook_sync.py
+```
+
+The pre-commit hook runs the same synchronization over all local HRF notebooks,
+including ignored files. It updates whichever representation is unchanged since
+HEAD, preserves unaffected local outputs, and refuses conflicting edits to both
+representations. If both versions changed, explicitly choose/merge the intended
+inputs before retrying; the hook does not choose by modification time.
+
+The hook never stages files. Review and `git add` the generated `.py` files,
+then retry the commit. It rejects staged `.ipynb` files even when force-added.
+CI also rejects tracked notebooks and executes all five reports from Python
+sources. Notebook metadata and output bundles are excluded from Python exports.
+A fresh checkout therefore does not need committed rendered outputs for testing.
+
+Do not push old pre-migration backup/experiment branches with `git push --all`:
+they may retain the old rendered notebook history. Normal pushes of the cleaned
+`main` branch contain only the text sources and report data.
 
 Each comparison writes total/partial/incremental task R² in `scores.tsv`, run-level SSE/rank tables, cortical partial-task-R² maps, HRF curves/parameters, diagnostic JSON, and a manifest. Unprocessed cortical vertices are NaN. `COMPLETE.json` is written last and records output hashes. Repeating an identical completed run verifies those hashes before reuse; incomplete/corrupted outputs are recomputed. Changed data/settings/scientific code require a new output directory. Restart currently operates on a whole session comparison, not individual feature chunks.
 

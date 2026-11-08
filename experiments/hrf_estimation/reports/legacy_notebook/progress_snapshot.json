@@ -1,0 +1,30 @@
+[
+  {
+    "scope": "Full VTC: library comparisons + L-BFGS-B, two RT models",
+    "completion_markers": 3,
+    "planned_units": 16,
+    "all_units_complete": false,
+    "output_directory": "full-vtc-lbfgsb"
+  },
+  {
+    "scope": "Synthetic noise/RT: original methods + L-BFGS-B",
+    "completion_markers": 288,
+    "planned_units": 288,
+    "all_units_complete": true,
+    "output_directory": "noise-rt-lbfgsb"
+  },
+  {
+    "scope": "Full VTC: original + extended REML, primary amplitude RT",
+    "completion_markers": 2,
+    "planned_units": 2,
+    "all_units_complete": true,
+    "output_directory": "full-vtc-reml"
+  },
+  {
+    "scope": "Synthetic noise/RT: original + extended REML",
+    "completion_markers": 288,
+    "planned_units": 288,
+    "all_units_complete": true,
+    "output_directory": "noise-rt-reml"
+  }
+]

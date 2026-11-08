@@ -1,0 +1,54 @@
+{
+  "seed": 20261107,
+  "cutoff_seconds": 80,
+  "metric": "HRF-transfer R2 with refitted amplitudes",
+  "library_fingerprint": "8d3ba84718c1c9cfcc2cf254d1681f797ba2f4e8ffbeff11f8ef7666c11b42ad",
+  "splits": [
+    {
+      "train": [
+        "sub-07_ses-nsd11_task-nsdcore_run-01",
+        "sub-07_ses-nsd11_task-nsdcore_run-02",
+        "sub-07_ses-nsd11_task-nsdcore_run-03",
+        "sub-07_ses-nsd11_task-nsdcore_run-08",
+        "sub-07_ses-nsd11_task-nsdcore_run-09",
+        "sub-07_ses-nsd11_task-nsdcore_run-12"
+      ],
+      "test": [
+        "sub-07_ses-nsd11_task-nsdcore_run-04",
+        "sub-07_ses-nsd11_task-nsdcore_run-05",
+        "sub-07_ses-nsd11_task-nsdcore_run-06",
+        "sub-07_ses-nsd11_task-nsdcore_run-07",
+        "sub-07_ses-nsd11_task-nsdcore_run-10",
+        "sub-07_ses-nsd11_task-nsdcore_run-11"
+      ]
+    },
+    {
+      "train": [
+        "sub-07_ses-nsd11_task-nsdcore_run-04",
+        "sub-07_ses-nsd11_task-nsdcore_run-05",
+        "sub-07_ses-nsd11_task-nsdcore_run-06",
+        "sub-07_ses-nsd11_task-nsdcore_run-07",
+        "sub-07_ses-nsd11_task-nsdcore_run-10",
+        "sub-07_ses-nsd11_task-nsdcore_run-11"
+      ],
+      "test": [
+        "sub-07_ses-nsd11_task-nsdcore_run-01",
+        "sub-07_ses-nsd11_task-nsdcore_run-02",
+        "sub-07_ses-nsd11_task-nsdcore_run-03",
+        "sub-07_ses-nsd11_task-nsdcore_run-08",
+        "sub-07_ses-nsd11_task-nsdcore_run-09",
+        "sub-07_ses-nsd11_task-nsdcore_run-12"
+      ]
+    }
+  ],
+  "rt_mode": "amplitude",
+  "methods": [
+    "canonical",
+    "librarycv",
+    "reml"
+  ],
+  "estimator_settings": {},
+  "input_fingerprint": "52085d2b68361ec7b3a47005769a4e364ef0d2f7a1683e33cb9b1c2a9896d157",
+  "implementation_fingerprint": "e930f9b9911c32bf48f8b9508ae416daaef05cd198cff04e10b643b00af20fb5",
+  "environment_fingerprint": "65d99406559a51a31118b2497828c51c7e49e59b9fc3d36b74b25903bc1aac1c"
+}

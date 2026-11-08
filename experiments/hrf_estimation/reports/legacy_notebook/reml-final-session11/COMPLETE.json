@@ -1,0 +1,13 @@
+{
+  "artifact_hashes": {
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "ffa8f48f68daa010934af0963765b6c19b433bbc6f1d6602d336435503e7035b",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcomponentsinsample_hrf.npz": "95530563e24053bf72307951d6b5056adbdb463026692f3275e50f67fc65dd78",
+    "manifest.json": "09aead9dc697f294b68d11d95dd57056e0344c77d6a6bdf5cb388fc481639713",
+    "scores.tsv.gz": "5e50322445af1b42b1f5bb898efe05ed9e686eedc99d5e0fd40cb1ff1270fbda",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlcombinedinsample_hrf.npz": "42db463445dc880e15b676acda1f8eed928d19a29683ea2426a9538121f5f7e1",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlar1insample_hrf.npz": "38754f9827a6378cc1559c07fa875adb258d7b111458015b5785ef5612d99c19",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlsharedinsample_hrf.npz": "e61a1912b8a7e0257f273eeb849ad2bab5d92fdb0f58e6ca6258c36494036de2"
+  },
+  "snapshot": true,
+  "transforms": "scores gzip; HRFs summarized as original median of individually peak-normalized curves"
+}

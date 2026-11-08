@@ -1,4 +1,5 @@
 """Execute notebook sources afresh; never trust saved outputs in local ipynb files."""
+
 from functools import lru_cache
 from pathlib import Path
 import sys
@@ -20,12 +21,25 @@ def executed_notebook():
         if long_outputs:
             for cell in notebook.cells:
                 if cell.cell_type == "code":
-                    cell.source = cell.source.replace("no_long_text_outputs = True", "no_long_text_outputs = False")
+                    cell.source = cell.source.replace(
+                        "no_long_text_outputs = True", "no_long_text_outputs = False"
+                    )
         kernel = KernelManager()
-        kernel.kernel_spec.argv = [sys.executable,"-m","ipykernel_launcher","-f","{connection_file}"]
-        client = NotebookClient(notebook, timeout=180, km=kernel,
-                                resources={"metadata":{"path":str(path.parent)}})
+        kernel.kernel_spec.argv = [
+            sys.executable,
+            "-m",
+            "ipykernel_launcher",
+            "-f",
+            "{connection_file}",
+        ]
+        client = NotebookClient(
+            notebook,
+            timeout=180,
+            km=kernel,
+            resources={"metadata": {"path": str(path.parent)}},
+        )
         client.execute()
         nbformat.validate(notebook)
         return notebook
+
     return execute

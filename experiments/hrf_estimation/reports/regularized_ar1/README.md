@@ -1,6 +1,6 @@
 # Regularized AR(1) pilot
 
-Results notebook: `../../regularized_ar1_results.ipynb`.
+Results notebook: `../../regularized_ar1_results.py`.
 
 Two sessions (11, 16), 256 fixed matched vertices, two complementary six-run training halves. Estimate noise from all 1,750 VTC vertices within each training split. Compare pooled AR(1), approximate empirical-Bayes shrinkage, and 5-mm surface regularization. Existing original REML and library CV provide references on the same vertices and splits.
 

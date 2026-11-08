@@ -1,0 +1,11 @@
+{
+  "artifact_hashes": {
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-remlinsample_hrf.npz": "81c0debb7eb0daf37b9210a38aba6abe954c2ba827abf8a93b8e93b8b01215bd",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-canonicalinsample_hrf.npz": "c04fa656425542a879a46dc738f972048f630ca33349070a29cb5a466a3adc29",
+    "sub-07_ses-nsd11_space-fsLR_den-32k_desc-librarycvinsample_hrf.npz": "5428b022bcd16f9244aeadc8c4975cd06661bd31e8f3885e36d6d73844d622fd",
+    "manifest.json": "6fce783d5b89e692c9bf08289ae140463eb7227dd1998aa2412c309a6d1f05f1",
+    "scores.tsv.gz": "102ef3418fc57c167b148afd7a75e350b6007029f3208fd552b910170055121b"
+  },
+  "snapshot": true,
+  "transforms": "scores gzip; HRFs summarized as original median of individually peak-normalized curves"
+}
