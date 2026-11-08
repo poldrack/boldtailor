@@ -32,3 +32,20 @@ def test_runtime_rejects_invalid_memory_limit(tmp_path):
     api = importlib.import_module("experiments.hrf_estimation.autodiff_runtime")
     with pytest.raises(ValueError, match="positive"):
         api.configure_worker(-1, str(tmp_path))
+
+
+from experiments.hrf_estimation.test_continuous import offgrid
+from experiments.hrf_estimation.test_library_cv import planted_runs
+
+
+def test_continuous_fit_writes_persistent_cache(offgrid, tmp_path):
+    pytest.importorskip("jax")
+    from experiments.hrf_estimation.continuous import fit_continuous
+    runs, library, _ = offgrid
+    cache = tmp_path / "compiled"
+    fitted = fit_continuous(runs, dict(
+        library=library, gradient="autodiff", n_jobs=2, **{"lambda": 0.0},
+        max_starts=2, maxiter=150, maxfun=2500,
+        worker_memory_growth_bytes=8 * 1024**3, compilation_cache_dir=str(cache)))
+    assert fitted.diagnostics["objective"][0] < 1e-7
+    assert list(cache.glob("*-cache")), "the fit must populate the persistent cache"
