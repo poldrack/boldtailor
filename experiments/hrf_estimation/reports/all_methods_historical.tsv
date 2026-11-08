@@ -1,0 +1,27 @@
+source	method	n_common	training_runs	test_runs	r2_full	r2_task_partial	seconds	regularization	validation
+pilot-session11	canonical	256	2	2	0.6522668690125002	0.13529611331330638			legacy completion marker
+pilot-session11	librarycv	256	2	2	0.6808870848677202	0.20559711010585646			legacy completion marker
+pilot-session11-final	canonical	255	2	2	0.652317636305833	0.13537614359562333			artifact hashes verified
+pilot-session11-final	librarycv	255	2	2	0.6809617600360836	0.20573870262789173			artifact hashes verified
+pilot-session11-final	reml	255	2	2	0.6808317824524102	0.2063425758748908			artifact hashes verified
+pilot-session11-reml	canonical	255	2	2	0.652317636305833	0.13537614359562333			legacy completion marker
+pilot-session11-reml	librarycv	255	2	2	0.6809617600360836	0.20573870262789173			legacy completion marker
+pilot-session11-reml	reml	255	2	2	0.6808317824524102	0.2063425758748908			legacy completion marker
+vtc-session11	canonical	1749	6	6	0.6762334650264811	0.17964094732481295			artifact hashes verified
+vtc-session11	librarycv	1749	6	6	0.7104003377231207	0.2655867219227862			artifact hashes verified
+vtc-session11	reml	1749	6	6	0.7099862560707748	0.26427492014141807			artifact hashes verified
+vtc-session12	canonical	1750	6	6	0.7000640613328077	0.2277863132748007			artifact hashes verified
+vtc-session12	librarycv	1750	6	6	0.7193621116508937	0.2750103713470897			artifact hashes verified
+vtc-session12	reml	1750	6	6	0.7186593330885083	0.2732850126991554			artifact hashes verified
+reml-final-session11	reml	4	6	6	0.6700938187881262	0.17564526446559592			artifact hashes verified
+reml-final-session11	remlar1	4	6	6	0.673403872824675	0.1830046661773055			artifact hashes verified
+reml-final-session11	remlcombined	4	6	6	0.6735548776815643	0.18348516928340652			artifact hashes verified
+reml-final-session11	remlcomponents	4	6	6	0.6698631511205956	0.1754278474054468			artifact hashes verified
+reml-final-session11	remlshared	4	6	6	0.6703266716321616	0.17625144334076615			artifact hashes verified
+reml-final-session12	reml	4	6	6	0.6569259437585392	0.18397629388516668			artifact hashes verified
+reml-final-session12	remlar1	4	6	6	0.653312328083724	0.17460326859822028			artifact hashes verified
+reml-final-session12	remlcombined	4	6	6	0.6557130946673113	0.18242492825351386			artifact hashes verified
+reml-final-session12	remlcomponents	4	6	6	0.6525303821468711	0.1731476280129577			artifact hashes verified
+reml-final-session12	remlshared	4	6	6	0.6569259437585392	0.18397629388516668			artifact hashes verified
+continuous-smoke	L-BFGS-B	4	2	2	0.632971396654973	0.11189915291938535	9.601819750008872	0.0	historical smoke check; no completion marker
+continuous-smoke	Powell	4	2	2	0.6328304903488078	0.11159149406589441	63.16354004200548	0.01	historical smoke check; no completion marker

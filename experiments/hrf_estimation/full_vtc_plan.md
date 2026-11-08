@@ -95,3 +95,19 @@ Implemented a vectorized scalar restricted-likelihood solver for the AR(1)-only 
 ## Complex-model scope narrowed (2026-11-08)
 
 User does not need further multi-session expansion of the complex REML models. Summarized only the completed full-VTC sessions 10 and 11 in `reml_completed_sessions.md`; incomplete sessions 12/13 were excluded. Do not resume the old expanded-model queues merely to finish sessions 10–19. All queues remain stopped.
+
+## Model scope decision (2026-11-08)
+
+User explicitly dropped separate-components, shared-effects, and combined REML models. Retain original REML and the AR(1)-only extension for ongoing comparisons. Preserve completed complex-model results as historical sensitivity analyses, but do not launch or resume additional fits of those variants.
+
+## AR(1)-only completion launch (2026-11-08)
+
+User authorized finishing AR(1) for sessions 14–19 with the new scalar solver. Verified 12 input runs per session. Launched two independent queues (14/16/18 and 15/17/19), each using one BLAS thread, from frozen commit `6fea6cf` in `/tmp/boldtailor-hrf-ar1-scalar-run`. Output root: `outputs/full-vtc-ar1-scalar`; launch provenance: `outputs/ar1-scalar-launch.json`; logs: `outputs/ar1-scalar-even.log` and `outputs/ar1-scalar-odd.log`. Preserve existing sessions 10–13. Each new session retains 1,750 VTC vertices, 533 HRFs, RT amplitude, NSD 24-motion nuisance terms, 80-second cosine HPF, seed 20261107, all-run plus both complementary 6/6 transfer fits, and refitted held-out amplitudes. No complex variants or continuous-optimization queues were restarted.
+
+### AR(1) completion verified (2026-11-08)
+
+Both scalar queues finished successfully. Verified completion hashes and all 5,250 score rows (1,750 vertices × three evaluations) for each session 14–19. Total: 18 new fits and 31,500 score records. There are 365 zero-variance records and 31,135 `ok` records; zero variance is a fitted boundary outcome, not an execution failure. No `not_converged` records were reported. Together with saved sessions 10–13, AR(1) now covers all requested sessions 10–19. Inventory: `reports/ar1_sessions14to19_completion.tsv`.
+
+## All-method comparison notebook (2026-11-08)
+
+Created `all_methods_results.ipynb` as a separate executed notebook, preserving both existing notebooks. It includes canonical, full/parametric library CV and REML, continuous L-BFGS-B, AR(1), historical complex REML variants, and a separately labeled earlier-pilot/Powell section. The current snapshot contains 43 complete model/session/RT combinations with explicit coverage for sessions 10–19. Only complete three-fit model units are compared; individual completed methods from stopped multi-method queues are recovered with artifact/run-set checks. Matched vertices are chosen within each session and RT mode; SSE is pooled before forming scores. Missing models are not treated as zero, and synthetic results are not mixed with empirical sessions. Portable summaries, compressed vertex-level scores and provenance are under `reports/all_methods_*`.

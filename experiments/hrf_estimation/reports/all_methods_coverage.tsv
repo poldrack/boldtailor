@@ -1,0 +1,201 @@
+session	mode	method	state
+10	amplitude	Canonical	missing
+10	amplitude	Library CV	missing
+10	amplitude	Parametric library CV	missing
+10	amplitude	Original REML	complete
+10	amplitude	Parametric REML	missing
+10	amplitude	AR(1) REML	complete
+10	amplitude	Continuous L-BFGS-B	missing
+10	amplitude	Separate components	complete
+10	amplitude	Shared effects	complete
+10	amplitude	Combined	complete
+10	duration	Canonical	missing
+10	duration	Library CV	missing
+10	duration	Parametric library CV	missing
+10	duration	Original REML	missing
+10	duration	Parametric REML	missing
+10	duration	AR(1) REML	missing
+10	duration	Continuous L-BFGS-B	missing
+10	duration	Separate components	missing
+10	duration	Shared effects	missing
+10	duration	Combined	missing
+11	amplitude	Canonical	complete
+11	amplitude	Library CV	complete
+11	amplitude	Parametric library CV	complete
+11	amplitude	Original REML	complete
+11	amplitude	Parametric REML	complete
+11	amplitude	AR(1) REML	complete
+11	amplitude	Continuous L-BFGS-B	complete
+11	amplitude	Separate components	complete
+11	amplitude	Shared effects	complete
+11	amplitude	Combined	complete
+11	duration	Canonical	complete
+11	duration	Library CV	complete
+11	duration	Parametric library CV	complete
+11	duration	Original REML	complete
+11	duration	Parametric REML	complete
+11	duration	AR(1) REML	missing
+11	duration	Continuous L-BFGS-B	complete
+11	duration	Separate components	missing
+11	duration	Shared effects	missing
+11	duration	Combined	missing
+12	amplitude	Canonical	complete
+12	amplitude	Library CV	complete
+12	amplitude	Parametric library CV	complete
+12	amplitude	Original REML	complete
+12	amplitude	Parametric REML	complete
+12	amplitude	AR(1) REML	complete
+12	amplitude	Continuous L-BFGS-B	complete
+12	amplitude	Separate components	complete
+12	amplitude	Shared effects	partial
+12	amplitude	Combined	missing
+12	duration	Canonical	complete
+12	duration	Library CV	complete
+12	duration	Parametric library CV	complete
+12	duration	Original REML	complete
+12	duration	Parametric REML	complete
+12	duration	AR(1) REML	missing
+12	duration	Continuous L-BFGS-B	missing
+12	duration	Separate components	missing
+12	duration	Shared effects	missing
+12	duration	Combined	missing
+13	amplitude	Canonical	missing
+13	amplitude	Library CV	missing
+13	amplitude	Parametric library CV	missing
+13	amplitude	Original REML	complete
+13	amplitude	Parametric REML	missing
+13	amplitude	AR(1) REML	complete
+13	amplitude	Continuous L-BFGS-B	missing
+13	amplitude	Separate components	complete
+13	amplitude	Shared effects	partial
+13	amplitude	Combined	missing
+13	duration	Canonical	missing
+13	duration	Library CV	missing
+13	duration	Parametric library CV	missing
+13	duration	Original REML	missing
+13	duration	Parametric REML	missing
+13	duration	AR(1) REML	missing
+13	duration	Continuous L-BFGS-B	missing
+13	duration	Separate components	missing
+13	duration	Shared effects	missing
+13	duration	Combined	missing
+14	amplitude	Canonical	missing
+14	amplitude	Library CV	missing
+14	amplitude	Parametric library CV	missing
+14	amplitude	Original REML	missing
+14	amplitude	Parametric REML	missing
+14	amplitude	AR(1) REML	complete
+14	amplitude	Continuous L-BFGS-B	missing
+14	amplitude	Separate components	missing
+14	amplitude	Shared effects	missing
+14	amplitude	Combined	missing
+14	duration	Canonical	missing
+14	duration	Library CV	missing
+14	duration	Parametric library CV	missing
+14	duration	Original REML	missing
+14	duration	Parametric REML	missing
+14	duration	AR(1) REML	missing
+14	duration	Continuous L-BFGS-B	missing
+14	duration	Separate components	missing
+14	duration	Shared effects	missing
+14	duration	Combined	missing
+15	amplitude	Canonical	missing
+15	amplitude	Library CV	missing
+15	amplitude	Parametric library CV	missing
+15	amplitude	Original REML	missing
+15	amplitude	Parametric REML	missing
+15	amplitude	AR(1) REML	complete
+15	amplitude	Continuous L-BFGS-B	missing
+15	amplitude	Separate components	missing
+15	amplitude	Shared effects	missing
+15	amplitude	Combined	missing
+15	duration	Canonical	missing
+15	duration	Library CV	missing
+15	duration	Parametric library CV	missing
+15	duration	Original REML	missing
+15	duration	Parametric REML	missing
+15	duration	AR(1) REML	missing
+15	duration	Continuous L-BFGS-B	missing
+15	duration	Separate components	missing
+15	duration	Shared effects	missing
+15	duration	Combined	missing
+16	amplitude	Canonical	missing
+16	amplitude	Library CV	missing
+16	amplitude	Parametric library CV	missing
+16	amplitude	Original REML	missing
+16	amplitude	Parametric REML	missing
+16	amplitude	AR(1) REML	complete
+16	amplitude	Continuous L-BFGS-B	missing
+16	amplitude	Separate components	missing
+16	amplitude	Shared effects	missing
+16	amplitude	Combined	missing
+16	duration	Canonical	missing
+16	duration	Library CV	missing
+16	duration	Parametric library CV	missing
+16	duration	Original REML	missing
+16	duration	Parametric REML	missing
+16	duration	AR(1) REML	missing
+16	duration	Continuous L-BFGS-B	missing
+16	duration	Separate components	missing
+16	duration	Shared effects	missing
+16	duration	Combined	missing
+17	amplitude	Canonical	missing
+17	amplitude	Library CV	missing
+17	amplitude	Parametric library CV	missing
+17	amplitude	Original REML	missing
+17	amplitude	Parametric REML	missing
+17	amplitude	AR(1) REML	complete
+17	amplitude	Continuous L-BFGS-B	missing
+17	amplitude	Separate components	missing
+17	amplitude	Shared effects	missing
+17	amplitude	Combined	missing
+17	duration	Canonical	missing
+17	duration	Library CV	missing
+17	duration	Parametric library CV	missing
+17	duration	Original REML	missing
+17	duration	Parametric REML	missing
+17	duration	AR(1) REML	missing
+17	duration	Continuous L-BFGS-B	missing
+17	duration	Separate components	missing
+17	duration	Shared effects	missing
+17	duration	Combined	missing
+18	amplitude	Canonical	missing
+18	amplitude	Library CV	missing
+18	amplitude	Parametric library CV	missing
+18	amplitude	Original REML	missing
+18	amplitude	Parametric REML	missing
+18	amplitude	AR(1) REML	complete
+18	amplitude	Continuous L-BFGS-B	missing
+18	amplitude	Separate components	missing
+18	amplitude	Shared effects	missing
+18	amplitude	Combined	missing
+18	duration	Canonical	missing
+18	duration	Library CV	missing
+18	duration	Parametric library CV	missing
+18	duration	Original REML	missing
+18	duration	Parametric REML	missing
+18	duration	AR(1) REML	missing
+18	duration	Continuous L-BFGS-B	missing
+18	duration	Separate components	missing
+18	duration	Shared effects	missing
+18	duration	Combined	missing
+19	amplitude	Canonical	missing
+19	amplitude	Library CV	missing
+19	amplitude	Parametric library CV	missing
+19	amplitude	Original REML	missing
+19	amplitude	Parametric REML	missing
+19	amplitude	AR(1) REML	complete
+19	amplitude	Continuous L-BFGS-B	missing
+19	amplitude	Separate components	missing
+19	amplitude	Shared effects	missing
+19	amplitude	Combined	missing
+19	duration	Canonical	missing
+19	duration	Library CV	missing
+19	duration	Parametric library CV	missing
+19	duration	Original REML	missing
+19	duration	Parametric REML	missing
+19	duration	AR(1) REML	missing
+19	duration	Continuous L-BFGS-B	missing
+19	duration	Separate components	missing
+19	duration	Shared effects	missing
+19	duration	Combined	missing
