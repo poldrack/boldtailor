@@ -91,3 +91,7 @@ Notebook inputs after handoff: original `full-vtc-lbfgsb` jobs 0–2, `full-vtc-
 User requested killing the ongoing jobs and fixing the unnecessary AR(1) solver overhead. Terminated the cached full-VTC queue and both REML queues, including worker descendants; verified no analysis launchers remained. Preserved all existing results and both user-edited notebooks. No full queue was restarted.
 
 Implemented a vectorized scalar restricted-likelihood solver for the AR(1)-only variant, preserving its noise model and normalized variance bounds. See `reml_scalar_validation.md` and `reports/reml_scalar_validation.json`: full session-11 validation finished in 38 seconds with identical HRF winners at all 1,750 vertices and likelihood differences below 5.5e-12. Other expanded variants still use the generic solver. Future restarts must use fresh provenance directories because implementation fingerprints have changed.
+
+## Complex-model scope narrowed (2026-11-08)
+
+User does not need further multi-session expansion of the complex REML models. Summarized only the completed full-VTC sessions 10 and 11 in `reml_completed_sessions.md`; incomplete sessions 12/13 were excluded. Do not resume the old expanded-model queues merely to finish sessions 10–19. All queues remain stopped.

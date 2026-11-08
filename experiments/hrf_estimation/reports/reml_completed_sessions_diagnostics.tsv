@@ -1,0 +1,31 @@
+session	method	evaluation	at_zero	at_upper	rho	converged
+10	reml	insample	0	0		
+10	reml	transfer01	0	0		
+10	reml	transfer02	0	0		
+10	remlar1	insample	28	0	0.5238370946639184	1740.0
+10	remlar1	transfer01	15	0	0.5244758398099532	1741.0
+10	remlar1	transfer02	20	0	0.5227836883331977	1747.0
+10	remlcomponents	insample	0	0	0.0	1749.0
+10	remlcomponents	transfer01	0	0	0.0	1748.0
+10	remlcomponents	transfer02	0	0	0.0	1749.0
+10	remlshared	insample	0	0	0.0	1747.0
+10	remlshared	transfer01	0	0	0.0	1746.0
+10	remlshared	transfer02	0	0	0.0	1748.0
+10	remlcombined	insample	0	0	0.5238370946639184	1750.0
+10	remlcombined	transfer01	1	0	0.5244758398099532	1750.0
+10	remlcombined	transfer02	0	0	0.5227836883331977	1749.0
+11	reml	insample	0	0		
+11	reml	transfer01	0	0		
+11	reml	transfer02	1	0		
+11	remlar1	insample	14	0	0.5330509684141589	1746.0
+11	remlar1	transfer01	8	0	0.5356143667773381	1742.0
+11	remlar1	transfer02	14	0	0.5299786774640429	1747.0
+11	remlcomponents	insample	0	0	0.0	1749.0
+11	remlcomponents	transfer01	0	0	0.0	1748.0
+11	remlcomponents	transfer02	0	0	0.0	1750.0
+11	remlshared	insample	0	0	0.0	1749.0
+11	remlshared	transfer01	0	0	0.0	1746.0
+11	remlshared	transfer02	0	0	0.0	1746.0
+11	remlcombined	insample	0	0	0.5330509684141589	1750.0
+11	remlcombined	transfer01	0	0	0.5356143667773381	1749.0
+11	remlcombined	transfer02	0	0	0.5299786774640429	1750.0
