@@ -5,14 +5,9 @@ import pandas as pd
 import pytest
 
 
-@pytest.fixture
-def notebook():
-    path=Path(__file__).with_name("all_methods_results.ipynb")
-    assert path.exists(), "comparison notebook is missing"
-    result=nbformat.read(path,as_version=4)
-    nbformat.validate(result)
-    return result
-
+@pytest.fixture(scope="module")
+def notebook(executed_notebook):
+    return executed_notebook("all_methods_results")
 
 def records(notebook, kind):
     bundles=[o.get("data",{}).get("application/json",{})
@@ -39,10 +34,11 @@ def test_coverage_distinguishes_missing_models(notebook):
 def test_session14_ar1_score_matches_raw_output(notebook):
     summary=pd.DataFrame(records(notebook,"all_methods_summary"))
     row=summary.query("session == 14 and mode == 'amplitude' and method == 'AR(1) REML'").iloc[0]
-    source=Path(__file__).parent/'outputs/full-vtc-ar1-scalar/session14-amplitude/scores.tsv'
+    source=Path(__file__).parent/'reports/all_methods_scores.tsv.gz'
     data=pd.read_csv(source,sep="\t")
-    transfer=data[data.evaluation.str.startswith('transfer')]
-    valid=set.intersection(*[set(g.loc[g.r2_task_partial.notna(),'feature_id'])
+    transfer=data[data.evaluation.str.startswith('transfer') & data.session.eq(14)
+                  & data['mode'].eq('amplitude') & data.method.eq('AR(1) REML')]
+    valid=set.intersection(*[set(g.loc[g.sse_full.notna() & g.sse_nuisance.gt(0),'feature_id'])
                             for _,g in transfer.groupby('evaluation')])
     transfer=transfer[transfer.feature_id.isin(valid)]
     assert row.n_common==len(valid)

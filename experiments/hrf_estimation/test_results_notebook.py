@@ -11,14 +11,9 @@ from PIL import Image
 import pytest
 
 
-@pytest.fixture
-def results_notebook():
-    path = Path(__file__).with_name("results.ipynb")
-    assert path.is_file(), "the results notebook has not been created"
-    notebook = nbformat.read(path, as_version=4)
-    nbformat.validate(notebook)
-    return notebook
-
+@pytest.fixture(scope="module")
+def results_notebook(executed_notebook):
+    return executed_notebook("results")
 
 def test_notebook_is_fully_executed_without_errors(results_notebook):
     cells = [cell for cell in results_notebook.cells if cell.cell_type == "code"]

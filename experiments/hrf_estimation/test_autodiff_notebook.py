@@ -6,14 +6,9 @@ import pandas as pd
 import pytest
 
 
-@pytest.fixture
-def notebook():
-    path = Path(__file__).with_name("autodiff_results.ipynb")
-    assert path.exists(), "autodiff results notebook is missing"
-    result = nbformat.read(path, as_version=4)
-    nbformat.validate(result)
-    return result
-
+@pytest.fixture(scope="module")
+def notebook(executed_notebook):
+    return executed_notebook("autodiff_results")
 
 def test_notebook_executed_with_figures(notebook):
     cells = [c for c in notebook.cells if c.cell_type == "code"]

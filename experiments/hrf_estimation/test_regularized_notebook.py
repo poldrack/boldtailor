@@ -5,11 +5,8 @@ import numpy as np
 import pandas as pd
 
 
-def test_regularized_pilot_notebook_is_executed_and_quiet():
-    path = Path(__file__).with_name("regularized_ar1_results.ipynb")
-    assert path.exists(), "regularized AR1 notebook is missing"
-    notebook = nbformat.read(path,as_version=4)
-    nbformat.validate(notebook)
+def test_regularized_pilot_notebook_is_executed_and_quiet(executed_notebook):
+    notebook = executed_notebook("regularized_ar1_results")
     codes = [c for c in notebook.cells if c.cell_type == "code"]
     assert all(isinstance(c.execution_count,int) for c in codes)
     outputs = [o for c in codes for o in c.outputs]

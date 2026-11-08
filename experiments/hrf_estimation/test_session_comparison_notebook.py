@@ -5,24 +5,23 @@ import pandas as pd
 import pytest
 
 
-@pytest.fixture
-def notebook():
-    path=Path(__file__).with_name("session_comparison.ipynb")
-    assert path.exists(), "focused session comparison notebook is missing"
-    result=nbformat.read(path,as_version=4)
-    nbformat.validate(result)
-    return result
+@pytest.fixture(scope="module")
+def notebook(executed_notebook):
+    return executed_notebook("session_comparison")
+
+@pytest.fixture(scope="module")
+def notebook_verbose(executed_notebook):
+    return executed_notebook("session_comparison", long_outputs=True)
 
 
 def records(notebook, kind):
     bundles=[o.get("data",{}).get("application/json",{})
              for c in notebook.cells if c.cell_type=="code" for o in c.outputs]
-    bundles += notebook.metadata.get("comparison_records", [])
     return next(b["records"] for b in bundles if b.get("kind")==kind)
 
 
-def test_only_complete_ten_session_methods(notebook):
-    table=pd.DataFrame(records(notebook,"ten_session_comparison"))
+def test_only_complete_ten_session_methods(notebook_verbose):
+    table=pd.DataFrame(records(notebook_verbose,"ten_session_comparison"))
     assert set(table.method)=={"Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"}
     assert len(table)==50
     for _,group in table.groupby('method'):
@@ -30,8 +29,8 @@ def test_only_complete_ten_session_methods(notebook):
     assert table.n_common.nunique()==1
 
 
-def test_only_complete_two_session_reml_variants(notebook):
-    table=pd.DataFrame(records(notebook,"reml_session_comparison"))
+def test_only_complete_two_session_reml_variants(notebook_verbose):
+    table=pd.DataFrame(records(notebook_verbose,"reml_session_comparison"))
     assert set(table.method)=={"Original REML","AR(1) REML","Separate components","Shared effects","Combined"}
     assert len(table)==10 and set(table.session)=={10,11}
 
@@ -44,28 +43,28 @@ def test_focused_notebook_executes_with_figures(notebook):
     assert sum('image/png' in o.get('data',{}) for o in outputs)>=4
 
 
-def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook):
-    within=pd.DataFrame(records(notebook,"core_shape_stability"))
+def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook_verbose):
+    within=pd.DataFrame(records(notebook_verbose,"core_shape_stability"))
     expected={"Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"}
     assert set(within.method)==expected and len(within)==50
     for _,g in within.groupby('method'):
         assert set(g.session)==set(range(10,20))
-    pairs=pd.DataFrame(records(notebook,"cross_session_shapes"))
+    pairs=pd.DataFrame(records(notebook_verbose,"cross_session_shapes"))
     assert set(pairs.method)==expected and len(pairs)==500
     canonical=pairs[pairs.method.eq('Canonical')]
     assert (canonical.median_curve_r-1).abs().max()<1e-12
     assert pairs.n_common.nunique()==1
 
 
-def test_empirical_selection_report_has_counts_and_session_agreement(notebook):
-    rates=pd.DataFrame(records(notebook,"empirical_selection_rates"))
+def test_empirical_selection_report_has_counts_and_session_agreement(notebook_verbose):
+    rates=pd.DataFrame(records(notebook_verbose,"empirical_selection_rates"))
     assert len(rates)==20
     assert set(rates.session)==set(range(10,20))
     assert (rates.n_empirical+rates.n_parametric==rates.n_common).all()
     assert rates.n_common.nunique()==1
     assert rates.query("method == 'Parametric library CV'").n_empirical.eq(0).all()
     assert rates.query("method == 'Library CV'").n_empirical.gt(0).any()
-    pairs=pd.DataFrame(records(notebook,"empirical_selection_agreement"))
+    pairs=pd.DataFrame(records(notebook_verbose,"empirical_selection_agreement"))
     assert len(pairs)==45
     assert (pairs.session_a<pairs.session_b).all()
     assert (pairs.n_both_empirical+pairs.n_both_parametric+pairs.n_switched==pairs.n_common).all()
