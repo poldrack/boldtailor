@@ -48,3 +48,12 @@ def test_session14_ar1_score_matches_raw_output(notebook):
     assert row.n_common==len(valid)
     expected=1-transfer.sse_full.sum()/transfer.sse_nuisance.sum()
     assert row.r2_task_partial==pytest.approx(expected,abs=1e-12)
+
+
+def test_prior_modeling_approaches_are_included(notebook):
+    coverage=pd.DataFrame(records(notebook,"model_coverage"))
+    available=set(coverage.loc[coverage.state.eq("complete"),"method"])
+    assert {"Canonical","Library CV","Original REML","Parametric library CV",
+            "Parametric REML","Continuous L-BFGS-B"} <= available
+    historical=pd.DataFrame(records(notebook,"historical_models"))
+    assert "Powell" in set(historical.method)
