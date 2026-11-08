@@ -1,0 +1,21 @@
+method	session	n_common	n_empirical	n_parametric	empirical_percent
+Library CV	10	1487	542	945	36.44922663080027
+Library CV	11	1487	190	1297	12.77740416946873
+Library CV	12	1487	66	1421	4.438466711499664
+Library CV	13	1487	268	1219	18.022864828513786
+Library CV	14	1487	274	1213	18.426361802286483
+Library CV	15	1487	524	963	35.23873570948218
+Library CV	16	1487	189	1298	12.710154673839947
+Library CV	17	1487	132	1355	8.876933422999327
+Library CV	18	1487	268	1219	18.022864828513786
+Library CV	19	1487	424	1063	28.513786146603902
+Parametric library CV	10	1487	0	1487	0.0
+Parametric library CV	11	1487	0	1487	0.0
+Parametric library CV	12	1487	0	1487	0.0
+Parametric library CV	13	1487	0	1487	0.0
+Parametric library CV	14	1487	0	1487	0.0
+Parametric library CV	15	1487	0	1487	0.0
+Parametric library CV	16	1487	0	1487	0.0
+Parametric library CV	17	1487	0	1487	0.0
+Parametric library CV	18	1487	0	1487	0.0
+Parametric library CV	19	1487	0	1487	0.0
