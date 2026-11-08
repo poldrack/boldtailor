@@ -54,3 +54,20 @@ def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook):
     canonical=pairs[pairs.method.eq('Canonical')]
     assert (canonical.median_curve_r-1).abs().max()<1e-12
     assert pairs.n_common.nunique()==1
+
+
+def test_empirical_selection_report_has_counts_and_session_agreement(notebook):
+    rates=pd.DataFrame(records(notebook,"empirical_selection_rates"))
+    assert len(rates)==20
+    assert set(rates.session)==set(range(10,20))
+    assert (rates.n_empirical+rates.n_parametric==rates.n_common).all()
+    assert rates.n_common.nunique()==1
+    assert rates.query("method == 'Parametric library CV'").n_empirical.eq(0).all()
+    assert rates.query("method == 'Library CV'").n_empirical.gt(0).any()
+    pairs=pd.DataFrame(records(notebook,"empirical_selection_agreement"))
+    assert len(pairs)==45
+    assert (pairs.session_a<pairs.session_b).all()
+    assert (pairs.n_both_empirical+pairs.n_both_parametric+pairs.n_switched==pairs.n_common).all()
+    assert pairs.family_agreement.between(0,1).all()
+    assert pairs.empirical_jaccard.between(0,1).all()
+    assert (pairs.n_same_empirical_id<=pairs.n_both_empirical).all()
