@@ -1,0 +1,26 @@
+method_a	method_b	n_vertex_sessions	median_curve_r
+Canonical	Canonical	14870	1.0
+Canonical	Library CV	14870	0.7132591731234675
+Canonical	Parametric library CV	14870	0.7268678959479687
+Canonical	Original REML	14870	0.7802713173609103
+Canonical	AR(1) REML	14870	0.7340079878033766
+Library CV	Canonical	14870	0.7132591731234675
+Library CV	Library CV	14870	1.0
+Library CV	Parametric library CV	14870	1.0
+Library CV	Original REML	14870	0.9861408140574336
+Library CV	AR(1) REML	14870	0.9850201236149907
+Parametric library CV	Canonical	14870	0.7268678959479687
+Parametric library CV	Library CV	14870	1.0
+Parametric library CV	Parametric library CV	14870	1.0
+Parametric library CV	Original REML	14870	0.9850573542948878
+Parametric library CV	AR(1) REML	14870	0.9838567788802931
+Original REML	Canonical	14870	0.7802713173609103
+Original REML	Library CV	14870	0.9861408140574336
+Original REML	Parametric library CV	14870	0.9850573542948878
+Original REML	Original REML	14870	1.0
+Original REML	AR(1) REML	14870	0.9896013231920354
+AR(1) REML	Canonical	14870	0.7340079878033766
+AR(1) REML	Library CV	14870	0.9850201236149907
+AR(1) REML	Parametric library CV	14870	0.9838567788802931
+AR(1) REML	Original REML	14870	0.9896013231920354
+AR(1) REML	AR(1) REML	14870	1.0
