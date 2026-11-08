@@ -41,3 +41,16 @@ def test_focused_notebook_executes_with_figures(notebook):
     outputs=[o for c in cells for o in c.outputs]
     assert not any(o.output_type=='error' for o in outputs)
     assert sum('image/png' in o.get('data',{}) for o in outputs)>=4
+
+
+def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook):
+    within=pd.DataFrame(records(notebook,"core_shape_stability"))
+    expected={"Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"}
+    assert set(within.method)==expected and len(within)==50
+    for _,g in within.groupby('method'):
+        assert set(g.session)==set(range(10,20))
+    pairs=pd.DataFrame(records(notebook,"cross_session_shapes"))
+    assert set(pairs.method)==expected and len(pairs)==500
+    canonical=pairs[pairs.method.eq('Canonical')]
+    assert (canonical.median_curve_r-1).abs().max()<1e-12
+    assert pairs.n_common.nunique()==1
