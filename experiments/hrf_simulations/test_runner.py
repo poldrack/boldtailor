@@ -131,6 +131,15 @@ def test_cli_plan_does_not_require_nsd(capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["datasets"] == 42
     assert result["sessions"] == [11]
+    assert result["default_n_jobs"] == 8
+
+
+def test_runner_defaults_to_eight_workers_with_override():
+    from experiments.hrf_simulations.cli import _parser
+
+    args = ['run', '--calibration', 'calibration', '--output', 'outputs']
+    assert _parser().parse_args(args).n_jobs == 8
+    assert _parser().parse_args(args + ['--n-jobs', '2']).n_jobs == 2
 
 
 def test_failure_rate_includes_failed_estimates():
