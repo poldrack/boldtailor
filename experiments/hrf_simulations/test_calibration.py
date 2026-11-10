@@ -97,24 +97,34 @@ def test_generated_dataset_reproducibility_pairing_and_events():
 def test_spectral_generation_saves_actual_donor_diagnostics():
     from experiments.hrf_simulations.dataset import generate
     from experiments.hrf_simulations.truths import truth_library
+
     run = synthetic_templates()[0]
     residual = np.random.default_rng(2).normal(size=len(run.frame_times))
-    profile = dict(rho=.7,variance=10.,feature_id=0,
-        runs=[dict(residual=residual,nuisance=np.zeros(len(run.confounds.columns)))])
-    case = dict(mechanism='none',convention='brief',noise='spectral',snr=.5,seed=3)
-    _,_,meta = generate([run],truth_library()['canonical'],profile,case)
-    donor = meta['donor_diagnostics'][0]
-    generated = meta['noise_diagnostics'][0]
-    np.testing.assert_allclose(donor['periodogram'],generated['periodogram'],atol=1e-12)
-    assert donor['variance'] == pytest.approx(np.var(residual))
+    profile = dict(
+        rho=0.7,
+        variance=10.0,
+        feature_id=0,
+        runs=[dict(residual=residual, nuisance=np.zeros(len(run.confounds.columns)))],
+    )
+    case = dict(mechanism="none", convention="brief", noise="spectral", snr=0.5, seed=3)
+    _, _, meta = generate([run], truth_library()["canonical"], profile, case)
+    donor = meta["donor_diagnostics"][0]
+    generated = meta["noise_diagnostics"][0]
+    np.testing.assert_allclose(
+        donor["periodogram"], generated["periodogram"], atol=1e-12
+    )
+    assert donor["variance"] == pytest.approx(np.var(residual))
 
 
 def test_ar1_variance_calibration_corrects_projection_loss():
     from experiments.hrf_simulations.calibration import _reference_fit
     from experiments.hrf_simulations.noise import ar1
+
     run = synthetic_templates()[0]
     rng = np.random.default_rng(15)
-    values = np.column_stack([ar1(len(run.frame_times),.7,2.,rng) for _ in range(128)])
-    result = _reference_fit(replace(run,signals=values,feature_ids=np.arange(128)))
-    assert result['variance'].mean() == pytest.approx(2.,rel=.12)
-    assert result['variance_rho'] == pytest.approx(.7,abs=.1)
+    values = np.column_stack(
+        [ar1(len(run.frame_times), 0.7, 2.0, rng) for _ in range(128)]
+    )
+    result = _reference_fit(replace(run, signals=values, feature_ids=np.arange(128)))
+    assert result["variance"].mean() == pytest.approx(2.0, rel=0.12)
+    assert result["variance_rho"] == pytest.approx(0.7, abs=0.1)

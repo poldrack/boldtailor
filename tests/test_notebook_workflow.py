@@ -120,13 +120,13 @@ def test_python_only_checkout_needs_no_rendered_notebooks(repo):
 
 def test_simulation_notebooks_use_same_text_only_workflow(repo):
     commit_pair(repo)
-    folder = repo/'experiments/hrf_simulations'
+    folder = repo / "experiments/hrf_simulations"
     folder.mkdir()
-    book = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell('simulation = 1')])
-    nbformat.write(book,folder/'results.ipynb')
+    book = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell("simulation = 1")])
+    nbformat.write(book, folder / "results.ipynb")
     assert sync(repo).returncode == 1
-    assert 'simulation = 1' in (folder/'results.py').read_text()
-    git(repo,'add','experiments/hrf_simulations/results.py')
+    assert "simulation = 1" in (folder / "results.py").read_text()
+    git(repo, "add", "experiments/hrf_simulations/results.py")
     assert sync(repo).returncode == 0
 
 

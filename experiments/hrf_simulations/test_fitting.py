@@ -111,4 +111,5 @@ def test_curve_metrics_and_failure_accounting(library):
 
 def test_default_cache_holds_all_pilot_design_groups():
     from experiments.hrf_simulations.fitting import DesignCache
-    assert DesignCache().max_entries >= 533*12*4*2
+
+    assert DesignCache().max_entries >= 533 * 12 * 4 * 2

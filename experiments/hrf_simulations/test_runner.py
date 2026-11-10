@@ -101,7 +101,7 @@ def test_complete_case_resume_corruption_and_report(tmp_path, tiny_case):
     assert (tmp_path / "report/paired.tsv").is_file()
     stability = pd.read_csv(tmp_path / "report/stability.tsv", sep="\t")
     assert len(stability) == 12
-    assert 'half_shape_correlation' in stability
+    assert "half_shape_correlation" in stability
     with (folder / "scores.tsv").open("a") as out:
         out.write("corruption")
     with pytest.raises(ValueError, match="corrupt"):

@@ -14,17 +14,17 @@ write and commit failing tests before implementation.
 
 ## Steps
 
-- [ ] Task 1: tests for physical boxcars, four designs, independent synthesis,
+- [x] Task 1: tests for physical boxcars, four designs, independent synthesis,
   RT preservation, noise spectra/variance, and invalid inputs. Run RED and
   commit tests. Implement `design.py`, `simulation.py`, `noise.py`; run GREEN.
-- [ ] Task 2: tests for fixed-reference rho, original-solver parity, noiseless
+- [x] Task 2: tests for fixed-reference rho, original-solver parity, noiseless
   recovery, calibration exclusion, seeds and checkpoint integrity. Run RED,
   commit. Implement `fitting.py`, `calibration.py`, `metrics.py`, `runner.py`
   and `io.py`; run GREEN.
-- [ ] Task 3: tests for case grid, CLI smoke/resume, complete reporting and
+- [x] Task 3: tests for case grid, CLI smoke/resume, complete reporting and
   portable report generation. Run RED and commit. Implement CLI and reports,
   document commands. Run complete new tests plus existing REML regression tests.
-- [ ] Final: independent review, fix substantive findings test-first, verify
+- [x] Final: independent review, fix substantive findings test-first, verify
   synthetic end-to-end execution, commit implementation. No automatic full run.
 
 Review focus: empty junk categories; long RT crossing scan end; incompatible
@@ -41,3 +41,16 @@ namespaces; all paired fits share identical generated data.
   Report this convention explicitly; native-design solver parity is tested
   separately from the new physical-design comparison.
 - Work on branch `hrf-simulations`; leave existing analysis files unchanged.
+- Review correction: exact event boundaries in fitted cumulative-HRF integrals
+  replace Nilearn hard-bin sampling. NSD TR/off-grid timing regression tests
+  exposed 20% short-boxcar area errors in that initial implementation.
+- Review correction: variance uses RSS / trace(M R) under a pooled run-level
+  AR(1) reference, rather than the white-noise RSS/(n-rank) correction.
+- Review correction: cache capacity 65,536 entries; save actual donor spectra
+  and report preservation error. Notebook sync now covers the new directory.
+- Validation: 88 tests passed across new simulations, notebook workflow, and
+  existing REML/design regression tests. Synthetic CLI smoke: 36 fits and
+  executed local notebook. Real-input interface: two runs each from sessions
+  10/11, 32 VTC vertices, successful session-excluded donor selection. This is
+  not the scientific pilot. Focused independent re-review passed 15 tests and
+  reported no remaining important issue.

@@ -73,7 +73,12 @@ def check(root, check_tracked=False):
             "Rendered .ipynb files must not be committed: " + ", ".join(notebooks)
         )
     pending = []
-    for path in sorted((root / "experiments/hrf_estimation").glob("*.ipynb")):
+    paths = [
+        path
+        for directory in ("hrf_estimation", "hrf_simulations")
+        for path in (root / "experiments" / directory).glob("*.ipynb")
+    ]
+    for path in sorted(paths):
         script = synchronize(root, path)
         relative = script.relative_to(root).as_posix()
         if git(root, "show", ":" + relative) != script.read_bytes():

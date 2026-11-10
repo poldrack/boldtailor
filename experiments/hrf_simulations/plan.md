@@ -1,6 +1,10 @@
 # RT effects on HRF recovery: NSD simulations
 
-Status: proposed design, 2026-11-10. No simulations have been launched.
+Status: approved and implemented, 2026-11-10. Synthetic validation and a small
+real-input calibration interface check completed; the scientific NSD study
+has not been launched. See README.md for executable commands and documented
+implementation details (physical boxcar scaling, exact event boundaries,
+AR(1) variance projection correction, and calibration limitations).
 
 ## Question and scope
 
