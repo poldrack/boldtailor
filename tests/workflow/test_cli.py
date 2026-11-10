@@ -328,3 +328,124 @@ def test_missing_surface_mesh_exits_two(four_runs, tmp_path, capsys):
     mesh = ("--surface-mesh", f"left={tmp_path / 'l.gii'}")
     assert cli.main([*argv, *mesh, "--surface-mesh", f"right={tmp_path}/r.gii"]) == 2
     assert "l.gii" in capsys.readouterr().err
+
+
+@pytest.fixture
+def two_sessions(four_runs):
+    from tests.workflow.synthetic_bids import copy_session
+
+    root, prep = four_runs
+    copy_session(root, prep, "ses-nsd11")
+    return root, prep
+
+
+def _sessions_argv(root, tmp_path, sessions, *extra):
+    argv = _quick(root, tmp_path, "--skip-stage", "betas", *extra)
+    at = argv.index("--session")
+    return [*argv[:at], "--session", *sessions, *argv[at + 2 :]]
+
+
+def _report(tmp_path, session):
+    return tmp_path / "out" / f"sub-07_{session}_task-nsdcore_report.html"
+
+
+def test_session_flag_takes_several_sessions_in_sorted_order(two_sessions, tmp_path):
+    root, _ = two_sessions
+    argv = _sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"])
+    args = cli.build_parser().parse_args(argv)
+    assert cli.sessions_from_args(args) == ("ses-nsd10", "ses-nsd11")
+    assert cli.settings_from_args(args, "ses-nsd11").session == "ses-nsd11"
+
+
+def test_one_session_still_builds_its_settings(four_runs):
+    root, _ = four_runs
+    args = cli.build_parser().parse_args(_argv(root))
+    assert cli.sessions_from_args(args) == ("ses-nsd10",)
+    assert cli.settings_from_args(args).session == "ses-nsd10"
+
+
+def test_repeated_session_exits_one(two_sessions, tmp_path, capsys):
+    root, _ = two_sessions
+    argv = _sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd10"])
+    assert cli.main(argv) == 1
+    err = capsys.readouterr().err.strip().splitlines()
+    assert len(err) == 1 and "ses-nsd10" in err[0] and "more than once" in err[0]
+
+
+def test_each_session_runs_separately(two_sessions, tmp_path, capsys):
+    root, _ = two_sessions
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"])) == 0
+    for session in ("ses-nsd10", "ses-nsd11"):
+        assert _report(tmp_path, session).is_file()
+        assert (tmp_path / "out" / "sub-07" / session / "func").is_dir()
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[0].startswith("ses-nsd10: wrote ")
+    assert lines[0].endswith(str(_report(tmp_path, "ses-nsd10")))
+    assert lines[1].startswith("ses-nsd11: wrote ")
+    assert lines[-1] == "ran 2 sessions of sub-07 task-nsdcore: ses-nsd10, ses-nsd11"
+
+
+def test_each_report_names_only_its_own_session(two_sessions, tmp_path):
+    root, _ = two_sessions
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd11"])) == 0
+    page = _report(tmp_path, "ses-nsd11").read_text()
+    assert "sub-07 ses-nsd11 task-nsdcore" in page
+    assert "ses-nsd10" not in page
+
+
+def test_input_problem_in_any_session_stops_before_fitting(
+    two_sessions, tmp_path, capsys
+):
+    import pandas as pd
+
+    root, prep = two_sessions
+    path = next((prep / "sub-07/ses-nsd11").rglob("*run-02*confounds_timeseries.tsv"))
+    pd.read_csv(path, sep="\t").drop(columns="cosine00").to_csv(
+        path, sep="\t", index=False
+    )
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd11"])) == 2
+    err = capsys.readouterr().err
+    assert "ses-nsd11" in err and "cosine" in err
+    assert not _report(tmp_path, "ses-nsd10").exists()
+
+
+def test_unknown_session_exits_two_before_fitting(two_sessions, tmp_path, capsys):
+    root, _ = two_sessions
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd99"])) == 2
+    assert "ses-nsd99" in capsys.readouterr().err
+    assert not _report(tmp_path, "ses-nsd10").exists()
+
+
+def test_existing_outputs_in_any_session_stop_before_fitting(
+    two_sessions, tmp_path, capsys
+):
+    root, _ = two_sessions
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11"])) == 0
+    capsys.readouterr()
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd11"])) == 1
+    err = capsys.readouterr().err
+    assert "ses-nsd11" in err and "existing_results" in err
+    assert not _report(tmp_path, "ses-nsd10").exists()
+
+
+def test_dry_run_prints_a_plan_per_session(two_sessions, tmp_path, capsys):
+    root, _ = two_sessions
+    argv = _sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"], "--dry-run")
+    assert cli.main(argv) == 0
+    plans = json.loads(capsys.readouterr().out)
+    assert [p["session"] for p in plans] == ["ses-nsd10", "ses-nsd11"]
+    assert all(p["problems"] == [] and "run-04" in p["runs"] for p in plans)
+    assert not _report(tmp_path, "ses-nsd10").exists()
+
+
+def test_dry_run_reports_a_later_sessions_problem(two_sessions, tmp_path, capsys):
+    root, _ = two_sessions
+    assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11"])) == 0
+    capsys.readouterr()
+    argv = _sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd11"], "--dry-run")
+    assert cli.main(argv) == 1
+    captured = capsys.readouterr()
+    plans = json.loads(captured.out)
+    assert plans[0]["problems"] == []
+    assert plans[1]["problems"][0]["kind"] == "existing_results"
+    assert "ses-nsd11" in captured.err
