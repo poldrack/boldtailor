@@ -131,13 +131,25 @@ def test_invalid_convention_and_model(template, truth):
         task_design(template, truth, "RTDur", "bad")
 
 
-@pytest.mark.parametrize('onset', [8.,8.03,8.1,8.55])
-@pytest.mark.parametrize('duration', [.1,.43,3.87])
-def test_exact_event_area_on_nsd_sampling_grid(truth,onset,duration):
+@pytest.mark.parametrize("onset", [8.0, 8.03, 8.1, 8.55])
+@pytest.mark.parametrize("duration", [0.1, 0.43, 3.87])
+def test_exact_event_area_on_nsd_sampling_grid(truth, onset, duration):
     from experiments.hrf_simulations.design import convolve
     from experiments.hrf_simulations.simulation import synthesize
-    times = np.arange(100)*4/3
-    fitted = convolve([onset],[duration],[1.],times,truth)
-    generated = synthesize([onset],[duration],[1.],times,truth)
-    assert fitted.sum()/generated.sum() == pytest.approx(1.,rel=.003)
-    assert np.max(np.abs(fitted-generated))/generated.max() < .005
+
+    times = np.arange(100) * 4 / 3
+    fitted = convolve([onset], [duration], [1.0], times, truth)
+    generated = synthesize([onset], [duration], [1.0], times, truth)
+    assert fitted.sum() / generated.sum() == pytest.approx(1.0, rel=0.003)
+    assert np.max(np.abs(fitted - generated)) / generated.max() < 0.005
+
+
+def test_reference_task_prediction_excludes_junk(template):
+    from experiments.hrf_simulations.design import reference_design
+
+    full = reference_design(template)
+    task = reference_design(template, include_junk=False)
+    assert full.shape == task.shape
+    changed = np.any(np.abs(full - task) > 1e-12, axis=0)
+    assert changed.sum() == 6  # two junk columns for each of three HRFs
+    np.testing.assert_array_equal(task[:, changed], 0.0)
