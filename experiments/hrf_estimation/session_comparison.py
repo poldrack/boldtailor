@@ -18,10 +18,11 @@
 # %% [markdown]
 # # HRF model comparisons
 #
-# Two complete comparisons for sub-07, using the RT-amplitude model:
+# Three complete comparisons for sub-07:
 #
 # 1. **Sessions 10–19:** canonical, full-library CV, parametric-library CV, original REML, and AR(1) REML.
-# 2. **Sessions 10 and 11:** original REML, AR(1), separate components, shared effects, and combined.
+# 2. **Sessions 10–19:** original REML with and without RT, with crossed evaluation and HRF shape comparisons.
+# 3. **Sessions 10 and 11:** original REML, AR(1), separate components, shared effects, and combined.
 #
 # No partial-coverage approaches, optimizer pilots, RT-duration results, or synthetic experiments are included. Results are saved snapshots; rerunning this notebook needs neither the NSD drive nor any model fitting.
 #
@@ -29,7 +30,7 @@
 #
 # The **hemodynamic response function (HRF)** describes how a brief neural event produces a BOLD response over time. These approaches differ in how they choose its shape. Each adaptive method selects **one HRF per cortical vertex**, shared by the condition, reaction-time (RT), and junk regressors at that vertex. The selected shape is shared across the runs used for fitting; it is not a separate HRF for each condition or trial.
 #
-# The event model includes the two binary trial-type conditions, an RT-amplitude regressor, and separate regressors for missing and incorrect responses. Motion and low-frequency drift are nuisance effects. In the RT-amplitude formulation, reaction time modulates a regressor's amplitude rather than the event's duration.
+# Except for the explicit no-RT ablation, the event model includes the two binary trial-type conditions, an RT-amplitude regressor, and separate regressors for missing and incorrect responses. Motion and low-frequency drift are nuisance effects. In the RT-amplitude formulation, reaction time modulates a regressor's amplitude rather than the event's duration.
 #
 # For the transfer comparisons, HRF selection uses only the training runs. **Only the selected HRF is frozen:** all regression amplitudes are estimated again in each held-out run. Thus the comparison asks whether an HRF learned from one set of runs describes another set well, rather than whether a completely frozen model predicts new runs.
 #
@@ -41,6 +42,7 @@
 # | **Library CV** | Evaluates the full library of **533 candidate HRFs**: the canonical HRF, 512 additional parametric shapes, and 20 empirical shapes. Within the outer training set, it leaves out one run at a time, fits task coefficients on the remaining runs, and evaluates task prediction on the omitted run after accounting for nuisance and junk effects. Each vertex receives the candidate with the best inner cross-validation score. |
 # | **Parametric library CV** | Uses the same cross-validation procedure, but only the **513 parametric HRFs**—the canonical shape and the 512 additional double-gamma shapes. Comparing it with full-library CV tests whether adding empirical HRF shapes improves transfer performance. This is discrete library selection, not continuous parameter optimization. |
 # | **Original REML** | Searches the full 533-HRF library using **restricted maximum likelihood (REML)** instead of inner cross-validation. Nuisance coefficients are fixed effects. The condition, RT, and junk coefficients are modeled as zero-mean random effects with **one common variance component**, independent across runs. For each candidate and vertex, the model estimates that variance relative to residual noise and chooses the HRF with the best restricted likelihood. Residual temporal noise is assumed independent. |
+# | **Original REML without RT** | Uses the original REML likelihood and full HRF library but removes the RT-amplitude regressor. Two condition and two junk coefficients remain, with one common random-effect variance. Trial inclusion and the fixed nuisance model are unchanged. Section 2 compares this model with original REML under both scoring designs. |
 # | **AR(1) REML** | Uses the same one-component task model and HRF-selection criterion as original REML, but accounts for correlation between adjacent time points with a first-order autoregressive noise model. One autocorrelation coefficient is estimated from the training data, pooled across runs and vertices, and held fixed across HRF candidates. The data and design are whitened before REML selection. This changes the noise assumption used to choose the HRF; it does not add HRF-shape parameters. |
 #
 # **CV versus REML:** CV chooses the HRF by predicting omitted training runs. REML chooses it by a likelihood that accounts for fixed nuisance effects and estimates the variance of random task effects. The random-effect coefficients here are condition/RT/junk regression coefficients, not a separate random amplitude for every trial.
@@ -317,7 +319,103 @@ display_long_output(selection_pairs.round(4))
 #
 
 # %% [markdown]
-# ## 2. REML variants in sessions 10 and 11
+# ## 2. Original REML with versus without response-time modeling
+#
+# This additional comparison covers **sessions 10–19 and the full 1,750-vertex VTC input ROI**, using the same 533 HRF candidates and complementary 6/6 run splits as original REML. A fixed complete-case mask across both models, all sessions, and both transfer directions is used below; valid all-run curves are also required. Its size is printed below and can differ from the earlier five-method comparison.
+#
+# **With RT** is the existing original REML model: two binary-condition effects, a common RT-amplitude effect, and separate missing/incorrect junk effects, all treated as independent run-specific random effects with one shared variance. **Without RT** omits only the RT column, leaving four random effects per run. Both use iid residual noise, the original scalar REML solver, and the same fixed nuisance model (NSD motion24, 80-second cosine drift, intercept). Stimulus durations, trial inclusion, and junk categories remain unchanged. Response-time validity still helps identify missing responses; its numeric values are not predictors in the no-RT model.
+#
+# The existing with-RT fits are reused after verifying artifact hashes, input fingerprints, libraries, and splits. The no-RT fits include all-run estimates and both training halves. These are experimental HRF-selection comparisons within one participant.
+#
+# ### Predictive comparison and crossed evaluation
+#
+# The native comparison selects and evaluates each HRF using its own model. To separate HRF-selection effects from the additional RT predictor, both sets of HRFs are also evaluated under **both** scoring designs. Every scoring fit refits amplitudes using unwhitened OLS. Thus the direct RT-regressor gain is not fully held-out prediction: for a fixed HRF, adding RT cannot increase OLS residual SSE. Total and partial-task R² are both reported; HRF-dependent junk regressors mean the partial-R² denominator can differ across selected HRFs.
+
+# %%
+rt_dir=reports/'reml_rt_ablation'
+rt_summary=pd.read_csv(rt_dir/'summary.tsv',sep='	')
+rt_pooled=pd.read_csv(rt_dir/'pooled.tsv',sep='	')
+rt_shape=pd.read_csv(rt_dir/'split_half_shapes.tsv',sep='	')
+rt_between=pd.read_csv(rt_dir/'between_models.tsv',sep='	')
+rt_cross=pd.read_csv(rt_dir/'cross_session_shapes.tsv',sep='	')
+rt_labels={'amplitude':'With RT','none':'Without RT'}
+rt_colors={'amplitude':'tab:blue','none':'tab:orange'}
+print(f'RT ablation uses {rt_summary.n_common.iloc[0]:,} matched vertices in every session and evaluation.')
+display(rt_pooled.round(6))
+display_long_output({'application/json':{'kind':'rt_ablation_comparison','records':rt_summary.to_dict('records')}},raw=True)
+display_long_output({'application/json':{'kind':'rt_ablation_shapes','records':rt_shape.to_dict('records')}},raw=True)
+fig,axes=plt.subplots(1,2,figsize=(12,4.2),constrained_layout=True)
+for mode in ['amplitude','none']:
+    g=rt_summary[(rt_summary.selection_rt==mode)&(rt_summary.evaluation_rt==mode)]
+    for ax,metric,title in zip(axes,['r2_full','r2_task_partial'],['Total R²','Partial task R²']):
+        ax.plot(g.session,g[metric],marker='o',label=rt_labels[mode],color=rt_colors[mode])
+        ax.set(xlabel='Session',ylabel=title,xticks=range(10,20),title='Native selection and evaluation')
+axes[0].legend();plt.show()
+display_long_output(rt_summary.round(6))
+
+# %%
+fig,axes=plt.subplots(1,2,figsize=(13,4),constrained_layout=True)
+for scoring in ['amplitude','none']:
+    data=rt_summary[rt_summary.evaluation_rt.eq(scoring)].pivot(index='session',columns='selection_rt',values='r2_task_partial')
+    axes[0].plot(data.index,100*(data.amplitude-data['none']),marker='o',label='Evaluate '+rt_labels[scoring].lower())
+for selected in ['amplitude','none']:
+    data=rt_summary[rt_summary.selection_rt.eq(selected)].pivot(index='session',columns='evaluation_rt',values='r2_task_partial')
+    axes[1].plot(data.index,100*(data.amplitude-data['none']),marker='o',label='Select '+rt_labels[selected].lower())
+axes[0].set(title='Effect of RT during HRF selection',ylabel='With-RT minus no-RT selection (percentage points)')
+axes[1].set(title='Effect of RT during amplitude refitting',ylabel='With-RT minus no-RT evaluation (percentage points)')
+for ax in axes:
+    ax.axhline(0,color='0.5',lw=.8);ax.set(xlabel='Session',xticks=range(10,20));ax.legend(fontsize=8)
+plt.show()
+
+# %% [markdown]
+# **Result:** On 1,746 matched vertices, pooled native total R² is **0.68532 with RT versus 0.68036 without RT**; partial task R² is **0.22846 versus 0.21647**. However, when both sets of HRFs are evaluated with RT, no-RT selection gives partial R² **0.22870**, compared with **0.22846** for RT selection. Under no-RT evaluation the corresponding values are **0.21647 versus 0.21555**. Thus the native advantage of including RT is primarily associated with the extra scoring regressor, rather than improved HRF selection. The selection differences are small and vary by session; these descriptive comparisons do not establish equivalence or statistical significance.
+
+# %% [markdown]
+# ### HRF shape and stability
+#
+# Split-half correlations compare the same vertex's HRFs selected from complementary six-run training sets. Between-model correlations compare the same vertex's all-run HRF with versus without RT. Curves are normalized to unit positive peak before averaging over vertices; correlations are calculated per vertex, not from the averaged curves.
+
+# %%
+fig,axes=plt.subplots(1,2,figsize=(12,4),constrained_layout=True)
+for mode in ['amplitude','none']:
+    data=rt_shape[rt_shape.selection_rt.eq(mode)]
+    axes[0].plot(data.session,data.median_curve_r,marker='o',label=rt_labels[mode],color=rt_colors[mode])
+axes[1].plot(rt_between.session,rt_between.median_curve_r,marker='o',color='tab:green')
+axes[1].fill_between(rt_between.session,rt_between.q25,rt_between.q75,color='tab:green',alpha=.15,label='Vertex interquartile range')
+axes[0].set(title='Within-model split-half agreement',ylabel='Median HRF correlation')
+axes[1].set(title='With-RT versus no-RT all-run HRFs',ylabel='Same-vertex HRF correlation')
+for ax in axes:ax.set(xlabel='Session',xticks=range(10,20));ax.legend(fontsize=8)
+plt.show()
+with np.load(rt_dir/'mean_shapes.npz') as data:
+    rt_curves=data['curves'];rt_times=data['times']
+fig,axes=plt.subplots(1,2,figsize=(12,4),sharey=True,constrained_layout=True)
+for i,mode in enumerate(['amplitude','none']):
+    for j,session in enumerate(range(10,20)):
+        axes[i].plot(rt_times,rt_curves[i,j],color=plt.get_cmap('viridis')(j/9),lw=1.2)
+    axes[i].axhline(0,color='0.5',lw=.7)
+    axes[i].set(title=rt_labels[mode],xlabel='Time after event (s)',ylabel='Mean peak-normalized HRF',xlim=(0,36))
+fig.colorbar(plt.cm.ScalarMappable(norm=plt.Normalize(10,19),cmap='viridis'),ax=list(axes),label='Session',ticks=range(10,20))
+plt.show()
+
+# %%
+fig,axes=plt.subplots(1,2,figsize=(12,5),constrained_layout=True)
+rt_min=float(rt_cross.median_curve_r.min())
+for ax,mode in zip(axes,['amplitude','none']):
+    data=rt_cross[rt_cross.selection_rt.eq(mode)].pivot(index='session_a',columns='session_b',values='median_curve_r')
+    im=ax.imshow(data,vmin=min(.9,rt_min),vmax=1,cmap='viridis')
+    ax.set(title=rt_labels[mode],xlabel='Session',ylabel='Session',xticks=range(10),yticks=range(10))
+    ax.set_xticklabels(range(10,20));ax.set_yticklabels(range(10,20))
+fig.colorbar(im,ax=list(axes),label='Median same-vertex all-run HRF correlation')
+plt.show()
+display(rt_cross.query('session_a < session_b').groupby('selection_rt').median_curve_r.agg(['median','min','max']).round(4))
+
+# %% [markdown]
+# The two heatmaps use the same color scale and compare all 45 distinct session pairs. Each session contributes one all-run HRF per vertex. These pairwise comparisons overlap in sessions and are descriptive, not independent replications. Detailed artifacts and source hashes are under `reports/reml_rt_ablation`.
+#
+# Omitting RT slightly increases the mean of the ten session-specific median split-half correlations (**0.9499 versus 0.9458**). Across the 45 session pairs, the median of the pair-specific median correlations is **0.9615 without RT versus 0.9579 with RT**. The two models nevertheless select similar shapes: within-session median all-run between-model correlations range from **0.9851 to 1.0000**.
+
+# %% [markdown]
+# ## 3. REML variants in sessions 10 and 11
 #
 # All five variants are complete in both sessions:
 #

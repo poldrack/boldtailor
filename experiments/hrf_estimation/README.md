@@ -130,3 +130,15 @@ code and settings. See `outputs/reml-sessions10to19.log` and
 `outputs/reml-sessions10to19-launch.json`. The preflight inventory is
 `reports/reml_sessions10to19_inventory.tsv`. This stage retains one
 complementary 6/6 split pair per session, not the planned twenty-split study.
+
+## Original REML response-time ablation
+
+`rt_ablation.py` compares the original REML model with RT amplitude versus an otherwise identical model that omits RT. It verifies existing input fingerprints, splits, library identities, and saved reference-fit hashes; it also crosses HRF selection with both scoring designs. Run sessions with:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 uv run python -m experiments.hrf_estimation.rt_ablation --root "$PWD/experiments/hrf_estimation" --sessions 10 11 12 13 14 15 16 17 18 19
+```
+
+Results are summarized in the RT-ablation section of `session_comparison.py`. RT validity still identifies missing responses; numeric RT is omitted as a predictor in mode `none`. Additional evaluation regressors improve refitted OLS SSE by construction, so the report separates evaluation flexibility from HRF-selection effects.
+
+After all ten sessions finish, rebuild the portable report with `uv run python scripts/build_rt_ablation_report.py` from the repository root. The committed tables and mean curves in `reports/reml_rt_ablation` let the notebook render without the NSD drive. Detailed per-vertex crossed scores and source hashes support rechecking the summaries.
