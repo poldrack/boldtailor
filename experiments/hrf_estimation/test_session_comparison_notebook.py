@@ -90,3 +90,18 @@ def test_long_outputs_disabled_by_default(notebook):
     namespace["no_long_text_outputs"] = False
     namespace["display_long_output"]("long output")
     assert calls == [("long output",)]
+
+
+def test_rt_ablation_covers_all_sessions_and_crossed_models(notebook_verbose):
+    table=pd.DataFrame(records(notebook_verbose,"rt_ablation_comparison"))
+    assert len(table)==40
+    assert set(table.session)==set(range(10,20))
+    assert set(zip(table.selection_rt,table.evaluation_rt))=={(a,b) for a in ["amplitude","none"] for b in ["amplitude","none"]}
+    assert table.n_common.nunique()==1
+    for _,g in table.groupby(["session","selection_rt"]):
+        g=g.set_index("evaluation_rt")
+        assert g.loc["amplitude","r2_full"] >= g.loc["none","r2_full"]-1e-12
+    shape=pd.DataFrame(records(notebook_verbose,"rt_ablation_shapes"))
+    assert len(shape)==20 and set(shape.selection_rt)=={"amplitude","none"}
+    assert shape.n_common.nunique()==1
+    assert shape.median_curve_r.between(-1,1).all()
