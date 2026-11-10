@@ -161,8 +161,12 @@ def fit_library_reml(runs, library, settings):
         ]:
             details[name].append(fit[key][feature].item())
     details["library_fingerprint"] = library.fingerprint
+    mode = settings.get("rt_mode", "amplitude")
+    count = 4 if mode == "none" else 5
+    details["rt_mode"] = mode
+    details["n_random_effects_per_run"] = count
     details["random_effects"] = (
-        "five task/junk coefficients; shared scalar variance; independent runs"
+        f"{count} task/junk coefficients; shared scalar variance; independent runs"
     )
     return HrfEstimate(
         runs[0].feature_ids.copy(),

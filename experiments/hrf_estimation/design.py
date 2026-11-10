@@ -46,8 +46,8 @@ def partition_events(events):
 
 
 def build_design(run, kernel, rt_mode="amplitude"):
-    if rt_mode not in ("amplitude", "duration"):
-        raise ValueError("rt_mode must be amplitude or duration")
+    if rt_mode not in ("amplitude", "duration", "none"):
+        raise ValueError("rt_mode must be amplitude, duration, or none")
     events = partition_events(run.events)
     trial_matrix = trial_regressors(events, run.frame_times, kernel)
     valid = events.category.to_numpy() == "valid"
@@ -57,7 +57,11 @@ def build_design(run, kernel, rt_mode="amplitude"):
             for level in (0, 1)
         ]
     )
-    rt = _rt_column(run.frame_times, events, trial_matrix, valid, kernel, rt_mode)
+    names = ("trial_type_0", "trial_type_1")
+    if rt_mode != "none":
+        rt = _rt_column(run.frame_times, events, trial_matrix, valid, kernel, rt_mode)
+        task = np.column_stack([task, rt])
+        names += ("response_time",)
     junk = np.column_stack(
         [
             trial_matrix[:, events.category.to_numpy() == category].sum(axis=1)
@@ -65,7 +69,7 @@ def build_design(run, kernel, rt_mode="amplitude"):
         ]
     )
     return DesignParts(
-        np.column_stack([task, rt]), junk, run.confounds.to_numpy(dtype=float)
+        task, junk, run.confounds.to_numpy(dtype=float), task_names=names
     )
 
 
