@@ -118,6 +118,18 @@ def test_python_only_checkout_needs_no_rendered_notebooks(repo):
     assert sync(repo).returncode == 0
 
 
+def test_simulation_notebooks_use_same_text_only_workflow(repo):
+    commit_pair(repo)
+    folder = repo/'experiments/hrf_simulations'
+    folder.mkdir()
+    book = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell('simulation = 1')])
+    nbformat.write(book,folder/'results.ipynb')
+    assert sync(repo).returncode == 1
+    assert 'simulation = 1' in (folder/'results.py').read_text()
+    git(repo,'add','experiments/hrf_simulations/results.py')
+    assert sync(repo).returncode == 0
+
+
 def test_ci_rejects_committed_rendered_notebooks(repo):
     git(repo, "add", "-f", "experiments/hrf_estimation/demo.ipynb")
     git(repo, "commit", "-m", "accidental rendered notebook")
