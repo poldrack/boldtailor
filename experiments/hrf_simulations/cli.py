@@ -23,6 +23,7 @@ DEFAULT_MASK = (
     ROOT.parent
     / "hrf_estimation/pilot_inputs/sub-07_space-fsLR_den-32k_desc-fusiform_mask.npz"
 )
+DEFAULT_N_JOBS = 8
 
 
 def _parser():
@@ -61,7 +62,7 @@ def _parser():
     run.add_argument(
         "--limit", type=int, help="maximum number of cases; useful for timing a pilot"
     )
-    run.add_argument("--n-jobs", type=int, default=1)
+    run.add_argument("--n-jobs", type=int, default=DEFAULT_N_JOBS)
     run.add_argument(
         "--snr", type=float, help="explicit fixed-SNR control; inf gives noiseless data"
     )
@@ -235,7 +236,7 @@ def main(argv=None):
         payload = dict(
             datasets=len(cases),
             sessions=sorted({c["session"] for c in cases}),
-            default_n_jobs=1,
+            default_n_jobs=DEFAULT_N_JOBS,
             includes_oracle=True,
         )
         if args.list_cases:

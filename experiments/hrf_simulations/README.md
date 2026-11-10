@@ -4,6 +4,34 @@ Implements the amplitude/duration comparison in [plan.md](plan.md), adapting
 the four task models in Mumford et al. (2024). All commands run from the
 repository root. No additional dependencies are required.
 
+## Makefile workflow
+
+```bash
+make -f experiments/hrf_simulations/Makefile help
+make -f experiments/hrf_simulations/Makefile plan
+make -f experiments/hrf_simulations/Makefile workflow
+```
+
+`workflow` (also `all`) runs calibration → simulations → report → executed
+notebook, sequentially, using **eight simulation workers** and one BLAS thread
+per worker. Each component also has its own target: `calibrate`, `run`,
+`report`, `notebook`, `smoke`, and `test`. Bare `make -f ...` prints help.
+
+Use `workflow LIMIT=1 REPLICATES=1` for an initial timing run. Other overrides
+include `N_JOBS`, `STAGE`, `SESSIONS`, `CALIBRATION`, `OUTPUT`, `REPORT`, and
+`SNR`. For example:
+
+```bash
+make -f experiments/hrf_simulations/Makefile run N_JOBS=8 LIMIT=8
+make -f experiments/hrf_simulations/Makefile workflow STAGE=sensitivity
+```
+
+Completed calibration is verified and reused. `run` resumes matching completed
+cases; use new output directories when changing code or settings. `LIMIT`
+limits simulation datasets, not calibration coverage. Calibration remains a
+sequential preprocessing step; `N_JOBS` controls simulation-case parallelism.
+No target runs the full 10-session simulation stage unless `STAGE=full` is set.
+
 ## Quick synthetic verification
 
 ```bash
@@ -70,7 +98,7 @@ OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OMP_NUM_THREADS=1 \
 uv run python -m experiments.hrf_simulations.cli run \
   --calibration experiments/hrf_simulations/calibration/nsd-v1 \
   --output experiments/hrf_simulations/outputs/pilot-v1 \
-  --stage pilot --limit 1 --n-jobs 1
+  --stage pilot --limit 1 --n-jobs 8
 ```
 
 Start with `--limit 1` to measure runtime; remove it to run the selected grid.
@@ -81,7 +109,7 @@ fixed-duration conventions. Each dataset gets full-session and complementary
 half-session fits. Existing empirical split manifests are reused when present;
 otherwise a deterministic seed-20261110 partition is saved in the manifest.
 
-The default worker count is **1**. `--n-jobs N` parallelizes independent cases;
+The default worker count is **8**. `--n-jobs N` parallelizes independent cases;
 each worker keeps a 65,536-entry candidate-design cache, large enough for all
 533 candidates × 12 runs × four models × two duration conventions. This can
 use several GB per worker. Set the thread environment

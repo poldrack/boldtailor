@@ -34,7 +34,7 @@ def implementation_fingerprint():
         p
         for p in root.glob("*.py")
         if not p.name.startswith("test_")
-        and p.name not in ("results.py", "reporting.py")
+        and p.name not in ("results.py", "reporting.py", "render.py")
     ]
     paths += [
         root.parent / "hrf_estimation" / name
