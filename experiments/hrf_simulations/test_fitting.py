@@ -16,7 +16,7 @@ def runs():
 
 @pytest.fixture
 def library():
-    return HrfLibrary((HrfCandidate(0, 'double_gamma', (6, 16, 1, 1, 6, 0, 36)),
+    return HrfLibrary((HrfCandidate(0, 'spm', (6, 16, 1, 1, 6, 0, 32)),
                        HrfCandidate(1, 'double_gamma', (3.5, 12, .8, 1.5, 6, 0, 36))))
 
 
