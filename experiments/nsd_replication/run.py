@@ -32,7 +32,11 @@ from experiments.nsd_replication.comparison import (
     check_trial_tables,
     reliability_differences,
 )
-from experiments.nsd_replication.config import load_config
+from experiments.nsd_replication.config import (
+    load_config,
+    select_sessions,
+    session_summary,
+)
 from experiments.nsd_replication.figure_stage import make_figures
 from experiments.nsd_replication.features import session_features
 from experiments.nsd_replication.hrf_maps import session_consistency
@@ -55,6 +59,11 @@ from experiments.nsd_replication.metrics import (
 )
 from experiments.nsd_replication.released import RELEASED, bids_trials, index_released
 from experiments.nsd_replication.roi import load_roi
+from experiments.nsd_replication.run_record import (
+    complete_run_record,
+    git_commit,
+    start_run_record,
+)
 from experiments.nsd_replication.trials import (
     images_with,
     out_of_sample_images,
@@ -82,20 +91,6 @@ def _load(config, source, subject, session):
     return load_nsdpreproc(config, subject, session)
 
 
-def _git_commit():
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=Path(__file__).resolve().parent,
-        )
-        return out.stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-
-
 def _jsonable(value):
     if isinstance(value, np.ndarray):
         return value.tolist()
@@ -111,7 +106,7 @@ def _metadata(source, session, digest, fit):
         session=session,
         inputs_digest=digest,
         boldtailor_version=version("boldtailor"),
-        git_commit=_git_commit(),
+        git_commit=git_commit(),
     )
     return json.loads(json.dumps(meta, default=_jsonable))
 
@@ -546,9 +541,7 @@ def _shared_images(trials_by_subject):
 def _subject_inputs(config, source, subject, levels):
     """ROI columns only: RSA masks never leave the ROI."""
     columns = np.flatnonzero(_subject_roi(config, subject))
-    loaded = {
-        lv: _subject_betas(config, source, subject, lv, columns) for lv in levels
-    }
+    loaded = {lv: _subject_betas(config, source, subject, lv, columns) for lv in levels}
     betas = {lv: b for lv, (b, _) in loaded.items()}
     trials = loaded[levels[0]][1]
     rel = _reliabilities(betas, trials, images_with(trials, 3))
@@ -725,7 +718,7 @@ def _session_done(config, subject, session):
 
 def _merge_session(config, subject, session, out):
     """Replace ``session``'s rows in each subject table, in config order."""
-    order = {s: i for i, s in enumerate(config.sessions)}
+    order = {s: i for i, s in enumerate(config.configured_sessions)}
     for name in FEATURE_TABLES:
         path = _feature_table(config, subject, name)
         old = _read_table(path)
@@ -769,6 +762,12 @@ def _parser():
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--source", choices=SOURCES, default="nsdpreproc")
     parser.add_argument("--levels", nargs="+", choices=LEVELS + LSS_LEVELS)
+    parser.add_argument(
+        "--sessions",
+        nargs="+",
+        metavar="SESSION",
+        help="run only these sessions from the config (default: all)",
+    )
     parser.add_argument("--refit", action="store_true")
     parser.add_argument("--recompute", action="store_true")
     parser.add_argument("--discard-betas-after-metrics", action="store_true")
@@ -856,7 +855,7 @@ def _configure_logging():
 def main(argv=None):
     args = _parser().parse_args(argv)
     _configure_logging()
-    config = load_config(args.config)
+    config = select_sessions(load_config(args.config), args.sessions)
     levels = tuple(args.levels or _default_levels(args.source))
     commands = {
         "fit": _run_fit,
@@ -864,7 +863,10 @@ def main(argv=None):
         "features": _run_features,
         "figures": _run_figures,
     }
+    print(session_summary(config))
+    record = start_run_record(config, args, levels)
     commands[args.command](config, args, levels)
+    complete_run_record(record)
     return 0
 
 
