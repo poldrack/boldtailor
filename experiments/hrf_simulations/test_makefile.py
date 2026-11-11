@@ -18,12 +18,12 @@ def dry_run(*args):
     ).stdout
 
 
-def test_workflow_runs_components_in_order_with_eight_workers():
+def test_workflow_runs_components_in_order_with_fifteen_workers():
     commands = dry_run("workflow")
     assert commands.index("cli calibrate") < commands.index("cli run")
     assert commands.index("cli run") < commands.index("cli report")
     assert commands.index("cli report") < commands.index("hrf_simulations.render")
-    assert '--n-jobs "8"' in commands
+    assert '--n-jobs "15"' in commands
     assert "uv run" in commands
     assert "HRF_SIM_REPORT=" in commands
     assert "python -m experiments.hrf_simulations.render" in commands

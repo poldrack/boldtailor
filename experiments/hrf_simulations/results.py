@@ -1,3 +1,20 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: ipynb,py:percent
+#     notebook_metadata_filter: kernelspec,jupytext
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.6
+#   kernelspec:
+#     display_name: boldtailor (3.12.0)
+#     language: python
+#     name: python3
+# ---
+
 # %% [markdown]
 # # RT mechanisms and HRF recovery
 #
@@ -28,8 +45,9 @@ from IPython.display import display
 
 no_long_text_outputs = True
 report = Path(
-    os.environ.get("HRF_SIM_REPORT", "experiments/hrf_simulations/reports/pilot-v1")
+    os.environ.get("HRF_SIM_REPORT", "./reports/pilot-v1")
 )
+print(report)
 if not (report / "summary.tsv").is_file():
     raise FileNotFoundError(
         f"Generate a simulation report first, or set HRF_SIM_REPORT: {report}"
@@ -83,7 +101,7 @@ if len(stability):
     display(
         stability.groupby(["model", "estimator"])[
             ["both_recovered", "half_shape_correlation"]
-        ].mean()
+        ].mean().sort_values('half_shape_correlation', ascending=False)
     )
 
 # %% [markdown]
