@@ -249,3 +249,19 @@ to regressor scaling: keeping raw RT and native solver scaling reproduces the
 analysis of interest, but differences need not reflect omitted-signal bias
 alone. Different numbers of random effects are part of the model comparison.
 Noise calibration is from one participant and VTC, not all brain regions.
+
+
+## Approved expansion (2026-11-11)
+
+Implement the post-pilot next steps as the `expanded` stage described in
+[README.md](README.md#expanded-study-on-another-computer): 12,580 datasets,
+three sessions, seven core truths, SNR/RT-strength/condition-contrast controls,
+matched RT RMS, variable run coefficients, and native versus RMS-scaled REML.
+Cross every selection model with every evaluation model and retain a known-HRF
+contrast benchmark. Report recovery relative to the library approximation floor.
+Freeze empirical split definitions in Git so another computer uses the same splits.
+Default parallelism is **15 jobs**, as requested for the destination's 16 cores.
+The full scientific expansion is to run on that computer, not locally.
+Twenty replicates are an initial expansion; inspect conditional Monte Carlo
+errors and selectively extend important conditions rather than launching the
+315,000-dataset full factorial. Full/half fits are HRF-only transfer evaluations.

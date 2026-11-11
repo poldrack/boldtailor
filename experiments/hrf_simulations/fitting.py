@@ -79,13 +79,29 @@ def _terms(y, z, c):
     return y, z, s[keep] ** 2, coordinates**2, energy, len(y) - rank
 
 
+def random_scales(parts, mode):
+    if mode not in ("native", "unit_rms"):
+        raise ValueError("unknown regressor scaling")
+    count = parts[0].task.shape[1] + parts[0].junk.shape[1]
+    if mode == "native":
+        return np.ones(count)
+    projected = [
+        residuals(p.nuisance, np.column_stack([p.task, p.junk]))[0] for p in parts
+    ]
+    scale = np.sqrt(
+        sum(np.sum(z * z, axis=0) for z in projected) / sum(len(z) for z in projected)
+    )
+    return np.where(scale < 1e-12, 1.0, scale)
+
+
 def _candidate_fit(runs, parts, rho, noise_mode, settings):
+    scales = random_scales(parts, settings.get("regressor_scaling", "native"))
     terms, projected = [], []
     for run, part in zip(runs, parts, strict=True):
         raw = whiten(run.signals, rho)
         y, z, s2, coord2, energy, dof = _terms(
             raw,
-            whiten(np.column_stack([part.task, part.junk]), rho),
+            whiten(np.column_stack([part.task, part.junk]) / scales, rho),
             whiten(part.nuisance, rho),
         )
         terms.append(
@@ -149,7 +165,9 @@ def fit(
     rho = (
         0.0
         if noise_mode == "iid"
-        else estimate_rho(runs, cache) if oracle_rho is None else float(oracle_rho)
+        else estimate_rho(runs, cache)
+        if oracle_rho is None
+        else float(oracle_rho)
     )
     best, winner = None, None
     for candidate in library.candidates:
@@ -170,6 +188,9 @@ def fit(
         if result["valid"] and np.isfinite(result["criterion"]):
             if best is None or result["criterion"] < best["criterion"]:
                 best, winner = result, candidate
+                best["random_scales"] = random_scales(
+                    parts, settings.get("regressor_scaling", "native")
+                ).tolist()
     state = (
         "no_signal" if best is None else "variance_zero" if best["at_zero"] else "ok"
     )

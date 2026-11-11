@@ -10,7 +10,7 @@ SIM_DIR := $(ROOT)/experiments/hrf_simulations
 UV_RUN ?= uv run
 CLI := $(UV_RUN) python -m experiments.hrf_simulations.cli
 
-N_JOBS ?= 8
+N_JOBS ?= 15
 STAGE ?= pilot
 BIDS_ROOT ?= /Volumes/extdata1/NSD/BIDS
 SUBJECT ?= sub-07
@@ -32,7 +32,7 @@ RUN_ARGS ?=
 GRID_ARGS = $(if $(strip $(SESSIONS)),--sessions $(SESSIONS)) $(if $(strip $(REPLICATES)),--replicates $(REPLICATES))
 CASE_ARGS = $(if $(strip $(LIMIT)),--limit $(LIMIT)) $(if $(strip $(CASE)),--case $(CASE)) $(if $(strip $(SNR)),--snr $(SNR))
 
-# Eight processes, one numerical-library thread each.
+# Fifteen processes, one numerical-library thread each.
 export OPENBLAS_NUM_THREADS := 1
 export VECLIB_MAXIMUM_THREADS := 1
 export OMP_NUM_THREADS := 1
@@ -43,7 +43,7 @@ export MKL_NUM_THREADS := 1
 help:
 	@printf '%s\n' \
 	  'Targets: plan calibrate run report notebook smoke test workflow (alias: all)' \
-	  'workflow = calibrate -> run -> report -> notebook; default N_JOBS=8, STAGE=pilot.' \
+	  'workflow = calibrate -> run -> report -> notebook; default N_JOBS=15, STAGE=pilot.' \
 	  'Inspect first: make -f experiments/hrf_simulations/Makefile plan' \
 	  'Small workflow: ... workflow LIMIT=1 REPLICATES=1' \
 	  'Overrides: N_JOBS STAGE CALIBRATION OUTPUT REPORT SESSIONS REPLICATES LIMIT CASE SNR RUN_ARGS' \

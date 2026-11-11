@@ -25,6 +25,9 @@ def summarize(table):
     groups = GROUPS + [
         c
         for c in (
+            "block",
+            "regressor_scaling",
+            "run_coefficient_sd",
             "gamma",
             "betas",
             "match_rt_rms",
@@ -165,16 +168,74 @@ def _noise_rows(manifest, generation):
     return rows
 
 
+def _expanded_reports(table, crossed, destination):
+    if crossed:
+        cross = pd.concat(crossed, ignore_index=True)
+        cross.to_csv(destination / "crossed_scores.tsv.gz", sep="\t", index=False)
+        keys = GROUPS + [
+            c
+            for c in (
+                "evaluation_model",
+                "block",
+                "gamma",
+                "betas",
+                "match_rt_rms",
+                "run_coefficient_sd",
+                "regressor_scaling",
+                "generating_convention",
+            )
+            if c in cross
+        ]
+        cross_summary = (
+            cross.groupby(keys, dropna=False)
+            .agg(
+                n=("failed", "size"),
+                n_recovered=("contrast_error", "count"),
+                contrast_bias=("contrast_error", "mean"),
+                contrast_sd=("contrast_error", "std"),
+                known_hrf_bias=("known_hrf_contrast_error", "mean"),
+                selection_bias=("selection_contrast_error", "mean"),
+            )
+            .reset_index()
+        )
+        cross_summary["contrast_mcse"] = cross_summary.contrast_sd / np.sqrt(
+            cross_summary.n_recovered
+        )
+        cross_summary.to_csv(destination / "crossed_summary.tsv", sep="\t", index=False)
+    if "curve_rmse_excess" in table:
+        table.groupby(
+            GROUPS
+            + [
+                c
+                for c in (
+                    "block",
+                    "gamma",
+                    "betas",
+                    "match_rt_rms",
+                    "run_coefficient_sd",
+                    "regressor_scaling",
+                )
+                if c in table
+            ],
+            dropna=False,
+        ).curve_rmse_excess.agg(["count", "mean", "std"]).reset_index().to_csv(
+            destination / "excess_recovery.tsv", sep="\t", index=False
+        )
+
+
 def build_report(source, destination):
     source, destination = Path(source), Path(destination)
     paths = sorted(p.parent for p in source.glob("case-*/COMPLETE.json"))
     if not paths:
         raise ValueError("no completed simulation cases")
     tables, provenance, noise, shapes, stability = [], [], [], [], []
+    crossed = []
     for folder in paths:
         record = verify(folder)
         table = pd.read_csv(folder / "scores.tsv", sep="\t")
         tables.append(table)
+        if (folder / "crossed_scores.tsv").exists():
+            crossed.append(pd.read_csv(folder / "crossed_scores.tsv", sep="\t"))
         provenance.append(dict(case=folder.name, hashes=record))
         generation = json.loads((folder / "generation.json").read_text())
         manifest = json.loads((folder / "manifest.json").read_text())
@@ -196,6 +257,7 @@ def build_report(source, destination):
                     )
     destination.mkdir(parents=True, exist_ok=True)
     table = pd.concat(tables, ignore_index=True)
+    _expanded_reports(table, crossed, destination)
     atomic_text(
         destination / "summary.tsv", summarize(table).to_csv(sep="\t", index=False)
     )

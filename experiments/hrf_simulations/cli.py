@@ -8,7 +8,6 @@ import platform
 import subprocess
 
 import numpy as np
-import pandas as pd
 from joblib import Parallel, delayed, parallel_config
 
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
@@ -23,7 +22,7 @@ DEFAULT_MASK = (
     ROOT.parent
     / "hrf_estimation/pilot_inputs/sub-07_space-fsLR_den-32k_desc-fusiform_mask.npz"
 )
-DEFAULT_N_JOBS = 8
+DEFAULT_N_JOBS = 15
 
 
 def _parser():
@@ -42,7 +41,9 @@ def _parser():
     report = commands.add_parser("report", help="summarize completed cases without NSD")
     for command in (plan, run):
         command.add_argument(
-            "--stage", choices=["pilot", "full", "sensitivity"], default="pilot"
+            "--stage",
+            choices=["pilot", "full", "sensitivity", "expanded"],
+            default="pilot",
         )
         command.add_argument("--replicates", type=int)
         command.add_argument("--sessions", nargs="+", type=int)

@@ -44,9 +44,7 @@ import pandas as pd
 from IPython.display import display
 
 no_long_text_outputs = True
-report = Path(
-    os.environ.get("HRF_SIM_REPORT", "./reports/pilot-v1")
-)
+report = Path(os.environ.get("HRF_SIM_REPORT", "./reports/pilot-v1"))
 print(report)
 if not (report / "summary.tsv").is_file():
     raise FileNotFoundError(
@@ -101,7 +99,9 @@ if len(stability):
     display(
         stability.groupby(["model", "estimator"])[
             ["both_recovered", "half_shape_correlation"]
-        ].mean().sort_values('half_shape_correlation', ascending=False)
+        ]
+        .mean()
+        .sort_values("half_shape_correlation", ascending=False)
     )
 
 # %% [markdown]
@@ -121,3 +121,60 @@ for ax, row in zip(axes.ravel(), shapes[:6]):
 axes[0, 0].legend()
 fig.tight_layout()
 plt.show()
+
+
+# %% [markdown]
+# ## Crossed HRF selection and evaluation
+# Each selection model is evaluated under all four task models. Contrast errors
+# refer to the noise-free projection onto the known-HRF evaluation design,
+# not necessarily the neural condition contrast. The known-HRF benchmark
+# separates model/noise error from the additional effect of HRF selection.
+# Select one session, truth, mechanism, noise family and convention below;
+# avoid pooling the targeted sensitivity blocks with the core experiment.
+
+# %%
+crossed_path = report / "crossed_summary.tsv"
+if crossed_path.exists():
+    crossed = pd.read_csv(crossed_path, sep="\t")
+    selection = dict(
+        session=10,
+        truth="canonical",
+        mechanism="amplitude",
+        noise="ar1",
+        convention="brief",
+        split="full",
+    )
+    selected = crossed.copy()
+    for column, value in selection.items():
+        selected = selected[selected[column] == value]
+    if "block" in selected:
+        selected = selected[selected.block == "core"]
+    columns = [
+        "model",
+        "evaluation_model",
+        "estimator",
+        "n",
+        "n_recovered",
+        "contrast_bias",
+        "contrast_mcse",
+        "known_hrf_bias",
+        "selection_bias",
+    ]
+    display(selected[columns].head(16) if no_long_text_outputs else selected[columns])
+    if len(selected):
+        selected.pivot(
+            index=["model", "evaluation_model"],
+            columns="estimator",
+            values="selection_bias",
+        ).plot.bar(figsize=(12, 4), ylabel="Contrast difference from known-HRF fit")
+
+# %% [markdown]
+# ## Recovery above the library approximation floor
+# Zero excess error means the best library shape was recovered by RMSE.
+# Failed fits remain in the primary summary's failure denominators.
+
+# %%
+excess_path = report / "excess_recovery.tsv"
+if excess_path.exists():
+    excess = pd.read_csv(excess_path, sep="\t")
+    display(excess.head(12) if no_long_text_outputs else excess)

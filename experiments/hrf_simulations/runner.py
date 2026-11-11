@@ -13,11 +13,11 @@ from experiments.hrf_estimation.splits import make_splits
 from experiments.hrf_simulations.dataset import generate
 from experiments.hrf_simulations.design import MODELS, task_design
 from experiments.hrf_simulations.fitting import DesignCache, fit
+from experiments.hrf_simulations.evaluation import evaluate_crossed
 from experiments.hrf_simulations.io import (
     atomic_npz,
     atomic_text,
     complete,
-    file_hash,
     json_value,
     verify,
     write_json,
@@ -36,6 +36,7 @@ def implementation_fingerprint():
         if not p.name.startswith("test_")
         and p.name not in ("results.py", "reporting.py", "render.py")
     ]
+    paths.append(root / "split_definitions.json")
     paths += [
         root.parent / "hrf_estimation" / name
         for name in (
@@ -80,25 +81,16 @@ def _splits(runs, enabled):
     evaluations = [("full", all_ids, all_ids)]
     if not enabled:
         return evaluations
-    root = Path(__file__).parent.parent / "hrf_estimation"
-    provenance = root / "reports/focused_comparison_provenance.json"
+    definitions = Path(__file__).with_name("split_definitions.json")
     matched = None
-    if provenance.exists():
-        for record in json.loads(provenance.read_text()):
-            if record["method"] != "Original REML":
-                continue
-            manifest = root / record["source"] / "manifest.json"
-            if manifest.exists():
-                splits = json.loads(manifest.read_text())["splits"]
-                if splits and set(splits[0]["train"] + splits[0]["test"]) == set(
-                    all_ids
-                ):
-                    matched = [(s["train"], s["test"]) for s in splits[:2]]
-                    break
+    for splits in json.loads(definitions.read_text()):
+        if set(splits[0][0] + splits[0][1]) == set(all_ids):
+            matched = splits
+            break
     if matched is None:
         matched = [(s.train, s.test) for s in make_splits(all_ids, 20261110, 1)]
     return evaluations + [
-        (f"half{i+1}", tuple(a), tuple(b)) for i, (a, b) in enumerate(matched)
+        (f"half{i + 1}", tuple(a), tuple(b)) for i, (a, b) in enumerate(matched)
     ]
 
 
@@ -131,7 +123,8 @@ def _fit_case(
         if case["mechanism"] == "duration"
         else (case["convention"],)
     )
-    rows, curves, details = [], [], []
+    rows, curves, details, crossed = [], [], [], []
+    benchmarks = {}
     fitted = {}
     estimators = (
         ("iid", "ar1", "ar1_oracle") if case["noise"] == "ar1" else ("iid", "ar1")
@@ -174,7 +167,9 @@ def _fit_case(
                     rho_true = (
                         profile["rho"]
                         if case["noise"] == "ar1"
-                        else 0.0 if case["noise"] == "white" else np.nan
+                        else 0.0
+                        if case["noise"] == "white"
+                        else np.nan
                     )
                     rows.append(
                         dict(
@@ -192,11 +187,22 @@ def _fit_case(
                             **score,
                         )
                     )
+                    crossed.extend(
+                        evaluate_crossed(
+                            [lookup[k] for k in test_ids],
+                            [signals[k] for k in test_ids],
+                            candidate,
+                            truth,
+                            convention,
+                            rows[-1],
+                            benchmarks,
+                        )
+                    )
                     curves.append(
                         curve(candidate) if candidate else np.full(len(TIMES), np.nan)
                     )
                     details.append(result.diagnostics)
-    return pd.DataFrame(rows), np.asarray(curves), details
+    return pd.DataFrame(rows), np.asarray(curves), details, pd.DataFrame(crossed)
 
 
 def run_case(
@@ -222,6 +228,7 @@ def _run_locked(runs, library, profile, case, folder, models, splits, settings):
         case["snr"] = float(
             profile["snr_quantiles"][{"q25": 0, "q50": 1, "q75": 2}[case["snr_level"]]]
         )
+    settings = dict(settings, regressor_scaling=case.get("regressor_scaling", "native"))
     truth = truth_library(library)[case["truth"]]
     evaluations = _splits(runs, splits)
     manifest = dict(
@@ -248,9 +255,13 @@ def _run_locked(runs, library, profile, case, folder, models, splits, settings):
     write_json(previous, manifest)
     start = time.monotonic()
     data, targets, metadata = generate(runs, truth, profile, case)
-    table, curves, details = _fit_case(
+    table, curves, details, crossed = _fit_case(
         data, targets, truth, library, case, profile, models, evaluations, settings
     )
+    floor = manifest["library_floor"]["min_curve_rmse"]
+    table["library_floor_rmse"] = floor
+    table["curve_rmse_excess"] = (table.curve_rmse - floor).clip(lower=0)
+    atomic_text(folder / "crossed_scores.tsv", crossed.to_csv(sep="\t", index=False))
     atomic_text(folder / "scores.tsv", table.to_csv(sep="\t", index=False))
     atomic_npz(folder / "hrfs.npz", times=TIMES, truth=curve(truth), curves=curves)
     metadata["seconds_total"] = time.monotonic() - start
@@ -258,6 +269,13 @@ def _run_locked(runs, library, profile, case, folder, models, splits, settings):
     write_json(folder / "fits.json", details)
     complete(
         folder,
-        ["manifest.json", "scores.tsv", "hrfs.npz", "generation.json", "fits.json"],
+        [
+            "manifest.json",
+            "scores.tsv",
+            "crossed_scores.tsv",
+            "hrfs.npz",
+            "generation.json",
+            "fits.json",
+        ],
     )
     return table

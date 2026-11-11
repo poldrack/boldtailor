@@ -18,8 +18,8 @@ def dry_run(*args):
     ).stdout
 
 
-def test_workflow_runs_components_in_order_with_fifteen_workers():
-    commands = dry_run("workflow")
+def test_workflow_runs_components_in_order_with_fifteen_workers(tmp_path):
+    commands = dry_run("workflow", f"CALIBRATION={tmp_path / 'new-calibration'}")
     assert commands.index("cli calibrate") < commands.index("cli run")
     assert commands.index("cli run") < commands.index("cli report")
     assert commands.index("cli report") < commands.index("hrf_simulations.render")

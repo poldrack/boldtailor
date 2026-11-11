@@ -4,6 +4,77 @@ Implements the amplitude/duration comparison in [plan.md](plan.md), adapting
 the four task models in Mumford et al. (2024). All commands run from the
 repository root. No additional dependencies are required.
 
+## Expanded study on another computer
+
+Install uv, clone this repository, check out `main`, and run `uv sync` from the
+repository root. The destination needs the NSD preprocessed BIDS data, events,
+and NSD motion confounds for sub-07 sessions 10–19, plus Connectome Workbench
+(`wb_command` on PATH). The fusiform vertex mask is tracked in the repository.
+Calibration and simulation data are intentionally excluded from Git.
+
+```bash
+uv sync
+uv run make -f experiments/hrf_simulations/Makefile plan STAGE=expanded
+uv run make -f experiments/hrf_simulations/Makefile workflow \
+  STAGE=expanded BIDS_ROOT=/path/to/NSD/BIDS N_JOBS=15
+```
+
+This regenerates calibration on the destination, then executes **12,580 datasets**
+with 20 paired replicates per condition. Alternatively, copy the complete
+`calibration/nsd-v1` directory (including COMPLETE.json); its hashes are checked
+before reuse. Keep the complete calibration together, and retain its source
+provenance. Use a new output directory for this code, not the earlier pilot.
+Default expanded outputs are `outputs/expanded-v1` and `reports/expanded-v1`.
+Run the same command again to resume interrupted work. No expanded analyses
+were launched as part of preparing this code.
+
+| Block | Datasets | Coverage |
+| --- | ---: | --- |
+| Core | 5,880 | Sessions 10/11/19; seven HRF truths; AR1 and spectral noise; median SNR |
+| White control | 700 | Session 10; five original truths; median SNR |
+| SNR | 3,360 | Three sessions; canonical/offgrid; q25/q75; AR1/spectral |
+| RT strength | 640 | Session 10; canonical/offgrid; gamma .25/1; amplitude/additive duration |
+| Unequal contrast | 560 | Session 10; condition heights 1/1.25 |
+| Matched RT | 320 | Session 10; RT component RMS = half baseline RMS |
+| Run variation | 560 | Session 10; independent mean-one lognormal coefficient multipliers, log SD .25 |
+| Regressor scaling | 560 | Session 10; nuisance-projected training-design RMS normalization |
+
+Controls use canonical/offgrid truths, AR1/spectral noise and median SNR unless
+specified otherwise. All seven mechanism/convention combinations appear except
+RT-strength/matched-RT controls, which apply only to amplitude and additive
+RT-duration mechanisms. Additional off-grid fast/slow truths appear in the core.
+With `SESSIONS` overridden, controls use the first requested session. These
+sessions provide actual timing/RT variation; they are not independent subjects.
+
+The expansion avoids the 315,000-dataset full factorial. Increase replication
+only for selected conditions after reviewing Monte Carlo errors: generate
+`plan --stage expanded --replicates 100 --list`, then run selected `--case ID`
+with those same stage/replicate settings. IDs for existing replicates stay fixed.
+Use the CLI for individual cases, or Make's `CASE` and `REPLICATES` variables.
+
+Run variation uses separate random streams, preserving paired noise. Scaling
+changes the random-effect prior: each candidate's task/junk columns are divided
+by their RMS after nuisance projection, pooled over training runs only, before
+whitening. Native scaling remains the primary analysis; OLS evaluation always
+uses physical units. Winner scales and run coefficients are saved.
+
+Every selection model is evaluated with all four task models, including
+**select without RT, evaluate with RT**. `crossed_summary.tsv` reports contrast
+bias and Monte Carlo error. The reference is the noiseless task's projection
+onto the known-HRF evaluation model, so comparisons remain meaningful under
+model misspecification. This is not necessarily the underlying neural contrast.
+`known_hrf_contrast_error` measures the noisy known-HRF benchmark's error;
+`selection_contrast_error` isolates the difference caused by HRF selection.
+`excess_recovery.tsv` subtracts the best attainable library shape RMSE; this is
+a shape-error floor, not the likelihood-optimal candidate.
+
+The earlier pilot's median noise ACF RMSE was .0775 (AR1), .0655 (white), and
+.0130 (spectral); median spectral relative power error was 3.84e-16. These are
+descriptive finite-run diagnostics, not proof that AR1 captures all NSD noise.
+Inspect the generated stratified tables, failures, noise diagnostics and Monte
+Carlo errors before increasing replication. The notebook includes the new
+crossed evaluation and library-floor summaries when present.
+
 ## Makefile workflow
 
 ```bash
@@ -13,7 +84,7 @@ make -f experiments/hrf_simulations/Makefile workflow
 ```
 
 `workflow` (also `all`) runs calibration → simulations → report → executed
-notebook, sequentially, using **eight simulation workers** and one BLAS thread
+notebook, sequentially, using **15 simulation workers** and one BLAS thread
 per worker. Each component also has its own target: `calibrate`, `run`,
 `report`, `notebook`, `smoke`, and `test`. Bare `make -f ...` prints help.
 
@@ -22,7 +93,7 @@ include `N_JOBS`, `STAGE`, `SESSIONS`, `CALIBRATION`, `OUTPUT`, `REPORT`, and
 `SNR`. For example:
 
 ```bash
-make -f experiments/hrf_simulations/Makefile run N_JOBS=8 LIMIT=8
+make -f experiments/hrf_simulations/Makefile run N_JOBS=15 LIMIT=15
 make -f experiments/hrf_simulations/Makefile workflow STAGE=sensitivity
 ```
 
@@ -98,7 +169,7 @@ OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OMP_NUM_THREADS=1 \
 uv run python -m experiments.hrf_simulations.cli run \
   --calibration experiments/hrf_simulations/calibration/nsd-v1 \
   --output experiments/hrf_simulations/outputs/pilot-v1 \
-  --stage pilot --limit 1 --n-jobs 8
+  --stage pilot --limit 1 --n-jobs 15
 ```
 
 Start with `--limit 1` to measure runtime; remove it to run the selected grid.
@@ -106,10 +177,10 @@ Default pilot: session 11, two truths, 20 paired replicates, three noise
 families, median SNR, and seven unique mechanism/duration combinations:
 **840 datasets**. Pure RT-duration data are generated once and fitted with both
 fixed-duration conventions. Each dataset gets full-session and complementary
-half-session fits. Existing empirical split manifests are reused when present;
+half-session fits. Committed empirical split definitions are reused when run IDs match;
 otherwise a deterministic seed-20261110 partition is saved in the manifest.
 
-The default worker count is **8**. `--n-jobs N` parallelizes independent cases;
+The default worker count is **15**. `--n-jobs N` parallelizes independent cases;
 each worker keeps a 65,536-entry candidate-design cache, large enough for all
 533 candidates × 12 runs × four models × two duration conventions. This can
 use several GB per worker. Set the thread environment

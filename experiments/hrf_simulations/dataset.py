@@ -48,18 +48,30 @@ def _signals(runs, truth, case):
         gamma = 0.5 * np.sqrt(
             _projected_energy(runs, base) / _projected_energy(runs, delta)
         )
+    sd = case.get("run_coefficient_sd", 0.0)
+    if sd < 0:
+        raise ValueError("run_coefficient_sd must be nonnegative")
+    rng = np.random.default_rng(np.random.SeedSequence([int(case["seed"]), 8102]))
+    factors = rng.lognormal(-sd * sd / 2, sd, (len(runs), 3))
+    coefficients = [
+        dict(
+            betas=(np.asarray(case.get("betas", (1.0, 1.0))) * f[:2]).tolist(),
+            gamma=float(gamma * f[2]),
+        )
+        for f in factors
+    ]
     components = [
         signal_components(
             r,
             truth,
             case["mechanism"],
             case["convention"],
-            gamma=gamma,
-            betas=case.get("betas", (1.0, 1.0)),
+            gamma=coefficient["gamma"],
+            betas=coefficient["betas"],
         )
-        for r in runs
+        for r, coefficient in zip(runs, coefficients, strict=True)
     ]
-    return components, gamma
+    return components, gamma, coefficients
 
 
 def generate(runs, truth, profile, case):
@@ -91,7 +103,7 @@ def generate(runs, truth, profile, case):
             if not case.get("zero_nuisance", False)
             else np.zeros_like(nuisance)
         )
-    components, gamma = _signals(runs, truth, case)
+    components, gamma, coefficients = _signals(runs, truth, case)
     task = [p[0] for p in components]
     noise_energy = _projected_energy(runs, noises)
     signal_energy = _projected_energy(runs, task)
@@ -118,6 +130,7 @@ def generate(runs, truth, profile, case):
         noise_hash=digest,
         signal_multiplier=multiplier,
         effective_gamma=gamma,
+        run_coefficients=coefficients,
         realized_target_snr=(
             np.sqrt(_projected_energy(runs, targets) / noise_energy)
             if noise_energy > 0
