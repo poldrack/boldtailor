@@ -10,6 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "src/boldtailor/_resources/GLMsingle-LICENSE.txt"]
 requires-python = ">=3.12"
+# NOTE: these are older due to requirements on sherlock
 dependencies = [
   "filelock",
   "joblib>=1.3",
@@ -22,6 +23,7 @@ dependencies = [
   "scikit-learn==1.7.2",
   "scipy==1.16.3",
   "h5py>=3.12,<4",
+  "contourpy==1.3.2",
 ]
 
 [project.scripts]
