@@ -360,3 +360,27 @@ human participants or a group-level significance test.
 
 The Python notebook source `results.py` loads a report without the NSD drive.
 Rendered notebooks remain local. Select the report through `HRF_SIM_REPORT`.
+
+
+## Inspect the combined data file
+
+Open `validate_data.ipynb` (local rendered notebook), or its tracked Jupytext
+source `validate_data.py`. It defaults to `/Volumes/extdata1/NSD/nsd_three_rois.h5`;
+edit `bundle_path` or set `HRF_SIM_BUNDLE` to use another location. Run all cells
+for subject/session coverage, ROI counts, export omissions, structural/event/motion
+checks, and an example session load with BOLD and RT plots.
+
+By default the notebook checks three BOLD columns in **every run**. Set
+`full_signal_scan = True` to check every stored BOLD value. Both modes check
+all runs' events and motion data. It does not compare against the original source
+files or validate anatomical registration. `no_long_text_outputs = True` keeps
+large tables compact. No data are modified and no model fitting is launched.
+
+To generate the local notebook from a fresh checkout:
+
+```bash
+uv run python -m experiments.hrf_simulations.render \
+  --source experiments/hrf_simulations/validate_data.py \
+  --output experiments/hrf_simulations/validate_data.ipynb \
+  --report experiments/hrf_simulations/reports
+```
