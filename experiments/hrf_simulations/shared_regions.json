@@ -1,0 +1,24 @@
+{
+  "cifti_reference": "/Volumes/extdata1/NSD/BIDS/derivatives/nsdpreproc/sub-07/ses-nsd11/func/sub-07_ses-nsd11_task-nsdcore_run-01_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii",
+  "mapping": "nearest native vertex on fsaverage-registered unit spheres",
+  "reference_subject": "sub-07",
+  "regions": {
+    "fusiform": 1750,
+    "inferiortemporal": 1674,
+    "lateraloccipital": 2404
+  },
+  "selection": "sub-07 anatomical aparc labels applied at shared fsLR locations across subjects",
+  "source_hashes": {
+    "L": {
+      "/Users/poldrack/Dropbox/code/boldtailor/experiments/hrf_estimation/pilot_inputs/tpl-fsLR_space-fsaverage_hemi-L_den-32k_sphere.surf.gii": "31987d139b6cdf1040188d1795bf23c213c57f8e84fb45f2c04823d996b0defc",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/label/lh.aparc.annot": "e5901f6f0ae9c2596b511f61602f2b719cab61cb1d557a03ead5c0e7ec9b4d05",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/surf/lh.sphere.reg": "49c16c87488ab78892666b2867a0f793d5eba6576f8ee412b61092715874022c"
+    },
+    "R": {
+      "/Users/poldrack/Dropbox/code/boldtailor/experiments/hrf_estimation/pilot_inputs/tpl-fsLR_space-fsaverage_hemi-R_den-32k_sphere.surf.gii": "8c1f67fa8fb3024ad3b292be995d5c9bae07dc4dbdd53fbac48e511e1366553d",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/label/rh.aparc.annot": "1f41630f4a27884c80f271f33422346bd10bdf9c5f07e794eeced8bddaf944a5",
+      "/Volumes/extdata1/NSD/BIDS/derivatives/freesurfer-NSD/subj07/surf/rh.sphere.reg": "50d98773c26f07d6bb07d3d49ab4855636a9edf4f717c134dd04714e980c1bdd"
+    }
+  },
+  "union_vertices": 5828
+}

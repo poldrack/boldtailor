@@ -49,6 +49,9 @@ def _parser():
         command.add_argument("--sessions", nargs="+", type=int)
     for command in (calibration, run):
         command.add_argument(
+            "--roi", default="fusiform", help="named ROI from the HDF5 bundle"
+        )
+        command.add_argument(
             "--bundle", type=Path, help="portable HDF5 inputs instead of BIDS and mask"
         )
         command.add_argument(
@@ -90,6 +93,7 @@ def _inventory(args):
         return dict(
             **bundle_provenance(args.bundle),
             subject=args.subject,
+            roi=getattr(args, "roi", "fusiform"),
             sessions=args.sessions,
             hpf_seconds=80.0,
             implementation=implementation_fingerprint(),
@@ -130,8 +134,14 @@ def _session_runs(args, session, first_vertex=False):
         from experiments.hrf_simulations.bundle import load_session
 
         return load_session(
-            args.bundle, args.subject, session, first_vertex=first_vertex
+            args.bundle,
+            args.subject,
+            session,
+            first_vertex=first_vertex,
+            roi=getattr(args, "roi", "fusiform"),
         )
+    if getattr(args, "roi", "fusiform") != "fusiform":
+        raise ValueError("named ROI selection requires --bundle")
     vertices = np.load(args.mask)["feature_ids"]
     if first_vertex:
         vertices = vertices[:1]
@@ -158,6 +168,10 @@ def _check_calibration_subject(args):
     if provenance.get("subject") != args.subject:
         raise ValueError(
             "calibration subject does not match requested subject; use a separate calibration directory"
+        )
+    if provenance.get("roi", "fusiform") != getattr(args, "roi", "fusiform"):
+        raise ValueError(
+            "calibration ROI does not match requested ROI; use a separate calibration directory"
         )
 
 

@@ -16,11 +16,21 @@ uv run python -m experiments.hrf_simulations.bundle \
   --output /path/to/nsd_simulation_inputs.h5
 ```
 
-The default selection is the same 1,750 fsLR fusiform columns used for sub-07,
-**applied to every subject**, as requested. This is a common surface selection,
-not a subject-specific anatomical ROI. The exporter verifies matching CIFTI
+The default export contains **three bilateral anatomical regions**, derived from
+sub-07's FreeSurfer `aparc` labels and **applied to every subject**:
+
+| ROI selector | Vertices |
+| --- | ---: |
+| `fusiform` | 1,750 |
+| `lateraloccipital` | 2,404 |
+| `inferiortemporal` | 1,674 |
+
+Their union has **5,828 vertices**, stored once per run, with separate ROI labels.
+The fusiform selection exactly matches the previous mask. These are common
+surface selections, not subject-specific anatomical ROIs. The exporter verifies matching CIFTI
 brainordinate ordering across runs and refuses incompatible inputs. Override
-`--mask` with an NPZ containing `feature_ids` to choose another shared selection.
+`--mask` with an NPZ containing `feature_ids` and optional arrays named after the
+three ROIs to choose another shared selection.
 Optional `--subjects sub-01 sub-07` and `--sessions 10 11 19` restrict extraction;
 without these options it includes every discovered layerB2 run, including
 sessions outside 10–19. It does not create missing CIFTIs.
@@ -50,6 +60,35 @@ uv run make -f experiments/hrf_simulations/Makefile workflow \
   CALIBRATION=experiments/hrf_simulations/calibration/bundle-sub07-v1 \
   OUTPUT=experiments/hrf_simulations/outputs/bundle-sub07-expanded-v1 \
   REPORT=experiments/hrf_simulations/reports/bundle-sub07-expanded-v1
+```
+
+Select a region using `ROI=fusiform`, `ROI=lateraloccipital`, or
+`ROI=inferiortemporal`. The default remains fusiform, so simply exporting more
+vertices does not change the primary analysis. To run all three sequentially:
+
+```bash
+for roi in fusiform lateraloccipital inferiortemporal; do
+  uv run make -f experiments/hrf_simulations/Makefile workflow \
+    STAGE=expanded BUNDLE=/path/to/nsd_simulation_inputs.h5 ROI="$roi" N_JOBS=15 \
+    CALIBRATION="experiments/hrf_simulations/calibration/sub07-$roi-v1" \
+    OUTPUT="experiments/hrf_simulations/outputs/sub07-$roi-expanded-v1" \
+    REPORT="experiments/hrf_simulations/reports/sub07-$roi-expanded-v1" \
+    NOTEBOOK="experiments/hrf_simulations/$roi-results.ipynb" || break
+done
+```
+
+Each region receives its own noise/SNR calibration. The workflow rejects reuse
+of another region's calibration. Older single-region bundles remain readable;
+to add the new regions, rerun export into a **new** HDF5 filename. Copying the new
+code cannot add BOLD data absent from an existing file.
+
+The tracked `shared_regions.npz` and its JSON sidecar contain mask indices and
+anatomical provenance. To reproduce them from the full dataset:
+
+```bash
+uv run python -m experiments.hrf_simulations.rois \
+  --freesurfer /path/to/NSD/BIDS/derivatives/freesurfer-NSD/subj07 \
+  --cifti /path/to/NSD/BIDS/derivatives/nsdpreproc/sub-07/ses-nsd11/func/sub-07_ses-nsd11_task-nsdcore_run-01_space-fsLR_den-32k_desc-layerB2_bold.dtseries.nii
 ```
 
 `BUNDLE` replaces BIDS/mask access in both calibration and simulation. The current
