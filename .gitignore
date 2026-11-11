@@ -16,3 +16,6 @@ logs
 # Portable NSD simulation inputs contain measured participant data.
 experiments/hrf_simulations/*.h5
 experiments/hrf_simulations/*.h5.*
+
+# remove uv.lock since this conflicts across systems
+uv.lock
