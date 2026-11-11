@@ -1,6 +1,8 @@
 """Portable extraction must reproduce direct BIDS loading without source files."""
 
 import shutil
+import json
+from argparse import Namespace
 
 import numpy as np
 import pandas as pd
@@ -59,3 +61,22 @@ def test_cli_bundle_path_and_makefile(tmp_path):
     args = _parser().parse_args(['run', '--bundle', str(tmp_path/'data.h5'), '--calibration', 'c', '--output', 'o'])
     assert args.bundle == tmp_path/'data.h5'
     assert '--bundle' in dry_run('workflow', 'BUNDLE=/tmp/data.h5', f'CALIBRATION={tmp_path / "new"}')
+
+
+def test_reject_donor_calibration_from_other_subject(tmp_path):
+    from experiments.hrf_simulations.cli import _check_calibration_subject
+    (tmp_path / 'provenance.json').write_text(json.dumps({'subject': 'sub-07'}))
+    with pytest.raises(ValueError, match='subject'):
+        _check_calibration_subject(Namespace(calibration=tmp_path, subject='sub-01'))
+    _check_calibration_subject(Namespace(calibration=tmp_path, subject='sub-07'))
+
+
+def test_bundle_cli_loader_without_source_or_mask(bids, tmp_path):
+    from experiments.hrf_simulations.bundle import export_bundle
+    from experiments.hrf_simulations.cli import _session_runs, _inventory
+    path = tmp_path / 'offline.h5'
+    export_bundle(bids, path, np.array([0]))
+    args = Namespace(bundle=path, subject='sub-07', sessions=[11], mask=tmp_path/'absent')
+    shutil.rmtree(bids / 'derivatives')
+    assert len(_session_runs(args, 11)) == 2
+    assert len(_inventory(args)['bundle_sha256']) == 64
