@@ -10,6 +10,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "src/boldtailor/_resources/GLMsingle-LICENSE.txt"]
 requires-python = ">=3.12"
+# NOTE: these are older due to requirements on sherlock
 dependencies = [
   "filelock",
   "joblib>=1.3",
