@@ -12,3 +12,7 @@ dist/
 *.ipynb
 logs
 .DS_Store
+
+# Portable NSD simulation inputs contain measured participant data.
+experiments/hrf_simulations/*.h5
+experiments/hrf_simulations/*.h5.*

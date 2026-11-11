@@ -4,6 +4,65 @@ Implements the amplitude/duration comparison in [plan.md](plan.md), adapting
 the four task models in Mumford et al. (2024). All commands run from the
 repository root. No additional dependencies are required.
 
+## Transfer only the simulation inputs
+
+On the computer holding the complete NSD tree, export all discovered subjects,
+sessions and runs into one compressed HDF5 file:
+
+```bash
+uv sync
+uv run python -m experiments.hrf_simulations.bundle \
+  --bids-root /path/to/NSD/BIDS \
+  --output /path/to/nsd_simulation_inputs.h5
+```
+
+The default selection is the same 1,750 fsLR fusiform columns used for sub-07,
+**applied to every subject**, as requested. This is a common surface selection,
+not a subject-specific anatomical ROI. The exporter verifies matching CIFTI
+brainordinate ordering across runs and refuses incompatible inputs. Override
+`--mask` with an NPZ containing `feature_ids` to choose another shared selection.
+Optional `--subjects sub-01 sub-07` and `--sessions 10 11 19` restrict extraction;
+without these options it includes every discovered layerB2 run, including
+sessions outside 10–19. It does not create missing CIFTIs.
+
+The HDF5 file contains losslessly compressed selected BOLD time series, exact
+frame times, original events and NSD motion TSVs, vertex identities, and source
+paths/hashes. It contains everything required to recompute calibration and the
+80-second HPF nuisance design. No CIFTI files, Workbench installation, or mask
+file are needed on the receiving machine for the bundle workflow. Only one run
+is processed at a time during export; source CIFTIs are also read sequentially
+for hashing. This step can take substantial disk I/O time but does not fit models.
+
+Missing events or confounds cause an error by default. If some sessions are
+incomplete, explicitly use `--skip-incomplete` to omit those runs; every omission
+and its reason are recorded in the embedded manifest. Invalid motion, incompatible
+vertex ordering, and corrupt data are always errors. Calibration still requires
+at least two runs per requested session. Extraction writes a temporary file and
+publishes the destination only on success; it refuses to overwrite an existing
+bundle. An interrupted export must be restarted (there is no export resume).
+
+Copy **only the `.h5` file** to the other computer, then run:
+
+```bash
+uv sync
+uv run make -f experiments/hrf_simulations/Makefile workflow \
+  STAGE=expanded BUNDLE=/path/to/nsd_simulation_inputs.h5 N_JOBS=15 \
+  CALIBRATION=experiments/hrf_simulations/calibration/bundle-sub07-v1 \
+  OUTPUT=experiments/hrf_simulations/outputs/bundle-sub07-expanded-v1 \
+  REPORT=experiments/hrf_simulations/reports/bundle-sub07-expanded-v1
+```
+
+`BUNDLE` replaces BIDS/mask access in both calibration and simulation. The current
+experimental grid remains sessions 10–19 (expanded core: 10/11/19); exporting all
+sessions does not silently broaden it. To analyze another subject, set
+`SUBJECT=sub-01` and use distinct calibration/output/report directories. Donors
+remain within that subject; the CLI rejects cross-subject calibration reuse.
+Archive contents can be listed without NSD:
+
+```bash
+uv run python -c 'from experiments.hrf_simulations.bundle import inventory; print(inventory("/path/to/nsd_simulation_inputs.h5"))'
+```
+
 ## Expanded study on another computer
 
 Install uv, clone this repository, check out `main`, and run `uv sync` from the

@@ -13,6 +13,7 @@ CLI := $(UV_RUN) python -m experiments.hrf_simulations.cli
 N_JOBS ?= 15
 STAGE ?= pilot
 BIDS_ROOT ?= /Volumes/extdata1/NSD/BIDS
+BUNDLE ?=
 SUBJECT ?= sub-07
 MASK ?= $(ROOT)/experiments/hrf_estimation/pilot_inputs/sub-07_space-fsLR_den-32k_desc-fusiform_mask.npz
 CALIBRATION ?= $(SIM_DIR)/calibration/nsd-v1
@@ -30,6 +31,7 @@ CASE ?=
 SNR ?=
 RUN_ARGS ?=
 GRID_ARGS = $(if $(strip $(SESSIONS)),--sessions $(SESSIONS)) $(if $(strip $(REPLICATES)),--replicates $(REPLICATES))
+BUNDLE_ARGS = $(if $(strip $(BUNDLE)),--bundle "$(BUNDLE)")
 CASE_ARGS = $(if $(strip $(LIMIT)),--limit $(LIMIT)) $(if $(strip $(CASE)),--case $(CASE)) $(if $(strip $(SNR)),--snr $(SNR))
 
 # Fifteen processes, one numerical-library thread each.
@@ -54,7 +56,7 @@ plan:
 
 $(CALIBRATION)/COMPLETE.json:
 	cd "$(ROOT)" && $(CLI) calibrate --bids-root "$(BIDS_ROOT)" \
-	  --subject "$(SUBJECT)" --mask "$(MASK)" --sessions $(CALIBRATION_SESSIONS) \
+	  --subject "$(SUBJECT)" --mask "$(MASK)" $(BUNDLE_ARGS) --sessions $(CALIBRATION_SESSIONS) \
 	  --output "$(CALIBRATION)"
 
 calibrate: $(CALIBRATION)/COMPLETE.json
@@ -62,7 +64,7 @@ calibrate: $(CALIBRATION)/COMPLETE.json
 
 run:
 	cd "$(ROOT)" && $(CLI) run --calibration "$(CALIBRATION)" --output "$(OUTPUT)" \
-	  --bids-root "$(BIDS_ROOT)" --subject "$(SUBJECT)" --mask "$(MASK)" \
+	  --bids-root "$(BIDS_ROOT)" --subject "$(SUBJECT)" --mask "$(MASK)" $(BUNDLE_ARGS) \
 	  --stage "$(STAGE)" --n-jobs "$(N_JOBS)" $(GRID_ARGS) $(CASE_ARGS) $(RUN_ARGS)
 
 report:

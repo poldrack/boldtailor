@@ -49,6 +49,9 @@ def _parser():
         command.add_argument("--sessions", nargs="+", type=int)
     for command in (calibration, run):
         command.add_argument(
+            "--bundle", type=Path, help="portable HDF5 inputs instead of BIDS and mask"
+        )
+        command.add_argument(
             "--bids-root", type=Path, default=Path("/Volumes/extdata1/NSD/BIDS")
         )
         command.add_argument("--subject", default="sub-07")
@@ -81,6 +84,16 @@ def _parser():
 
 
 def _inventory(args):
+    if args.bundle:
+        from experiments.hrf_simulations.bundle import bundle_provenance
+
+        return dict(
+            **bundle_provenance(args.bundle),
+            subject=args.subject,
+            sessions=args.sessions,
+            hpf_seconds=80.0,
+            implementation=implementation_fingerprint(),
+        )
     sources = []
     for s in args.sessions:
         for spec in discover_runs(args.bids_root, args.subject, [s]):
@@ -112,24 +125,47 @@ def _inventory(args):
     )
 
 
+def _session_runs(args, session, first_vertex=False):
+    if args.bundle:
+        from experiments.hrf_simulations.bundle import load_session
+
+        return load_session(
+            args.bundle, args.subject, session, first_vertex=first_vertex
+        )
+    vertices = np.load(args.mask)["feature_ids"]
+    if first_vertex:
+        vertices = vertices[:1]
+    return tuple(
+        load_run(spec, vertices, 80.0)
+        for spec in discover_runs(args.bids_root, args.subject, [session])
+    )
+
+
 def _calibrate(args):
     if any(s not in range(10, 20) for s in args.sessions):
         raise ValueError("use sessions 10–19 only")
-    vertices = np.load(args.mask)["feature_ids"]
     provenance = _inventory(args)
 
     def sessions():
         for s in args.sessions:
-            specs = discover_runs(args.bids_root, args.subject, [s])
-            yield s, tuple(load_run(spec, vertices, 80.0) for spec in specs)
+            yield s, _session_runs(args, s)
 
     calibrate(sessions(), args.output, provenance)
+
+
+def _check_calibration_subject(args):
+    provenance = json.loads((args.calibration / "provenance.json").read_text())
+    if provenance.get("subject") != args.subject:
+        raise ValueError(
+            "calibration subject does not match requested subject; use a separate calibration directory"
+        )
 
 
 def _run(args):
     if args.n_jobs < 1 or (args.limit is not None and args.limit < 1):
         raise ValueError("n_jobs and limit must be positive")
     verify(args.calibration)
+    _check_calibration_subject(args)
     cases = simulation_cases(args.stage, args.replicates, args.sessions)
     if args.case:
         cases = [case for case in cases if case["id"] == args.case]
@@ -149,13 +185,9 @@ def _run(args):
 
     grid_id = sha256(json.dumps(cases, sort_keys=True).encode()).hexdigest()[:12]
     write_json(args.output / f"grid-{grid_id}.json", cases)
-    vertices = np.load(args.mask)["feature_ids"][:1]
     library = default_hrf_library()
     for s in sorted({c["session"] for c in cases}):
-        runs = tuple(
-            load_run(spec, vertices, 80.0)
-            for spec in discover_runs(args.bids_root, args.subject, [s])
-        )
+        runs = _session_runs(args, s, first_vertex=True)
         selected = [c for c in cases if c["session"] == s]
         profiles = {
             seed: draw_profile(args.calibration, s, runs, seed)
