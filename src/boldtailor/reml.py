@@ -78,6 +78,8 @@ def _validate(groups, random_design):
         _check_group(group, random, index)
     if len({g.signals.shape[1] for g in groups}) != 1:
         raise ValueError("feature counts differ across groups")
+    if groups[0].signals.shape[1] == 0:
+        raise ValueError("signals must have at least one feature")
 
 
 def _feature_rho(rho, n_features):
