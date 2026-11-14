@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_criterion import criterion, profiled_variance
+from boldtailor._reml_criterion import criterion, criterion_slope, profiled_variance
 from boldtailor._reml_terms import project_fixed, reml_terms
 from tests.reml_oracles import dense_criterion, simulate
 
@@ -87,3 +87,20 @@ def test_no_random_directions_is_constant_in_ratio():
     values = [criterion(_at(r), terms) for r in RATIOS]
     for value in values:
         assert_allclose(value, values[0], rtol=1e-12)
+
+
+SLOPE_RATIOS = [1e-3, 0.1, 1.0, 10.0, 1e3]
+
+
+def _central_difference(terms, ratio, step=1e-4):
+    upper = criterion(_at(ratio * np.exp(step)), terms)
+    lower = criterion(_at(ratio * np.exp(-step)), terms)
+    return (upper - lower) / (2 * step)
+
+
+@pytest.mark.parametrize("rho", [0.0, 0.5])
+def test_slope_matches_finite_differences(rho):
+    terms = _build(rho)[3]
+    for r in SLOPE_RATIOS:
+        expected = _central_difference(terms, r)
+        assert_allclose(criterion_slope(_at(r), terms), expected, rtol=1e-6)
