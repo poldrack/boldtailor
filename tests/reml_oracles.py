@@ -119,5 +119,5 @@ def mixedlm_fit(signals, fixed, random):
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        result = model.fit(reml=True)
+        result = model.fit(reml=True, method="bfgs", gtol=1e-10)
     return result.vcomp[0] / result.scale, result.scale

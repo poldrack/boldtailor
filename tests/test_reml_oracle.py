@@ -39,22 +39,16 @@ EXTRA_CASES = [
 ]
 CASES = _grid_cases() + EXTRA_CASES
 
-# Cases where MixedLM(reml=True) with default settings does not reach the
-# optimum; each was confirmed against dense_fit (see test_matches_dense_fit).
-_STOPS_EARLY = (
-    "MixedLM default optimiser stops short of the REML optimum "
-    "(dense criterion at its estimate is {gap} higher; ratio off by {error})"
-)
+# Cases where MixedLM(reml=True, BFGS, gtol=1e-10) does not reach the REML
+# optimum. Each was confirmed: boldtailor matches dense_fit within 1e-5, and
+# the dense criterion scores MixedLM's estimate worse.
 MIXEDLM_FAILURES = {
-    "g1-eq-z1-r0.05": "REML optimum is on the boundary ratio=0 (dense_fit); "
-    "MixedLM stops at ratio=4.4e-4",
-    "g1-uneq-z3-r0.05": _STOPS_EARLY.format(gap="0.11", error="160%"),
-    "g3-eq-z1-r1.0": _STOPS_EARLY.format(gap="1.1e-7", error="2.8e-4"),
-    "g3-eq-z1-r20.0": _STOPS_EARLY.format(gap="9.1e-7", error="7.9e-4"),
-    "g3-uneq-z1-r20.0": _STOPS_EARLY.format(gap="3.3e-6", error="1.5e-3"),
-    "g12-eq-z1-r20.0": _STOPS_EARLY.format(gap="2.3e-6", error="6.3e-4"),
-    "g12-eq-z3-r20.0": _STOPS_EARLY.format(gap="2.0e-6", error="3.4e-4"),
-    "g12-uneq-z1-r20.0": _STOPS_EARLY.format(gap="1.6e-6", error="5.2e-4"),
+    "g1-eq-z1-r0.05": "REML optimum on boundary ratio=0; boldtailor matches "
+    "dense_fit exactly (ratio 0, sigma2 rel. diff 2.7e-16); dense criterion is "
+    "2.0e-3 worse at MixedLM's ratio=4.4e-4",
+    "g1-uneq-z3-r0.05": "MixedLM stuck away from the optimum; boldtailor "
+    "matches dense_fit (ratio rel. diff 1.9e-7); dense criterion is 0.11 worse "
+    "at MixedLM's ratio=0.0173 (optimum 0.00669)",
 }
 
 
