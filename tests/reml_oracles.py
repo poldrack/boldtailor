@@ -58,12 +58,47 @@ def _group_quadratic_and_logdet(y, c, z, ratio, rho):
     return quad, np.linalg.slogdet(v)[1], k.shape[1]
 
 
-def dense_criterion(signals, fixed, random, ratio: float, rho: float = 0.0):
-    """Profiled restricted criterion from dense covariances on unwhitened data."""
+def _dense_parts(signals, fixed, random, ratio, rho):
     q, logdet, n = 0.0, 0.0, 0
     for y, c, z in zip(signals, fixed, random, strict=True):
         group_q, group_logdet, group_n = _group_quadratic_and_logdet(
             y, c, z, ratio, rho
         )
         q, logdet, n = q + group_q, logdet + group_logdet, n + group_n
+    return q, logdet, n
+
+
+def dense_criterion(signals, fixed, random, ratio: float, rho: float = 0.0):
+    """Profiled restricted criterion from dense covariances on unwhitened data."""
+    q, logdet, n = _dense_parts(signals, fixed, random, ratio, rho)
     return n * np.log(q / n) + logdet
+
+
+def _feature(signals, index):
+    return [y[:, [index]] for y in signals]
+
+
+def _dense_feature_fit(signals, fixed, random, rho):
+    from scipy.optimize import minimize_scalar
+
+    def objective(log_ratio):
+        return dense_criterion(signals, fixed, random, np.exp(log_ratio), rho)[0]
+
+    found = minimize_scalar(
+        objective, bounds=(-30.0, 30.0), method="bounded", options={"xatol": 1e-10}
+    )
+    ratio = float(np.exp(found.x))
+    if dense_criterion(signals, fixed, random, 0.0, rho)[0] <= found.fun:
+        ratio = 0.0
+    q, _, n = _dense_parts(signals, fixed, random, ratio, rho)
+    return ratio, float(q[0] / n)
+
+
+def dense_fit(signals, fixed, random, rho: float = 0.0):
+    """Per-feature (ratio, sigma2) by bounded search on log ratio, compared with 0."""
+    fits = [
+        _dense_feature_fit(_feature(signals, f), fixed, random, rho)
+        for f in range(signals[0].shape[1])
+    ]
+    ratio, sigma2 = (np.array(column) for column in zip(*fits, strict=True))
+    return ratio, sigma2
