@@ -92,15 +92,22 @@ def test_no_random_directions_is_constant_in_ratio():
 SLOPE_RATIOS = [1e-3, 0.1, 1.0, 10.0, 1e3]
 
 
-def _central_difference(terms, ratio, step=1e-4):
+def _central_difference(terms, ratio, step):
     upper = criterion(_at(ratio * np.exp(step)), terms)
     lower = criterion(_at(ratio * np.exp(-step)), terms)
     return (upper - lower) / (2 * step)
+
+
+def _richardson_difference(terms, ratio, step=1e-3):
+    """Central difference in log ratio with the O(step**2) error removed."""
+    coarse = _central_difference(terms, ratio, step)
+    fine = _central_difference(terms, ratio, step / 2)
+    return (4 * fine - coarse) / 3
 
 
 @pytest.mark.parametrize("rho", [0.0, 0.5])
 def test_slope_matches_finite_differences(rho):
     terms = _build(rho)[3]
     for r in SLOPE_RATIOS:
-        expected = _central_difference(terms, r)
+        expected = _richardson_difference(terms, r)
         assert_allclose(criterion_slope(_at(r), terms), expected, rtol=1e-6)
