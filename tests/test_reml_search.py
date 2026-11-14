@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
 from boldtailor._reml_criterion import criterion, criterion_slope
-from boldtailor._reml_search import minimize_ratio
+from boldtailor._reml_search import _log_grid, minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 from tests.reml_oracles import dense_fit, simulate
 
@@ -95,7 +95,7 @@ def test_optimum_is_a_score_root(true_ratio):
     interior = ~optimum.at_zero & ~optimum.at_upper
     assert interior.any()
     slope = criterion_slope(optimum.ratio, terms)[interior]
-    assert np.all(np.abs(slope) <= 1e-8 * sum(t.dof for t in terms))
+    assert np.all(np.abs(slope) <= 1e-10 * sum(t.dof for t in terms))
 
 
 def _shift_example():
@@ -115,3 +115,20 @@ def test_optimum_is_stable_under_fixed_span_shift():
     np.testing.assert_array_equal(shifted.at_zero, base.at_zero)
     assert (~base.at_zero).any()
     assert_allclose(shifted.ratio, base.ratio, rtol=1e-9, atol=0.0)
+
+
+def _best_search_grid_value(terms, n_features):
+    """Lowest criterion over zero and the search's own starting grid."""
+    ratios = np.concatenate([[0.0], np.exp(_log_grid(terms, 121))])
+    stacked = np.broadcast_to(ratios[:, None], (ratios.size, n_features))
+    return criterion(stacked, terms).min(axis=0)
+
+
+@pytest.mark.parametrize("true_ratio", [0.0, 0.1, 1.0, 10.0])
+@pytest.mark.parametrize("seed", range(5))
+def test_polish_never_worsens_criterion_beyond_rounding(seed, true_ratio):
+    _, terms = _simulated_terms(seed, true_ratio)
+    grid_value = _best_search_grid_value(terms, N_FEATURES)
+    n = sum(t.dof for t in terms)
+    rounding = 64 * np.finfo(float).eps * (np.abs(grid_value) + n)
+    assert np.all(minimize_ratio(terms).criterion <= grid_value + rounding)
