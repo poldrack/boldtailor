@@ -26,21 +26,39 @@ def pytest_addoption(parser):
         )
     except ValueError:
         pass
+    parser.addoption(
+        "--run-slow",
+        action="store_true",
+        default=False,
+        help="run slow statistical tests; off by default",
+    )
 
 
 def pytest_configure(config):
     config.addinivalue_line(
         "markers", "notebook: executes a notebook kernel; needs --run-notebooks"
     )
+    config.addinivalue_line("markers", "slow: slow statistical test; needs --run-slow")
+
+
+def _skip_unless(config, items, option, keyword, reason):
+    if config.getoption(option):
+        return
+    skip = pytest.mark.skip(reason=reason)
+    for item in items:
+        if keyword in item.keywords:
+            item.add_marker(skip)
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-notebooks"):
-        return
-    skip = pytest.mark.skip(reason="notebook execution needs --run-notebooks")
-    for item in items:
-        if "notebook" in item.keywords:
-            item.add_marker(skip)
+    _skip_unless(
+        config,
+        items,
+        "--run-notebooks",
+        "notebook",
+        "notebook execution needs --run-notebooks",
+    )
+    _skip_unless(config, items, "--run-slow", "slow", "slow test needs --run-slow")
 
 
 @pytest.fixture

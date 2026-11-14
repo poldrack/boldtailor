@@ -40,6 +40,8 @@ dev = [
   "nbclient>=0.11.0",
   "pytest",
   "pytest-cov",
+  "statsmodels>=0.15.0",
+  "hypothesis>=6.170.15",
 ]
 
 [tool.pytest.ini_options]
