@@ -102,3 +102,22 @@ def dense_fit(signals, fixed, random, rho: float = 0.0):
     ]
     ratio, sigma2 = (np.array(column) for column in zip(*fits, strict=True))
     return ratio, sigma2
+
+
+def mixedlm_fit(signals, fixed, random):
+    """Single-feature (ratio, sigma2) from statsmodels MixedLM with REML."""
+    import warnings
+
+    import scipy.linalg
+    from statsmodels.regression.mixed_linear_model import MixedLM, VCSpec
+
+    groups = np.repeat(np.arange(len(signals)), [len(y) for y in signals])
+    names = [[f"z{g}_{j}" for j in range(z.shape[1])] for g, z in enumerate(random)]
+    vc = VCSpec(["z"], [names], [list(random)])
+    model = MixedLM(
+        np.concatenate(signals), scipy.linalg.block_diag(*fixed), groups, exog_vc=vc
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        result = model.fit(reml=True)
+    return result.vcomp[0] / result.scale, result.scale
