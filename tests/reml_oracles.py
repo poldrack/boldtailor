@@ -45,3 +45,25 @@ def simulate(
         for n in scans
     ]
     return tuple(list(part) for part in zip(*groups, strict=True))
+
+
+def _group_quadratic_and_logdet(y, c, z, ratio, rho):
+    from scipy.linalg import null_space
+
+    k = null_space(c.T)
+    cov = ar1_correlation(len(y), rho) + ratio * z @ z.T
+    v = k.T @ cov @ k
+    projected = k.T @ y
+    quad = np.sum(projected * np.linalg.solve(v, projected), axis=0)
+    return quad, np.linalg.slogdet(v)[1], k.shape[1]
+
+
+def dense_criterion(signals, fixed, random, ratio: float, rho: float = 0.0):
+    """Profiled restricted criterion from dense covariances on unwhitened data."""
+    q, logdet, n = 0.0, 0.0, 0
+    for y, c, z in zip(signals, fixed, random, strict=True):
+        group_q, group_logdet, group_n = _group_quadratic_and_logdet(
+            y, c, z, ratio, rho
+        )
+        q, logdet, n = q + group_q, logdet + group_logdet, n + group_n
+    return n * np.log(q / n) + logdet

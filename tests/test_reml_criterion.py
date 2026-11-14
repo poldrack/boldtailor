@@ -1,0 +1,89 @@
+import numpy as np
+import pytest
+from numpy.testing import assert_allclose
+
+from boldtailor._reml_criterion import criterion, profiled_variance
+from boldtailor._reml_terms import project_fixed, reml_terms
+from tests.reml_oracles import dense_criterion, simulate
+
+RATIOS = [0.0, 0.01, 1.0, 10.0, 1e3]
+N_FEATURES = 3
+
+
+def _build(rho):
+    signals, fixed, random = simulate(
+        np.random.default_rng(5),
+        scans=(40, 55, 48),
+        n_features=N_FEATURES,
+        rho=rho,
+    )
+    terms = [
+        reml_terms(project_fixed(y, c, rho), z)
+        for y, c, z in zip(signals, fixed, random, strict=True)
+    ]
+    return signals, fixed, random, terms
+
+
+def _at(ratio):
+    return np.full(N_FEATURES, ratio)
+
+
+@pytest.fixture
+def iid():
+    return _build(0.0)
+
+
+@pytest.fixture
+def ar1():
+    return _build(0.5)
+
+
+def _assert_differences_match(data, rho):
+    signals, fixed, random, terms = data
+    base = criterion(_at(0.0), terms)
+    dense_base = dense_criterion(signals, fixed, random, 0.0, rho)
+    for r in RATIOS:
+        expected = dense_criterion(signals, fixed, random, r, rho) - dense_base
+        assert_allclose(
+            criterion(_at(r), terms) - base, expected, rtol=1e-9, atol=1e-9
+        )
+
+
+def test_criterion_differences_match_dense_iid(iid):
+    _assert_differences_match(iid, 0.0)
+
+
+def test_criterion_differences_match_dense_ar1(ar1):
+    _assert_differences_match(ar1, 0.5)
+
+
+def test_profiled_variance_matches_dense_quadratic_form(iid):
+    signals, fixed, random, terms = iid
+    n = sum(t.dof for t in terms)
+    for r in RATIOS:
+        dense = dense_criterion(signals, fixed, random, r)
+        logdet = np.sum([np.log1p(r * t.singular2).sum() for t in terms])
+        expected = np.exp((dense - logdet) / n)
+        assert_allclose(profiled_variance(_at(r), terms), expected, rtol=1e-9)
+
+
+def test_criterion_broadcasts_over_leading_axes(iid):
+    terms = iid[3]
+    ratios = np.random.default_rng(1).uniform(0, 5, size=(7, N_FEATURES))
+    stacked = criterion(ratios, terms)
+    assert stacked.shape == ratios.shape
+    separate = np.stack([criterion(row, terms) for row in ratios])
+    assert_allclose(stacked, separate, rtol=1e-12)
+
+
+def test_no_random_directions_is_constant_in_ratio():
+    signals, fixed, _ = simulate(
+        np.random.default_rng(2), scans=(40, 30), n_features=N_FEATURES
+    )
+    terms = [
+        reml_terms(project_fixed(y, c), None)
+        for y, c in zip(signals, fixed, strict=True)
+    ]
+    values = [criterion(_at(r), terms) for r in RATIOS]
+    for value in values:
+        assert_allclose(value, values[0], rtol=1e-12)
