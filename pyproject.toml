@@ -42,9 +42,6 @@ dev = [
   "pytest-cov",
 ]
 
-[tool.uv]
-find-links = ["/oak/stanford/groups/russpold/uv_wheelhouse"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
