@@ -1,0 +1,193 @@
+import numpy as np
+import pytest
+from numpy.testing import assert_allclose, assert_array_equal
+
+import boldtailor.reml as reml
+from boldtailor.reml import RemlGroup, RemlSelection, fit_reml, select_random_design
+from tests.reml_oracles import simulate
+
+N_FEATURES = 4
+FIT_FIELDS = ("ratio", "noise_variance", "effect_variance", "criterion", "at_upper")
+
+
+def _groups(signals, fixed):
+    return [RemlGroup(y, c) for y, c in zip(signals, fixed, strict=True)]
+
+
+def _columns(signals, index):
+    return [y[:, index] for y in signals]
+
+
+def _decoys(rng, fixed, count, n_random=3):
+    return [[rng.normal(size=(len(c), n_random)) for c in fixed] for _ in range(count)]
+
+
+@pytest.fixture
+def planted():
+    """Signals simulated from candidate 2 of 5 at ratio 5."""
+    rng = np.random.default_rng(3)
+    signals, fixed, random = simulate(rng, ratio=5.0, n_features=N_FEATURES)
+    candidates = _decoys(rng, fixed, 4)
+    candidates.insert(2, random)
+    return signals, fixed, candidates
+
+
+def _assert_same_fit(fit, expected):
+    for name in FIT_FIELDS:
+        assert_array_equal(getattr(fit, name), getattr(expected, name))
+    assert fit.status == expected.status
+    assert_array_equal(fit.rho, expected.rho)
+    assert fit.restricted_dof == expected.restricted_dof
+
+
+def _orthogonal_signals(rng, fixed, candidates):
+    """Signals with no component along any candidate beyond the fixed design."""
+    signals = []
+    for index, c in enumerate(fixed):
+        span = np.column_stack([c] + [z[index] for z in candidates])
+        noise = rng.normal(size=(len(c), 2))
+        residual = noise - span @ np.linalg.lstsq(span, noise, rcond=None)[0]
+        signals.append(residual + c @ rng.normal(size=(c.shape[1], 2)))
+    return signals
+
+
+def test_planted_design_wins(planted):
+    signals, fixed, candidates = planted
+    groups = _groups(signals, fixed)
+    selection = select_random_design(groups, candidates)
+    assert isinstance(selection, RemlSelection)
+    assert selection.n_candidates == 5
+    assert selection.winner.dtype == np.int64
+    assert_array_equal(selection.winner, np.full(N_FEATURES, 2))
+    assert (selection.gap > 0).all()
+    _assert_same_fit(selection.fit, fit_reml(groups, candidates[2]))
+
+
+def test_results_are_read_only(planted):
+    signals, fixed, candidates = planted
+    selection = select_random_design(_groups(signals, fixed), candidates)
+    with pytest.raises(ValueError):
+        selection.winner[0] = 0
+    with pytest.raises(ValueError):
+        selection.gap[0] = 0.0
+
+
+def test_ties_go_to_earlier_candidate(planted):
+    signals, fixed, candidates = planted
+    design = candidates[2]
+    selection = select_random_design(_groups(signals, fixed), [design, design])
+    assert_array_equal(selection.winner, np.zeros(N_FEATURES))
+    assert_array_equal(selection.gap, np.zeros(N_FEATURES))
+
+
+def test_no_supported_candidate_gives_sentinel():
+    rng = np.random.default_rng(4)
+    _, fixed, _ = simulate(rng)
+    candidates = _decoys(rng, fixed, 3)
+    signals = _orthogonal_signals(rng, fixed, candidates)
+    groups = _groups(signals, fixed)
+    selection = select_random_design(groups, candidates)
+    at_zero = fit_reml(groups, [None] * len(groups))
+    assert_array_equal(selection.winner, [-1, -1])
+    assert np.isnan(selection.gap).all()
+    assert selection.fit.status == ("variance_zero", "variance_zero")
+    assert_array_equal(selection.fit.ratio, 0.0)
+    assert_array_equal(selection.fit.effect_variance, 0.0)
+    assert_allclose(selection.fit.criterion, at_zero.criterion, rtol=1e-12)
+    assert_allclose(selection.fit.noise_variance, at_zero.noise_variance, rtol=1e-12)
+
+
+def test_no_signal_feature_gives_sentinel(planted):
+    signals, fixed, candidates = planted
+    signals = [np.column_stack([y[:, 0], np.zeros(len(y)), y[:, 1]]) for y in signals]
+    groups = _groups(signals, fixed)
+    selection = select_random_design(groups, candidates)
+    reference = select_random_design(
+        _groups(_columns(signals, [0, 2]), fixed), candidates
+    )
+    assert_array_equal(selection.winner, [2, -1, 2])
+    assert np.isnan(selection.gap[1])
+    assert selection.fit.status[1] == "no_signal"
+    assert np.isnan(selection.fit.noise_variance[1])
+    assert np.isnan(selection.fit.criterion[1])
+    assert selection.fit.ratio[1] == 0.0
+    assert_array_equal(selection.gap[[0, 2]], reference.gap)
+    assert_array_equal(selection.fit.criterion[[0, 2]], reference.fit.criterion)
+
+
+def test_single_ok_candidate_has_nan_gap(planted):
+    signals, fixed, candidates = planted
+    groups = _groups(signals, fixed)
+    selection = select_random_design(groups, [[None, None], candidates[2]])
+    assert_array_equal(selection.winner, np.ones(N_FEATURES))
+    assert np.isnan(selection.gap).all()
+    _assert_same_fit(selection.fit, fit_reml(groups, candidates[2]))
+
+
+class _OnePass:
+    """Iterable of candidates that counts ``next`` calls and allows one pass."""
+
+    def __init__(self, candidates):
+        self.candidates, self.calls, self.passes = candidates, 0, 0
+
+    def __iter__(self):
+        self.passes += 1
+        if self.passes > 1:
+            raise AssertionError("candidates iterated twice")
+        for candidate in self.candidates:
+            self.calls += 1
+            yield candidate
+
+
+def test_candidates_consumed_once(planted):
+    signals, fixed, candidates = planted
+    once = _OnePass(candidates)
+    rho = np.array([0.0, 0.2, 0.2, 0.4])
+    selection = select_random_design(_groups(signals, fixed), once, rho=rho)
+    assert once.calls == len(candidates)
+    assert once.passes == 1
+    assert selection.n_candidates == len(candidates)
+    assert_array_equal(selection.fit.rho, rho)
+
+
+def test_invalid_candidates_raise(planted):
+    signals, fixed, candidates = planted
+    groups = _groups(signals, fixed)
+    with pytest.raises(ValueError, match="candidate"):
+        select_random_design(groups, [])
+    with pytest.raises(ValueError, match="group"):
+        select_random_design(groups, [candidates[0], candidates[1][:1]])
+    short = [candidates[1][0][:-1], candidates[1][1]]
+    with pytest.raises(ValueError, match="scan"):
+        select_random_design(groups, [candidates[0], short])
+
+
+def test_per_feature_rho_equals_separate_selections(planted):
+    signals, fixed, candidates = planted
+    rho = np.array([0.0, 0.3, 0.3, 0.6])
+    selection = select_random_design(_groups(signals, fixed), candidates, rho=rho)
+    for value, index in ((0.0, [0]), (0.3, [1, 2]), (0.6, [3])):
+        groups = _groups(_columns(signals, index), fixed)
+        single = select_random_design(groups, candidates, rho=value)
+        assert_array_equal(selection.winner[index], single.winner)
+        assert_array_equal(selection.gap[index], single.gap)
+        for name in FIT_FIELDS:
+            assert_array_equal(
+                getattr(selection.fit, name)[index], getattr(single.fit, name)
+            )
+        assert [selection.fit.status[i] for i in index] == list(single.fit.status)
+
+
+def test_fixed_projection_built_once_per_rho(planted, monkeypatch):
+    signals, fixed, candidates = planted
+    calls = []
+    original = reml.project_fixed
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(reml, "project_fixed", counting)
+    rho = np.array([0.0, 0.0, 0.5, 0.5])
+    select_random_design(_groups(signals, fixed), candidates[:4], rho=rho)
+    assert len(calls) == 4
