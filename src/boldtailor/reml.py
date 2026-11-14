@@ -1,6 +1,6 @@
 """Scalar restricted maximum likelihood for one random-effect variance."""
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -58,28 +58,39 @@ def _check_matrix(values, name, index):
     _check_finite(values, name, index)
 
 
-def _check_group(group, random, index):
+def _check_group(group, index):
     _check_matrix(group.signals, "signals", index)
     _check_matrix(group.fixed_design, "fixed_design", index)
-    scans = {group.signals.shape[0], group.fixed_design.shape[0]}
-    if random is not None:
-        _check_matrix(random, "random_design", index)
-        scans.add(np.shape(random)[0])
-    if len(scans) != 1:
+    if group.signals.shape[0] != group.fixed_design.shape[0]:
         raise ValueError(f"scan counts differ within group {index}")
 
 
-def _validate(groups, random_design):
+def _check_random(group, random, index):
+    if random is None:
+        return
+    _check_matrix(random, "random_design", index)
+    if np.shape(random)[0] != group.signals.shape[0]:
+        raise ValueError(f"scan counts differ within group {index}")
+
+
+def _validate_groups(groups):
     if len(groups) == 0:
         raise ValueError("at least one group is required")
-    if len(random_design) != len(groups):
-        raise ValueError("random_design must have one entry per group")
-    for index, (group, random) in enumerate(zip(groups, random_design, strict=True)):
-        _check_group(group, random, index)
+    for index, group in enumerate(groups):
+        _check_group(group, index)
     if len({g.signals.shape[1] for g in groups}) != 1:
         raise ValueError("feature counts differ across groups")
     if groups[0].signals.shape[1] == 0:
         raise ValueError("signals must have at least one feature")
+
+
+def _checked_random(groups, random_design, label):
+    """Validate one random design per group and return it as float arrays."""
+    if len(random_design) != len(groups):
+        raise ValueError(f"{label} must have one entry per group")
+    for index, (group, random) in enumerate(zip(groups, random_design, strict=True)):
+        _check_random(group, random, index)
+    return [_as_random(z) for z in random_design]
 
 
 def _feature_rho(rho, n_features):
@@ -100,17 +111,54 @@ def _as_random(random):
 # ---------------------------------------------------------------- fitting
 
 
-def _group_terms(groups, random_design, columns, rho):
+@dataclass(frozen=True)
+class _Subset:
+    """Live columns of one rho value and their fixed projections per group."""
+
+    columns: np.ndarray
+    projections: list
+    dof: int
+
+
+def _project(groups, columns, rho):
+    return [project_fixed(g.signals[:, columns], g.fixed_design, rho) for g in groups]
+
+
+def _live(projections):
+    energy = sum(p.energy for p in projections)
+    raw_energy = sum(p.raw_energy for p in projections)
+    return energy > _NO_SIGNAL_FACTOR * np.finfo(float).eps * raw_energy
+
+
+def _live_subset(groups, columns, rho):
+    """Project one rho subset; when it mixes in dead features, re-project the live."""
+    projections = _project(groups, columns, rho)
+    live = _live(projections)
+    if live.any() and not live.all():
+        projections = _project(groups, columns[live], rho)
+    return _Subset(columns[live], projections, sum(p.dof for p in projections))
+
+
+def _subsets(groups, rho):
     return [
-        reml_terms(project_fixed(g.signals[:, columns], g.fixed_design, rho), z)
-        for g, z in zip(groups, random_design, strict=True)
+        _live_subset(groups, np.flatnonzero(rho == value), float(value))
+        for value in np.unique(rho)
     ]
 
 
-def _live(terms):
-    energy = sum(t.energy for t in terms)
-    raw_energy = sum(t.raw_energy for t in terms)
-    return energy > _NO_SIGNAL_FACTOR * np.finfo(float).eps * raw_energy
+def _fit_values(subset, random_design):
+    """Fit one candidate on one subset; arrays are indexed like ``subset.columns``."""
+    terms = [
+        reml_terms(p, z) for p, z in zip(subset.projections, random_design, strict=True)
+    ]
+    optimum = minimize_ratio(terms)
+    return {
+        "ratio": optimum.ratio,
+        "noise_variance": profiled_variance(optimum.ratio, terms),
+        "criterion": optimum.criterion,
+        "status": np.where(optimum.at_zero, "variance_zero", "ok"),
+        "at_upper": optimum.at_upper,
+    }
 
 
 def _empty_result(n_features):
@@ -123,24 +171,9 @@ def _empty_result(n_features):
     }
 
 
-def _store(result, index, terms):
-    optimum = minimize_ratio(terms)
-    result["ratio"][index] = optimum.ratio
-    result["noise_variance"][index] = profiled_variance(optimum.ratio, terms)
-    result["criterion"][index] = optimum.criterion
-    result["status"][index] = np.where(optimum.at_zero, "variance_zero", "ok")
-    result["at_upper"][index] = optimum.at_upper
-
-
-def _fit_subset(result, groups, random_design, columns, rho):
-    """Fit one rho subset; dead features are dropped before the live refit."""
-    terms = _group_terms(groups, random_design, columns, rho)
-    live = _live(terms)
-    if live.any() and not live.all():
-        terms = _group_terms(groups, random_design, columns[live], rho)
-    if live.any():
-        _store(result, columns[live], terms)
-    return sum(t.dof for t in terms)
+def _write(result, columns, values, keep=slice(None)):
+    for name, array in values.items():
+        result[name][columns[keep]] = array[keep]
 
 
 def _assemble(result, rho, restricted_dof) -> RemlFit:
@@ -157,6 +190,17 @@ def _assemble(result, rho, restricted_dof) -> RemlFit:
     )
 
 
+def _prepare(groups, rho):
+    rho = _feature_rho(rho, groups[0].signals.shape[1])
+    return rho, _subsets(groups, rho)
+
+
+def _fill(result, subsets, random_design):
+    for subset in subsets:
+        if subset.columns.size:
+            _write(result, subset.columns, _fit_values(subset, random_design))
+
+
 def fit_reml(
     groups: Sequence[RemlGroup],
     random_design: Sequence[np.ndarray | None],
@@ -164,12 +208,92 @@ def fit_reml(
     rho: float | np.ndarray = 0.0,
 ) -> RemlFit:
     """Estimate the variance ratio of the random effects, feature by feature."""
-    _validate(groups, random_design)
-    random_design = [_as_random(z) for z in random_design]
-    n_features = groups[0].signals.shape[1]
-    rho = _feature_rho(rho, n_features)
-    result = _empty_result(n_features)
-    for value in np.unique(rho):
-        columns = np.flatnonzero(rho == value)
-        dof = _fit_subset(result, groups, random_design, columns, float(value))
-    return _assemble(result, rho, dof)
+    _validate_groups(groups)
+    random_design = _checked_random(groups, random_design, "random_design")
+    rho, subsets = _prepare(groups, rho)
+    result = _empty_result(rho.size)
+    _fill(result, subsets, random_design)
+    return _assemble(result, rho, subsets[-1].dof)
+
+
+# ---------------------------------------------------------------- selection
+
+
+@dataclass(frozen=True)
+class RemlSelection:
+    """Per-feature best random design among candidates, by restricted likelihood."""
+
+    winner: np.ndarray
+    fit: RemlFit
+    gap: np.ndarray
+    n_candidates: int
+
+    def __post_init__(self):
+        own_fields(self, ("winner",), dtype=np.int64)
+        own_fields(self, ("gap",))
+
+
+def _empty_race(n_features):
+    return {
+        "winner": np.full(n_features, -1, dtype=np.int64),
+        "best": np.full(n_features, np.inf),
+        "second": np.full(n_features, np.inf),
+    }
+
+
+def _compete(race, result, columns, values, candidate):
+    """Update the running best and runner-up with one candidate's ok features."""
+    ok = values["status"] == "ok"
+    value = values["criterion"]
+    best, second = race["best"][columns], race["second"][columns]
+    better = ok & (value < best)
+    runner_up = np.where(better, best, np.minimum(second, value))
+    race["second"][columns] = np.where(ok, runner_up, second)
+    race["best"][columns] = np.where(better, value, best)
+    race["winner"][columns[better]] = candidate
+    _write(result, columns, values, better)
+
+
+def _run_candidate(race, result, subsets, random_design, candidate):
+    for subset in subsets:
+        if subset.columns.size:
+            values = _fit_values(subset, random_design)
+            _compete(race, result, subset.columns, values, candidate)
+
+
+def _gap(race):
+    supported = (race["winner"] >= 0) & np.isfinite(race["second"])
+    gap = np.full(supported.shape, np.nan)
+    gap[supported] = race["second"][supported] - race["best"][supported]
+    return gap
+
+
+def _run_race(groups, candidates, subsets, result):
+    race, count = _empty_race(result["ratio"].size), 0
+    for count, candidate in enumerate(candidates, start=1):
+        label = f"candidate {count - 1}"
+        random_design = _checked_random(groups, candidate, label)
+        _run_candidate(race, result, subsets, random_design, count - 1)
+    if count == 0:
+        raise ValueError("at least one candidate is required")
+    return race, count
+
+
+def select_random_design(
+    groups: Sequence[RemlGroup],
+    candidates: Iterable[Sequence[np.ndarray | None]],
+    *,
+    rho: float | np.ndarray = 0.0,
+) -> RemlSelection:
+    """Pick, per feature, the candidate random design with the best criterion."""
+    _validate_groups(groups)
+    rho, subsets = _prepare(groups, rho)
+    result = _empty_result(rho.size)
+    _fill(result, subsets, [None] * len(groups))
+    race, count = _run_race(groups, candidates, subsets, result)
+    return RemlSelection(
+        winner=race["winner"],
+        fit=_assemble(result, rho, subsets[-1].dof),
+        gap=_gap(race),
+        n_candidates=count,
+    )
