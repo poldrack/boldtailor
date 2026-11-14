@@ -4,7 +4,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_criterion import criterion
+from boldtailor._reml_criterion import criterion, criterion_slope
 from boldtailor._reml_search import minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 from tests.reml_oracles import dense_fit, simulate
@@ -86,3 +86,32 @@ def test_no_directions_returns_zero():
     assert optimum.at_zero.all()
     assert not optimum.at_upper.any()
     assert_allclose(optimum.ratio, 0.0, atol=0.0)
+
+
+@pytest.mark.parametrize("true_ratio", [0.05, 1.0, 20.0])
+def test_optimum_is_a_score_root(true_ratio):
+    _, terms = _simulated_terms(3, true_ratio)
+    optimum = minimize_ratio(terms)
+    interior = ~optimum.at_zero & ~optimum.at_upper
+    assert interior.any()
+    slope = criterion_slope(optimum.ratio, terms)[interior]
+    assert np.all(np.abs(slope) <= 1e-8 * sum(t.dof for t in terms))
+
+
+def _shift_example():
+    """Flat-criterion case where golden section alone loses ratio precision."""
+    rng = np.random.default_rng(12)
+    signals, fixed, random = simulate(
+        rng, scans=(34,), n_fixed=2, n_random=3, ratio=0.0, n_features=3
+    )
+    shift = fixed[0] @ rng.normal(scale=10.0, size=(2, 3))
+    return _terms(signals, fixed, random), _terms([signals[0] + shift], fixed, random)
+
+
+def test_optimum_is_stable_under_fixed_span_shift():
+    base_terms, shifted_terms = _shift_example()
+    base = minimize_ratio(base_terms)
+    shifted = minimize_ratio(shifted_terms)
+    np.testing.assert_array_equal(shifted.at_zero, base.at_zero)
+    assert (~base.at_zero).any()
+    assert_allclose(shifted.ratio, base.ratio, rtol=1e-9, atol=0.0)
