@@ -6,11 +6,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from boldtailor._arrays import own_fields
-from boldtailor._reml_criterion import criterion
+from boldtailor._reml_criterion import criterion, criterion_slope
 from boldtailor._reml_terms import RemlTerms
 
 _INVERSE_GOLDEN = (np.sqrt(5.0) - 1.0) / 2.0
 _RELATIVE_SPAN = 1e8
+_BISECTIONS = 64
+_ROUNDING_ULPS = 64
 
 
 @dataclass(frozen=True)
@@ -83,7 +85,49 @@ def _golden_section(terms, low, high, start, start_value, iterations):
         fresh = track(np.where(left, c_new, d_new))
         c, d = np.where(left, c_new, d), np.where(left, c, d_new)
         fc, fd = np.where(left, fresh, fd), np.where(left, fc, fresh)
-    return track.best, track.value
+    return track.best, track.value, low, high
+
+
+def _slope_brackets(terms, low, high):
+    """True where the slope rises from negative at ``low`` to positive at ``high``."""
+    falling = criterion_slope(np.exp(low), terms) < 0
+    return falling & (criterion_slope(np.exp(high), terms) > 0)
+
+
+def _root_bracket(terms, golden, grid):
+    """The golden bracket where it shows a sign change, else the grid bracket."""
+    use_golden = _slope_brackets(terms, *golden)
+    low = np.where(use_golden, golden[0], grid[0])
+    high = np.where(use_golden, golden[1], grid[1])
+    return low, high, use_golden | _slope_brackets(terms, low, high)
+
+
+def _bisect_slope(terms, low, high):
+    """Vectorised bisection for the zero of the slope in log ratio."""
+    for _ in range(_BISECTIONS):
+        middle = 0.5 * (low + high)
+        rising = criterion_slope(np.exp(middle), terms) > 0
+        low, high = np.where(rising, low, middle), np.where(rising, middle, high)
+    return 0.5 * (low + high)
+
+
+def _rounding_slack(value, terms):
+    """Criterion rounding noise: on a flat criterion the golden point can sit a
+    few ulps below the better-determined score root, which must still win."""
+    return _ROUNDING_ULPS * np.finfo(float).eps * (np.abs(value) + _dof(terms))
+
+
+def _dof(terms):
+    return sum(t.dof for t in terms)
+
+
+def _polish(terms, best, value, golden, grid):
+    """Replace the incumbent by the slope root where no worse beyond rounding."""
+    low, high, bracketed = _root_bracket(terms, golden, grid)
+    root = _bisect_slope(terms, low, high)
+    root_value = criterion(np.exp(root), terms)
+    accept = bracketed & (root_value <= value + _rounding_slack(value, terms))
+    return np.where(accept, root, best), np.where(accept, root_value, value)
 
 
 def _zero_optimum(terms, n_features) -> RatioOptimum:
@@ -102,9 +146,10 @@ def _best_positive(terms, grid_size, iterations, n_features):
     index = np.argmin(values, axis=0)
     start = log_grid[index]
     start_value = np.take_along_axis(values, index[None], axis=0)[0]
-    low, high = _bracket(log_grid, index)
-    best, best_value = _golden_section(terms, low, high, start, start_value, iterations)
-    return np.exp(best), best_value, index == log_grid.size - 1
+    grid = _bracket(log_grid, index)
+    best, value, *golden = _golden_section(terms, *grid, start, start_value, iterations)
+    best, value = _polish(terms, best, value, golden, grid)
+    return np.exp(best), value, index == log_grid.size - 1
 
 
 def minimize_ratio(
