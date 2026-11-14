@@ -178,6 +178,13 @@ def test_no_groups_raises():
         fit_reml([], [])
 
 
+def test_zero_features_raises(data):
+    signals, fixed, random = data
+    empty = [y[:, :0] for y in signals]
+    with pytest.raises(ValueError, match="signals"):
+        _fit(empty, fixed, random)
+
+
 def test_invalid_shapes_raise(data):
     signals, fixed, random = data
     groups = _groups(signals, fixed)
