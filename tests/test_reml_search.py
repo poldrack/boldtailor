@@ -190,22 +190,6 @@ def test_neighbour_bracket_shows_sign_change_for_interior_optima(cases):
     assert counts[:, 0].sum() == 0
 
 
-def test_grid_chunks_bound_temporaries_without_changing_the_optimum(monkeypatch):
-    import boldtailor._reml_search as search
-    from boldtailor._reml_criterion import pool_terms
-
-    _, terms = _simulated_terms(5, 1.0, n_features=1750)
-    pooled = pool_terms(terms)
-    row_bytes = 8 * pooled.singular2.size * pooled.residual_ss.size
-    assert search._chunk_rows(pooled) * row_bytes <= 32 * 2**20
-    whole = minimize_ratio(terms)
-    monkeypatch.setattr(search, "_GRID_CHUNK_BYTES", 3 * row_bytes)
-    assert search._chunk_rows(pooled) == 3
-    chunked = minimize_ratio(terms)
-    for name in ("ratio", "criterion", "at_zero", "at_upper"):
-        np.testing.assert_array_equal(getattr(chunked, name), getattr(whole, name))
-
-
 def _two_basin_terms():
     """The review's narrow minimum: bracketed by a slope crossing, yet not the
     lowest grid point, so refining only around the grid argmin loses it."""
@@ -225,6 +209,97 @@ def _two_basin_terms():
             energy=np.array([y2.sum() + rest]),
         )
     ]
+
+
+def _recorded_bytes(monkeypatch):
+    """Record the bytes of the (k, ...) temporary behind every evaluation."""
+    import boldtailor._reml_search as search
+
+    sizes = []
+
+    def recording(function):
+        def wrapped(ratios, pooled):
+            sizes.append(8 * pooled.singular2.size * np.size(ratios))
+            return function(ratios, pooled)
+
+        return wrapped
+
+    for name in ("pooled_criterion", "pooled_slope", "pooled_value_and_slope"):
+        monkeypatch.setattr(search, name, recording(getattr(search, name)))
+    return sizes
+
+
+OPTIMUM_FIELDS = ("ratio", "criterion", "at_zero", "at_upper", "unidentifiable")
+
+
+def _assert_same_optimum(result, expected):
+    for name in OPTIMUM_FIELDS:
+        np.testing.assert_array_equal(getattr(result, name), getattr(expected, name))
+
+
+def test_search_temporaries_stay_within_the_budget(monkeypatch):
+    """One grid row over all features exceeds the budget; batches must not."""
+    import boldtailor._reml_search as search
+
+    _, terms = _simulated_terms(5, 1.0, n_features=1750)
+    directions = sum(t.singular2.size for t in terms)
+    whole = minimize_ratio(terms)
+    budget = 8 * directions * 100
+    monkeypatch.setattr(search, "_WORKING_BYTES", budget)
+    sizes = _recorded_bytes(monkeypatch)
+    _assert_same_optimum(minimize_ratio(terms), whole)
+    assert sizes and max(sizes) <= budget
+
+
+def test_default_budget_bounds_a_wide_problem(monkeypatch):
+    """The review's shape: 100 directions by 30000 features is 22.9 MiB a row."""
+    import boldtailor._reml_search as search
+    from boldtailor._reml_terms import RemlTerms
+
+    rng = np.random.default_rng(0)
+    terms = [
+        RemlTerms(
+            singular2=rng.uniform(0.5, 2.0, size=100),
+            coordinates2=rng.normal(size=(100, 30000)) ** 2,
+            residual_ss=rng.chisquare(50, size=30000),
+            dof=150,
+            energy=np.zeros(30000),
+        )
+    ]
+    sizes = _recorded_bytes(monkeypatch)
+    minimize_ratio(terms, grid_size=9, iterations=2)
+    assert max(sizes) <= search._WORKING_BYTES == 8 * 2**20
+
+
+def test_budget_below_one_feature_falls_back_to_single_features(monkeypatch):
+    import boldtailor._reml_search as search
+
+    _, terms = _simulated_terms(5, 1.0, n_features=7)
+    directions = sum(t.singular2.size for t in terms)
+    whole = minimize_ratio(terms)
+    monkeypatch.setattr(search, "_WORKING_BYTES", 1)
+    sizes = _recorded_bytes(monkeypatch)
+    _assert_same_optimum(minimize_ratio(terms), whole)
+    assert max(sizes) == 8 * directions
+
+
+def test_batches_do_not_change_a_multi_basin_optimum(monkeypatch):
+    import boldtailor._reml_search as search
+
+    terms = _two_basin_terms()
+    tiled = [
+        type(terms[0])(
+            singular2=terms[0].singular2,
+            coordinates2=np.tile(terms[0].coordinates2, (1, 5)),
+            residual_ss=np.tile(terms[0].residual_ss, 5),
+            dof=10,
+            energy=np.tile(terms[0].energy, 5),
+        )
+    ]
+    whole = minimize_ratio(tiled)
+    monkeypatch.setattr(search, "_WORKING_BYTES", 8 * 8 * 2)
+    _assert_same_optimum(minimize_ratio(tiled), whole)
+    assert_allclose(whole.ratio, minimize_ratio(terms).ratio[0], rtol=1e-12)
 
 
 def test_every_slope_crossing_competes():

@@ -69,3 +69,48 @@ def test_whitening_applied_to_all_inputs(group):
     assert_allclose(direct.signals, manual.signals, atol=1e-10)
     assert_allclose(direct.energy, manual.energy, rtol=1e-10)
     assert direct.dof == manual.dof
+
+
+SHAPES = {"tall": (40, 3), "square": (12, 12), "wide": (6, 90)}
+
+
+@pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
+def test_spectral_norm_matches_svd(shape):
+    from boldtailor._reml_terms import _spectral_norm
+
+    matrix = np.random.default_rng(0).normal(size=shape)
+    expected = np.linalg.svd(matrix, compute_uv=False)[0]
+    assert _spectral_norm(matrix) == pytest.approx(expected, rel=1e-12)
+
+
+def test_spectral_norm_of_rank_deficient_and_zero_matrices():
+    from boldtailor._reml_terms import _spectral_norm
+
+    column = np.random.default_rng(1).normal(size=(8, 1))
+    repeated = np.tile(column, (1, 30))
+    expected = np.linalg.svd(repeated, compute_uv=False)[0]
+    assert _spectral_norm(repeated) == pytest.approx(expected, rel=1e-12)
+    assert _spectral_norm(np.zeros((4, 9))) == 0.0
+
+
+@pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
+def test_spectral_norm_decomposes_the_smaller_gram_matrix(shape, monkeypatch):
+    from boldtailor._reml_terms import _spectral_norm
+
+    seen = []
+    eigvalsh = np.linalg.eigvalsh
+    monkeypatch.setattr(
+        np.linalg, "eigvalsh", lambda a: seen.append(a.shape) or eigvalsh(a)
+    )
+    _spectral_norm(np.random.default_rng(0).normal(size=shape))
+    assert seen == [(min(shape), min(shape))]
+
+
+def test_wide_random_design_keeps_fixed_span_rank_policy(group):
+    """Columns inside the fixed span are still rejected against the
+    unprojected norm when the design is wider than it is tall."""
+    signals, fixed, _ = group
+    rng = np.random.default_rng(2)
+    inside = fixed @ rng.normal(size=(fixed.shape[1], 80))
+    terms = reml_terms(project_fixed(signals, fixed), inside)
+    assert terms.singular2.size == 0
