@@ -5,7 +5,12 @@ Bisection refines the slope root inside every grid cell where the slope turns
 from negative to positive, so each local minimum the grid resolves competes,
 not only the one nearest the best grid point. The lowest root replaces the
 best grid point unless it is worse beyond floating-point rounding, and the
-result is compared explicitly with lambda = 0 (ties to zero).
+result is compared explicitly with lambda = 0: a positive ratio must improve
+on zero by more than the criterion's rounding noise.
+
+When the random covariance is a multiple of the identity on the whole
+restricted space, the covariance is (sigma2 + tau2 c) I and the criterion is
+constant in lambda. Such fits are flagged unidentifiable instead of searched.
 
 The search is not a certified global minimisation: a minimum and a maximum
 that both fall strictly inside one grid cell leave no sign change and are not
@@ -41,10 +46,11 @@ class RatioOptimum:
     criterion: np.ndarray
     at_zero: np.ndarray
     at_upper: np.ndarray
+    unidentifiable: np.ndarray
 
     def __post_init__(self):
         own_fields(self, ("ratio", "criterion"))
-        own_fields(self, ("at_zero", "at_upper"), dtype=bool)
+        own_fields(self, ("at_zero", "at_upper", "unidentifiable"), dtype=bool)
 
 
 def _search_grid(singular2, size):
@@ -149,13 +155,42 @@ def _best_positive(pooled, grid_size, iterations):
     return np.exp(best), np.where(accept, root_value, grid_value), on_edge
 
 
-def _zero_optimum(pooled, n_features) -> RatioOptimum:
-    zero = np.zeros(n_features)
+def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
+    """An optimum that needs no search; its criterion is the value at zero."""
+    n_features = pooled.residual_ss.size
+    flags = np.full(n_features, at_zero)
     return RatioOptimum(
-        ratio=zero,
-        criterion=pooled_criterion(zero, pooled),
-        at_zero=np.ones(n_features, dtype=bool),
+        ratio=np.full(n_features, ratio),
+        criterion=pooled_criterion(np.zeros(n_features), pooled),
+        at_zero=flags,
         at_upper=np.zeros(n_features, dtype=bool),
+        unidentifiable=~flags,
+    )
+
+
+def _confounded(pooled: PooledTerms) -> bool:
+    """True when the random covariance is c I on the whole restricted space.
+
+    That needs a retained direction for every restricted degree of freedom
+    and one common singular value, up to the rounding of the decompositions
+    that produced them (relative error about dof * eps per singular value).
+    """
+    singular2 = pooled.singular2
+    spread = singular2.max() - singular2.min()
+    tolerance = 4 * pooled.dof * np.finfo(float).eps * singular2.max()
+    return singular2.size == pooled.dof and spread <= tolerance
+
+
+def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
+    ratio, value, on_edge = _best_positive(pooled, grid_size, iterations)
+    at_zero_value = pooled_criterion(np.zeros(value.size), pooled)
+    at_zero = at_zero_value <= value + _rounding_slack(at_zero_value, pooled.dof)
+    return RatioOptimum(
+        ratio=np.where(at_zero, 0.0, ratio),
+        criterion=np.where(at_zero, at_zero_value, value),
+        at_zero=at_zero,
+        at_upper=on_edge & ~at_zero,
+        unidentifiable=np.zeros(value.size, dtype=bool),
     )
 
 
@@ -164,18 +199,12 @@ def minimize_ratio(
 ) -> RatioOptimum:
     """Minimise the profiled criterion over lambda >= 0 for every feature.
 
-    ``iterations`` is the number of slope bisections inside the bracket.
+    ``iterations`` is the number of slope bisections inside each bracket.
+    Unidentifiable fits have a NaN ratio and the criterion's constant value.
     """
     pooled = pool_terms(terms)
-    n_features = pooled.residual_ss.size
     if pooled.singular2.size == 0:
-        return _zero_optimum(pooled, n_features)
-    ratio, value, on_edge = _best_positive(pooled, grid_size, iterations)
-    at_zero_value = pooled_criterion(np.zeros(n_features), pooled)
-    at_zero = at_zero_value <= value
-    return RatioOptimum(
-        ratio=np.where(at_zero, 0.0, ratio),
-        criterion=np.where(at_zero, at_zero_value, value),
-        at_zero=at_zero,
-        at_upper=on_edge & ~at_zero,
-    )
+        return _boundary_optimum(pooled, 0.0, at_zero=True)
+    if _confounded(pooled):
+        return _boundary_optimum(pooled, np.nan, at_zero=False)
+    return _searched_optimum(pooled, grid_size, iterations)

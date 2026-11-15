@@ -83,6 +83,11 @@ def _subsets(groups, rho):
     ]
 
 
+def _status(optimum):
+    status = np.where(optimum.at_zero, "variance_zero", "ok")
+    return np.where(optimum.unidentifiable, "unidentifiable", status)
+
+
 def _fit_values(subset, random_design):
     """Fit one candidate on one subset; arrays are indexed like ``subset.columns``."""
     terms = [
@@ -93,7 +98,7 @@ def _fit_values(subset, random_design):
         "ratio": optimum.ratio,
         "noise_variance": profiled_variance(optimum.ratio, terms),
         "criterion": optimum.criterion,
-        "status": np.where(optimum.at_zero, "variance_zero", "ok"),
+        "status": _status(optimum),
         "at_upper": optimum.at_upper,
     }
 
