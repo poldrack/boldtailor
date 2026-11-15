@@ -88,7 +88,16 @@ def project_out(signals, basis, amplification):
     See ``PROJECTION_ERROR_FACTOR``.
     """
     coordinates = basis.T @ signals
-    relative2 = (PROJECTION_ERROR_FACTOR * len(signals) * np.finfo(float).eps) ** 2
-    energy = np.sum(signals**2, axis=0)
-    amplified = _amplified_energy(energy, coordinates, amplification)
-    return signals - basis @ coordinates, relative2 * energy, relative2 * amplified
+    relative = PROJECTION_ERROR_FACTOR * len(signals) * np.finfo(float).eps
+    peak = np.abs(signals).max(axis=0)
+    safe_peak = np.where(peak > 0, peak, 1.0)
+    unit_energy = np.sum((signals / safe_peak) ** 2, axis=0)
+    unit_amplified = _amplified_energy(
+        unit_energy, coordinates / safe_peak, amplification
+    )
+    scale2 = (relative * peak) ** 2
+    return (
+        signals - basis @ coordinates,
+        scale2 * unit_energy,
+        scale2 * unit_amplified,
+    )

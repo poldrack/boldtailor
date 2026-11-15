@@ -55,6 +55,21 @@ def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
     )
 
 
+def reproject_signals(projection: FixedProjection, signals) -> FixedProjection:
+    """Whiten and project ``signals`` onto an existing fixed-design basis."""
+    residual = residualise(whiten(signals, projection.rho), projection.basis)
+    zeros = np.zeros(residual.shape[1])
+    return FixedProjection(
+        basis=projection.basis,
+        signals=residual,
+        energy=np.sum(residual**2, axis=0),
+        rounding_floor=zeros,
+        uncertainty_floor=zeros,
+        dof=projection.dof,
+        rho=projection.rho,
+    )
+
+
 @dataclass(frozen=True)
 class RemlTerms:
     """Sufficient statistics of one group for the REML criterion."""
@@ -77,7 +92,12 @@ def _smaller_gram(matrix):
 
 def _spectral_norm(matrix):
     """Largest singular value from the smaller Gram matrix, without a second SVD."""
-    return np.sqrt(max(np.linalg.eigvalsh(_smaller_gram(matrix))[-1], 0.0))
+    peak = np.abs(matrix).max()
+    if peak == 0.0:
+        return 0.0
+    return peak * np.sqrt(
+        max(np.linalg.eigvalsh(_smaller_gram(matrix / peak))[-1], 0.0)
+    )
 
 
 def _projected_random(projection, random_design):

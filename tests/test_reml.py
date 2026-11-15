@@ -306,7 +306,7 @@ def test_fit_values_pools_terms_once(data, monkeypatch):
         return original(terms)
 
     monkeypatch.setattr(crit, "pool_terms", counted)
-    # Also patch any direct import in _reml_search or reml
+    monkeypatch.setattr(reml, "pool_terms", counted)
     import boldtailor._reml_search as search
 
     monkeypatch.setattr(search, "pool_terms", counted)

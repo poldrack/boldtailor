@@ -193,10 +193,12 @@ def _best_positive(pooled, log_grid, iterations):
     roots = _crossing_roots(pooled, log_grid, slopes, iterations)
     root, root_value = _lowest_root(index.size, *roots)
     accept = root_value <= grid_value + _rounding_slack(grid_value, pooled.dof)
+    grid_stationary = np.take_along_axis(slopes, index[None], axis=0)[0] == 0.0
+    refined = accept | grid_stationary
     best = np.where(accept, root, log_grid[index])
     # The grid's upper edge is a truncation, not an optimum: flag it.
-    on_edge = (index == log_grid.size - 1) & ~accept
-    return np.exp(best), np.where(accept, root_value, grid_value), on_edge, accept
+    on_edge = (index == log_grid.size - 1) & ~refined
+    return np.exp(best), np.where(accept, root_value, grid_value), on_edge, refined
 
 
 def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
@@ -260,14 +262,17 @@ def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
 
 
 def minimize_ratio(
-    terms: Sequence[RemlTerms], *, grid_size: int = 121, iterations: int = 48
+    terms: Sequence[RemlTerms] | PooledTerms,
+    *,
+    grid_size: int = 121,
+    iterations: int = 48,
 ) -> RatioOptimum:
     """Minimise the profiled criterion over lambda >= 0 for every feature.
 
     ``iterations`` is the number of slope bisections inside each bracket.
     Unidentifiable fits have a NaN ratio and the criterion's constant value.
     """
-    pooled = pool_terms(terms)
+    pooled = terms if isinstance(terms, PooledTerms) else pool_terms(terms)
     if pooled.singular2.size == 0:
         return _boundary_optimum(pooled, 0.0, at_zero=True)
     if _confounded(pooled):

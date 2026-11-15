@@ -7,9 +7,9 @@ import numpy as np
 
 from boldtailor._arrays import own_fields, own_tuples
 from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
-from boldtailor._reml_criterion import profiled_variance
+from boldtailor._reml_criterion import pool_terms, pooled_quadratic
 from boldtailor._reml_search import minimize_ratio
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor._reml_terms import project_fixed, reml_terms, reproject_signals
 
 
 @dataclass(frozen=True)
@@ -81,7 +81,10 @@ def _live_subset(groups, columns, rho):
     live = _above(projections, "uncertainty_floor")
     unresolved = columns[~live & _above(projections, "rounding_floor")]
     if live.any() and not live.all():
-        projections = _project(groups, columns[live], rho)
+        projections = [
+            reproject_signals(p, g.signals[:, columns[live]])
+            for p, g in zip(projections, groups, strict=True)
+        ]
     dof = sum(p.dof for p in projections)
     return _Subset(columns[live], projections, dof, unresolved)
 
@@ -103,10 +106,11 @@ def _fit_values(subset, random_design):
     terms = [
         reml_terms(p, z) for p, z in zip(subset.projections, random_design, strict=True)
     ]
-    optimum = minimize_ratio(terms)
+    pooled = pool_terms(terms)
+    optimum = minimize_ratio(pooled)
     return {
         "ratio": optimum.ratio,
-        "noise_variance": profiled_variance(optimum.ratio, terms),
+        "noise_variance": pooled_quadratic(optimum.ratio, pooled) / pooled.dof,
         "criterion": optimum.criterion,
         "status": _status(optimum),
         "at_upper": optimum.at_upper,
