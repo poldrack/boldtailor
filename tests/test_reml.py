@@ -1,3 +1,4 @@
+import dataclasses
 import warnings
 
 import numpy as np
@@ -6,7 +7,8 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from boldtailor._reml_search import minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
-from boldtailor.reml import RemlFit, RemlGroup, fit_reml
+import boldtailor.reml as reml
+from boldtailor.reml import RemlFit, RemlGroup, fit_reml, select_random_design
 from tests.reml_oracles import dense_fit, simulate
 
 N_FEATURES = 4
@@ -248,3 +250,26 @@ def test_no_restricted_dof_raises():
     signals, fixed = [rng.normal(size=(4, 2))], [rng.normal(size=(4, 4))]
     with pytest.raises(ValueError, match="degrees of freedom"):
         _fit(signals, fixed, [rng.normal(size=(4, 1))])
+
+
+@pytest.fixture
+def dof_differs_at_half(monkeypatch):
+    """project_fixed reporting one fewer dof at rho 0.5, as a rank flip would."""
+    original = reml.project_fixed
+
+    def shifted(*args, **kwargs):
+        projection = original(*args, **kwargs)
+        if projection.rho == 0.5:
+            return dataclasses.replace(projection, dof=projection.dof - 1)
+        return projection
+
+    monkeypatch.setattr(reml, "project_fixed", shifted)
+
+
+def test_restricted_dof_must_agree_across_rho(data, dof_differs_at_half):
+    signals, fixed, random = data
+    rho = np.array([0.0, 0.0, 0.5, 0.5])
+    with pytest.raises(ValueError, match="restricted degrees of freedom"):
+        _fit(signals, fixed, random, rho=rho)
+    with pytest.raises(ValueError, match="restricted degrees of freedom"):
+        select_random_design(_groups(signals, fixed), [random], rho=rho)
