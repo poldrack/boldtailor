@@ -203,14 +203,132 @@ def test_inversion_interpolates_a_monotonic_expectation():
     assert_allclose(corrected[1], [0.45, -0.9], atol=1e-15)
 
 
-def test_inversion_is_undefined_when_the_curve_is_not_identifying():
+def test_inversion_identifies_each_value_by_its_own_level():
+    """An observed ratio identifies rho when the curve reaches that level
+    exactly once; a level reached on several branches identifies nothing."""
     grid = np.array([-0.6, -0.3, 0.0, 0.3, 0.6])
     expected = np.array([0.0, 0.5, 0.4, 0.8, 1.0])
-    values = np.array([0.41, 0.52, 0.95, np.nan, -0.2])
+    values = np.array([0.41, 0.52, 0.95, np.nan, -0.2, 0.2, 1.3])
     corrected = invert_lag_ratio(values, expected, grid)
-    # Multiple inverse branches cannot identify a unique rho. This replaces
-    # the old nearest-grid policy, which invented an estimate on flat curves.
-    assert np.isnan(corrected).all()
+    # 0.41 lies on three branches. 0.52 and 0.95 lie on one each, 0.2 only on
+    # the first. Below and above the curve the unique end points are returned.
+    assert np.isnan(corrected[[0, 3]]).all()
+    assert_allclose(corrected[[1, 2]], [0.09, 0.525], atol=1e-15)
+    assert_allclose(corrected[[4, 5, 6]], [-0.6, -0.48, 0.6], atol=1e-15)
+
+
+def _bent_curve():
+    """Increasing over most of the grid, turning down beyond rho = 0.8."""
+    grid = np.linspace(-0.95, 0.95, 39)
+    expected = np.where(grid <= 0.8, 0.6 * grid, 0.48 - 0.4 * (grid - 0.8))
+    return grid, expected
+
+
+def test_a_bend_at_the_extreme_leaves_the_rest_of_the_curve_usable():
+    grid, expected = _bent_curve()
+    usable = np.array([-0.5, -0.1, 0.0, 0.2, 0.41])
+    assert_allclose(invert_lag_ratio(usable, expected, grid), usable / 0.6, atol=1e-12)
+    ambiguous = np.array([0.43, 0.45, 0.479])
+    assert np.isnan(invert_lag_ratio(ambiguous, expected, grid)).all()
+
+
+def test_values_beyond_an_interior_extreme_are_undefined():
+    grid, expected = _bent_curve()
+    corrected = invert_lag_ratio(np.array([0.49, 0.7, -0.9]), expected, grid)
+    assert np.isnan(corrected[:2]).all()
+    assert corrected[2] == grid[0]
+
+
+def test_a_flat_stretch_hides_only_its_own_level():
+    grid = np.linspace(-0.9, 0.9, 7)
+    expected = np.array([-0.5, -0.3, 0.0, 0.0, 0.0, 0.3, 0.5])
+    corrected = invert_lag_ratio(np.array([-0.4, 0.0, 1e-17, 0.4]), expected, grid)
+    assert_allclose(corrected[[0, 3]], [-0.75, 0.75], atol=1e-12)
+    assert np.isnan(corrected[1:3]).all()
+
+
+def test_values_beyond_a_tied_end_are_undefined():
+    grid = np.linspace(-0.9, 0.9, 7)
+    expected = np.array([0.5, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5])
+    assert np.isnan(invert_lag_ratio(np.array([0.9]), expected, grid)).all()
+
+
+def _censored_design(seed, n=200, drift=10, random=29, censored=100):
+    """Drifts, nuisance regressors and one regressor per censored volume."""
+    rng = np.random.default_rng(seed)
+    t = (np.arange(n) + 0.5) / n
+    columns = [np.ones(n)] + [np.cos(np.pi * j * t) for j in range(1, drift + 1)]
+    columns.append(rng.normal(size=(n, random)))
+    columns.append(np.eye(n)[:, rng.choice(n, censored, replace=False)])
+    return np.column_stack(columns)
+
+
+def _ar1_noise(seed, n, n_features, rho, burn=50):
+    noise = np.random.default_rng(seed).normal(size=(n + burn, n_features))
+    for t in range(1, n + burn):
+        noise[t] += rho * noise[t - 1]
+    return noise[burn:]
+
+
+def test_curve_bent_only_beyond_the_pooling_range_still_estimates_rho():
+    """With half the volumes censored this design's correction curve turns
+    for rho below -0.928 only. Estimates away from that end must survive: all
+    NaN would make the pooled value 0.0, silently treating the noise as white."""
+    design = _censored_design(18)
+    curve = expected_lag_ratio(design, np.linspace(-0.95, 0.95, 2001))
+    turning = np.flatnonzero(np.diff(curve) <= 0)
+    assert turning.size > 0 and turning.max() < 30
+    estimate = estimate_rho([_ar1_noise(1, 200, 2000, 0.4)], [design])
+    assert np.isfinite(estimate.values).mean() > 0.95
+    assert estimate.pooled == pytest.approx(0.4, abs=0.04)
+
+
+def _crossings(value, expected):
+    """Cells of the curve whose closed range contains the value; the oracle."""
+    low = np.minimum(expected[:-1], expected[1:])
+    high = np.maximum(expected[:-1], expected[1:])
+    return np.flatnonzero((low <= value) & (value <= high))
+
+
+@settings(derandomize=True, deadline=None, max_examples=200)
+@given(
+    st.lists(st.integers(-6, 6), min_size=3, max_size=12),
+    st.lists(st.integers(-40, 40), min_size=1, max_size=6),
+)
+def test_inversion_returns_exactly_the_uniquely_identified_values(steps, odd):
+    """Against a brute-force count over cells: inside the curve's range a
+    value is inverted when one cell contains it, and then the curve passes
+    through the returned rho at that value; otherwise the result is NaN.
+
+    Curve levels are multiples of 1/8 and values odd multiples of 1/16, so
+    no value sits exactly on a grid level; the examples above cover those."""
+    values = [(2 * k + 1) / 16.0 for k in odd]
+    expected = np.cumsum(np.array([0, *steps], dtype=float)) / 8.0
+    grid = np.linspace(-0.9, 0.9, expected.size)
+    corrected = invert_lag_ratio(np.array(values), expected, grid)
+    for value, rho in zip(values, corrected, strict=True):
+        cells = _crossings(value, expected)
+        inside = expected.min() <= value <= expected.max()
+        if inside and cells.size == 1 and steps[cells[0]] != 0:
+            assert np.interp(rho, grid, expected) == pytest.approx(value, abs=1e-12)
+            assert grid[cells[0]] <= rho <= grid[cells[0] + 1]
+        elif inside:
+            assert np.isnan(rho)
+
+
+@settings(derandomize=True, deadline=None, max_examples=100)
+@given(
+    st.lists(st.integers(1, 6), min_size=2, max_size=12),
+    st.lists(st.floats(-3.0, 12.0), min_size=1, max_size=6),
+    st.booleans(),
+)
+def test_inversion_of_a_monotone_curve_is_plain_interpolation(steps, values, falling):
+    expected = np.cumsum(np.array([0, *steps], dtype=float)) / 8.0
+    grid = np.linspace(-0.9, 0.9, expected.size)
+    curve = -expected if falling else expected
+    order = slice(None, None, -1) if falling else slice(None)
+    reference = np.interp(values, curve[order], grid[order])
+    assert_allclose(invert_lag_ratio(values, curve, grid), reference, atol=1e-15)
 
 
 @pytest.mark.parametrize(
