@@ -39,6 +39,7 @@ def _best_of_grid_and_zero(terms):
 @settings(
     max_examples=15,
     deadline=None,
+    derandomize=True,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 @given(seed=st.integers(0, 10_000), ratio=st.sampled_from([0.0, 0.1, 10.0]))

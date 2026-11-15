@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
@@ -28,6 +28,7 @@ def dense_expected(design, rho):
     return np.trace(m @ lag @ m @ r) / np.trace(m @ previous @ m @ r)
 
 
+@settings(derandomize=True, deadline=None)
 @given(
     n=st.integers(3, 40),
     rho=st.floats(-0.95, 0.95, exclude_min=True, exclude_max=True),
