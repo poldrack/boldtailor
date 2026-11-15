@@ -215,3 +215,73 @@ def test_only_unidentifiable_candidates_leave_the_null_fit(
     assert selection.fit.status == null.status
     np.testing.assert_array_equal(selection.fit.criterion, null.criterion)
     np.testing.assert_array_equal(selection.fit.ratio, 0.0)
+
+
+# ------------------------------------------- R3: fixed-span shifts and no_signal
+
+SHIFT_SCALES = (1e4, 1e6, 1e8, 1e10)
+
+
+def _shift_tolerance(n_scans, scale):
+    """A hundred times the projection error of a shift of this scale, relative
+    to unit-scale residuals: n eps scale."""
+    return 100 * n_scans * np.finfo(float).eps * scale
+
+
+def _planted_problem(seed, n_fixed, rho, n=40):
+    rng = np.random.default_rng(seed)
+    fixed = np.column_stack([np.ones(n), rng.normal(size=(n, n_fixed - 1))])
+    planted = rng.normal(size=(n, 3))
+    decoy = rng.normal(size=(n, 3))
+    noise = rng.normal(size=(n, 4))
+    noise[1:] += rho * noise[:-1]
+    signals = planted @ rng.normal(scale=3.0, size=(3, 4)) + noise
+    return signals, fixed, planted, decoy
+
+
+def _shifted(signals, fixed, scale, seed=0):
+    coefficients = np.random.default_rng(seed).normal(size=(fixed.shape[1], 1))
+    return signals + scale * (fixed @ coefficients)
+
+
+@pytest.mark.parametrize("scale", SHIFT_SCALES)
+@pytest.mark.parametrize("rho", [0.0, 0.4])
+@pytest.mark.parametrize("n_fixed", [1, 3])
+def test_fit_is_invariant_to_resolvable_fixed_span_shifts(n_fixed, rho, scale):
+    signals, fixed, planted, _ = _planted_problem(19, n_fixed, rho)
+    base = fit_reml([RemlGroup(signals, fixed)], [planted], rho=rho)
+    moved = _shifted(signals, fixed, scale)
+    shifted = fit_reml([RemlGroup(moved, fixed)], [planted], rho=rho)
+    tolerance = _shift_tolerance(len(signals), scale)
+    assert base.status == ("ok",) * 4
+    assert shifted.status == base.status
+    np.testing.assert_allclose(shifted.ratio, base.ratio, rtol=tolerance)
+    np.testing.assert_allclose(
+        shifted.noise_variance, base.noise_variance, rtol=tolerance
+    )
+
+
+@pytest.mark.parametrize("scale", SHIFT_SCALES)
+def test_selection_is_invariant_to_resolvable_fixed_span_shifts(scale):
+    signals, fixed, planted, decoy = _planted_problem(7, 2, 0.0)
+    moved = _shifted(signals, fixed, scale)
+    selection = select_random_design([RemlGroup(moved, fixed)], [[decoy], [planted]])
+    np.testing.assert_array_equal(selection.winner, 1)
+    assert selection.fit.status == ("ok",) * 4
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e6])
+@pytest.mark.parametrize("rho", [0.0, 0.6])
+@pytest.mark.parametrize("n_fixed", [1, 3, 8])
+def test_signals_inside_the_fixed_span_are_no_signal(n_fixed, rho, scale):
+    _, fixed, planted, _ = _planted_problem(3, n_fixed, rho, n=200)
+    coefficients = np.random.default_rng(4).normal(size=(n_fixed, 6))
+    signals = scale * (fixed @ coefficients)
+    fit = fit_reml([RemlGroup(signals, fixed)], [planted], rho=rho)
+    assert fit.status == ("no_signal",) * 6
+
+
+def test_shift_that_destroys_the_residual_is_no_signal():
+    signals, fixed, planted, _ = _planted_problem(19, 1, 0.0)
+    fit = fit_reml([RemlGroup(signals + 1e18, fixed)], [planted])
+    assert fit.status == ("no_signal",) * 4

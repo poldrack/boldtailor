@@ -233,3 +233,42 @@ def test_non_finite_signal_feature_gives_nan_not_error():
     assert np.isnan(result.values[1, 2]) and np.isnan(result.raw[1, 2])
     assert np.isfinite(np.delete(result.values[1], 2)).all()
     assert np.isfinite(result.values[0]).all()
+
+
+def _lag_problem(n_fixed, n=60):
+    rng = np.random.default_rng(11)
+    design = np.column_stack([np.ones(n), rng.normal(size=(n, n_fixed - 1))])
+    noise = rng.normal(size=(n, 5))
+    noise[1:] += 0.5 * noise[:-1]
+    return noise, design
+
+
+@pytest.mark.parametrize("scale", [1e4, 1e6, 1e8, 1e10])
+@pytest.mark.parametrize("n_fixed", [1, 3])
+def test_lag_ratio_is_invariant_to_resolvable_design_span_shifts(n_fixed, scale):
+    from boldtailor._ar1_moments import residual_lag_ratio
+
+    signals, design = _lag_problem(n_fixed)
+    shift = scale * (design @ np.random.default_rng(0).normal(size=(n_fixed, 1)))
+    base = residual_lag_ratio(signals, design)
+    shifted = residual_lag_ratio(signals + shift, design)
+    tolerance = 100 * len(signals) * np.finfo(float).eps * scale
+    assert np.isfinite(base).all()
+    np.testing.assert_allclose(shifted, base, rtol=0.0, atol=tolerance)
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e6])
+@pytest.mark.parametrize("n_fixed", [1, 3, 8])
+def test_lag_ratio_of_signals_inside_the_design_span_is_nan(n_fixed, scale):
+    from boldtailor._ar1_moments import residual_lag_ratio
+
+    _, design = _lag_problem(n_fixed, n=200)
+    signals = scale * (design @ np.random.default_rng(4).normal(size=(n_fixed, 6)))
+    assert np.isnan(residual_lag_ratio(signals, design)).all()
+
+
+def test_lag_ratio_of_zero_signal_is_nan():
+    from boldtailor._ar1_moments import residual_lag_ratio
+
+    _, design = _lag_problem(2)
+    assert np.isnan(residual_lag_ratio(np.zeros((60, 2)), design)).all()
