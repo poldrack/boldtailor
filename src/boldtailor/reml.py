@@ -190,9 +190,18 @@ def _assemble(result, rho, restricted_dof) -> RemlFit:
     )
 
 
+def _single_dof(subsets) -> int:
+    """The restricted dof shared by every rho subset; rank must not flip with rho."""
+    dofs = {subset.dof for subset in subsets}
+    if len(dofs) != 1:
+        raise ValueError(f"restricted degrees of freedom differ across rho: {dofs}")
+    return dofs.pop()
+
+
 def _prepare(groups, rho):
     rho = _feature_rho(rho, groups[0].signals.shape[1])
-    return rho, _subsets(groups, rho)
+    subsets = _subsets(groups, rho)
+    return rho, subsets, _single_dof(subsets)
 
 
 def _fill(result, subsets, random_design):
@@ -210,10 +219,10 @@ def fit_reml(
     """Estimate the variance ratio of the random effects, feature by feature."""
     _validate_groups(groups)
     random_design = _checked_random(groups, random_design, "random_design")
-    rho, subsets = _prepare(groups, rho)
+    rho, subsets, dof = _prepare(groups, rho)
     result = _empty_result(rho.size)
     _fill(result, subsets, random_design)
-    return _assemble(result, rho, subsets[-1].dof)
+    return _assemble(result, rho, dof)
 
 
 # ---------------------------------------------------------------- selection
@@ -287,13 +296,13 @@ def select_random_design(
 ) -> RemlSelection:
     """Pick, per feature, the candidate random design with the best criterion."""
     _validate_groups(groups)
-    rho, subsets = _prepare(groups, rho)
+    rho, subsets, dof = _prepare(groups, rho)
     result = _empty_result(rho.size)
     _fill(result, subsets, [None] * len(groups))
     race, count = _run_race(groups, candidates, subsets, result)
     return RemlSelection(
         winner=race["winner"],
-        fit=_assemble(result, rho, subsets[-1].dof),
+        fit=_assemble(result, rho, dof),
         gap=_gap(race),
         n_candidates=count,
     )
