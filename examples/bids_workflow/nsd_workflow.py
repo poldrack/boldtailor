@@ -36,14 +36,16 @@
 #
 # Every key in the configuration is a `WorkflowSettings` field (see
 # `src/boldtailor/workflow/settings.py`); `bids_root`, `fmriprep_root`, and `output_root`
-# are accepted for `bids_dir`, `fmriprep_dir`, and `output_dir`. Set `NSD_BIDS_ROOT` in the
-# environment, or supply `bids_root` in an `NSD_CONFIG` dictionary before this cell.
-# `NSD_FMRIPREP_ROOT` and `NSD_OUTPUT_ROOT` optionally override the derivative locations;
-# otherwise fMRIPrep is found under `derivatives/fmriprep*` and outputs go to
-# `derivatives/boldtailor_hrf-..._ridge-...`.
+# are accepted for `bids_dir`, `fmriprep_dir`, and `output_dir`. The local default is
+# `/Volumes/extdata1/NSD/BIDS`; `NSD_BIDS_ROOT` overrides it. Outputs default to this
+# checkout's ignored `results/nsd_workflow/` directory, keeping worktrees independent.
+# `NSD_FMRIPREP_ROOT` and `NSD_OUTPUT_ROOT` optionally override the derivative locations.
+# Otherwise fMRIPrep is discovered under `derivatives/fmriprep*`. An `NSD_CONFIG`
+# dictionary defined before this cell overrides all these choices.
 #
-# For a quick check, set `max_grayordinates=128`: the workflow still uses **every run** and
-# exports the original spatial axis, with NaN outside the requested subset. Lower `n_jobs` or
+# The default `max_grayordinates=128` is a smoke run: it uses **every run** and
+# exports the original spatial axis, with NaN outside the requested subset. For a full-brain
+# analysis set `max_grayordinates=None`, `block_size=4096`, and a new `output_root`. Lower `n_jobs` or
 # `block_size` to reduce memory use. Existing outputs for this session stop the run unless
 # `existing_results="overwrite"`.
 
@@ -59,18 +61,27 @@ repo = next(
 if str(repo) not in sys.path:
     sys.path.insert(0, str(repo))
 
-import logging, sys
+import json
+import logging
+import os
+
+import nibabel as nib
+import numpy as np
 import pandas as pd
-from IPython.display import Image, display
+from IPython.display import FileLink, Image, display
 from boldtailor.workflow.report import command_line
-from boldtailor.workflow.run import run_workflow
+from boldtailor.workflow.run import describe_inputs, run_workflow
 from examples.bids_workflow.nsd_settings import nsd_paths, nsd_settings
 
 config = dict(
     subject="sub-07",
     session="ses-nsd10",
-    # bids_root="/path/to/NSD/BIDS",  # else the NSD_BIDS_ROOT environment variable
-    # max_grayordinates=128, n_jobs=4, block_size=4096, existing_results="overwrite",
+    bids_root=os.environ.get("NSD_BIDS_ROOT", "/Volumes/extdata1/NSD/BIDS"),
+    output_root=os.environ.get("NSD_OUTPUT_ROOT", str(repo / "results/nsd_workflow")),
+    max_grayordinates=128,  # None for the complete 91k spatial axis
+    n_jobs=4,
+    block_size=128,
+    existing_results="error",  # set "overwrite" deliberately when rerunning
     # ridge_mode="fractional_cv",  # "fractional_cv", "cv", "fixed" (with ridge_alpha), or "off"
     # hrf_library="default", hrf_n_samples=512, hrf_seed=0, hrf_selection_rt=True,
 )
@@ -87,7 +98,28 @@ print("Equivalent command:")
 print(command_line(settings))
 
 # %% [markdown]
-# ## 2. Run the workflow
+# ## 2. Validate inputs, then run the workflow
+#
+# Preflight reads event tables, CIFTI headers, timing and confounds, detects the task model,
+# checks run counts for nested ridge CV, and checks for existing outputs. It does not fit
+# models or publish files. Resolve any reported problem before starting the expensive cell.
+
+# %%
+preflight = describe_inputs(settings)
+display(pd.DataFrame({"run": preflight.get("runs", [])}))
+print(f"HRF candidates: {preflight['library_candidates']}")
+print(f"Stages: {', '.join(preflight['stages'])}")
+print(f"fMRIPrep: {preflight['fmriprep_dir']}")
+print(f"Output: {preflight['output_dir']}")
+display(preflight.get("task_model", {}))
+for note in preflight["notes"]:
+    print(note)
+if preflight["problems"]:
+    display(pd.DataFrame(preflight["problems"]))
+    raise ValueError("Preflight failed; resolve the problems above before fitting")
+
+# %% [markdown]
+# ### Fit and publish
 #
 # This is the expensive cell. The workflow loads the session, removes leading nonsteady
 # volumes (keeping original acquisition times and event onsets), selects HRFs, fits the GLMs
@@ -112,8 +144,6 @@ def show(*names):
             shown.add(name)
             display(Image(filename=str(path)))
 
-
-# %%
 
 # %% [markdown]
 # ## 3. Inputs and nuisance model
@@ -196,3 +226,81 @@ remaining = sorted(
 )
 show(*remaining)
 display(pd.DataFrame({"path": [str(p) for p in result.paths]}))
+
+
+# %% [markdown]
+# ## 9. Read the saved results for downstream analysis
+#
+# The CIFTI scalar axis contains map names; the brain-model axis identifies cortical
+# vertices and subcortical voxels. Read these axes rather than assuming map ordering or
+# reshaping a 91k array into a volume. Here we summarize optimized-GLM R² maps using only
+# finite grayordinates. In the smoke run, all unprocessed locations are NaN.
+
+# %%
+glm_path = settings.output_dir / (
+    f"{settings.stem}_{settings.space_entity}_desc-OptimizedGLM_stat-rsquared.dscalar.nii"
+)
+glm_image = nib.load(glm_path)
+glm_values = glm_image.get_fdata()
+map_summary = pd.DataFrame(
+    {
+        "map": glm_image.header.get_axis(0).name,
+        "finite_grayordinates": np.isfinite(glm_values).sum(axis=1),
+        "median": [
+            np.median(row[np.isfinite(row)]) if np.isfinite(row).any() else np.nan
+            for row in glm_values
+        ],
+    }
+)
+display(map_summary)
+print(f"Spatial axis: {len(glm_image.header.get_axis(1)):,} grayordinates")
+
+# %% [markdown]
+# Each beta CIFTI contains **trials × grayordinates** for one run. The session-wide trial
+# table contains the same trial IDs, plus onsets, durations, RTs, and run identifiers.
+# Align using the saved IDs before relating betas to behavioral variables. This example
+# reads the first run's optimized OLS betas and one finite grayordinate; it makes no
+# statistical selection or inference. Ridge models have separate files and trial tables.
+
+# %%
+beta_path = sorted(
+    p
+    for p in result.paths
+    if p.name.endswith("_desc-OptimizedTrialOLS_betas.dscalar.nii")
+)[0]
+beta_image = nib.load(beta_path)
+trial_table = pd.read_csv(
+    settings.output_dir / f"{settings.stem}_desc-OptimizedTrialOLS_trials.tsv", sep="\t"
+)
+beta_values = beta_image.get_fdata()
+finite_columns = np.flatnonzero(np.isfinite(beta_values).any(axis=0))
+if not len(finite_columns):
+    raise ValueError(
+        "No finite optimized OLS betas; inspect the report and input signals"
+    )
+grayordinate = int(finite_columns[0])
+beta_preview = (
+    trial_table.set_index("trial_id")
+    .loc[list(beta_image.header.get_axis(0).name)]
+    .reset_index()
+)
+beta_preview["beta"] = beta_values[:, grayordinate]
+print(f"{beta_path.name}: {beta_image.shape}; grayordinate {grayordinate}")
+display(beta_preview.head(10))
+
+# %% [markdown]
+# The metadata records the resolved settings and model definitions. The HTML report is
+# self-contained and can be opened directly in a browser; keep the derivative directory
+# for the maps, tables, designs, and linked provenance records.
+#
+# For interpretation, distinguish in-sample GLM R² and selected-HRF CV scores from the
+# independent odd→even/even→odd prediction and outer encoding scores. A larger in-sample
+# optimized-HRF R² alone does not establish generalization. The small spatial smoke run
+# verifies execution and file formats; use the full spatial analysis for scientific work.
+
+# %%
+metadata_path = settings.output_dir / f"{settings.stem}_desc-boldtailor_metadata.json"
+metadata = json.loads(metadata_path.read_text())
+display(metadata["settings"])
+print(f"Open report in a browser: {result.report_path}")
+display(FileLink(str(result.report_path)))

@@ -20,3 +20,6 @@ experiments/hrf_simulations/reports
 
 # remove uv.lock since this conflicts across systems
 uv.lock
+
+# Local notebook workflow derivatives (isolated per checkout).
+/results/

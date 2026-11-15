@@ -6,16 +6,24 @@ import jupytext
 import numpy as np
 import pytest
 
-NOTEBOOK = Path(__file__).resolve().parents[2] / "examples/bids_workflow/nsd_workflow.py"
+NOTEBOOK = (
+    Path(__file__).resolve().parents[2] / "examples/bids_workflow/nsd_workflow.py"
+)
 
 
 @pytest.fixture
 def notebook_config(six_run_dataset, tmp_path):
     root, prep = six_run_dataset
     return dict(
-        bids_root=str(root), fmriprep_root=str(prep), output_root=str(tmp_path / "results"),
-        hrf_library="sobol", hrf_n_samples=2, ridge_fractions=(0.4, 1.0),
-        n_jobs=1, block_size=4, surface_maps=False,
+        bids_root=str(root),
+        fmriprep_root=str(prep),
+        output_root=str(tmp_path / "results"),
+        hrf_library="sobol",
+        hrf_n_samples=2,
+        ridge_fractions=(0.4, 1.0),
+        n_jobs=1,
+        block_size=4,
+        surface_maps=False,
     )
 
 
@@ -40,7 +48,9 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config)
     assert "beta_preview" in ns, "demonstrate beta rows joined to trial metadata"
     assert len(ns["beta_preview"]) > 0
     assert np.isfinite(ns["beta_preview"]["beta"]).any()
-    assert ns["beta_preview"]["trial_id"].tolist() == list(ns["beta_image"].header.get_axis(0).name)
+    assert ns["beta_preview"]["trial_id"].tolist() == list(
+        ns["beta_image"].header.get_axis(0).name
+    )
     assert ns["metadata"]["settings"]["ridge_mode"] == "fractional_cv"
 
 

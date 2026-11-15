@@ -20,12 +20,14 @@
 - Pair per-run trial rows with beta rows by saved trial IDs.
 
 ## Task 1: Full executable walkthrough
-- [ ] Add pytest execution of the notebook against synthetic six-run BIDS data, checking preflight, full-stage outputs, map summaries, and aligned beta readback; test invalid inputs.
-- [ ] Run and commit failing tests.
-- [ ] Update nsd_workflow.py and its README with local paths, preflight, current model interpretation, saved output examples, and execution instructions.
-- [ ] Run focused tests and the full suite.
-- [ ] Execute a generated notebook on all real session runs with a small grayordinate subset; preserve the executed notebook locally and document validation limits.
-- [ ] Review and commit notebook, documentation, and validation record.
+- [x] Add pytest execution of the notebook against synthetic six-run BIDS data, checking preflight, full-stage outputs, map summaries, and aligned beta readback; test invalid inputs.
+- [x] Run and commit failing tests.
+- [x] Update nsd_workflow.py and its README with local paths, preflight, current model interpretation, saved output examples, and execution instructions.
+- [x] Run focused tests and the full suite.
+- [x] Execute a generated notebook on all real session runs with a small grayordinate subset; preserve the executed notebook locally and document validation limits.
+- [x] Review and commit notebook, documentation, and validation record.
 
 ## Decisions
 Execute in this session under the user's authorization to update the notebook; no additional approval checkpoint is needed. Use the current checkout commit as the worktree base. Results default to a local ignored results directory so dataset derivatives remain untouched.
+
+Validation evidence: `docs/validation/nsd-notebook-2026-11-15.md`.

@@ -44,19 +44,21 @@ All runs need the same CIFTI spatial axis. The fMRIPrep directory must be
 inside the BIDS root. Event durations and acquisition offsets are read from
 the inputs; onsets are not rounded to whole volumes.
 
-The defaults analyze `sub-07/ses-nsd10`, read the BIDS root's single
+The shared settings defaults analyze `sub-07/ses-nsd10`, read the BIDS root's single
 `derivatives/fmriprep*` directory, and write to
 `derivatives/boldtailor_hrf-<library>_ridge-<mode>` (for the defaults,
 `boldtailor_hrf-default512s0_ridge-fractionalcv`) under the selected BIDS root.
-That session has 12 runs, 750 trials, and 91,282 grayordinates. The data are
-not included in this repository.
+The full notebook overrides the output location as described below. That session
+has 12 runs, 750 trials, and 91,282 grayordinates. The data are not included in
+this repository.
 
 ## Full workflow notebook
 
 Open [nsd_workflow.py](nsd_workflow.py) as a notebook after running
 `uv sync --group dev` (see the jupytext note above), and select the checkout's
 `.venv` Python kernel.
-Set `NSD_BIDS_ROOT` before starting the notebook kernel, then edit the
+The full notebook defaults to `/Volumes/extdata1/NSD/BIDS`. Override `NSD_BIDS_ROOT`
+before starting the notebook kernel if needed, then edit the
 `config` in the first code cell and run all cells. Every key is a
 `WorkflowSettings` field (`src/boldtailor/workflow/settings.py`), with
 `bids_root`, `fmriprep_root`, and `output_root` accepted for `bids_dir`,
@@ -72,13 +74,35 @@ Alternatively, add a cell before setup defining
 notebook uses `HRF_RELIABILITY_CONFIG` instead. Both accept `fmriprep_root`
 and `output_root` explicitly, or through `NSD_FMRIPREP_ROOT` and
 `NSD_OUTPUT_ROOT`. Explicit dictionary paths override environment values;
-otherwise derivative defaults follow the BIDS root. Missing BIDS configuration
-raises an actionable error before loading or writing data. The helpers do
-not read `.env` files.
+The full notebook supplies local BIDS and output defaults; in the other notebooks,
+derivative defaults follow the BIDS root and missing BIDS configuration raises
+an actionable error. The helpers do not read `.env` files.
 
-The
-default uses all grayordinates and four workers. Set `max_grayordinates=128`
-for a quick run through every stage using all runs and a small spatial subset.
+The full notebook defaults to 128 grayordinates, four workers, and a block size of
+128, exercising every stage with all runs. Outputs go to the checkout's ignored
+`results/nsd_workflow/` directory (or `NSD_OUTPUT_ROOT`), isolating worktree results.
+For a full spatial analysis, set `max_grayordinates=None`, `block_size=4096`, and a
+new `output_root`. `NSD_CONFIG` overrides these defaults. The other notebooks
+retain their existing spatial and derivative defaults. To reuse this notebook's
+outputs in the companion notebooks, set `NSD_OUTPUT_ROOT` to this checkout's
+absolute `results/nsd_workflow` path for all notebooks (and use matching model
+settings). This full walkthrough assumes all four workflow stages are enabled.
+
+Before fitting, the notebook calls `describe_inputs` to show the discovered runs,
+task model, library size, and validation problems. After fitting, it displays the
+saved diagnostics, reads named CIFTI R² maps, aligns per-run beta rows to trial
+metadata by trial ID, and provides a link to the HTML report.
+
+To execute from the checkout root without opening Jupyter:
+
+```bash
+uv run jupytext --to ipynb --execute examples/bids_workflow/nsd_workflow.py
+```
+
+The generated `.ipynb` retains figures and tables locally; the tracked `.py`
+contains inputs only. A second execution stops at preflight when outputs exist;
+choose a new output directory or explicitly set `existing_results="overwrite"`.
+
 The HRF reliability stages require at least two odd and two even runs;
 optimized-HRF ridge CV needs at least three in each half. This
 notebook requires matching nuisance column names and order after trimming;
