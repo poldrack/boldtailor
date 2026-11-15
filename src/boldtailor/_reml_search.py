@@ -1,9 +1,16 @@
 """Vectorised search for the REML variance ratio.
 
-A log grid locates the best grid point; its neighbours bracket the root of the
-analytic slope in log(lambda), which bisection refines. The root replaces the
-grid point unless it is worse beyond floating-point rounding, and the result
-is compared explicitly with lambda = 0 (ties to zero).
+A log grid evaluates the criterion and its analytic slope in log(lambda).
+Bisection refines the slope root inside every grid cell where the slope turns
+from negative to positive, so each local minimum the grid resolves competes,
+not only the one nearest the best grid point. The lowest root replaces the
+best grid point unless it is worse beyond floating-point rounding, and the
+result is compared explicitly with lambda = 0 (ties to zero).
+
+The search is not a certified global minimisation: a minimum and a maximum
+that both fall strictly inside one grid cell leave no sign change and are not
+refined. The grid spacing never exceeds log(1e16) / (grid_size - 1), about
+0.31 in log(lambda) by default, whatever the spread of the singular values.
 """
 
 from collections.abc import Sequence
@@ -17,6 +24,7 @@ from boldtailor._reml_criterion import (
     pool_terms,
     pooled_criterion,
     pooled_slope,
+    pooled_value_and_slope,
 )
 from boldtailor._reml_terms import RemlTerms
 
@@ -39,17 +47,21 @@ class RatioOptimum:
         own_fields(self, ("at_zero", "at_upper"), dtype=bool)
 
 
-def _singular2_grid(singular2, size):
-    return np.linspace(
-        np.log(1.0 / _RELATIVE_SPAN / singular2.max()),
-        np.log(_RELATIVE_SPAN / singular2.min()),
-        size,
-    )
+def _search_grid(singular2, size):
+    """Log-ratio grid spanning 1e-8 / max(s2) to 1e8 / min(s2).
+
+    ``size`` points cover a single singular value; a wider spectrum adds
+    points so that the spacing never exceeds that base step.
+    """
+    low = np.log(1.0 / _RELATIVE_SPAN / singular2.max())
+    high = np.log(_RELATIVE_SPAN / singular2.min())
+    step = 2.0 * np.log(_RELATIVE_SPAN) / (size - 1)
+    return np.linspace(low, high, max(size, int(np.ceil((high - low) / step)) + 1))
 
 
 def _log_grid(terms: Sequence[RemlTerms], size: int) -> np.ndarray:
-    """Log-ratio grid spanning 1e-8 / max(s2) to 1e8 / min(s2)."""
-    return _singular2_grid(np.concatenate([t.singular2 for t in terms]), size)
+    """The search grid of the pooled singular values."""
+    return _search_grid(np.concatenate([t.singular2 for t in terms]), size)
 
 
 def _chunk_rows(pooled: PooledTerms) -> int:
@@ -58,32 +70,31 @@ def _chunk_rows(pooled: PooledTerms) -> int:
     return max(1, _GRID_CHUNK_BYTES // max(row_bytes, 1))
 
 
-def _grid_values(pooled: PooledTerms, log_grid) -> np.ndarray:
-    """Criterion on every grid point for every feature, shape (grid, features)."""
+def _grid_chunks(pooled: PooledTerms, log_grid):
+    """Criterion and slope of each chunk of grid rows, for every feature."""
     n_features, rows = pooled.residual_ss.size, _chunk_rows(pooled)
     ratios = np.exp(log_grid)
-    chunks = [
-        pooled_criterion(
+    for start in range(0, ratios.size, rows):
+        part = ratios[start : start + rows]
+        yield pooled_value_and_slope(
             np.broadcast_to(part[:, None], (part.size, n_features)), pooled
         )
-        for part in (ratios[i : i + rows] for i in range(0, ratios.size, rows))
-    ]
-    return np.concatenate(chunks, axis=0)
 
 
-def _bracket(log_grid, best_index):
-    """The best grid point's neighbours, clipped to the grid."""
-    last = log_grid.size - 1
-    return (
-        log_grid[np.maximum(best_index - 1, 0)],
-        log_grid[np.minimum(best_index + 1, last)],
+def _on_grid(pooled: PooledTerms, log_grid):
+    """Criterion and slope on the grid, each of shape (grid, features)."""
+    values, slopes = zip(*_grid_chunks(pooled, log_grid), strict=True)
+    return np.concatenate(values, axis=0), np.concatenate(slopes, axis=0)
+
+
+def _take(pooled: PooledTerms, features) -> PooledTerms:
+    """The pooled statistics of the given feature columns."""
+    return PooledTerms(
+        singular2=pooled.singular2,
+        coordinates2=pooled.coordinates2[:, features],
+        residual_ss=pooled.residual_ss[features],
+        dof=pooled.dof,
     )
-
-
-def _sign_change(pooled, low, high):
-    """True where the slope rises from negative at ``low`` to positive at ``high``."""
-    falling = pooled_slope(np.exp(low), pooled) < 0
-    return falling & (pooled_slope(np.exp(high), pooled) > 0)
 
 
 def _bisect_slope(pooled, low, high, iterations):
@@ -95,6 +106,24 @@ def _bisect_slope(pooled, low, high, iterations):
     return 0.5 * (low + high)
 
 
+def _crossing_roots(pooled, log_grid, slopes, iterations):
+    """Feature, slope root and criterion of every cell where the slope turns up."""
+    cell, feature = np.nonzero((slopes[:-1] < 0) & (slopes[1:] > 0))
+    crossed = _take(pooled, feature)
+    root = _bisect_slope(crossed, log_grid[cell], log_grid[cell + 1], iterations)
+    return feature, root, pooled_criterion(np.exp(root), crossed)
+
+
+def _lowest_root(n_features, feature, root, value):
+    """Per feature, its lowest-criterion root; value inf where it has none."""
+    lowest = np.full(n_features, np.inf)
+    np.minimum.at(lowest, feature, value)
+    position = np.full(n_features, np.nan)
+    is_lowest = value == lowest[feature]
+    position[feature[is_lowest]] = root[is_lowest]
+    return position, lowest
+
+
 def _rounding_slack(value, dof):
     """Criterion rounding noise. On a flat criterion a grid point can sit a few
     ulps below the better-determined slope root, which must still win; at an
@@ -102,25 +131,22 @@ def _rounding_slack(value, dof):
     return _ROUNDING_ULPS * np.finfo(float).eps * (np.abs(value) + dof)
 
 
-def _refine(pooled, log_grid, index, start_value, iterations):
-    """The slope root inside the neighbour bracket, where it is no worse."""
-    low, high = _bracket(log_grid, index)
-    root = _bisect_slope(pooled, low, high, iterations)
-    root_value = pooled_criterion(np.exp(root), pooled)
-    slack = _rounding_slack(start_value, pooled.dof)
-    accept = _sign_change(pooled, low, high) & (root_value <= start_value + slack)
-    start = log_grid[index]
-    return np.where(accept, root, start), np.where(accept, root_value, start_value)
+def _best_grid_point(values):
+    index = np.argmin(values, axis=0)
+    return index, np.take_along_axis(values, index[None], axis=0)[0]
 
 
 def _best_positive(pooled, grid_size, iterations):
-    log_grid = _singular2_grid(pooled.singular2, grid_size)
-    values = _grid_values(pooled, log_grid)
-    index = np.argmin(values, axis=0)
-    start_value = np.take_along_axis(values, index[None], axis=0)[0]
-    best, value = _refine(pooled, log_grid, index, start_value, iterations)
+    log_grid = _search_grid(pooled.singular2, grid_size)
+    values, slopes = _on_grid(pooled, log_grid)
+    index, grid_value = _best_grid_point(values)
+    roots = _crossing_roots(pooled, log_grid, slopes, iterations)
+    root, root_value = _lowest_root(index.size, *roots)
+    accept = root_value <= grid_value + _rounding_slack(grid_value, pooled.dof)
+    best = np.where(accept, root, log_grid[index])
     # The grid's upper edge is a truncation, not an optimum: flag it.
-    return np.exp(best), value, index == log_grid.size - 1
+    on_edge = (index == log_grid.size - 1) & ~accept
+    return np.exp(best), np.where(accept, root_value, grid_value), on_edge
 
 
 def _zero_optimum(pooled, n_features) -> RatioOptimum:

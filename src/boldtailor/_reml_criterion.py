@@ -65,6 +65,19 @@ def pooled_slope(ratios, pooled: PooledTerms) -> np.ndarray:
     return pooled.dof * q_slope / q + fraction.sum(axis=-2)
 
 
+def pooled_value_and_slope(ratios, pooled: PooledTerms):
+    """Criterion and its slope in log(lambda), sharing one pass of temporaries."""
+    scaled = _scaled(ratios, pooled.singular2)
+    logdet = np.log1p(scaled).sum(axis=-2)
+    shrunk = 1.0 + scaled
+    scaled /= shrunk
+    weighted = pooled.coordinates2 / shrunk
+    q = pooled.residual_ss + weighted.sum(axis=-2)
+    weighted *= scaled
+    slope = scaled.sum(axis=-2) - pooled.dof * weighted.sum(axis=-2) / q
+    return pooled.dof * np.log(q / pooled.dof) + logdet, slope
+
+
 def profiled_variance(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
     """Profiled noise variance Q(lambda) / N, shaped like ``ratios``."""
     pooled = pool_terms(terms)

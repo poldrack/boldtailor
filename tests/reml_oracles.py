@@ -88,12 +88,37 @@ def _feature(signals, index):
     return [y[:, [index]] for y in signals]
 
 
+_FIT_GRID = np.linspace(-30.0, 30.0, 241)
+
+
+def _local_minima(values):
+    """Indices of grid points no higher than both neighbours."""
+    padded = np.concatenate([[np.inf], values, [np.inf]])
+    return np.flatnonzero((values <= padded[:-2]) & (values <= padded[2:]))
+
+
+def _polish(objective, index):
+    """Bounded local search between the neighbours of one grid minimum."""
+    low = _FIT_GRID[max(index - 1, 0)]
+    high = _FIT_GRID[min(index + 1, _FIT_GRID.size - 1)]
+    return minimize_scalar(
+        objective, bounds=(low, high), method="bounded", options={"xatol": 1e-10}
+    )
+
+
 def _dense_feature_fit(signals, fixed, random, rho):
+    """Scan log ratio, polish every local minimum of the scan, keep the best.
+
+    A single bounded search is only local; the scan makes the reference
+    independent of which basin such a search happens to enter.
+    """
+
     def objective(log_ratio):
         return dense_criterion(signals, fixed, random, np.exp(log_ratio), rho)[0]
 
-    found = minimize_scalar(
-        objective, bounds=(-30.0, 30.0), method="bounded", options={"xatol": 1e-10}
+    scan = np.array([objective(x) for x in _FIT_GRID])
+    found = min(
+        (_polish(objective, i) for i in _local_minima(scan)), key=lambda f: f.fun
     )
     ratio = float(np.exp(found.x))
     if dense_criterion(signals, fixed, random, 0.0, rho)[0] <= found.fun:
@@ -103,7 +128,7 @@ def _dense_feature_fit(signals, fixed, random, rho):
 
 
 def dense_fit(signals, fixed, random, rho: float = 0.0):
-    """Per-feature (ratio, sigma2) by bounded search on log ratio, compared with 0."""
+    """Per-feature (ratio, sigma2) by scan and polish on log ratio, compared with 0."""
     fits = [
         _dense_feature_fit(_feature(signals, f), fixed, random, rho)
         for f in range(signals[0].shape[1])
