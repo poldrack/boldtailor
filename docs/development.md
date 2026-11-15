@@ -292,6 +292,17 @@ when only one candidate is `ok`), and its `fit` is the `λ = 0` fit (for an
 `unresolved` feature, the NaN fit). `RemlSelection.any_at_upper` marks the
 features for which any candidate, winner or not, was truncated: a truncated
 loser might have won at its true optimum, so those selections are provisional.
+`any_unrefined` additionally records interior fallbacks, including losing
+candidates. Both HRF experiment adapters preserve these qualifications in their
+diagnostics; `provisional` is `any_unrefined`, not a significance decision.
+
+Orthogonal residual energy is computed from `y - U(U'y)`, not the subtraction
+`||y||² - ||U'y||²`. The latter loses small noise energy at high SNR and can
+distort the likelihood at large ratios. When retained random rank fills the
+restricted space, its orthogonal complement has dimension zero and its energy
+is exactly zero. Otherwise the explicit residual calculation has rounding
+error in amplitude units; it does not guarantee accuracy for information below
+that arithmetic scale.
 
 The criterion depends on the groups only through pooled statistics (all
 singular values, the stacked squared coordinates, the summed residual sum of
@@ -383,8 +394,49 @@ lag-one ratio for projection bias on a fixed grid. Its signal-independent work
 grid) can be computed once with `ar1.prepare_reference` and reused; the
 simulations cache it per run. A feature is degenerate (NaN) when its residual
 denominator does not exceed the uncertainty floor above. `RhoEstimate.pooled` is the median
-over all groups and features of the finite corrected values, clipped to ±0.8,
-and `0.0` when none is finite.
+over all groups and features of the finite corrected values, clipped to
+`rho_range` (default `(-0.2, 0.95)`), and `0.0` when none is finite.
+`RhoEstimate.pooled_at_bound` marks a pooled value on a limit of that range.
+The lower limit is a prior, not a property of the estimator: strong negative
+autocorrelation is not plausible for fMRI noise, mildly negative estimates
+are ordinary sampling error around zero, and a strongly negative pooled value
+signals an upstream problem that the flag keeps visible. Clipping commutes
+with the median, so the limits change the pooled value only when the median
+itself lies outside them. In the regularized AR(1) pilot (256 vertices,
+sessions 11 and 16) every coefficient was between 0.22 and 0.80 and some sat
+at the former 0.8 cap, which is why the upper limit is now the end of the
+correction grid.
+Inversion requires the curve to be finite and strictly monotone across the
+pooling range, `rho_range` cut to the grid, with adjacent differences larger
+than `64 eps max(1, max(abs(expected)))`, a roundoff guard on the
+dimensionless lag ratio. The monotone branch that spans that range, extended
+as far as it stays monotone, is inverted by interpolation for every value,
+and values beyond it are clipped to its ends, as a fully monotone curve clips
+at the ends of the grid. Decreasing branches are reversed for interpolation.
+A curve that is nonfinite, flat, or turns inside the pooling range yields NaN
+for every value. Pooling excludes those values. The zero fallback when none
+remain is explicitly not an inferred absence of autocorrelation.
+
+Two alternatives were tried and rejected. Rejecting the whole curve for a bend
+anywhere on the grid discards usable estimates: confound-heavy designs often
+bend only beyond `|ρ| > 0.9` (about 8% of designs drawn with 200 scans and 100
+censored volumes), and a true `ρ` of 0.4 was then pooled as 0.0. Inverting
+value by value, with NaN at the levels a bend repeats, drops observations
+according to their value and biases the pooled median: on designs with ten
+residual degrees of freedom it sat at the then 0.8 limit for a true `ρ` of 0.4. The
+branch rule drops no value and keeps their order, and on those designs
+reproduces the estimates of plain monotone interpolation.
+
+Scientific regression coverage includes independent diagonal covariance and
+derivative oracles, known orthogonal energies near saturation, generated
+confounding classifications, dense AR(1) moment traces and time reversal.
+Bounded Monte Carlo checks cover estimated-rho recovery/null-tail behavior
+for matched references at rho ±0.5, and null selection as library size grows.
+A winner is not a significance test. Shared-variance estimates under unequal
+run variances summarize a pooled quantity, not each run's variance. These
+checks do not establish robustness to arbitrary temporal covariance,
+heterogeneous rho, correlated random coefficients or an incomplete reference
+design; those remain modeling sensitivity questions.
 
 `tests/reml_oracles.py` imports nothing from `boldtailor`. It holds a
 dense-covariance criterion and optimiser (a scan over `log λ` followed by a

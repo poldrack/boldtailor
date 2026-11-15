@@ -122,6 +122,11 @@ def test_noiseless_case_and_zero_signal_metrics(tmp_path, tiny_case):
         splits=False,
     )
     assert result.loc[result.estimator == "iid", "candidate_id"].iloc[0] == 0
+    # Noiseless data need not hit a search boundary when the fitted task model
+    # differs from the generating model. The table must retain the actual
+    # comparison's qualification, rather than infer it from the noise level.
+    fits = json.loads((tmp_path / "noiseless/fits.json").read_text())
+    assert result.provisional.tolist() == [f["provisional"][0] for f in fits]
 
 
 def test_cli_plan_does_not_require_nsd(capsys):
@@ -157,6 +162,7 @@ def test_failure_rate_includes_failed_estimates():
             estimator=["iid"] * 2,
             split=["full"] * 2,
             failed=[False, True],
+            provisional=[True, False],
             curve_rmse=[0.1, np.nan],
             peak_absolute_error=[0.0, np.nan],
         )
@@ -165,3 +171,9 @@ def test_failure_rate_includes_failed_estimates():
     assert out.n.iloc[0] == 2
     assert out.failure_rate.iloc[0] == 0.5
     assert out.curve_rmse_mean.iloc[0] == 0.1
+    assert out.n_qualified.iloc[0] == 2
+    assert out.n_provisional.iloc[0] == 1
+    assert out.provisional_rate.iloc[0] == 0.5
+    legacy = summarize(rows.drop(columns="provisional"))
+    assert legacy.n_qualified.iloc[0] == 0
+    assert np.isnan(legacy.provisional_rate.iloc[0])

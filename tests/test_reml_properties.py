@@ -55,6 +55,7 @@ def _well_conditioned(rng, size):
 def _assert_same_fit(actual, expected):
     assert actual.status == expected.status
     assert_array_equal(actual.at_upper, expected.at_upper)
+    assert_array_equal(actual.unrefined, expected.unrefined)
     assert_allclose(actual.ratio, expected.ratio, rtol=RTOL)
     assert_allclose(actual.noise_variance, expected.noise_variance, rtol=RTOL)
     assert_allclose(actual.effect_variance, expected.effect_variance, rtol=RTOL)
@@ -204,3 +205,5 @@ def test_selection_is_invariant_to_candidate_order(params, order):
     decisive = base.gap > 1e-8
     assert_array_equal(mapped[decisive], base.winner[decisive])
     assert_array_equal(permuted.winner == -1, base.winner == -1)
+    assert_array_equal(permuted.any_at_upper, base.any_at_upper)
+    assert_array_equal(permuted.any_unrefined, base.any_unrefined)

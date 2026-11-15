@@ -204,6 +204,7 @@ class RemlSelection:
     ``any_at_upper`` marks features for which some candidate's criterion was
     truncated at the upper edge of its search range. That criterion is an
     upper bound on the candidate's optimum, so the comparison is provisional.
+    ``any_unrefined`` also includes interior grid fallbacks of any candidate.
     """
 
     winner: np.ndarray
@@ -211,11 +212,12 @@ class RemlSelection:
     gap: np.ndarray
     n_candidates: int
     any_at_upper: np.ndarray
+    any_unrefined: np.ndarray
 
     def __post_init__(self):
         own_fields(self, ("winner",), dtype=np.int64)
         own_fields(self, ("gap",))
-        own_fields(self, ("any_at_upper",), dtype=bool)
+        own_fields(self, ("any_at_upper", "any_unrefined"), dtype=bool)
 
 
 def _empty_race(n_features):
@@ -224,6 +226,7 @@ def _empty_race(n_features):
         "best": np.full(n_features, np.inf),
         "second": np.full(n_features, np.inf),
         "any_at_upper": np.zeros(n_features, dtype=bool),
+        "any_unrefined": np.zeros(n_features, dtype=bool),
     }
 
 
@@ -238,6 +241,7 @@ def _compete(race, result, columns, values, candidate):
     race["best"][columns] = np.where(better, value, best)
     race["winner"][columns[better]] = candidate
     race["any_at_upper"][columns] |= values["at_upper"]
+    race["any_unrefined"][columns] |= values["unrefined"]
     _write(result, columns, values, better)
 
 
@@ -285,4 +289,5 @@ def select_random_design(
         gap=_gap(race),
         n_candidates=count,
         any_at_upper=race["any_at_upper"],
+        any_unrefined=race["any_unrefined"],
     )

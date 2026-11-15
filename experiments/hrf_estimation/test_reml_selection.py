@@ -87,6 +87,10 @@ def test_estimate_matches_package_selection(planted_runs):
     np.testing.assert_array_equal(d["sigma2"], expected.fit.noise_variance)
     np.testing.assert_array_equal(d["criterion"], expected.fit.criterion)
     np.testing.assert_array_equal(d["at_upper"], expected.fit.at_upper)
+    np.testing.assert_array_equal(d["unrefined"], expected.fit.unrefined)
+    np.testing.assert_array_equal(d["any_at_upper"], expected.any_at_upper)
+    np.testing.assert_array_equal(d["any_unrefined"], expected.any_unrefined)
+    np.testing.assert_array_equal(d["provisional"], expected.any_unrefined)
     np.testing.assert_array_equal(d["candidate_gap"], expected.gap)
     zero = [s == "variance_zero" for s in expected.fit.status]
     assert d["at_zero"] == zero
@@ -137,9 +141,15 @@ def test_noise_estimate_keys_and_bounds(planted_runs):
     assert moderate["rho"] == pytest.approx(moderate["corrected_median"])
     assert 0.1 < moderate["rho"] < 0.5
     strong = api.estimate_noise(_with_ar1_noise(runs, 0.97, 1.0, 6), "amplitude")
+    # Estimates saturate at the end of the correction grid, the upper limit
+    # of the default rho range: the pooled value is a bound there.
     assert strong["clipped"]
-    assert strong["corrected_median"] > 0.8
-    assert strong["rho"] == 0.8
+    assert strong["corrected_median"] == 0.95
+    assert strong["rho"] == 0.95
+    negative = api.estimate_noise(_with_ar1_noise(runs, -0.6, 1.0, 7), "amplitude")
+    assert negative["clipped"]
+    assert negative["corrected_median"] < -0.2
+    assert negative["rho"] == -0.2
 
 
 @pytest.mark.parametrize("method", ["remlcomponents", "remlshared", "remlcombined"])

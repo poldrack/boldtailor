@@ -165,9 +165,7 @@ def _fit_case(
                     rho_true = (
                         profile["rho"]
                         if case["noise"] == "ar1"
-                        else 0.0
-                        if case["noise"] == "white"
-                        else np.nan
+                        else 0.0 if case["noise"] == "white" else np.nan
                     )
                     rows.append(
                         dict(
@@ -178,6 +176,9 @@ def _fit_case(
                             estimator=estimator,
                             split=label,
                             status=result.status[0],
+                            provisional=result.diagnostics.get("provisional", [None])[
+                                0
+                            ],
                             rho=result.diagnostics["rho"],
                             rho_true=rho_true,
                             seconds=time.monotonic() - start,

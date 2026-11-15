@@ -42,6 +42,7 @@ def estimate():
 
 def test_evaluation_refits_amplitudes_and_pools_sums(signal_run):
     est = estimate()
+    est.diagnostics["provisional"] = [True, False]
     parts = build_design(signal_run, est.kernels[0])
     rng = np.random.default_rng(1)
     y1 = parts.task @ np.array([[2, 3], [5, 7], [1, -1]]) + 30
@@ -57,6 +58,7 @@ def test_evaluation_refits_amplitudes_and_pools_sums(signal_run):
         runs, est
     )
     assert score.summary.loc[8, "r2_full"] == pytest.approx(1)
+    assert score.summary.provisional.tolist() == [True, False]
     design = np.column_stack([parts.nuisance, parts.junk, parts.task])
     sse = sum(
         np.sum((y - design @ np.linalg.lstsq(design, y, rcond=None)[0]) ** 2, axis=0)

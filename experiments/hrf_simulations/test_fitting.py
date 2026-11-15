@@ -107,6 +107,10 @@ def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
     assert result.diagnostics["variance_ratio"] == [float(expected.fit.ratio[0])]
     assert result.diagnostics["sigma2"] == [float(expected.fit.noise_variance[0])]
     assert result.diagnostics["criterion"] == [float(expected.fit.criterion[0])]
+    assert result.diagnostics["unrefined"] == expected.fit.unrefined.tolist()
+    assert result.diagnostics["any_at_upper"] == expected.any_at_upper.tolist()
+    assert result.diagnostics["any_unrefined"] == expected.any_unrefined.tolist()
+    assert result.diagnostics["provisional"] == expected.any_unrefined.tolist()
     assert result.diagnostics["random_scales"] == [scaled[winner][1].tolist()]
 
 

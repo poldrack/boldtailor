@@ -65,7 +65,7 @@ def _log10_spectrum(rng, kind, k):
         return rng.uniform(-2, 2, size=k)
     if kind == "clustered":
         return rng.choice([-6.0, 5.0], size=k) + rng.normal(scale=0.05, size=k)
-    return np.repeat(rng.uniform(-8, 8, size=2), k)[:k]
+    return np.resize(rng.uniform(-8, 8, size=2), k)
 
 
 def _diagonal_problem(seed, kind):

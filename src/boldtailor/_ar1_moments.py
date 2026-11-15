@@ -12,6 +12,11 @@ import numpy as np
 from boldtailor._numerics import conditioned_basis, orthonormal_basis, project_out
 
 GRID = np.linspace(-0.95, 0.95, 2001)
+RHO_RANGE = (-0.2, 0.95)
+"""Default admissible range of the pooled rho. Strong negative
+autocorrelation is not plausible for fMRI noise, so the lower limit sits just
+below zero, leaving room for sampling error around a true value near zero.
+The upper limit is the end of the correction grid."""
 
 
 def lag_moments(residuals):
@@ -80,30 +85,87 @@ def expected_lag_ratio(design, rhos) -> np.ndarray:
     return basis_expected_lag_ratio(orthonormal_basis(design), rhos)
 
 
-def invert_lag_ratio(values, expected, grid) -> np.ndarray:
-    """Map observed ratios to rho through ``expected`` on ``grid``.
+def _resolution(expected) -> float:
+    """Differences of the dimensionless lag ratio at or below this are rounding."""
+    return 64 * np.finfo(float).eps * max(1.0, np.max(np.abs(expected)))
 
-    Linear interpolation where ``expected`` increases strictly, else the
-    nearest grid value; NaN stays NaN.
+
+def _branches(expected, slack):
+    """Maximal runs of grid cells with one direction, as (first, last, direction).
+
+    ``first`` and ``last`` index the run's end points. Direction is +1 or -1
+    for a resolved rise or fall and 0 where the differences are rounding.
+    """
+    difference = np.diff(expected)
+    direction = np.sign(difference) * (np.abs(difference) > slack)
+    breaks = np.flatnonzero(np.diff(direction)) + 1
+    firsts = np.concatenate([[0], breaks])
+    lasts = np.concatenate([breaks, [direction.size]])
+    return [(a, b, int(direction[a])) for a, b in zip(firsts, lasts, strict=True)]
+
+
+def _pooling_branch(expected, grid, slack, rho_range):
+    """The resolved monotone branch spanning ``rho_range``, or ``None``.
+
+    The range is cut to the grid, which must be increasing.
+    """
+    low, high = max(rho_range[0], grid[0]), min(rho_range[1], grid[-1])
+    for first, last, direction in _branches(expected, slack):
+        if direction and grid[first] <= low and grid[last] >= high:
+            return first, last, direction
+    return None
+
+
+def _branch_inverse(values, levels, rhos, direction):
+    """Rho interpolated on one branch, read in its rising direction; values
+    beyond the branch take the rho of its nearer end."""
+    order = slice(None, None, direction)
+    return np.interp(values, levels[order], rhos[order])
+
+
+def invert_lag_ratio(values, expected, grid, rho_range=RHO_RANGE) -> np.ndarray:
+    """Map observed ratios to rho through ``expected`` on an increasing ``grid``.
+
+    The curve must rise or fall, by more than rounding at every step, across
+    the whole of ``rho_range``, in which estimates are pooled. That branch, extended as
+    far as it stays monotone, is inverted by interpolation for every value,
+    and values beyond it are clipped to its ends, exactly as a fully monotone
+    curve clips at the ends of the grid; individual estimates are not
+    confined to ``rho_range``. A bend outside the range therefore only
+    shortens the usable branch. No finite value is dropped and
+    the order of the values is kept, so the pooled median is not biased by
+    which values happen to sit at levels the bend repeats.
+
+    A curve that is nonfinite, flat, or turns inside ``rho_range``
+    identifies nothing there and gives NaN for every value. NaN observations
+    stay NaN.
     """
     values = np.asarray(values, dtype=float)
-    if np.all(np.diff(expected) > 0):
-        corrected = np.interp(values, expected, grid)
-    else:
-        nearest = np.abs(expected[:, None] - values.ravel()[None, :]).argmin(axis=0)
-        corrected = grid[nearest].reshape(values.shape)
+    expected, grid = np.asarray(expected, dtype=float), np.asarray(grid, dtype=float)
+    if expected.size < 2 or not np.all(np.isfinite(expected)):
+        return np.full(values.shape, np.nan)
+    branch = _pooling_branch(expected, grid, _resolution(expected), rho_range)
+    if branch is None:
+        return np.full(values.shape, np.nan)
+    points = slice(branch[0], branch[1] + 1)
+    corrected = _branch_inverse(values, expected[points], grid[points], branch[2])
     return np.where(np.isfinite(values), corrected, np.nan)
 
 
-def correct_lag_ratio(values, design) -> np.ndarray:
+def correct_lag_ratio(values, design, rho_range=RHO_RANGE) -> np.ndarray:
     """Invert the expected lag ratio on the fixed rho grid; NaN stays NaN."""
-    return invert_lag_ratio(values, expected_lag_ratio(design, GRID), GRID)
+    expected = expected_lag_ratio(design, GRID)
+    return invert_lag_ratio(values, expected, GRID, rho_range)
 
 
-def pool_rho(values) -> float:
-    """Median of finite values clipped to [-0.8, 0.8]; 0.0 if none are finite."""
+def finite_median(values) -> float:
+    """Median of the finite values; NaN if there are none."""
     values = np.asarray(values, dtype=float)
     finite = values[np.isfinite(values)]
-    if finite.size == 0:
-        return 0.0
-    return float(np.clip(np.median(finite), -0.8, 0.8))
+    return float(np.median(finite)) if finite.size else np.nan
+
+
+def pool_rho(values, rho_range=RHO_RANGE) -> float:
+    """Median of finite values clipped to ``rho_range``; 0.0 if none are finite."""
+    median = finite_median(values)
+    return float(np.clip(median, *rho_range)) if np.isfinite(median) else 0.0
