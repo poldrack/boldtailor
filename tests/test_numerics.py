@@ -41,6 +41,17 @@ def test_basis_accepts_array_likes():
     assert orthonormal_basis([[1, 0], [1, 1], [1, 2]]).shape == (3, 2)
 
 
+def test_basis_is_row_major_like_its_owned_copies():
+    """A stored copy of the basis must reach BLAS in the same memory layout.
+
+    Projections keep a C-ordered copy; a column-major original makes the same
+    product round differently on some BLAS builds, at the last bit.
+    """
+    basis, _ = conditioned_basis(_design(np.random.default_rng(2), 30, 4))
+    assert basis.flags.c_contiguous
+    assert basis.flags.owndata
+
+
 def test_rank_tolerance_scales_with_size_and_norm():
     assert rank_tolerance((50, 4), 3.0) == pytest.approx(50 * EPS * 3.0)
 
