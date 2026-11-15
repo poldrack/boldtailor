@@ -32,11 +32,19 @@ class DesignCache:
         return self.entries[identity]
 
 
+def _prepared_reference(run):
+    return ar1.prepare_reference(reference_design(run))
+
+
 def estimate_rho(runs, cache=None):
-    """Pooled corrected AR(1) rho after projecting the shared reference design."""
+    """Pooled corrected AR(1) rho after projecting the shared reference design.
+
+    The prepared reference (basis and expected lag ratio) is signal-independent
+    and cached per run, so repeated fits pay only one projection per run.
+    """
     cache = cache or DesignCache()
     references = [
-        cache.get(r, "reference", lambda r=r: reference_design(r)) for r in runs
+        cache.get(r, "reference", lambda r=r: _prepared_reference(r)) for r in runs
     ]
     return float(ar1.estimate_rho([r.signals for r in runs], references).pooled)
 
