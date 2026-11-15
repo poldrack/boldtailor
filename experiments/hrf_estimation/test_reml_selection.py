@@ -141,9 +141,15 @@ def test_noise_estimate_keys_and_bounds(planted_runs):
     assert moderate["rho"] == pytest.approx(moderate["corrected_median"])
     assert 0.1 < moderate["rho"] < 0.5
     strong = api.estimate_noise(_with_ar1_noise(runs, 0.97, 1.0, 6), "amplitude")
+    # Estimates saturate at the end of the correction grid, the upper limit
+    # of the default rho range: the pooled value is a bound there.
     assert strong["clipped"]
-    assert strong["corrected_median"] > 0.8
-    assert strong["rho"] == 0.8
+    assert strong["corrected_median"] == 0.95
+    assert strong["rho"] == 0.95
+    negative = api.estimate_noise(_with_ar1_noise(runs, -0.6, 1.0, 7), "amplitude")
+    assert negative["clipped"]
+    assert negative["corrected_median"] < -0.2
+    assert negative["rho"] == -0.2
 
 
 @pytest.mark.parametrize("method", ["remlcomponents", "remlshared", "remlcombined"])
