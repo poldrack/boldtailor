@@ -72,7 +72,7 @@ def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
         ratio, sigma2 = fits[winner]
         assert result.diagnostics["variance_ratio"][v] == pytest.approx(ratio[0], rel=1e-5)
         assert result.diagnostics["sigma2"][v] == pytest.approx(sigma2[0], rel=1e-5)
-        assert result.diagnostics["candidate_gap"][v] == pytest.approx(max(scores)-min(scores), rel=1e-6)
+        assert result.diagnostics["candidate_gap"][v] == pytest.approx(sorted(scores)[1]-sorted(scores)[0], rel=1e-6)
     assert result.training_run_ids == tuple(r.run_id for r in runs)
 
 

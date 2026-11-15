@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from boldtailor.reml import RemlGroup, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_design
 from experiments.hrf_estimation import pilot
 from experiments.hrf_estimation import reml_selection as api
 from experiments.hrf_estimation.sensitivity import ar1_noise
@@ -94,13 +94,37 @@ def test_estimate_matches_package_selection(planted_runs):
     assert d["library_fingerprint"] == library.fingerprint
 
 
+def _argmin_kernels(runs, library, mode):
+    """Per-feature best ok candidate and its criterion, one package fit each."""
+    groups = [RemlGroup(r.signals, r.confounds.to_numpy(dtype=float)) for r in runs]
+    fits = [
+        fit_reml(groups, [api.random_design(r, k, mode) for r in runs])
+        for k in library.candidates
+    ]
+    ok = np.array([[s == "ok" for s in f.status] for f in fits])
+    scores = np.where(ok, np.array([f.criterion for f in fits]), np.inf)
+    best = np.argmin(scores, axis=0)
+    kernels = tuple(
+        library.candidates[i] if ok[i, v] else None for v, i in enumerate(best)
+    )
+    return kernels, scores.min(axis=0)
+
+
 def test_no_rt_mode_has_four_random_effects(planted_runs):
     runs, library = planted_runs
+    runs = runs[:2]
     for mode, count in [("none", 4), ("amplitude", 5)]:
-        result = api.fit_library_reml(runs[:2], library, {"rt_mode": mode})
+        result = api.fit_library_reml(runs, library, {"rt_mode": mode})
         assert result.diagnostics["rt_mode"] == mode
         assert result.diagnostics["n_random_effects_per_run"] == count
         assert str(count) in result.diagnostics["random_effects"]
+        kernels, criterion = _argmin_kernels(runs, library, mode)
+        assert result.kernels == kernels
+        won = np.isfinite(criterion)
+        assert won.any()
+        np.testing.assert_array_equal(
+            np.asarray(result.diagnostics["criterion"])[won], criterion[won]
+        )
 
 
 def test_noise_estimate_keys_and_bounds(planted_runs):
