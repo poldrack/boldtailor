@@ -87,6 +87,10 @@ def test_estimate_matches_package_selection(planted_runs):
     np.testing.assert_array_equal(d["sigma2"], expected.fit.noise_variance)
     np.testing.assert_array_equal(d["criterion"], expected.fit.criterion)
     np.testing.assert_array_equal(d["at_upper"], expected.fit.at_upper)
+    np.testing.assert_array_equal(d["unrefined"], expected.fit.unrefined)
+    np.testing.assert_array_equal(d["any_at_upper"], expected.any_at_upper)
+    np.testing.assert_array_equal(d["any_unrefined"], expected.any_unrefined)
+    np.testing.assert_array_equal(d["provisional"], expected.any_unrefined)
     np.testing.assert_array_equal(d["candidate_gap"], expected.gap)
     zero = [s == "variance_zero" for s in expected.fit.status]
     assert d["at_zero"] == zero

@@ -296,6 +296,7 @@ def test_selection_reports_features_with_a_truncated_candidate(noise_free, exact
     candidates = [exact, decoy] if exact_first else [decoy, exact]
     selection = select_random_design(_groups(signals, fixed), candidates)
     assert_array_equal(selection.any_at_upper, [True, False])
+    assert_array_equal(selection.any_unrefined, [True, False])
     assert selection.any_at_upper.dtype == bool
     with pytest.raises(ValueError):
         selection.any_at_upper[0] = False
@@ -312,3 +313,21 @@ def test_untruncated_selection_has_no_flag(planted):
     signals, fixed, candidates = planted
     selection = select_random_design(_groups(signals, fixed), candidates)
     assert not selection.any_at_upper.any()
+    assert not selection.any_unrefined.any()
+
+
+def test_losing_interior_fallback_makes_selection_provisional(monkeypatch):
+    import boldtailor.reml as api
+    from boldtailor._reml_search import minimize_ratio
+    from tests.test_reml_adversarial import _diagonal_problem
+
+    y, z, _ = _diagonal_problem(54, "wide")
+    # Exercise the real optimizer's documented coarse-grid fallback. The
+    # signal-aligned candidate wins, but uncertainty of the loser must survive.
+    monkeypatch.setattr(api, "minimize_ratio", lambda t: minimize_ratio(t, grid_size=3))
+    groups = [RemlGroup(y, np.empty((len(y), 0)))]
+    loser = api.fit_reml(groups, [z])
+    assert loser.unrefined[0] and not loser.at_upper[0]
+    selected = api.select_random_design(groups, [[z], [y]])
+    assert selected.winner[0] == 1
+    assert selected.any_unrefined[0]
