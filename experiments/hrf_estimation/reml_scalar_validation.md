@@ -1,3 +1,5 @@
+> Superseded by docs/superpowers/specs/2026-11-14-reml-module-design.md
+
 # Scalar AR(1) REML validation
 
 The AR(1)-only extension now uses a vectorized one-component restricted-likelihood solver. It diagonalizes the task Gram matrix once per HRF, evaluates all vertices together, and performs a bounded grid search followed by golden-section refinement. Exact zero and upper boundaries are included. The normalized variance bound, noise estimation, whitening, common nuisance projection, covariance model, and inactive/no-signal handling are retained. The multiple-component variants keep their existing generic optimizer.

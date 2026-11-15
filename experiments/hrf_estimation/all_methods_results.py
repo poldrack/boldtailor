@@ -181,9 +181,9 @@ plt.show()
 # ## Scope, provenance and interpretation
 #
 # - This is an empirical session comparison. Synthetic noise/RT sweeps have no NSD session identity and are not pooled into these plots.
-# - Complex REML variants remain historical sensitivity results; no further runs are implied by their inclusion.
+# - The multi-component REML variants (separate components, shared effects, combined) have been removed from the code; their rows here are historical results that can no longer be regenerated.
 # - AR(1) sessions 10–13 used the earlier generic solver; sessions 14–19 used the new scalar solver. Full session-11 validation matched all 1,750 HRF winners, but earlier transfer convergence flags are retained as recorded.
-# - The original REML versus AR(1)/complex comparison uses common held-out OLS scoring, not whitened likelihood or inferential calibration.
+# - The original REML versus AR(1) comparison, like the historical multi-component rows, uses common held-out OLS scoring, not whitened likelihood or inferential calibration.
 # - No across-session grand ranking is computed: methods have unequal session coverage. Conclusions should rely on within-session matched comparisons and consistency across the available sessions.
 #
 # The supporting tables include pooled total/partial/incremental R², converged-only sensitivity, coverage, and historical results. The compressed vertex-level snapshot allows recomputation without the NSD drive. Source paths and artifact hashes are retained in `reports/all_methods_provenance.json`.

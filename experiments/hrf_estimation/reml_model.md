@@ -1,3 +1,5 @@
+> Superseded by docs/superpowers/specs/2026-11-14-reml-module-design.md
+
 # Direct REML HRF-library selection
 
 The user selected direct REML with random task effects on 2026-11-07. The following covariance is the initial experimental model; all amplitude refitting for final R² remains ordinary least squares.

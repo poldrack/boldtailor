@@ -1,4 +1,4 @@
-"""Focused notebook: complete ten-session methods, then complete REML variants."""
+"""Focused notebook: complete ten-session methods and the RT ablation."""
 from pathlib import Path
 import nbformat
 import pandas as pd
@@ -27,12 +27,6 @@ def test_only_complete_ten_session_methods(notebook_verbose):
     for _,group in table.groupby('method'):
         assert set(group.session)==set(range(10,20))
     assert table.n_common.nunique()==1
-
-
-def test_only_complete_two_session_reml_variants(notebook_verbose):
-    table=pd.DataFrame(records(notebook_verbose,"reml_session_comparison"))
-    assert set(table.method)=={"Original REML","AR(1) REML","Separate components","Shared effects","Combined"}
-    assert len(table)==10 and set(table.session)=={10,11}
 
 
 def test_focused_notebook_executes_with_figures(notebook):

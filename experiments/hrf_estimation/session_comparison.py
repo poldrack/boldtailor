@@ -18,11 +18,10 @@
 # %% [markdown]
 # # HRF model comparisons
 #
-# Three complete comparisons for sub-07:
+# Two complete comparisons for sub-07:
 #
 # 1. **Sessions 10–19:** canonical, full-library CV, parametric-library CV, original REML, and AR(1) REML.
 # 2. **Sessions 10–19:** original REML with and without RT, with crossed evaluation and HRF shape comparisons.
-# 3. **Sessions 10 and 11:** original REML, AR(1), separate components, shared effects, and combined.
 #
 # No partial-coverage approaches, optimizer pilots, RT-duration results, or synthetic experiments are included. Results are saved snapshots; rerunning this notebook needs neither the NSD drive nor any model fitting.
 #
@@ -47,17 +46,7 @@
 #
 # **CV versus REML:** CV chooses the HRF by predicting omitted training runs. REML chooses it by a likelihood that accounts for fixed nuisance effects and estimates the variance of random task effects. The random-effect coefficients here are condition/RT/junk regression coefficients, not a separate random amplitude for every trial.
 #
-# ### Additional REML variants compared in sessions 10 and 11
-#
-# These variants keep the full HRF library and REML selection rule, but change the covariance assumptions for the task coefficients. Their variance components are estimated separately for each vertex and HRF candidate.
-#
-# | Variant | Change relative to original REML |
-# |---|---|
-# | **Separate components** | Replaces the single task/junk variance with **three variances**: one shared by the two condition coefficients, one for RT, and one shared by the missing/incorrect junk coefficients. Coefficients remain independent across runs, and residual temporal noise remains independent. This lets condition, RT, and junk effects have different amounts of shrinkage. |
-# | **Shared effects** | Adds a **shared task component across training runs**, alongside independent run-specific task/junk effects. There are two variance components: independent task/junk effects and shared condition/RT effects. Junk effects are not shared across runs. Residual temporal noise remains independent. This represents task responses that are consistent across runs while allowing run-specific deviations. |
-# | **Combined** | Combines AR(1) whitening with separate variances and shared task effects. It has **five task variance components**: independent conditions, RT, and junk, plus shared conditions and shared RT. It allows different shrinkage by effect type, cross-run task consistency, and temporal noise correlation. |
-#
-# All methods are evaluated with the **same unwhitened held-out OLS scoring procedure**. Consequently, the reported R² values compare the transfer quality of their selected HRFs, not the quality of their noise estimates or the calibration of statistical tests. The more complex REML variants are included here only as completed sensitivity analyses.
+# All methods are evaluated with the **same unwhitened held-out OLS scoring procedure**. Consequently, the reported R² values compare the transfer quality of their selected HRFs, not the quality of their noise estimates or the calibration of statistical tests.
 #
 #
 # **Output control:** `no_long_text_outputs = True` in the first code cell suppresses detailed tables and raw record dumps. Set it to `False` and rerun the notebook to show them. Plots and compact summaries remain visible.
@@ -89,13 +78,10 @@ reports=root/'reports'
 core=pd.read_csv(reports/'ten_session_core_summary.tsv',sep='\t')
 overall=pd.read_csv(reports/'ten_session_core_overall.tsv',sep='\t')
 strict=pd.read_csv(reports/'ten_session_core_converged.tsv',sep='\t')
-reml=pd.read_csv(reports/'two_session_reml_comparison.tsv',sep='\t')
 core_methods=['Canonical','Library CV','Parametric library CV','Original REML','AR(1) REML']
-reml_methods=['Original REML','AR(1) REML','Separate components','Shared effects','Combined']
-colors=dict(zip(dict.fromkeys(core_methods+reml_methods),plt.get_cmap('tab10').colors))
+colors=dict(zip(core_methods,plt.get_cmap('tab10').colors))
 plt.rcParams.update({'figure.dpi':120,'axes.spines.top':False,'axes.spines.right':False})
-for kind,frame in [('ten_session_comparison',core),('reml_session_comparison',reml)]:
-    display_long_output({'application/json':{'kind':kind,'records':json.loads(frame.to_json(orient='records',double_precision=15))}},raw=True)
+display_long_output({'application/json':{'kind':'ten_session_comparison','records':json.loads(core.to_json(orient='records',double_precision=15))}},raw=True)
 
 # %% [markdown]
 # ## 1. Five methods across all ten sessions
@@ -415,50 +401,6 @@ display(rt_cross.query('session_a < session_b').groupby('selection_rt').median_c
 # Omitting RT slightly increases the mean of the ten session-specific median split-half correlations (**0.9499 versus 0.9458**). Across the 45 session pairs, the median of the pair-specific median correlations is **0.9615 without RT versus 0.9579 with RT**. The two models nevertheless select similar shapes: within-session median all-run between-model correlations range from **0.9851 to 1.0000**.
 
 # %% [markdown]
-# ## 3. REML variants in sessions 10 and 11
+# ## Provenance
 #
-# All five variants are complete in both sessions:
-#
-# - **Original REML:** one variance for independent task/junk effects.
-# - **AR(1):** adds training-only pooled autocorrelation correction and whitening.
-# - **Separate components:** distinct condition, RT and junk variances.
-# - **Shared effects:** adds task effects shared across training runs.
-# - **Combined:** AR(1), separate components and shared condition/RT effects.
-#
-# Here the matched set is defined within each session across these five variants: **1,716 vertices in session 10 and 1,728 in session 11**. Scores therefore differ slightly from Section 1's smaller fixed ten-session mask; compare methods within each section. Evaluation uses the same unwhitened OLS scoring model for all variants.
-#
-# The complex variants remain discontinued for future analyses; this section summarizes their completed sensitivity results only.
-
-# %%
-display(reml[['session','method','n_common','r2_full','r2_task_partial','delta_r2_task']].sort_values(['session','method']).round(6))
-fig,axes=plt.subplots(1,2,figsize=(12,4.3),constrained_layout=True)
-for ax,session in zip(axes,[10,11]):
-    g=reml[reml.session.eq(session)].set_index('method').reindex(reml_methods)
-    change=100*(g.r2_task_partial-g.loc['Original REML','r2_task_partial'])
-    ax.barh(reml_methods,change,color=[colors[m] for m in reml_methods])
-    ax.axvline(0,color='0.5',linewidth=1);ax.invert_yaxis()
-    ax.set(title=f'Session {session}',xlabel='Partial task R² difference vs original REML (percentage points)')
-plt.show()
-
-# %% [markdown]
-# ### HRF shape agreement
-#
-# The next plot shows median Pearson correlation between each vertex’s HRFs estimated from the two independent training halves. AR(1) and combined improve descriptive shape agreement in both sessions. Increased stability can result from shrinkage and does not prove greater recovery accuracy.
-
-# %%
-fig,ax=plt.subplots(figsize=(10,4.5),constrained_layout=True)
-for i,session in enumerate([10,11]):
-    g=reml[reml.session.eq(session)].set_index('method').reindex(reml_methods)
-    ax.plot(range(len(reml_methods)),g.median_curve_r,marker='o',label=f'Session {session}')
-ax.set(xticks=range(len(reml_methods)),xticklabels=reml_methods,ylabel='Median split-half HRF curve correlation',ylim=(.94,1.0))
-ax.legend();plt.show()
-display(reml[['session','method','median_curve_r','same_hrf']].round(4))
-
-# %% [markdown]
-# The combined model has the largest predictive gain in session 11 (**+0.120 percentage points** in partial task R² over original REML), but almost no gain in session 10. Separate components and shared effects alone add little. Combined has the highest HRF shape agreement, with AR(1) providing much of that improvement at lower model complexity.
-#
-# These two sessions provide a sensitivity check, not evidence for a broadly superior complex model. Together, the two sections show that the larger canonical-to-adapted-HRF gain is much clearer than differences among the adapted approaches.
-#
-# ### Provenance
-#
-# All new baseline completion hashes, row counts, input fingerprints and splits were verified against the corresponding AR(1) analyses. The notebook uses portable reports under `reports/ten_session_core_*` and `reports/two_session_reml_comparison.tsv`. Requested-method vertex-level scores are in `reports/focused_comparison_scores.tsv.gz`; source paths and fit artifact hashes are in `reports/focused_comparison_provenance.json`. No significance test or independent-participant generalization is implied by these within-participant comparisons.
+# All new baseline completion hashes, row counts, input fingerprints and splits were verified against the corresponding AR(1) analyses. The notebook uses portable reports under `reports/ten_session_core_*`. Requested-method vertex-level scores are in `reports/focused_comparison_scores.tsv.gz`; source paths and fit artifact hashes are in `reports/focused_comparison_provenance.json`. No significance test or independent-participant generalization is implied by these within-participant comparisons.

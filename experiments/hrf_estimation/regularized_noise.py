@@ -5,33 +5,15 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 
-from boldtailor.hrf_library import HrfCandidate
-from experiments.hrf_estimation.design import build_design
+from boldtailor.ar1 import estimate_rho, whiten
+from experiments.hrf_estimation.estimators import validate_features
 from experiments.hrf_estimation.scoring import residuals
-from experiments.hrf_estimation.reml_extensions import _correct_noise_moments, whiten
-
-
-def reference_design(run):
-    designs = []
-    for parameters in ((3.5,12,.8,1.5,6,0,36), (6,16,1,1,6,0,36), (8,20,1.2,1.5,6,0,36)):
-        parts = build_design(run, HrfCandidate(0, "double_gamma", parameters), "amplitude")
-        designs.append(np.column_stack([parts.task, parts.junk]))
-    return np.column_stack([parts.nuisance, *designs])
+from experiments.hrf_estimation.reml_selection import random_design, reference_design, select_hrf
 
 
 def run_rhos(runs):
     """Bias-corrected run-by-vertex estimates, retaining missing estimates as NaN."""
-    rows = []
-    for run in runs:
-        matrix = reference_design(run)
-        error, _ = residuals(matrix, run.signals)
-        denominator = np.sum(error[:-1]**2, axis=0)
-        valid = denominator > 64*np.finfo(float).eps*np.sum(run.signals**2, axis=0)
-        values = np.full(len(run.feature_ids), np.nan)
-        raw = np.sum(error[1:]*error[:-1], axis=0)[valid] / denominator[valid]
-        values[valid] = _correct_noise_moments(raw, matrix)
-        rows.append(values)
-    return np.asarray(rows)
+    return estimate_rho([r.signals for r in runs], [reference_design(r) for r in runs]).values
 
 
 def shrink_rho(samples, pooled):
@@ -81,8 +63,14 @@ def subset_run(run, indices):
 
 
 def fit_grouped(runs, library, rho, verbose=False):
-    from experiments.hrf_estimation.regularized_fit import fit_grouped as fit
-    return fit(runs, library, rho, verbose)
+    """Scalar REML selection with one fixed AR(1) coefficient per vertex."""
+    validate_features(runs, runs[0].feature_ids, runs[0].brain_axis)
+    rho = np.asarray(rho)
+    if rho.shape != (len(runs[0].feature_ids),) or not np.isfinite(rho).all() or (abs(rho)>=1).any():
+        raise ValueError("one finite stationary rho per vertex required")
+    if verbose:
+        print(f"REML: {len(library.candidates)} candidates, {len(np.unique(rho))} rho groups", flush=True)
+    return select_hrf(runs, library, random_design, rho)
 
 
 def _acf(error):

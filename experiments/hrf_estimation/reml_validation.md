@@ -1,3 +1,5 @@
+> Superseded by docs/superpowers/specs/2026-11-14-reml-module-design.md
+
 # REML extension validation
 
 This is an execution/recovery validation on **four deterministic anatomical vertices**, not a full-VTC stability ranking. Sessions 11 and 12 each use all 12 runs, the full 533-candidate library, and the same complementary 6/6 run splits as the main experiment. The original REML, AR(1), separate-component, shared-task, and combined variants each produce an all-run fit and two transfer fits.
