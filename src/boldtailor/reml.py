@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from boldtailor._arrays import own_fields, own_tuples
+from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
 from boldtailor._reml_criterion import profiled_variance
 from boldtailor._reml_search import minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
@@ -42,70 +43,6 @@ class RemlFit:
         own_fields(self, ("criterion", "rho"))
         own_fields(self, ("at_upper",), dtype=bool)
         own_tuples(self, ("status",))
-
-
-# ---------------------------------------------------------------- validation
-
-
-def _check_finite(values, name, index):
-    if not np.all(np.isfinite(values)):
-        raise ValueError(f"{name} of group {index} contains non-finite values")
-
-
-def _check_matrix(values, name, index):
-    if np.ndim(values) != 2:
-        raise ValueError(f"{name} of group {index} must be 2-D (scans, columns)")
-    _check_finite(values, name, index)
-
-
-def _check_group(group, index):
-    _check_matrix(group.signals, "signals", index)
-    _check_matrix(group.fixed_design, "fixed_design", index)
-    if group.signals.shape[0] != group.fixed_design.shape[0]:
-        raise ValueError(f"scan counts differ within group {index}")
-
-
-def _check_random(group, random, index):
-    if random is None:
-        return
-    _check_matrix(random, "random_design", index)
-    if np.shape(random)[0] != group.signals.shape[0]:
-        raise ValueError(f"scan counts differ within group {index}")
-
-
-def _validate_groups(groups):
-    if len(groups) == 0:
-        raise ValueError("at least one group is required")
-    for index, group in enumerate(groups):
-        _check_group(group, index)
-    if len({g.signals.shape[1] for g in groups}) != 1:
-        raise ValueError("feature counts differ across groups")
-    if groups[0].signals.shape[1] == 0:
-        raise ValueError("signals must have at least one feature")
-
-
-def _checked_random(groups, random_design, label):
-    """Validate one random design per group and return it as float arrays."""
-    if len(random_design) != len(groups):
-        raise ValueError(f"{label} must have one entry per group")
-    for index, (group, random) in enumerate(zip(groups, random_design, strict=True)):
-        _check_random(group, random, index)
-    return [_as_random(z) for z in random_design]
-
-
-def _feature_rho(rho, n_features):
-    values = np.asarray(rho, dtype=float)
-    if values.ndim == 0:
-        values = np.full(n_features, float(values))
-    if values.shape != (n_features,):
-        raise ValueError("rho must be a scalar or have shape (features,)")
-    if not np.all(np.abs(values) < 1):
-        raise ValueError("rho must be finite with |rho| < 1")
-    return values
-
-
-def _as_random(random):
-    return None if random is None else np.asarray(random, dtype=float)
 
 
 # ---------------------------------------------------------------- fitting
@@ -199,7 +136,7 @@ def _single_dof(subsets) -> int:
 
 
 def _prepare(groups, rho):
-    rho = _feature_rho(rho, groups[0].signals.shape[1])
+    rho = feature_rho(rho, groups[0].signals.shape[1])
     subsets = _subsets(groups, rho)
     return rho, subsets, _single_dof(subsets)
 
@@ -212,13 +149,13 @@ def _fill(result, subsets, random_design):
 
 def fit_reml(
     groups: Sequence[RemlGroup],
-    random_design: Sequence[np.ndarray | None],
+    random_design: Iterable[np.ndarray | None],
     *,
     rho: float | np.ndarray = 0.0,
 ) -> RemlFit:
     """Estimate the variance ratio of the random effects, feature by feature."""
-    _validate_groups(groups)
-    random_design = _checked_random(groups, random_design, "random_design")
+    validate_groups(groups)
+    random_design = checked_random(groups, random_design, "random_design")
     rho, subsets, dof = _prepare(groups, rho)
     result = _empty_result(rho.size)
     _fill(result, subsets, random_design)
@@ -278,24 +215,26 @@ def _gap(race):
 
 
 def _run_race(groups, candidates, subsets, result):
-    race, count = _empty_race(result["ratio"].size), 0
-    for count, candidate in enumerate(candidates, start=1):
-        label = f"candidate {count - 1}"
-        random_design = _checked_random(groups, candidate, label)
-        _run_candidate(race, result, subsets, random_design, count - 1)
-    if count == 0:
+    """Fit candidates one at a time as they are drawn; return the race and count."""
+    race, n_candidates = _empty_race(result["ratio"].size), 0
+    for index, candidate in enumerate(candidates):
+        label = f"candidate {index} random_design"
+        random_design = checked_random(groups, candidate, label)
+        _run_candidate(race, result, subsets, random_design, index)
+        n_candidates = index + 1
+    if n_candidates == 0:
         raise ValueError("at least one candidate is required")
-    return race, count
+    return race, n_candidates
 
 
 def select_random_design(
     groups: Sequence[RemlGroup],
-    candidates: Iterable[Sequence[np.ndarray | None]],
+    candidates: Iterable[Iterable[np.ndarray | None]],
     *,
     rho: float | np.ndarray = 0.0,
 ) -> RemlSelection:
     """Pick, per feature, the candidate random design with the best criterion."""
-    _validate_groups(groups)
+    validate_groups(groups)
     rho, subsets, dof = _prepare(groups, rho)
     result = _empty_result(rho.size)
     _fill(result, subsets, [None] * len(groups))
