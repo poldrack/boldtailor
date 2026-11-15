@@ -275,11 +275,50 @@ def test_lag_ratio_of_zero_signal_is_nan():
 
 
 def test_reference_carries_the_conditioning_of_its_basis(design):
-    scaled = design * np.logspace(0, 4, design.shape[1])
-    reference = prepare_reference(scaled)
-    singular = np.linalg.svd(scaled, compute_uv=False)
+    reference = prepare_reference(design * np.logspace(0, 4, design.shape[1]))
+    unit = design / np.linalg.norm(design, axis=0)
+    singular = np.linalg.svd(unit, compute_uv=False)
     assert_allclose(reference.amplification, singular[0] / singular, rtol=1e-10)
     assert not reference.amplification.flags.writeable
+
+
+def test_exactly_removable_shift_preserves_the_lag_ratio():
+    """Follow-up review probe: orthogonal reference columns in unequal units."""
+    eye = np.eye(30)
+    reference = [prepare_reference(eye[:, :2] * np.array([1e-12, 1.0]))]
+    signal = (2 * eye[:, 2] + eye[:, 3])[:, None]
+    base = estimate_rho([signal], reference)
+    moved = estimate_rho([signal + 100 * eye[:, [0]]], reference)
+    assert_allclose(base.raw, [[0.4]])
+    assert_allclose(moved.raw, base.raw, rtol=1e-12)
+
+
+@pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e6, 1e-9, 1.0)])
+def test_estimate_does_not_depend_on_reference_column_units(scales):
+    signals, reference = _lag_problem(3)
+    base = estimate_rho([signals], [reference])
+    rescaled = estimate_rho([signals], [reference * np.array(scales)])
+    assert_allclose(rescaled.raw, base.raw, rtol=1e-9)
+    assert_allclose(rescaled.values, base.values, rtol=1e-9)
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e4, 1e8])
+def test_lag_ratio_is_invariant_to_shifts_in_a_span_of_unequal_units(scale):
+    n = 300
+    t = np.arange(n, dtype=float)
+    rng = np.random.default_rng(2)
+    reference = np.column_stack(
+        [np.ones(n), t, t**2, t**3, 0.05 * rng.normal(size=(n, 6))]
+    )
+    signals = rng.normal(size=(n, 4))
+    unit = reference / np.linalg.norm(reference, axis=0)
+    moved = signals + scale * (unit @ rng.normal(size=(10, 1)))
+    base = estimate_rho([signals], [reference]).raw
+    tolerance = max(100 * n * np.finfo(float).eps * scale, 1e-9)
+    assert np.isfinite(base).all()
+    assert_allclose(
+        estimate_rho([moved], [reference]).raw, base, rtol=0.0, atol=tolerance
+    )
 
 
 def _weak_column_problem(seed=0):

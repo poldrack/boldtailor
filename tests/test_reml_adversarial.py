@@ -301,3 +301,115 @@ def test_ill_conditioned_saturated_fixed_span_signal_is_no_signal():
     random = np.random.default_rng(1).normal(size=(10, 2))
     fit = fit_reml([RemlGroup(signals, fixed)], [random])
     assert fit.status == ("no_signal",) * 40
+
+
+# ------------------------------ follow-up F1: column units and unresolved fits
+
+
+@pytest.fixture
+def scaled_fixed_problem():
+    """Follow-up review probe: orthogonal fixed columns in unequal units."""
+    eye = np.eye(30)
+    fixed = eye[:, :2] * np.array([1e-12, 1.0])
+    signal = (2 * eye[:, 2] + eye[:, 3])[:, None]
+    return fixed, eye[:, [2]], signal, signal + 100 * eye[:, [0]]
+
+
+def test_exactly_removable_shift_preserves_reml(scaled_fixed_problem):
+    fixed, random, signal, shifted = scaled_fixed_problem
+    base = fit_reml([RemlGroup(signal, fixed)], [random])
+    moved = fit_reml([RemlGroup(shifted, fixed)], [random])
+    assert base.status == ("ok",)
+    assert moved.status == base.status
+    np.testing.assert_allclose(moved.ratio, base.ratio, rtol=1e-12)
+
+
+def _drift_problem(seed=2, n=300):
+    """Planted effect on a fixed design with unnormalised drift and small units."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(n, dtype=float)
+    fixed = np.column_stack([np.ones(n), t, t**2, t**3, 0.05 * rng.normal(size=(n, 6))])
+    planted = rng.normal(size=(n, 3))
+    signals = planted @ rng.normal(scale=3.0, size=(3, 4)) + rng.normal(size=(n, 4))
+    return signals, fixed, planted
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e4, 1e8])
+def test_fit_is_invariant_to_shifts_in_a_fixed_span_of_unequal_units(scale):
+    signals, fixed, planted = _drift_problem()
+    unit_shift = _unit_columns(fixed) @ np.random.default_rng(0).normal(size=(10, 1))
+    moved = signals + scale * unit_shift
+    base = fit_reml([RemlGroup(signals, fixed)], [planted])
+    shifted = fit_reml([RemlGroup(moved, fixed)], [planted])
+    tolerance = max(_shift_tolerance(len(signals), scale), 1e-9)
+    assert base.status == ("ok",) * 4
+    assert shifted.status == base.status
+    np.testing.assert_allclose(shifted.ratio, base.ratio, rtol=tolerance)
+
+
+def _unit_columns(design):
+    return design / np.linalg.norm(design, axis=0)
+
+
+@pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e6, 1e-9, 1.0)])
+def test_fit_does_not_depend_on_fixed_column_units(scales):
+    signals, fixed, planted, _ = _planted_problem(19, 3, 0.0)
+    base = fit_reml([RemlGroup(signals, fixed)], [planted])
+    rescaled = fit_reml([RemlGroup(signals, fixed * np.array(scales))], [planted])
+    assert rescaled.status == base.status
+    assert rescaled.restricted_dof == base.restricted_dof
+    np.testing.assert_allclose(rescaled.ratio, base.ratio, rtol=1e-8)
+    np.testing.assert_allclose(rescaled.criterion, base.criterion, rtol=1e-10)
+
+
+def test_tiny_unit_fixed_column_still_costs_a_degree_of_freedom():
+    signals, fixed, planted, _ = _planted_problem(19, 3, 0.0)
+    tiny = fixed * np.array([1.0, 1e-30, 1.0])
+    assert fit_reml([RemlGroup(signals, tiny)], [planted]).restricted_dof == 37
+
+
+def _collinear_fixed(rng, n=30, gap=1e-9):
+    fixed = rng.normal(size=(n, 4))
+    fixed[:, 3] = fixed[:, 0] + gap * rng.normal(size=n)
+    return fixed, (fixed[:, [3]] - fixed[:, [0]]) / gap
+
+
+def test_residual_below_the_span_uncertainty_is_unresolved():
+    """A genuine residual of 1e-8 beside an order-one component along the
+    weak direction of a near-collinear fixed design cannot be certified."""
+    rng = np.random.default_rng(0)
+    fixed, weak = _collinear_fixed(rng)
+    random = rng.normal(size=(30, 2))
+    signals = weak @ rng.normal(size=(1, 5)) + 1e-8 * rng.normal(size=(30, 5))
+    fit = fit_reml([RemlGroup(signals, fixed)], [random])
+    assert fit.status == ("unresolved",) * 5
+    for name in ("ratio", "noise_variance", "effect_variance", "criterion"):
+        assert np.isnan(getattr(fit, name)).all()
+    selection = select_random_design([RemlGroup(signals, fixed)], [[random]])
+    np.testing.assert_array_equal(selection.winner, -1)
+    assert selection.fit.status == ("unresolved",) * 5
+    assert np.isnan(selection.gap).all()
+
+
+def test_collinear_fixed_design_alone_does_not_make_a_fit_unresolved():
+    """The same residual without the weak-direction component is resolved."""
+    rng = np.random.default_rng(0)
+    fixed, _ = _collinear_fixed(rng)
+    random = rng.normal(size=(30, 2))
+    signals = fixed[:, :3] @ rng.normal(size=(3, 5)) + 1e-8 * rng.normal(size=(30, 5))
+    fit = fit_reml([RemlGroup(signals, fixed)], [random])
+    assert set(fit.status) <= {"ok", "variance_zero"}
+
+
+def test_unresolved_features_do_not_affect_resolved_ones():
+    rng = np.random.default_rng(0)
+    fixed, weak = _collinear_fixed(rng)
+    random = rng.normal(size=(30, 2))
+    live = random @ rng.normal(size=(2, 2)) + rng.normal(size=(30, 2))
+    uncertain = weak @ rng.normal(size=(1, 1)) + 1e-8 * rng.normal(size=(30, 1))
+    mixed = np.column_stack([live[:, [0]], uncertain, live[:, [1]]])
+    fit = fit_reml([RemlGroup(mixed, fixed)], [random])
+    reference = fit_reml([RemlGroup(live, fixed)], [random])
+    assert fit.status[1] == "unresolved"
+    np.testing.assert_array_equal(fit.ratio[[0, 2]], reference.ratio)
+    np.testing.assert_array_equal(fit.criterion[[0, 2]], reference.criterion)

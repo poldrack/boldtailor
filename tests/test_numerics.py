@@ -52,80 +52,151 @@ def test_residuals_are_orthogonal_to_the_basis():
     assert_allclose(basis.T @ residual, 0.0, atol=1e-13)
 
 
-def test_amplification_is_the_inverse_relative_singular_value():
+def _unit_columns(design):
+    return design / np.linalg.norm(design, axis=0)
+
+
+def test_amplification_is_the_inverse_relative_singular_value_of_unit_columns():
     design = _design(np.random.default_rng(4), 30, 3, condition=1e4)
     basis, amplification = conditioned_basis(design)
-    singular = np.linalg.svd(design, compute_uv=False)
+    singular = np.linalg.svd(_unit_columns(design), compute_uv=False)
     assert_allclose(basis, orthonormal_basis(design), atol=0.0)
     assert_allclose(amplification, singular[0] / singular, rtol=1e-12)
+
+
+@pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e-200, 1e100, 1.0)])
+def test_basis_and_amplification_do_not_depend_on_column_units(scales):
+    design = _design(np.random.default_rng(6), 30, 3)
+    basis, amplification = conditioned_basis(design)
+    rescaled, rescaled_amplification = conditioned_basis(design * np.array(scales))
+    assert_allclose(rescaled @ rescaled.T, basis @ basis.T, atol=1e-13)
+    assert_allclose(rescaled_amplification, amplification, rtol=1e-10)
+
+
+def test_only_exactly_zero_columns_are_dropped_for_their_norm():
+    design = _design(np.random.default_rng(7), 30, 3)
+    tiny = np.column_stack([design, 1e-250 * design[:, 1] ** 2, np.zeros(30)])
+    assert orthonormal_basis(tiny).shape == (30, 4)
+    assert orthonormal_basis(np.zeros((5, 2))).shape == (5, 0)
+
+
+def test_orthogonal_columns_in_unequal_units_have_no_amplification():
+    design = np.eye(30)[:, :2] * np.array([1e-12, 1.0])
+    assert_allclose(conditioned_basis(design)[1], 1.0, rtol=1e-12)
 
 
 def test_project_out_returns_the_residual():
     rng = np.random.default_rng(5)
     basis, amplification = conditioned_basis(_design(rng, 40, 4))
     signals = rng.normal(size=(40, 3))
-    residual, _ = project_out(signals, basis, amplification)
+    residual = project_out(signals, basis, amplification)[0]
     assert_allclose(residual, residualise(signals, basis), atol=0.0)
 
 
-def test_floor_is_a_squared_norm_threshold_weighted_by_conditioning():
-    """Energy along a basis vector counts amplification**2 times; the rest once."""
+def test_floors_are_squared_norm_thresholds():
+    """The rounding floor counts ||y||^2; the uncertainty floor counts energy
+    along a basis vector amplification**2 times and the rest once."""
     basis = np.eye(25)[:, :2]
     amplification = np.array([1.0, 1e3])
     signals = np.zeros((25, 3))
     signals[0, 0], signals[1, 1], signals[7, 2] = 3.0, 3.0, 3.0
-    _, floor = project_out(signals, basis, amplification)
+    _, rounding, uncertainty = project_out(signals, basis, amplification)
     unit = (PROJECTION_ERROR_FACTOR * 25 * EPS * 3.0) ** 2
-    assert_allclose(floor, unit * np.array([1.0, 1e6, 1.0]), rtol=1e-12)
+    assert_allclose(rounding, unit * np.ones(3), rtol=1e-12)
+    assert_allclose(uncertainty, unit * np.array([1.0, 1e6, 1.0]), rtol=1e-12)
 
 
-def _residue(rng, n, p, condition):
-    """Residual energy and floor of signals lying exactly in the design's span."""
-    design = _design(rng, n, p, condition)
+def _span_signals(rng, design, weak_last=False):
+    """Signals exactly in the design's span, optionally loading its last column."""
+    p = design.shape[1]
     amplitudes = 10.0 ** rng.uniform(-3, 6, size=(p, 1))
-    signals = design @ (rng.normal(size=(p, 40)) * amplitudes)
+    if weak_last:
+        amplitudes = np.logspace(-12, 0, p)[:, None]
+    return design @ (rng.normal(size=(p, 40)) * amplitudes)
+
+
+def _energies(signals, design):
     basis, amplification = conditioned_basis(design)
-    assert basis.shape[1] == p
-    residual, floor = project_out(signals, basis, amplification)
-    return np.sum(residual**2, axis=0), floor
+    assert basis.shape[1] == design.shape[1]
+    residual, rounding, uncertainty = project_out(signals, basis, amplification)
+    return np.sum(residual**2, axis=0), rounding, uncertainty
 
 
-@pytest.mark.parametrize("condition", [1.0, 1e6, 1e9])
+@pytest.mark.parametrize("weak_last", [False, True])
+@pytest.mark.parametrize("condition", [1.0, 1e6, 1e12])
 @pytest.mark.parametrize("n,p", [(10, 1), (10, 9), (30, 29), (100, 9), (1000, 400)])
-def test_floor_exceeds_projection_residue_with_a_fourfold_margin(n, p, condition):
-    """Calibration of the factor: the residue of exact-span signals stays a
-    factor four in norm below the floor across sizes, ranks, scales and
-    conditioning, including nearly saturated ill-conditioned designs."""
+def test_rounding_floor_covers_span_signals_of_unit_scaled_designs(
+    n, p, condition, weak_last
+):
+    """Calibration of the factor: when ill-conditioning comes only from column
+    units, the residue of exact-span signals stays a factor four in norm below
+    the plain rounding floor, whichever columns carry the signal."""
     rng = np.random.default_rng(n + p)
     for _ in range(5):
-        energy, floor = _residue(rng, n, p, condition)
-        assert np.all(16 * energy < floor)
+        design = rng.normal(size=(n, p)) * np.logspace(0, np.log10(condition), p)
+        energy, rounding, _ = _energies(_span_signals(rng, design, weak_last), design)
+        assert np.all(16 * energy < rounding)
 
 
-def _weak_column_problem(seed=0):
-    """Signals in the span of an ill-conditioned saturated design, dominated
-    by its weakest column, where the computed span is least accurate."""
-    rng = np.random.default_rng(seed)
-    design = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
-    weights = rng.normal(size=(9, 40)) * np.logspace(0, -12, 9)[:, None]
-    return design @ weights, design
+def _collinear_problem(rng, n, p, gap):
+    """A design whose last column nearly repeats its first, and span signals
+    dominated by the difference of the two."""
+    design = rng.normal(size=(n, p))
+    design[:, -1] = design[:, 0] + gap * rng.normal(size=n)
+    weak = design[:, [-1]] - design[:, [0]]
+    signals = weak @ rng.normal(size=(1, 40)) / gap + design @ rng.normal(size=(p, 40))
+    return signals, design
 
 
-def test_floor_without_conditioning_would_miss_ill_conditioned_residue():
-    """Why the floor is weighted: against ||y|| alone the residue of these
-    signals is orders of magnitude above the same multiple of n eps."""
-    signals, design = _weak_column_problem()
-    residual, floor = project_out(signals, *conditioned_basis(design))
-    energy = np.sum(residual**2, axis=0)
-    plain = (PROJECTION_ERROR_FACTOR * 10 * EPS) ** 2 * np.sum(signals**2, axis=0)
-    assert np.all(energy > 100 * plain)
-    assert np.all(16 * energy < floor)
+@pytest.mark.parametrize("gap", [1e-3, 1e-6, 1e-9])
+@pytest.mark.parametrize("n,p", [(10, 9), (30, 5), (300, 30)])
+def test_uncertainty_floor_covers_span_signals_of_collinear_designs(n, p, gap):
+    rng = np.random.default_rng(n * p)
+    for _ in range(5):
+        energy, _, uncertainty = _energies(*_collinear_problem(rng, n, p, gap))
+        assert np.all(16 * energy < uncertainty)
+
+
+def test_rounding_floor_alone_would_miss_collinear_residue():
+    """Why the uncertainty floor exists: near-collinear columns leave residue
+    far above the plain rounding floor."""
+    signals, design = _collinear_problem(np.random.default_rng(90), 10, 9, 1e-9)
+    energy, rounding, uncertainty = _energies(signals, design)
+    assert np.any(energy > 100 * rounding)
+    assert np.all(16 * energy < uncertainty)
+
+
+def _drift_design(n=300):
+    """Intercept, unnormalised cubic drift and small-unit motion columns."""
+    t = np.arange(n, dtype=float)
+    motion = 0.05 * np.random.default_rng(0).normal(size=(n, 6))
+    return np.column_stack([np.ones(n), t, t**2, t**3, motion])
+
+
+def test_unit_noise_on_a_drift_design_is_far_above_both_floors():
+    design = _drift_design()
+    rng = np.random.default_rng(1)
+    scale = np.array([1e4, 1.0, 1e-2, 1e-4] + [5.0] * 6)[:, None]
+    signals = rng.normal(size=(300, 5)) + design @ (rng.normal(size=(10, 5)) * scale)
+    energy, rounding, uncertainty = _energies(signals, design)
+    assert np.all(energy > 1e12 * uncertainty)
+    assert np.all(uncertainty < 1e6 * rounding)
 
 
 @pytest.mark.parametrize("offset", [1e4, 1e8, 1e10])
-def test_small_residual_on_a_large_nuisance_is_above_the_floor(offset):
+def test_small_residual_on_a_large_nuisance_is_above_the_floors(offset):
     rng = np.random.default_rng(3)
-    basis, amplification = conditioned_basis(_design(rng, 30, 2))
+    design = _design(rng, 30, 2)
     signals = rng.normal(size=(30, 4)) + offset
-    residual, floor = project_out(signals, basis, amplification)
-    assert np.all(np.sum(residual**2, axis=0) > floor)
+    energy, _, uncertainty = _energies(signals, design)
+    assert np.all(energy > uncertainty)
+
+
+def test_exactly_removable_shift_in_unequal_units_is_above_the_floors():
+    """Follow-up review F1: column units alone must not raise the floor."""
+    eye = np.eye(30)
+    design = eye[:, :2] * np.array([1e-12, 1.0])
+    signals = (2 * eye[:, 2] + eye[:, 3] + 100 * eye[:, 0])[:, None]
+    energy, _, uncertainty = _energies(signals, design)
+    assert_allclose(energy, 5.0, rtol=1e-12)
+    assert np.all(uncertainty < 1e-20)
