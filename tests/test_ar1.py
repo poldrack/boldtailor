@@ -88,12 +88,13 @@ def test_degenerate_feature_is_nan(design):
     assert np.isnan(result.raw[0, 1]) and np.isnan(result.values[0, 1])
     assert np.isfinite(result.raw[0, [0, 2]]).all()
     finite = result.values[np.isfinite(result.values)]
-    assert result.pooled == pytest.approx(np.clip(np.median(finite), -0.8, 0.8))
+    assert result.pooled == pytest.approx(np.clip(np.median(finite), -0.2, 0.95))
 
 
 def test_pooled_is_clipped_median():
     assert pool_rho(np.array([[0.1, 0.2, np.nan, 0.9]])) == pytest.approx(0.2)
-    assert pool_rho(np.array([0.95, 0.99, 0.97])) == pytest.approx(0.8)
+    assert pool_rho(np.array([0.96, 0.99, 0.97])) == pytest.approx(0.95)
+    assert pool_rho(np.array([0.96, 0.99, 0.97]), (-0.2, 0.8)) == pytest.approx(0.8)
     assert pool_rho(np.array([-0.99, -0.95])) == pytest.approx(-0.2)
     assert pool_rho(np.array([-0.99, -0.95]), (-0.8, 0.8)) == pytest.approx(-0.8)
 
@@ -225,16 +226,18 @@ def test_a_bend_beyond_the_pooling_range_leaves_the_curve_usable():
     levels the bend repeats are read on that branch, not dropped."""
     grid, expected = _bent_curve()
     values = np.array([-0.5, -0.1, 0.0, 0.2, 0.41, 0.5, 0.505])
-    assert_allclose(invert_lag_ratio(values, expected, grid), values / 0.6, atol=1e-12)
+    corrected = invert_lag_ratio(values, expected, grid, (-0.8, 0.8))
+    assert_allclose(corrected, values / 0.6, atol=1e-12)
 
 
 def test_values_beyond_the_usable_branch_are_clipped_to_its_ends():
     grid, expected = _bent_curve()
-    corrected = invert_lag_ratio(np.array([0.7, 5.0, -0.9]), expected, grid)
+    values = np.array([0.7, 5.0, -0.9])
+    corrected = invert_lag_ratio(values, expected, grid, (-0.8, 0.8))
     assert_allclose(corrected, [0.85, 0.85, -0.95], atol=1e-12)
 
 
-@pytest.mark.parametrize("turn", [0.0, 0.5, 0.75])
+@pytest.mark.parametrize("turn", [0.0, 0.5, 0.75, 0.85])
 def test_a_bend_inside_the_pooling_range_identifies_nothing(turn):
     grid, expected = _bent_curve(turn)
     values = np.array([-0.5, 0.0, 0.2])
@@ -251,8 +254,8 @@ def test_a_flat_stretch_inside_the_pooling_range_identifies_nothing():
 def test_default_rho_range_excludes_strong_negative_autocorrelation():
     from boldtailor._ar1_moments import RHO_RANGE
 
-    assert RHO_RANGE == (-0.2, 0.8)
-    assert pool_rho(np.array([0.9, 0.95, 0.99])) == 0.8
+    assert RHO_RANGE == (-0.2, 0.95)
+    assert pool_rho(np.array([0.97, 0.98, 0.99])) == 0.95
     assert pool_rho(np.array([-0.9, -0.95])) == -0.2
 
 
@@ -286,17 +289,27 @@ def test_values_below_the_range_are_clipped_to_the_branch_not_to_the_range():
 
 
 @pytest.mark.parametrize("true_rho", [-0.5, 0.4])
-def test_estimate_reports_whether_the_pooled_value_was_clipped(true_rho):
+def test_estimate_reports_whether_the_pooled_value_sits_on_a_bound(true_rho):
     signals = [_ar1_noise(3, 150, 600, true_rho)]
     reference = [np.ones((150, 1))]
     default = estimate_rho(signals, reference)
     wide = estimate_rho(signals, reference, rho_range=(-0.8, 0.8))
-    assert default.rho_range == (-0.2, 0.8) and wide.rho_range == (-0.8, 0.8)
+    assert default.rho_range == (-0.2, 0.95) and wide.rho_range == (-0.8, 0.8)
     assert wide.pooled == pytest.approx(true_rho, abs=0.03)
-    assert not wide.pooled_clipped
-    assert default.pooled_clipped == (true_rho < -0.2)
+    assert not wide.pooled_at_bound
+    assert default.pooled_at_bound == (true_rho < -0.2)
     assert default.pooled == (wide.pooled if true_rho > 0 else -0.2)
     assert_allclose(default.values, wide.values, atol=0.0)
+
+
+def test_pooled_value_at_the_upper_end_of_the_grid_is_reported_at_bound():
+    """Estimates saturating at the end of the correction grid pool to the
+    upper limit; that is a bound, not a measurement."""
+    rng = np.random.default_rng(0)
+    walk = np.cumsum(rng.normal(size=(400, 50)), axis=0)
+    estimate = estimate_rho([walk], [np.ones((400, 1))])
+    assert estimate.pooled == 0.95
+    assert estimate.pooled_at_bound
 
 
 @pytest.mark.parametrize(
@@ -317,7 +330,7 @@ def test_rho_range_reaches_both_the_inversion_and_the_pooling():
     assert np.isfinite(estimate_rho(signals, [design]).values).all()
     wide = estimate_rho(signals, [design], rho_range=(-0.9, 0.8))
     assert np.isnan(wide.values).all() and wide.pooled == 0.0
-    assert not wide.pooled_clipped
+    assert not wide.pooled_at_bound
 
 
 def _censored_design(seed, n=200, drift=10, random=29, censored=100):
@@ -402,7 +415,7 @@ def test_no_value_is_dropped_and_order_is_kept_whatever_the_tails(
     reordering by value would bias the pooled median."""
     grid, expected = _tailed_curve(left, core, right)
     sign = -1.0 if falling else 1.0
-    corrected = invert_lag_ratio(np.sort(values), sign * expected, grid)
+    corrected = invert_lag_ratio(np.sort(values), sign * expected, grid, (-0.8, 0.8))
     assert np.all(np.isfinite(corrected))
     assert np.all(np.diff(corrected) * sign >= 0)
     assert corrected.min() >= grid[0] and corrected.max() <= grid[-1]
@@ -415,7 +428,8 @@ def test_values_on_the_pooling_branch_are_inverted_exactly(left, core, right):
     inside = np.abs(grid) <= 0.8 + 1e-12
     rhos = np.linspace(-0.8, 0.8, 23)
     levels = np.interp(rhos, grid[inside], expected[inside])
-    assert_allclose(invert_lag_ratio(levels, expected, grid), rhos, atol=1e-12)
+    corrected = invert_lag_ratio(levels, expected, grid, (-0.8, 0.8))
+    assert_allclose(corrected, rhos, atol=1e-12)
 
 
 @settings(derandomize=True, deadline=None, max_examples=100)

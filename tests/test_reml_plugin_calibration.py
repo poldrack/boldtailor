@@ -28,7 +28,8 @@ def plugin_problem(request):
     )
     groups = [RemlGroup(y, c) for y, c in zip(signals, fixed, strict=True)]
     reference = [np.column_stack([c, z]) for c, z in zip(fixed, random, strict=True)]
-    estimated = estimate_rho(signals, reference).pooled
+    # The scenarios include rho = -0.5, outside the default fMRI range.
+    estimated = estimate_rho(signals, reference, rho_range=(-0.95, 0.95)).pooled
     return groups, random, rho, ratio, estimated
 
 
