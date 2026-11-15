@@ -149,6 +149,14 @@ the random design is not supported by the data), `no_signal` (no energy left
 after projecting out `C`), with a separate boolean for hitting the upper grid
 edge.
 
+Added after the 2026-11-15 review (`docs/review-2026-11-15-reml.md`): a fourth
+status, `unidentifiable`, for a random covariance that is a multiple of the
+identity on the whole restricted space. The criterion is then constant in `λ`;
+the ratio and variances are NaN and the candidate is not eligible in a
+selection. `no_signal` is decided by a conditioning-aware projection rounding
+floor instead of `64 · eps · ‖y‖²`. See the REML conventions in
+`docs/development.md` for both.
+
 Selection semantics per feature: the winner is the candidate with the lowest
 criterion among candidates whose status is `ok`. At `λ = 0` every candidate has
 the same criterion, and any candidate with `λ̂ > 0` is strictly better, so a

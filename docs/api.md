@@ -373,9 +373,16 @@ sequences, consumed once.
 `RemlFit` has per-feature read-only `ratio` (variance ratio λ), `noise_variance`
 (marginal σ²), `effect_variance` (`ratio * noise_variance`), `criterion`
 (−2 restricted log-likelihood up to a constant), `status` (`"ok"`,
-`"variance_zero"`, or `"no_signal"`), `at_upper`, and `rho`, plus the integer
-`restricted_dof`. A `"no_signal"` feature has `ratio` `0.0` and NaN
-`noise_variance`, `effect_variance` and `criterion`. `at_upper` marks an optimum
+`"variance_zero"`, `"no_signal"`, or `"unidentifiable"`), `at_upper`, and
+`rho`, plus the integer `restricted_dof`. A `"no_signal"` feature has `ratio`
+`0.0` and NaN `noise_variance`, `effect_variance` and `criterion`; it is one
+whose energy after projecting out the fixed design is within the rounding of
+that projection, which does not change when a fixed-design combination is
+added to the signals. An `"unidentifiable"` fit is one whose random covariance
+is a multiple of the noise covariance on the whole restricted space, so only
+`σ² + c τ²` is determined: `ratio`, `noise_variance` and `effect_variance` are
+NaN, `criterion` is the constant value of the flat profile, and the candidate
+cannot win a selection. `at_upper` marks an optimum
 at the upper edge of the search range; its `criterion` is a truncation at a
 candidate-dependent grid edge, not a comparable optimum. `RemlSelection` has
 `winner` (candidate index, `-1` when no candidate has status `ok`), the
@@ -403,15 +410,17 @@ estimate_rho(signals, reference)
 `W R(rho) W'` is the identity: the whitened noise has identity correlation and
 keeps its marginal variance σ². `prepare_reference` returns a frozen,
 read-only `RhoReference` holding what `estimate_rho` needs from one reference
-design (`basis`, an orthonormal basis of the design, and `expected`, the
-expected residual lag-one ratio on the correction grid); reuse it across
+design (`basis`, an orthonormal basis of the design, `amplification`, the
+design's largest singular value over that of each basis vector, and `expected`,
+the expected residual lag-one ratio on the correction grid); reuse it across
 signals to avoid recomputing that work. `estimate_rho` takes one signal array
 `(scans, features)` and one reference per group, each a design array or a
 `RhoReference` (identical results), and returns `RhoEstimate` with per-group
 `values` (bias-corrected, NaN where undefined), uncorrected `raw` estimates,
 and `pooled`, the median over all groups and features of the finite `values`,
 clipped to ±0.8 (`0.0` when none is finite). A feature with non-finite signals
-gets NaN estimates. Non-2-D inputs, non-finite designs, scan mismatches and
+gets NaN estimates, as does one whose residual after projecting out the
+reference is within the rounding of that projection. Non-2-D inputs, non-finite designs, scan mismatches and
 unequal feature counts raise `ValueError` naming the group.
 
 ## HRF libraries, selection, and evaluation

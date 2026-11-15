@@ -66,7 +66,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
-| Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_reml_terms`, `_reml_criterion`, `_reml_search`, `_ar1_moments` |
+| Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_reml_terms`, `_reml_criterion`, `_reml_search`, `_ar1_moments`, `_numerics` |
 | Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_denoising_pool`, `_denoising_cv`, `_denoising_gate`, `_denoising_identity`, `_mixture_threshold` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication`, `_software` |
 | Shared constants and deprecation shims | `_constants`, `_deprecation` |
@@ -262,8 +262,19 @@ groups' `fixed_design` and that feature's `rho`; `rho` may differ between
 features, and features are never compared with each other.
 
 Per-feature `status` is `ok`, `variance_zero` (the optimum is `λ = 0`, so the
-data do not support the random design), or `no_signal` (no energy remains after
-projecting out `C`; its `ratio` is `0.0` and its other estimates are NaN).
+data do not support the random design), `no_signal` (no energy remains after
+projecting out `C`; its `ratio` is `0.0` and its other estimates are NaN), or
+`unidentifiable`. A fit is unidentifiable when the random covariance is a
+multiple of the identity on the whole restricted space: every restricted
+degree of freedom has a retained random direction and all pooled singular
+values are equal (within `4 · dof · eps` relative). The covariance is then
+`(σ² + c τ²) I`, the profiled criterion is constant in `λ`, and only the sum
+is determined; `ratio` and both variances are NaN, `criterion` is that constant
+(the `λ = 0` value), and the fit is not eligible in a selection. The check is
+on the pooled spectrum, so groups that are each isotropic but at different
+scales remain identifiable. A nearly confounded design is not flagged: its
+profile is nearly flat, the data carry little information about the split, and
+the estimate is reported as `ok` or `variance_zero` with that caveat.
 `at_upper` flags an optimum at the upper edge of the search range; that edge
 depends on the candidate's singular values, so the criterion of an `at_upper`
 fit is a truncation, not a comparable optimum. In a selection, the winner is the
@@ -276,21 +287,51 @@ The criterion depends on the groups only through pooled statistics (all
 singular values, the stacked squared coordinates, the summed residual sum of
 squares and dof), so the search pools them once and every evaluation is one
 vectorised pass whatever the number of groups. The search is a log grid over
-the variance ratio (121 points from `1e-8 / max s²` to `1e8 / min s²`); the best
-grid point's neighbours bracket the root of the analytic derivative of the
-criterion with respect to `log λ`, which bisection refines. The root replaces
-the grid point unless it is worse beyond floating-point rounding; where the
-neighbours show no negative-to-positive sign change, the grid point stands
-(a test scan of the oracle and property-style cases finds no interior optimum
-without one). The result is then compared explicitly with `λ = 0`, and ties go
-to zero. Grid evaluation is chunked so that no temporary exceeds 8 MiB. The
-guarantees, rather than the iteration counts, are the contract: an interior
-optimum is a stationary point of the criterion to near machine precision, it
-is never worse than the best grid point beyond rounding, `λ = 0` is an explicit
-boundary, and `at_upper` reports a boundary hit.
+the variance ratio from `1e-8 / max s²` to `1e8 / min s²`, with 121 points when
+all singular values are equal and more for a wider spectrum, so the spacing in
+`log λ` never exceeds `log(1e16) / 120 ≈ 0.31`. The criterion and its analytic
+derivative with respect to `log λ` are evaluated on the grid; bisection refines
+the root inside every grid cell where the derivative turns from negative to
+positive, and the lowest of those roots replaces the best grid point unless it
+is worse beyond floating-point rounding. Refining only around the best grid
+point is not enough: a minimum narrower than the spacing can be bracketed by a
+sign change while both neighbouring grid values are worse than `λ = 0`. The
+result is then compared explicitly with `λ = 0`, and a positive ratio must
+improve on zero by more than the criterion's rounding noise
+(`64 · eps · (|F| + dof)`). The guarantees, rather than the iteration counts,
+are the contract: an interior optimum is a stationary point of the criterion to
+near machine precision, it is never worse than the best grid point beyond
+rounding, `λ = 0` is an explicit boundary, and `at_upper` reports a boundary
+hit. The search is not a certified global minimisation: a minimum and a
+maximum that both fall strictly inside one grid cell leave no sign change and
+are not refined.
 
-Rank decisions use one tolerance, `max(shape) · eps · σ_max`, defined in
-`_reml_terms`. The internal `project_fixed` (not public API) runs once per
+Memory: features are searched in batches sized so that each temporary of the
+search (`(grid rows, k, features)` or `(k, crossings)`, with `k` the pooled
+number of random directions) and each retained `(grid, features)` table stays
+within 8 MiB; a few such arrays are alive at once, and one feature is the
+smallest batch, so a temporary is never below `8 k` bytes. The bound covers
+the search only. The pooled statistics, `(k, features)` per fit, and the
+projected signals, `(scans, features)` per group and distinct `ρ`, are held in
+full, so this is not a bound on total process memory.
+
+Rank and degeneracy policy shared by `reml` and `ar1` lives in `_numerics`.
+Rank decisions use one tolerance, `max(shape) · eps · σ_max`. A projection
+residual is treated as rounding when its norm is at most `8 · n · eps` times
+the norm of the signal with its coordinate on each basis vector amplified by
+`σ_max / σ_i` of the projected-out design: a basis computed from `C` spans the
+range of `C + E` with `‖E‖ ~ n · eps · ‖C‖`, so signal along a weak direction
+of `C` leaves proportionally more rounding. Exact-span signals leave at most
+1.0 times that scale across the sizes, ranks and condition numbers pinned in
+`tests/test_numerics.py`; against the unweighted `n · eps · ‖y‖` the residue of
+an ill-conditioned, nearly saturated design reaches `1e5` times. This floor
+decides `no_signal` in `reml` and degenerate (NaN) features in `ar1`. It is a
+floating-point floor in float64, not a significance test: adding `C a` to the
+signals leaves the fit unchanged for as long as the residual is still
+representable, and data whose residual is only quantisation noise from a
+lower-precision file format are not masked by it; callers mask such features.
+For random designs, a column is rejected against the unprojected norm of `Z`,
+computed from the smaller of `Z'Z` and `ZZ'`. The internal `project_fixed` (not public API) runs once per
 group per distinct `ρ`, plus once more for a `ρ` subset that mixes features
 with and without signal, so results for live features are bit-identical
 whether or not dead features are present. Every candidate's `Z` is whitened,
@@ -308,12 +349,13 @@ lag-one ratio for projection bias on a fixed grid. Its signal-independent work
 (an orthonormal basis of the reference design and the expected lag ratio on the
 grid) can be computed once with `ar1.prepare_reference` and reused; the
 simulations cache it per run. A feature is degenerate (NaN) when its residual
-denominator is at most `64 · eps · ||y||²`. `RhoEstimate.pooled` is the median
+denominator does not exceed the projection floor above. `RhoEstimate.pooled` is the median
 over all groups and features of the finite corrected values, clipped to ±0.8,
 and `0.0` when none is finite.
 
 `tests/reml_oracles.py` imports nothing from `boldtailor`. It holds a
-dense-covariance criterion and optimiser, a `statsmodels` `MixedLM(reml=True)`
+dense-covariance criterion and optimiser (a scan over `log λ` followed by a
+bounded search around every local minimum of the scan), a `statsmodels` `MixedLM(reml=True)`
 fit (BFGS), and a finite-sample null reference for the restricted
 likelihood-ratio statistic. Two oracle cases are strict xfails because MixedLM
 does not reach the optimum there; the dense optimiser confirms the package
