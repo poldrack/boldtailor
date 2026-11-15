@@ -102,17 +102,24 @@ def test_floor_exceeds_projection_residue_with_a_fourfold_margin(n, p, condition
         assert np.all(16 * energy < floor)
 
 
+def _weak_column_problem(seed=0):
+    """Signals in the span of an ill-conditioned saturated design, dominated
+    by its weakest column, where the computed span is least accurate."""
+    rng = np.random.default_rng(seed)
+    design = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
+    weights = rng.normal(size=(9, 40)) * np.logspace(0, -12, 9)[:, None]
+    return design @ weights, design
+
+
 def test_floor_without_conditioning_would_miss_ill_conditioned_residue():
-    """Why the floor is weighted: against ||y|| alone the residue of an
-    ill-conditioned saturated design is far above any modest multiple."""
-    rng = np.random.default_rng(19)
-    design = _design(rng, 10, 9, 1e9)
-    signals = design @ (rng.normal(size=(9, 40)) * 10.0 ** rng.uniform(-3, 6, (9, 1)))
-    basis, amplification = conditioned_basis(design)
-    residual, floor = project_out(signals, basis, amplification)
+    """Why the floor is weighted: against ||y|| alone the residue of these
+    signals is orders of magnitude above the same multiple of n eps."""
+    signals, design = _weak_column_problem()
+    residual, floor = project_out(signals, *conditioned_basis(design))
+    energy = np.sum(residual**2, axis=0)
     plain = (PROJECTION_ERROR_FACTOR * 10 * EPS) ** 2 * np.sum(signals**2, axis=0)
-    assert np.any(np.sum(residual**2, axis=0) > plain)
-    assert np.all(np.sum(residual**2, axis=0) < floor)
+    assert np.all(energy > 100 * plain)
+    assert np.all(16 * energy < floor)
 
 
 @pytest.mark.parametrize("offset", [1e4, 1e8, 1e10])

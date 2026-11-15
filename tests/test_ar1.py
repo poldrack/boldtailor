@@ -282,10 +282,15 @@ def test_reference_carries_the_conditioning_of_its_basis(design):
     assert not reference.amplification.flags.writeable
 
 
+def _weak_column_problem(seed=0):
+    """Signals in the span of an ill-conditioned saturated design, dominated
+    by its weakest column, where the computed span is least accurate."""
+    rng = np.random.default_rng(seed)
+    design = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
+    weights = rng.normal(size=(9, 40)) * np.logspace(0, -12, 9)[:, None]
+    return design @ weights, design
+
+
 def test_ill_conditioned_saturated_span_signal_is_degenerate():
-    rng = np.random.default_rng(19)
-    reference = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
-    signals = reference @ (
-        rng.normal(size=(9, 40)) * 10.0 ** rng.uniform(-3, 6, (9, 1))
-    )
+    signals, reference = _weak_column_problem()
     assert np.isnan(estimate_rho([signals], [reference]).raw).all()

@@ -287,9 +287,17 @@ def test_shift_that_destroys_the_residual_is_no_signal():
     assert fit.status == ("no_signal",) * 4
 
 
+def _weak_column_problem(seed=0):
+    """Signals in the span of an ill-conditioned saturated design, dominated
+    by its weakest column, where the computed span is least accurate."""
+    rng = np.random.default_rng(seed)
+    design = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
+    weights = rng.normal(size=(9, 40)) * np.logspace(0, -12, 9)[:, None]
+    return design @ weights, design
+
+
 def test_ill_conditioned_saturated_fixed_span_signal_is_no_signal():
-    rng = np.random.default_rng(19)
-    fixed = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
-    signals = fixed @ (rng.normal(size=(9, 40)) * 10.0 ** rng.uniform(-3, 6, (9, 1)))
-    fit = fit_reml([RemlGroup(signals, fixed)], [rng.normal(size=(10, 2))])
+    signals, fixed = _weak_column_problem()
+    random = np.random.default_rng(1).normal(size=(10, 2))
+    fit = fit_reml([RemlGroup(signals, fixed)], [random])
     assert fit.status == ("no_signal",) * 40
