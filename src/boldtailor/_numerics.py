@@ -55,13 +55,15 @@ def conditioned_basis(matrix) -> tuple[np.ndarray, np.ndarray]:
     Columns are normalised first, so the basis, the rank decision and the
     amplification depend on the span and the collinearity of the columns, not
     on their units. Only exactly zero columns are dropped for their size.
+    The basis is row-major, like the copies that projections store, so that
+    products with either round identically.
     """
     scaled = _unit_columns(np.asarray(matrix, dtype=float))
     if scaled.shape[1] == 0:
         return np.empty((scaled.shape[0], 0)), np.empty(0)
     u, s, _ = np.linalg.svd(scaled, full_matrices=False)
     keep = s > rank_tolerance(scaled.shape, s[0])
-    return u[:, keep], s[0] / s[keep]
+    return np.ascontiguousarray(u[:, keep]), s[0] / s[keep]
 
 
 def orthonormal_basis(matrix) -> np.ndarray:
