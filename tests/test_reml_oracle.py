@@ -102,3 +102,18 @@ def test_matches_dense_fit(case):
     ratio, sigma2 = dense_fit(*data, rho)
     assert_allclose(fit.ratio, ratio, rtol=1e-5)
     assert_allclose(fit.noise_variance, sigma2, rtol=1e-5)
+
+
+@pytest.mark.parametrize("rho", [0.0, 0.4])
+def test_wide_random_design_matches_dense_fit(rho):
+    """More random columns than scans: the spectral norm takes the ZZ' path."""
+    rng = np.random.default_rng(21)
+    signals, fixed, _ = simulate(rng, scans=(30, 34), ratio=0.0, rho=rho, n_features=3)
+    random = [rng.normal(size=(len(y), 80)) / 9.0 for y in signals]
+    effects = [z @ rng.normal(size=(80, 3)) for z in random]
+    signals = [y + e for y, e in zip(signals, effects, strict=True)]
+    fit = _fit(signals, fixed, random, rho)
+    expected_ratio, expected_sigma2 = dense_fit(signals, fixed, random, rho)
+    assert fit.status == ("ok",) * 3
+    assert_allclose(fit.ratio, expected_ratio, rtol=1e-5)
+    assert_allclose(fit.noise_variance, expected_sigma2, rtol=1e-5)
