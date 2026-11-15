@@ -111,12 +111,13 @@ Names follow the package pattern (`fractional_ridge` / `_fractional_ridge`).
 
 | Module | Responsibility |
 | --- | --- |
-| `_ar1_moments.py` | (public `whiten` lives in `ar1.py`) lag-one residual autocorrelation; the projection-bias correction (`tr(MLMR)/tr(MDMR)` inverted on a grid); pooling (median, clip to ±0.8). No REML knowledge. |
+| `_ar1_moments.py` | Lag-one residual autocorrelation (`e'Le / e'De`); the projection-bias correction (`tr(MLMR)/tr(MDMR)` inverted on a grid); pooling (median, clip to ±0.8). No REML knowledge; the public `whiten` lives in `ar1.py`. |
 | `_reml_terms.py` | `FixedProjection` (per group: orthonormal basis of whitened `C`, projected signals, `d_g`, raw energy), built **once** per problem; `RemlTerms` (per group: `s²`, `c²`, `r`, `d`); `reml_terms(projection, random_design)`. Rank tolerances live here only. |
-| `_reml_criterion.py` | `criterion(ratios, terms)` and `profiled_variance(ratios, terms)`: pure functions of sufficient statistics, vectorised over features. |
-| `_reml_search.py` | `minimize_ratio(terms)`: log grid over `λ·s²`, golden-section refinement, explicit `λ = 0` candidate; returns ratio, criterion, boundary flags. The only optimiser. |
-| `ar1.py` (public) | `whiten`, `estimate_rho`, `RhoEstimate`; the lag-ratio moments live in `_ar1_moments.py`. |
-| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_design`, result dataclasses. Validation of inputs. |
+| `_reml_criterion.py` | `criterion(ratios, terms)`, `criterion_slope` and `profiled_variance(ratios, terms)`: pure functions of the groups' pooled sufficient statistics (`pool_terms`), vectorised over features. |
+| `_reml_search.py` | `minimize_ratio(terms)`: log grid over `λ·s²`, bisection on the analytic slope inside the neighbouring grid points, explicit `λ = 0` candidate; returns ratio, criterion, boundary flags. The only optimiser. |
+| `ar1.py` (public) | `whiten`, `prepare_reference`, `RhoReference`, `estimate_rho`, `RhoEstimate`; the lag-ratio moments live in `_ar1_moments.py`. |
+| `_reml_inputs.py` | Validation of the public REML inputs (groups, random designs and candidates, `rho`). |
+| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_design`, result dataclasses. |
 
 Public API sketch (names are the builder's to refine; shapes and semantics are not):
 
@@ -270,10 +271,28 @@ returns the full candidate × feature criterion table behind an option.
 
 ## Decisions during implementation
 
-- The search polishes the golden-section result by bisection on the analytic
-  derivative of the criterion in `log λ`, accepted unless worse than the
-  incumbent beyond floating-point rounding, then compares with `λ = 0` (ties to
-  zero). The contract is the guarantees, not iteration counts.
+- The search refines the best log-grid point by bisection on the analytic
+  derivative of the criterion in `log λ` inside the neighbouring grid points,
+  accepted unless worse than the grid point beyond floating-point rounding, then
+  compares with `λ = 0` (ties to zero). Without a sign change in that bracket the
+  grid point stands. The contract is the guarantees, not iteration counts.
+  (Final fix wave, item (b): the original golden-section stage was dropped once
+  the groups' sufficient statistics were pooled once per call; every existing
+  optimality, oracle and property test passed unchanged, and a single-feature
+  12-run selection became about 9x faster.)
+- (Final fix wave, item (a).) Input validation moved from `reml.py` to the
+  private `_reml_inputs.py`; `reml.py` still calls `project_fixed` through its
+  own namespace. Candidate errors name the candidate index, and a candidate may
+  be any iterable of per-group designs (one candidate is materialised at a
+  time, never the candidate stream). All `ρ` subsets must share one restricted
+  dof, else `ValueError`.
+- (Final fix wave, item (c).) `boldtailor.ar1` gained a public prepared
+  reference: `prepare_reference(design) -> RhoReference` (frozen, read-only:
+  the orthonormal basis and the expected lag ratio on the grid), and
+  `estimate_rho` accepts, per group, a design array or a `RhoReference` with
+  identical results; it validates its input and names the group. The
+  simulations cache the prepared reference per run under the `DesignCache`
+  `"reference"` key; rho estimation stays out of `runner.py`.
 - `project_fixed` runs once per group per distinct `ρ`, plus once more for a
   `ρ` subset mixing features with and without signal, so live features are
   bit-identical whether or not dead features are present.

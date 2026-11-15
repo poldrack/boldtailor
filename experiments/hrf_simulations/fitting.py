@@ -117,6 +117,9 @@ def _run_diagnostics(runs, library, model, convention, noise_mode, rho, oracle_r
 
 
 def _select(runs, library, parts, scaling, rho):
+    # The fixed design is r.confounds while random_scales residualise on
+    # p.nuisance; task_design sets nuisance = confounds, but a custom
+    # design_builder must keep the two equal for the scales to be consistent.
     groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in runs]
     candidates = (_random_designs(parts(k), scaling) for k in library.candidates)
     return select_random_design(groups, candidates, rho=rho)

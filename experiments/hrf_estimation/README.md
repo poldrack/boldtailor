@@ -107,16 +107,18 @@ directory is not a completed result. Current long-running jobs use the fixed
 into this checkout. Preserve that execution worktree while the queues run.
 
 The existing results notebook describes the earlier completed pilots; it does
-not yet include this running stage. The authorized REML extensions are documented in
-[reml_model.md](reml_model.md). Only `reml` and `remlar1` remain; the
+not yet include this running stage. The authorized REML extensions are
+documented in [reml_model.md](reml_model.md). Only `reml` and `remlar1` remain; the
 multi-component variants were removed. REML now comes from `boldtailor.reml`
 through `experiments/hrf_estimation/reml_selection.py`.
 Powell remains available for historical reproducibility but is excluded from
 both active queues at the user’s request.
 
 
-The completed [REML extension validation](reml_validation.md) records all 100
-passing tests and the four-vertex/two-session real-data check. Full-ROI REML
+Historical record: the completed [REML extension validation](reml_validation.md)
+documents the earlier experiment-local solvers, including the multi-component
+variants that have since been removed; it records all 100 then-passing tests
+and the four-vertex/two-session real-data check. Full-ROI REML
 variant comparisons (primary RT-amplitude model) and the matching 288-case
 synthetic checks run from c79a2a5 in `/tmp/boldtailor-hrf-reml-run`. Their exact
 commands and PIDs are in `outputs/reml-launch.json`; logs are

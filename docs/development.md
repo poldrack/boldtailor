@@ -257,36 +257,60 @@ the AR(1) fit's; this is a finding from that scenario, not a general law.
 The criterion is the exact restricted likelihood, profiled over `σ²`. Its
 constant depends only on `C` and `ρ`, so criteria are comparable across random
 designs only at fixed `C` and `ρ`, never across `ρ` or `C`.
-`select_random_design` therefore compares candidates at the groups'
-`fixed_design` and a single `rho`.
+`select_random_design` therefore compares candidates per feature, at the
+groups' `fixed_design` and that feature's `rho`; `rho` may differ between
+features, and features are never compared with each other.
 
 Per-feature `status` is `ok`, `variance_zero` (the optimum is `λ = 0`, so the
 data do not support the random design), or `no_signal` (no energy remains after
-projecting out `C`). `at_upper` flags an optimum at the upper edge of the
-search range. In a selection, the winner is the candidate with the lowest
-criterion among those with status `ok`; ties go to the earlier candidate. A
-feature with no `ok` candidate has winner `-1` and a NaN `gap` (the criterion
-difference to the runner-up, also NaN when only one candidate is `ok`).
+projecting out `C`; its `ratio` is `0.0` and its other estimates are NaN).
+`at_upper` flags an optimum at the upper edge of the search range; that edge
+depends on the candidate's singular values, so the criterion of an `at_upper`
+fit is a truncation, not a comparable optimum. In a selection, the winner is the
+candidate with the lowest criterion among those with status `ok`; ties go to
+the earlier candidate. A feature with no `ok` candidate has winner `-1`, a NaN
+`gap` (the criterion difference to the runner-up, also NaN when only one
+candidate is `ok`), and its `fit` is the `λ = 0` fit.
 
-The search is a log grid over the variance ratio, golden-section refinement,
-and a polish that finds the root of the analytic derivative of the criterion
-with respect to `log λ` by bisection. The polish is accepted unless it is worse
-than the incumbent beyond floating-point rounding. The result is then compared
-explicitly with `λ = 0`, and ties go to zero. The guarantees, rather than the
-iteration counts, are the contract: an interior optimum is a stationary point
-of the criterion to near machine precision, it is never worse than the best
-grid point beyond rounding, `λ = 0` is an explicit boundary, and `at_upper`
-reports a boundary hit.
+The criterion depends on the groups only through pooled statistics (all
+singular values, the stacked squared coordinates, the summed residual sum of
+squares and dof), so the search pools them once and every evaluation is one
+vectorised pass whatever the number of groups. The search is a log grid over
+the variance ratio (121 points from `1e-8 / max s²` to `1e8 / min s²`); the best
+grid point's neighbours bracket the root of the analytic derivative of the
+criterion with respect to `log λ`, which bisection refines. The root replaces
+the grid point unless it is worse beyond floating-point rounding; where the
+neighbours show no negative-to-positive sign change, the grid point stands
+(a test scan of the oracle and property-style cases finds no interior optimum
+without one). The result is then compared explicitly with `λ = 0`, and ties go
+to zero. Grid evaluation is chunked so that no temporary exceeds 8 MiB. The
+guarantees, rather than the iteration counts, are the contract: an interior
+optimum is a stationary point of the criterion to near machine precision, it
+is never worse than the best grid point beyond rounding, `λ = 0` is an explicit
+boundary, and `at_upper` reports a boundary hit.
 
 Rank decisions use one tolerance, `max(shape) · eps · σ_max`, defined in
-`_reml_terms`. `project_fixed` runs once per group per distinct `ρ`, plus once
-more for a `ρ` subset that mixes features with and without signal, so results
-for live features are bit-identical whether or not dead features are present.
+`_reml_terms`. The internal `project_fixed` (not public API) runs once per
+group per distinct `ρ`, plus once more for a `ρ` subset that mixes features
+with and without signal, so results for live features are bit-identical
+whether or not dead features are present. Every candidate's `Z` is whitened,
+projected and decomposed once per group per distinct `ρ`, so cost grows with
+the number of distinct `ρ` values: unbinned per-vertex `ρ` (for example 1,750
+values × 533 candidates × 12 runs) is impractical, and callers bin it
+(`regularized_pilot.py` uses steps of 0.02). All `ρ` subsets must share one
+restricted dof (the rank of the whitened `C` must not change with `ρ`);
+otherwise `ValueError` is raised. Input validation lives in `_reml_inputs`.
 Zero-feature signals, non-finite inputs, shape mismatches, `|ρ| >= 1`, an empty
 candidate iterable, and a candidate with the wrong number of groups raise
-`ValueError`. `ar1.estimate_rho` corrects the residual lag-one ratio for
-projection bias on a fixed grid, and `RhoEstimate.pooled` is the median clipped
-to ±0.8.
+`ValueError`; candidate errors name the candidate index, and a candidate may be
+any iterable of per-group designs. `ar1.estimate_rho` corrects the residual
+lag-one ratio for projection bias on a fixed grid. Its signal-independent work
+(an orthonormal basis of the reference design and the expected lag ratio on the
+grid) can be computed once with `ar1.prepare_reference` and reused; the
+simulations cache it per run. A feature is degenerate (NaN) when its residual
+denominator is at most `64 · eps · ||y||²`. `RhoEstimate.pooled` is the median
+over all groups and features of the finite corrected values, clipped to ±0.8,
+and `0.0` when none is finite.
 
 `tests/reml_oracles.py` imports nothing from `boldtailor`. It holds a
 dense-covariance criterion and optimiser, a `statsmodels` `MixedLM(reml=True)`

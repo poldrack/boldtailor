@@ -374,24 +374,45 @@ sequences, consumed once.
 (marginal σ²), `effect_variance` (`ratio * noise_variance`), `criterion`
 (−2 restricted log-likelihood up to a constant), `status` (`"ok"`,
 `"variance_zero"`, or `"no_signal"`), `at_upper`, and `rho`, plus the integer
-`restricted_dof`. `RemlSelection` has `winner` (candidate index, `-1` when no
-candidate has status `ok`), the winner's `fit`, the criterion `gap` to the
-runner-up (NaN without one), and `n_candidates`. Criteria are comparable across
-candidates only at the same `fixed_design` and `rho`. Invalid input raises
-`ValueError`. See [REML conventions](development.md#reml-conventions).
+`restricted_dof`. A `"no_signal"` feature has `ratio` `0.0` and NaN
+`noise_variance`, `effect_variance` and `criterion`. `at_upper` marks an optimum
+at the upper edge of the search range; its `criterion` is a truncation at a
+candidate-dependent grid edge, not a comparable optimum. `RemlSelection` has
+`winner` (candidate index, `-1` when no candidate has status `ok`), the
+winner's `fit` (for a feature with winner `-1`, the `λ = 0` fit), the criterion
+`gap` to the runner-up (NaN without one), and `n_candidates`. Criteria are
+comparable across candidates only at the same `fixed_design` and `rho`; the
+comparison is per feature, at that feature's `rho`. Invalid input raises
+`ValueError`, naming the group and, in a selection, the candidate index.
+
+Cost: the fixed design is projected once per group per distinct `rho` value,
+and every candidate's random design is whitened, projected and decomposed once
+per group per distinct `rho` value. Per-feature `rho` should therefore take few
+distinct values; bin it (for example to 0.02) rather than passing one unbinned
+value per vertex. See [REML conventions](development.md#reml-conventions).
 
 From `boldtailor.ar1`:
 
 ```text
 whiten(values, rho)
+prepare_reference(design)
 estimate_rho(signals, reference)
 ```
 
-`whiten` returns rows whitened by AR(1) noise, normalised so the whitened noise
-has unit marginal variance. `estimate_rho` takes one signal array and one
-reference design per group and returns `RhoEstimate` with per-group `values`
-(bias-corrected, NaN where undefined), uncorrected `raw` estimates, and the
-`pooled` median clipped to ±0.8.
+`whiten` returns rows whitened by AR(1) noise, normalised so that
+`W R(rho) W'` is the identity: the whitened noise has identity correlation and
+keeps its marginal variance σ². `prepare_reference` returns a frozen,
+read-only `RhoReference` holding what `estimate_rho` needs from one reference
+design (`basis`, an orthonormal basis of the design, and `expected`, the
+expected residual lag-one ratio on the correction grid); reuse it across
+signals to avoid recomputing that work. `estimate_rho` takes one signal array
+`(scans, features)` and one reference per group, each a design array or a
+`RhoReference` (identical results), and returns `RhoEstimate` with per-group
+`values` (bias-corrected, NaN where undefined), uncorrected `raw` estimates,
+and `pooled`, the median over all groups and features of the finite `values`,
+clipped to ±0.8 (`0.0` when none is finite). A feature with non-finite signals
+gets NaN estimates. Non-2-D inputs, non-finite designs, scan mismatches and
+unequal feature counts raise `ValueError` naming the group.
 
 ## HRF libraries, selection, and evaluation
 

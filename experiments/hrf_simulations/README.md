@@ -230,7 +230,11 @@ fits include motion-24, an intercept, 80-second cosine terms, and fixed
 fast/canonical/slow task and junk regressors covering both RT mechanisms.
 Artifacts retain all vertex profiles; target-specific selection takes 64
 vertices spanning variance and lag-one correlation **after excluding the
-target session**. Each replicate draws one vertex profile. Its AR(1) rho is
+target session**. Per-vertex calibration rho comes from
+`boldtailor.ar1.estimate_rho`; a vertex is invalid (NaN) when its residual
+lag-one denominator is at most `64 · eps · ||y||²`, a floor relative to the
+vertex's own energy (the earlier experiment-local code used an absolute
+`eps` floor). Each replicate draws one vertex profile. Its AR(1) rho is
 shrunk across calibration vertices using repeated-run uncertainty, and remains
 constant across the replicate's runs. Independent innovations start each run
 in its stationary distribution.
@@ -339,8 +343,9 @@ AR(1) estimation uses a fixed reference containing both duration conventions
 and RT mechanisms, shared by every fitted task model. Rho is estimated only
 from the simulated training runs with `boldtailor.ar1.estimate_rho`, pooled
 within each simulated vertex, with its projection-bias correction and
-[-0.8, 0.8] clipping. Replicates
-are never pooled for estimation. AR(1)-generated cases additionally include a
+[-0.8, 0.8] clipping. Replicates are never pooled for estimation. The
+signal-independent part of each run's reference (`boldtailor.ar1.prepare_reference`)
+is cached per run, so repeated fits pay one projection per run. AR(1)-generated cases additionally include a
 known-rho oracle diagnostic; calibration rho is otherwise hidden from fitting.
 
 ## Reporting

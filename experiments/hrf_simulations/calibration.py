@@ -28,6 +28,8 @@ def _reference_fit(run):
             "calibration reference requires positive residual degrees of freedom"
         )
     error = run.signals - design @ beta
+    # Per-vertex rho is NaN when the residual lag denominator is at most
+    # 64 * eps * ||y||^2: a floor relative to the vertex's energy, not absolute.
     corrected = np.array(estimate_rho([run.signals], [design]).values[0])
     finite = corrected[np.isfinite(corrected)]
     variance_rho = float(np.clip(np.median(finite), -0.8, 0.8)) if len(finite) else 0.0
