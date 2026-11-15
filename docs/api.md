@@ -400,7 +400,10 @@ which marks features for which any candidate, winner or not, was truncated at
 its upper edge. `any_unrefined` also includes interior grid fallbacks of any
 candidate; these comparisons are provisional even when the winning fit is
 refined. Both experiment adapters save these flags, the winning `unrefined`
-flag, and a `provisional` diagnostic equal to `any_unrefined`. Criteria are
+flag, and a `provisional` diagnostic equal to `any_unrefined`. Score tables
+preserve that qualification; simulation summaries report the number and rate
+of provisional selections among results with known qualification metadata.
+Historical records without it remain unknown. Criteria are
 comparable across candidates only at the same `fixed_design` and `rho`; the
 comparison is per feature, at that feature's `rho`. Invalid input raises
 `ValueError`, naming the group and, in a selection, the candidate index.
