@@ -394,10 +394,20 @@ lag-one ratio for projection bias on a fixed grid. Its signal-independent work
 grid) can be computed once with `ar1.prepare_reference` and reused; the
 simulations cache it per run. A feature is degenerate (NaN) when its residual
 denominator does not exceed the uncertainty floor above. `RhoEstimate.pooled` is the median
-over all groups and features of the finite corrected values, clipped to ±0.8,
-and `0.0` when none is finite.
+over all groups and features of the finite corrected values, clipped to
+`rho_range` (default `(-0.2, 0.95)`), and `0.0` when none is finite.
+`RhoEstimate.pooled_at_bound` marks a pooled value on a limit of that range.
+The lower limit is a prior, not a property of the estimator: strong negative
+autocorrelation is not plausible for fMRI noise, mildly negative estimates
+are ordinary sampling error around zero, and a strongly negative pooled value
+signals an upstream problem that the flag keeps visible. Clipping commutes
+with the median, so the limits change the pooled value only when the median
+itself lies outside them. In the regularized AR(1) pilot (256 vertices,
+sessions 11 and 16) every coefficient was between 0.22 and 0.80 and some sat
+at the former 0.8 cap, which is why the upper limit is now the end of the
+correction grid.
 Inversion requires the curve to be finite and strictly monotone across the
-pooling range, `[-0.8, 0.8]` cut to the grid, with adjacent differences larger
+pooling range, `rho_range` cut to the grid, with adjacent differences larger
 than `64 eps max(1, max(abs(expected)))`, a roundoff guard on the
 dimensionless lag ratio. The monotone branch that spans that range, extended
 as far as it stays monotone, is inverted by interpolation for every value,
@@ -413,7 +423,7 @@ bend only beyond `|ρ| > 0.9` (about 8% of designs drawn with 200 scans and 100
 censored volumes), and a true `ρ` of 0.4 was then pooled as 0.0. Inverting
 value by value, with NaN at the levels a bend repeats, drops observations
 according to their value and biases the pooled median: on designs with ten
-residual degrees of freedom it sat at the 0.8 limit for a true `ρ` of 0.4. The
+residual degrees of freedom it sat at the then 0.8 limit for a true `ρ` of 0.4. The
 branch rule drops no value and keeps their order, and on those designs
 reproduces the estimates of plain monotone interpolation.
 

@@ -419,7 +419,7 @@ From `boldtailor.ar1`:
 ```text
 whiten(values, rho)
 prepare_reference(design)
-estimate_rho(signals, reference)
+estimate_rho(signals, reference, *, rho_range=(-0.2, 0.95))
 ```
 
 `whiten` returns rows whitened by AR(1) noise, normalised so that
@@ -435,14 +435,25 @@ signals to avoid recomputing that work. `estimate_rho` takes one signal array
 `RhoReference` (identical results), and returns `RhoEstimate` with per-group
 `values` (bias-corrected, NaN where undefined), uncorrected `raw` estimates,
 and `pooled`, the median over all groups and features of the finite `values`,
-clipped to ±0.8 (`0.0` when none is finite). A feature with non-finite signals
+clipped to `rho_range` (`0.0` when none is finite). `rho_range` is the
+admissible range `(low, high)` of the pooled coefficient, within the
+correction grid of ±0.95. Its default lower limit, −0.2, encodes that strong
+negative autocorrelation is not plausible for fMRI noise while leaving room
+for sampling error around zero; its default upper limit is the end of the
+grid. Widen the range for other kinds of data. `RhoEstimate` also records
+`rho_range` and `pooled_at_bound`, true when `pooled` sits on a limit of the
+range: it is then a bound on rho, not a measurement, and a pooled value at the
+lower limit usually points to a problem upstream (temporal filtering,
+interpolated or censored volumes, or a reference that does not match the
+data). Per-feature `values` are not confined to `rho_range`; they run to the
+ends of the usable branch of the correction curve. A feature with non-finite signals
 gets NaN estimates, as does one whose residual after projecting out the
 reference is within the rounding of that projection or the uncertainty of its
 computed span. Estimates do not depend on the units of the reference columns. Non-2-D inputs, non-finite designs, scan mismatches and
 unequal feature counts raise `ValueError` naming the group.
 
 Correction requires a finite moment curve that is numerically resolved and
-strictly monotone across the pooling range, ρ in [−0.8, 0.8]. The monotone
+strictly monotone across `rho_range`, the pooling range. The monotone
 branch spanning that range is interpolated, increasing or decreasing, for
 every observation, and observations beyond the branch are clipped to its
 ends; for a curve monotone over the whole grid these are the grid endpoints.
