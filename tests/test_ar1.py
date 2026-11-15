@@ -203,54 +203,56 @@ def test_inversion_interpolates_a_monotonic_expectation():
     assert_allclose(corrected[1], [0.45, -0.9], atol=1e-15)
 
 
-def test_inversion_identifies_each_value_by_its_own_level():
-    """An observed ratio identifies rho when the curve reaches that level
-    exactly once; a level reached on several branches identifies nothing."""
+def test_inversion_is_undefined_when_the_curve_turns_inside_the_pooling_range():
+    """Several inverse branches where estimates are pooled identify nothing."""
     grid = np.array([-0.6, -0.3, 0.0, 0.3, 0.6])
     expected = np.array([0.0, 0.5, 0.4, 0.8, 1.0])
-    values = np.array([0.41, 0.52, 0.95, np.nan, -0.2, 0.2, 1.3])
-    corrected = invert_lag_ratio(values, expected, grid)
-    # 0.41 lies on three branches. 0.52 and 0.95 lie on one each, 0.2 only on
-    # the first. Below and above the curve the unique end points are returned.
-    assert np.isnan(corrected[[0, 3]]).all()
-    assert_allclose(corrected[[1, 2]], [0.09, 0.525], atol=1e-15)
-    assert_allclose(corrected[[4, 5, 6]], [-0.6, -0.48, 0.6], atol=1e-15)
+    values = np.array([0.41, 0.52, 0.95, np.nan, -0.2])
+    assert np.isnan(invert_lag_ratio(values, expected, grid)).all()
 
 
-def _bent_curve():
-    """Increasing over most of the grid, turning down beyond rho = 0.8."""
+def _bent_curve(turn=0.85):
+    """Rising with slope 0.6 up to ``turn``, falling beyond it."""
     grid = np.linspace(-0.95, 0.95, 39)
-    expected = np.where(grid <= 0.8, 0.6 * grid, 0.48 - 0.4 * (grid - 0.8))
+    peak = 0.6 * turn
+    expected = np.where(grid <= turn, 0.6 * grid, peak - 0.4 * (grid - turn))
     return grid, expected
 
 
-def test_a_bend_at_the_extreme_leaves_the_rest_of_the_curve_usable():
+def test_a_bend_beyond_the_pooling_range_leaves_the_curve_usable():
+    """The branch spanning the pooling range is inverted for every value;
+    levels the bend repeats are read on that branch, not dropped."""
     grid, expected = _bent_curve()
-    usable = np.array([-0.5, -0.1, 0.0, 0.2, 0.41])
-    assert_allclose(invert_lag_ratio(usable, expected, grid), usable / 0.6, atol=1e-12)
-    ambiguous = np.array([0.43, 0.45, 0.479])
-    assert np.isnan(invert_lag_ratio(ambiguous, expected, grid)).all()
+    values = np.array([-0.5, -0.1, 0.0, 0.2, 0.41, 0.5, 0.505])
+    assert_allclose(invert_lag_ratio(values, expected, grid), values / 0.6, atol=1e-12)
 
 
-def test_values_beyond_an_interior_extreme_are_undefined():
+def test_values_beyond_the_usable_branch_are_clipped_to_its_ends():
     grid, expected = _bent_curve()
-    corrected = invert_lag_ratio(np.array([0.49, 0.7, -0.9]), expected, grid)
-    assert np.isnan(corrected[:2]).all()
-    assert corrected[2] == grid[0]
+    corrected = invert_lag_ratio(np.array([0.7, 5.0, -0.9]), expected, grid)
+    assert_allclose(corrected, [0.85, 0.85, -0.95], atol=1e-12)
 
 
-def test_a_flat_stretch_hides_only_its_own_level():
+@pytest.mark.parametrize("turn", [0.0, 0.5, 0.75])
+def test_a_bend_inside_the_pooling_range_identifies_nothing(turn):
+    grid, expected = _bent_curve(turn)
+    values = np.array([-0.5, 0.0, 0.2])
+    assert np.isnan(invert_lag_ratio(values, expected, grid)).all()
+
+
+def test_a_flat_stretch_inside_the_pooling_range_identifies_nothing():
     grid = np.linspace(-0.9, 0.9, 7)
     expected = np.array([-0.5, -0.3, 0.0, 0.0, 0.0, 0.3, 0.5])
-    corrected = invert_lag_ratio(np.array([-0.4, 0.0, 1e-17, 0.4]), expected, grid)
-    assert_allclose(corrected[[0, 3]], [-0.75, 0.75], atol=1e-12)
-    assert np.isnan(corrected[1:3]).all()
+    corrected = invert_lag_ratio(np.array([-0.4, 0.0, 0.4]), expected, grid)
+    assert np.isnan(corrected).all()
 
 
-def test_values_beyond_a_tied_end_are_undefined():
-    grid = np.linspace(-0.9, 0.9, 7)
-    expected = np.array([0.5, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5])
-    assert np.isnan(invert_lag_ratio(np.array([0.9]), expected, grid)).all()
+def test_pooling_clips_at_the_limit_the_inversion_must_span():
+    from boldtailor._ar1_moments import POOLING_LIMIT
+
+    assert POOLING_LIMIT == 0.8
+    assert pool_rho(np.array([0.9, 0.95, 0.99])) == POOLING_LIMIT
+    assert pool_rho(np.array([-0.9, -0.95])) == -POOLING_LIMIT
 
 
 def _censored_design(seed, n=200, drift=10, random=29, censored=100):
@@ -279,41 +281,76 @@ def test_curve_bent_only_beyond_the_pooling_range_still_estimates_rho():
     turning = np.flatnonzero(np.diff(curve) <= 0)
     assert turning.size > 0 and turning.max() < 30
     estimate = estimate_rho([_ar1_noise(1, 200, 2000, 0.4)], [design])
-    assert np.isfinite(estimate.values).mean() > 0.95
+    assert np.isfinite(estimate.values).all()
     assert estimate.pooled == pytest.approx(0.4, abs=0.04)
 
 
-def _crossings(value, expected):
-    """Cells of the curve whose closed range contains the value; the oracle."""
-    low = np.minimum(expected[:-1], expected[1:])
-    high = np.maximum(expected[:-1], expected[1:])
-    return np.flatnonzero((low <= value) & (value <= high))
+def _saturated_design(seed, n=100, residual_dof=10):
+    rng = np.random.default_rng(seed)
+    t = (np.arange(n) + 0.5) / n
+    k = n - residual_dof - 1
+    drifts = [np.cos(np.pi * j * t) for j in range(1, k // 2 + 1)]
+    return np.column_stack([np.ones(n), *drifts, rng.normal(size=(n, k - k // 2))])
+
+
+def test_pooled_rho_is_not_pulled_to_the_far_end_by_a_bend_at_one_end():
+    """Ten residual degrees of freedom and a curve that turns below rho =
+    -0.83: raw ratios are noisy and many fall at the levels the bend repeats.
+    Dropping those values alone leaves an upward-biased median near the 0.8
+    limit; keeping every value keeps the pooled estimate near the truth."""
+    design = _saturated_design(5)
+    curve = expected_lag_ratio(design, np.linspace(-0.95, 0.95, 2001))
+    turning = np.flatnonzero(np.diff(curve) <= 0)
+    assert turning.size > 0 and turning.max() < 130
+    estimate = estimate_rho([_ar1_noise(2, 100, 4000, 0.4)], [design])
+    assert np.isfinite(estimate.values).all()
+    assert abs(estimate.pooled - 0.4) < 0.25
+
+
+TAILS = st.lists(st.integers(-6, 6), min_size=0, max_size=4)
+
+
+def _tailed_curve(left, core, right):
+    """Rising across [-0.8, 0.8], with arbitrary steps on either side of it."""
+    core_grid = np.linspace(-0.8, 0.8, len(core) + 1)
+    step = core_grid[1] - core_grid[0]
+    below = core_grid[0] - step * np.arange(len(left), 0, -1)
+    above = core_grid[-1] + step * np.arange(1, len(right) + 1)
+    steps = np.array([*left, *core, *right], dtype=float)
+    expected = np.concatenate([[0.0], np.cumsum(steps)]) / 8.0
+    return np.concatenate([below, core_grid, above]), expected
 
 
 @settings(derandomize=True, deadline=None, max_examples=200)
 @given(
-    st.lists(st.integers(-6, 6), min_size=3, max_size=12),
-    st.lists(st.integers(-40, 40), min_size=1, max_size=6),
+    TAILS,
+    st.lists(st.integers(1, 6), min_size=2, max_size=8),
+    TAILS,
+    st.lists(st.floats(-20.0, 20.0), min_size=2, max_size=8),
+    st.booleans(),
 )
-def test_inversion_returns_exactly_the_uniquely_identified_values(steps, odd):
-    """Against a brute-force count over cells: inside the curve's range a
-    value is inverted when one cell contains it, and then the curve passes
-    through the returned rho at that value; otherwise the result is NaN.
+def test_no_value_is_dropped_and_order_is_kept_whatever_the_tails(
+    left, core, right, values, falling
+):
+    """Whatever the curve does beyond the pooling range, every finite value
+    gets an estimate and estimates keep the order of the values. Dropping or
+    reordering by value would bias the pooled median."""
+    grid, expected = _tailed_curve(left, core, right)
+    sign = -1.0 if falling else 1.0
+    corrected = invert_lag_ratio(np.sort(values), sign * expected, grid)
+    assert np.all(np.isfinite(corrected))
+    assert np.all(np.diff(corrected) * sign >= 0)
+    assert corrected.min() >= grid[0] and corrected.max() <= grid[-1]
 
-    Curve levels are multiples of 1/8 and values odd multiples of 1/16, so
-    no value sits exactly on a grid level; the examples above cover those."""
-    values = [(2 * k + 1) / 16.0 for k in odd]
-    expected = np.cumsum(np.array([0, *steps], dtype=float)) / 8.0
-    grid = np.linspace(-0.9, 0.9, expected.size)
-    corrected = invert_lag_ratio(np.array(values), expected, grid)
-    for value, rho in zip(values, corrected, strict=True):
-        cells = _crossings(value, expected)
-        inside = expected.min() <= value <= expected.max()
-        if inside and cells.size == 1 and steps[cells[0]] != 0:
-            assert np.interp(rho, grid, expected) == pytest.approx(value, abs=1e-12)
-            assert grid[cells[0]] <= rho <= grid[cells[0] + 1]
-        elif inside:
-            assert np.isnan(rho)
+
+@settings(derandomize=True, deadline=None, max_examples=200)
+@given(TAILS, st.lists(st.integers(1, 6), min_size=2, max_size=8), TAILS)
+def test_values_on_the_pooling_branch_are_inverted_exactly(left, core, right):
+    grid, expected = _tailed_curve(left, core, right)
+    inside = np.abs(grid) <= 0.8 + 1e-12
+    rhos = np.linspace(-0.8, 0.8, 23)
+    levels = np.interp(rhos, grid[inside], expected[inside])
+    assert_allclose(invert_lag_ratio(levels, expected, grid), rhos, atol=1e-12)
 
 
 @settings(derandomize=True, deadline=None, max_examples=100)
