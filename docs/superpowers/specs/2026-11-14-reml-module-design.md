@@ -157,6 +157,14 @@ selection. `no_signal` is decided by a conditioning-aware projection rounding
 floor instead of `64 · eps · ‖y‖²`. See the REML conventions in
 `docs/development.md` for both.
 
+Added after the follow-up review (`docs/review-2026-11-15-reml-followup.md`):
+a fifth status, `unresolved`, for energy above projection rounding but within
+the uncertainty of the computed fixed span; fixed-design columns are
+normalised so that neither rank nor any status depends on their units; an
+`unrefined` flag on fits marks a positive ratio that is a grid point and not
+a verified stationary point; and `any_at_upper` on a selection marks features
+for which some candidate's criterion was truncated.
+
 Selection semantics per feature: the winner is the candidate with the lowest
 criterion among candidates whose status is `ok`. At `λ = 0` every candidate has
 the same criterion, and any candidate with `λ̂ > 0` is strictly better, so a

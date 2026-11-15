@@ -262,9 +262,14 @@ groups' `fixed_design` and that feature's `rho`; `rho` may differ between
 features, and features are never compared with each other.
 
 Per-feature `status` is `ok`, `variance_zero` (the optimum is `λ = 0`, so the
-data do not support the random design), `no_signal` (no energy remains after
-projecting out `C`; its `ratio` is `0.0` and its other estimates are NaN), or
-`unidentifiable`. A fit is unidentifiable when the random covariance is a
+data do not support the random design), `no_signal` (the energy left after
+projecting out `C` is within the rounding of that projection; its `ratio` is
+`0.0` and its other estimates are NaN), `unresolved` (the energy left is above
+that rounding but within the uncertainty of the computed fixed span, so it may
+be real but cannot be certified; all its estimates, `ratio` included, are NaN),
+or `unidentifiable`. `unresolved` arises only when the fixed design has nearly
+collinear columns and the signal loads on the direction they barely determine;
+see the projection floors below. A fit is unidentifiable when the random covariance is a
 multiple of the identity on the whole restricted space: every restricted
 degree of freedom has a retained random direction and all pooled singular
 values are equal (within `4 · dof · eps` relative). The covariance is then
@@ -275,13 +280,18 @@ on the pooled spectrum, so groups that are each isotropic but at different
 scales remain identifiable. A nearly confounded design is not flagged: its
 profile is nearly flat, the data carry little information about the split, and
 the estimate is reported as `ok` or `variance_zero` with that caveat.
-`at_upper` flags an optimum at the upper edge of the search range; that edge
-depends on the candidate's singular values, so the criterion of an `at_upper`
-fit is a truncation, not a comparable optimum. In a selection, the winner is the
-candidate with the lowest criterion among those with status `ok`; ties go to
-the earlier candidate. A feature with no `ok` candidate has winner `-1`, a NaN
-`gap` (the criterion difference to the runner-up, also NaN when only one
-candidate is `ok`), and its `fit` is the `λ = 0` fit.
+`unrefined` flags a positive ratio that is a point of the search grid, not a
+verified root of the criterion's slope; `at_upper` flags those at the upper
+edge of the search range. That edge depends on the candidate's singular
+values, so the criterion of an `at_upper` fit is a truncation, an upper bound
+on that candidate's optimum, not a comparable optimum. In a selection, the
+winner is the candidate with the lowest criterion among those with status
+`ok`; ties go to the earlier candidate. A feature with no `ok` candidate has
+winner `-1`, a NaN `gap` (the criterion difference to the runner-up, also NaN
+when only one candidate is `ok`), and its `fit` is the `λ = 0` fit (for an
+`unresolved` feature, the NaN fit). `RemlSelection.any_at_upper` marks the
+features for which any candidate, winner or not, was truncated: a truncated
+loser might have won at its true optimum, so those selections are provisional.
 
 The criterion depends on the groups only through pooled statistics (all
 singular values, the stacked squared coordinates, the summed residual sum of
@@ -299,38 +309,61 @@ sign change while both neighbouring grid values are worse than `λ = 0`. The
 result is then compared explicitly with `λ = 0`, and a positive ratio must
 improve on zero by more than the criterion's rounding noise
 (`64 · eps · (|F| + dof)`). The guarantees, rather than the iteration counts,
-are the contract: an interior optimum is a stationary point of the criterion to
-near machine precision, it is never worse than the best grid point beyond
-rounding, `λ = 0` is an explicit boundary, and `at_upper` reports a boundary
-hit. The search is not a certified global minimisation: a minimum and a
-maximum that both fall strictly inside one grid cell leave no sign change and
-are not refined.
+are the contract: a positive ratio that is not flagged `unrefined` is a
+stationary point of the criterion to near machine precision; the reported
+optimum is never worse than the best grid point beyond rounding; `λ = 0` is an
+explicit boundary; and `at_upper` reports a boundary hit. When no slope root is
+accepted the best grid point stands, keeps status `ok`, and is flagged
+`unrefined`: it need not be stationary. At the default grid this was not
+observed away from the upper edge in the oracle, property-style and adversarial
+test problems, but it is not excluded; a coarse grid produces it readily
+(`tests/test_reml_search.py`). The search is not a certified global
+minimisation: a minimum and a maximum that both fall strictly inside one grid
+cell leave no sign change and are not refined.
 
 Memory: features are searched in batches sized so that each temporary of the
 search (`(grid rows, k, features)` or `(k, crossings)`, with `k` the pooled
 number of random directions) and each retained `(grid, features)` table stays
-within 8 MiB; a few such arrays are alive at once, and one feature is the
+within 8 MiB; about ten such arrays are alive at once, and one feature is the
 smallest batch, so a temporary is never below `8 k` bytes. The bound covers
 the search only. The pooled statistics, `(k, features)` per fit, and the
 projected signals, `(scans, features)` per group and distinct `ρ`, are held in
-full, so this is not a bound on total process memory.
+full, so this is not a bound on total process memory. Measured with
+`tracemalloc` on 100 directions by 30,000 features (22.9 MiB of pooled
+statistics), the search's peak extra allocation was 78 MiB at the default
+budget, 31 MiB at 1 MiB and 221 MiB at 64 MiB, against 168 MiB before
+batching; run time differed by a few percent across those budgets.
 
 Rank and degeneracy policy shared by `reml` and `ar1` lives in `_numerics`.
-Rank decisions use one tolerance, `max(shape) · eps · σ_max`. A projection
-residual is treated as rounding when its norm is at most `8 · n · eps` times
-the norm of the signal with its coordinate on each basis vector amplified by
-`σ_max / σ_i` of the projected-out design: a basis computed from `C` spans the
-range of `C + E` with `‖E‖ ~ n · eps · ‖C‖`, so signal along a weak direction
-of `C` leaves proportionally more rounding. Exact-span signals leave at most
-1.0 times that scale across the sizes, ranks and condition numbers pinned in
-`tests/test_numerics.py`; against the unweighted `n · eps · ‖y‖` the residue of
-an ill-conditioned, nearly saturated design reaches `1e5` times. This floor
-decides `no_signal` in `reml` and degenerate (NaN) features in `ar1`. It is a
-floating-point floor in float64, not a significance test: adding `C a` to the
-signals leaves the fit unchanged for as long as the residual is still
-representable, and data whose residual is only quantisation noise from a
-lower-precision file format are not masked by it; callers mask such features.
-For random designs, a column is rejected against the unprojected norm of `Z`,
+The columns of a projected-out design (`C`, or the AR(1) reference) are
+normalised before its basis is computed. The fit depends on such a design only
+through its column span, so results, rank and restricted dof do not depend on
+the units of its columns; only exactly zero columns are dropped for their
+size, and rank among the normalised columns uses one tolerance,
+`max(shape) · eps · σ_max`. A column of rounding residue is therefore a
+direction like any other and costs a degree of freedom; remove such columns
+before fitting.
+
+A projection residual is judged against two floors, both `8 · n · eps` times
+a norm. The rounding floor uses the norm of the signal: with normalised
+columns, signals lying exactly in the span leave at most about 1.2 times
+`n · eps · ‖y‖` when the design is ill-conditioned only through its units. The
+uncertainty floor uses the norm of the signal with its coordinate on each
+basis vector amplified by `σ_max / σ_i` of the normalised design: a basis
+computed from `C` spans the range of `C + E` with `‖E‖ ~ n · eps`, so signal
+along a direction that nearly collinear columns barely determine leaves
+proportionally more, up to `1e5` times the rounding scale in the cases pinned
+in `tests/test_numerics.py`, and at most 1.0 times the amplified one. Energy
+at or below the rounding floor is `no_signal`; between the floors it is
+`unresolved`; above the uncertainty floor the feature is fitted. `ar1` returns
+NaN at or below the uncertainty floor and has no status to tell the two cases
+apart. The uncertainty floor is a bound, not a measurement: a residual below
+it is not shown to be noise, which is why it is not reported as `no_signal`.
+Both are floating-point floors in float64, not significance tests: adding
+`C a` to the signals leaves the fit unchanged for as long as the residual is
+still representable and resolved, and data whose residual is only quantisation
+noise from a lower-precision file format are not masked; callers mask such
+features. For random designs, a column is rejected against the unprojected norm of `Z`,
 computed from the smaller of `Z'Z` and `ZZ'`. The internal `project_fixed` (not public API) runs once per
 group per distinct `ρ`, plus once more for a `ρ` subset that mixes features
 with and without signal, so results for live features are bit-identical
@@ -349,7 +382,7 @@ lag-one ratio for projection bias on a fixed grid. Its signal-independent work
 (an orthonormal basis of the reference design and the expected lag ratio on the
 grid) can be computed once with `ar1.prepare_reference` and reused; the
 simulations cache it per run. A feature is degenerate (NaN) when its residual
-denominator does not exceed the projection floor above. `RhoEstimate.pooled` is the median
+denominator does not exceed the uncertainty floor above. `RhoEstimate.pooled` is the median
 over all groups and features of the finite corrected values, clipped to ±0.8,
 and `0.0` when none is finite.
 
