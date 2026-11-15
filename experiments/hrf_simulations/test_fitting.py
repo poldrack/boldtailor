@@ -4,8 +4,6 @@ import numpy as np
 import pytest
 
 from boldtailor.hrf_library import HrfCandidate, HrfLibrary
-from experiments.hrf_estimation.reml import fit_library_reml
-from experiments.hrf_estimation.design import build_design
 from experiments.hrf_estimation.sensitivity import synthetic_templates
 
 
@@ -24,34 +22,47 @@ def library():
     )
 
 
-def test_iid_adapter_matches_original_solver(runs, library):
-    from experiments.hrf_simulations.fitting import fit
+@pytest.fixture
+def planted(runs, library):
+    """Noisy single-vertex runs generated from the first candidate's design."""
+    from experiments.hrf_simulations.design import task_design
 
     rng = np.random.default_rng(5)
     data = []
     for r in runs:
-        p = build_design(r, library.candidates[0], "amplitude")
-        data.append(
-            replace(
-                r,
-                signals=(
-                    p.task @ [1.0, 2.0, 0.5] + rng.normal(0, 0.2, len(r.frame_times))
-                )[:, None],
-            )
+        p = task_design(r, library.candidates[0], "ConsDurRTMod", "stimulus")
+        signal = p.task @ [1.0, 2.0, 0.5] + rng.normal(0, 0.2, len(r.frame_times))
+        data.append(replace(r, signals=signal[:, None]))
+    return data
+
+
+def test_iid_and_ar1_paths_agree_at_zero_rho(planted, library):
+    from experiments.hrf_simulations.fitting import fit
+
+    iid = fit(planted, library, "ConsDurRTMod", "stimulus", "iid")
+    ar1 = fit(planted, library, "ConsDurRTMod", "stimulus", "ar1", oracle_rho=0.0)
+    assert iid.kernels == ar1.kernels
+    assert iid.status == ar1.status
+    for key in ("criterion", "variance_ratio", "sigma2"):
+        np.testing.assert_allclose(
+            iid.diagnostics[key], ar1.diagnostics[key], rtol=1e-10
         )
-    original = fit_library_reml(data, library, {})
-    result = fit(
-        data,
-        library,
-        "ConsDurRTMod",
-        "stimulus",
-        "iid",
-        design_builder=lambda r, k, m, c: build_design(r, k, "amplitude"),
-    )
-    assert result.kernels == original.kernels
-    assert result.status == original.status
-    np.testing.assert_allclose(
-        result.diagnostics["criterion"], original.diagnostics["criterion"], atol=1e-8
+
+
+def test_unit_rms_scaling_leaves_selection_and_fit_variance_consistent(
+    planted, library
+):
+    from experiments.hrf_simulations.fitting import fit
+
+    args = (planted, library, "ConsDurRTMod", "stimulus", "iid")
+    native = fit(*args, settings={"regressor_scaling": "native"})
+    scaled = fit(*args, settings={"regressor_scaling": "unit_rms"})
+    assert native.kernels[0] == library.candidates[0]
+    assert scaled.kernels == native.kernels
+    assert scaled.status == ("ok",)
+    assert np.all(np.isfinite(scaled.diagnostics["variance_ratio"]))
+    assert scaled.diagnostics["random_scales"][0] != [1.0] * len(
+        scaled.diagnostics["random_scales"][0]
     )
 
 
