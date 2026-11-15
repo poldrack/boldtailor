@@ -164,6 +164,51 @@ def test_invalid_candidates_raise(planted):
         select_random_design(groups, [candidates[0], short])
 
 
+@pytest.mark.parametrize("value", [np.nan, np.inf])
+def test_invalid_candidate_message_names_candidate_and_group(planted, value):
+    signals, fixed, candidates = planted
+    groups = _groups(signals, fixed)
+    corrupt = [z.copy() for z in candidates[3]]
+    corrupt[1][2, 0] = value
+    with pytest.raises(ValueError, match=r"candidate 3.*group 1|group 1.*candidate 3"):
+        select_random_design(groups, [*candidates[:3], corrupt])
+    short = [candidates[3][0], candidates[3][1][:-1]]
+    with pytest.raises(ValueError, match=r"candidate 2.*group 1|group 1.*candidate 2"):
+        select_random_design(groups, [*candidates[:2], short])
+
+
+def test_candidate_may_be_any_iterable_of_group_designs(planted):
+    signals, fixed, candidates = planted
+    groups = _groups(signals, fixed)
+    expected = select_random_design(groups, candidates)
+    lazy = ((z for z in candidate) for candidate in candidates)
+    selection = select_random_design(groups, lazy)
+    assert_array_equal(selection.winner, expected.winner)
+    assert_array_equal(selection.gap, expected.gap)
+    _assert_same_fit(selection.fit, expected.fit)
+    fit = fit_reml(groups, iter(candidates[2]))
+    _assert_same_fit(fit, fit_reml(groups, candidates[2]))
+
+
+def test_candidates_are_fitted_as_they_are_drawn(planted, monkeypatch):
+    signals, fixed, candidates = planted
+    drawn, at_fit = [0], []
+    original = reml.minimize_ratio
+
+    def recording(*args, **kwargs):
+        at_fit.append(drawn[0])
+        return original(*args, **kwargs)
+
+    def stream():
+        for candidate in candidates:
+            drawn[0] += 1
+            yield candidate
+
+    monkeypatch.setattr(reml, "minimize_ratio", recording)
+    select_random_design(_groups(signals, fixed), stream())
+    assert at_fit == list(range(len(candidates) + 1))
+
+
 def test_per_feature_rho_equals_separate_selections(planted):
     signals, fixed, candidates = planted
     rho = np.array([0.0, 0.3, 0.3, 0.6])
