@@ -325,15 +325,21 @@ time step included. Fitting evaluates cumulative HRF integrals at exact onset
 and offset lags; generation independently uses fractional-bin neural activity
 and FFT convolution at 5 ms. This avoids rounding short events to NSD TR/50
 bins. Thus longer neural durations retain their greater area.
-This is essential for the Mumford comparison. The original iid scalar REML
-and bounded AR(1) scalar REML numerical solvers are reused unchanged. Solver
-parity on the original empirical designs is separately tested. Differences
-between the two estimators include their existing variance-search conventions.
+This is essential for the Mumford comparison. Both estimators run on the
+package module `boldtailor.reml` (`select_random_design`): each candidate's
+task and junk columns are the random-effects design, with one shared scalar
+variance ratio and run-specific coefficients, and the confounds are the
+unpenalised fixed design. The iid and AR(1) estimators differ only in the
+noise model: AR(1) passes the pooled rho, and the package whitens internally
+with `boldtailor.ar1.whiten`, which is normalised so that the noise variance
+and variance ratio mean the same thing in both paths. At rho = 0 the two
+paths give identical selections and estimates (tested).
 
 AR(1) estimation uses a fixed reference containing both duration conventions
 and RT mechanisms, shared by every fitted task model. Rho is estimated only
-from the simulated training runs, pooled within each simulated vertex, with
-the existing projection-bias correction and [-0.8, 0.8] clipping. Replicates
+from the simulated training runs with `boldtailor.ar1.estimate_rho`, pooled
+within each simulated vertex, with its projection-bias correction and
+[-0.8, 0.8] clipping. Replicates
 are never pooled for estimation. AR(1)-generated cases additionally include a
 known-rho oracle diagnostic; calibration rho is otherwise hidden from fitting.
 

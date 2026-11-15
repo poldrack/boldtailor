@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from experiments.hrf_estimation.reml_extensions import _correct_noise_moments
+from boldtailor.ar1 import estimate_rho
 from experiments.hrf_estimation.regularized_noise import shrink_rho
 from experiments.hrf_estimation.scoring import residuals
 from experiments.hrf_estimation.timing import sampling_interval
@@ -28,15 +28,7 @@ def _reference_fit(run):
             "calibration reference requires positive residual degrees of freedom"
         )
     error = run.signals - design @ beta
-    energy = np.sum(error[:-1] ** 2, axis=0)
-    raw = np.divide(
-        np.sum(error[1:] * error[:-1], axis=0),
-        energy,
-        out=np.full(len(energy), np.nan),
-        where=energy > np.finfo(float).eps,
-    )
-    corrected = _correct_noise_moments(raw, design)
-    corrected[~np.isfinite(raw)] = np.nan
+    corrected = np.array(estimate_rho([run.signals], [design]).values[0])
     finite = corrected[np.isfinite(corrected)]
     variance_rho = float(np.clip(np.median(finite), -0.8, 0.8)) if len(finite) else 0.0
     u = np.linalg.svd(design, full_matrices=False)[0][:, :rank]
