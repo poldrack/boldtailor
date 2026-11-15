@@ -150,15 +150,21 @@ def null_statistics(replicates):
     return statistic, reference
 
 
+def two_sample_se(p, replicates, draws):
+    """SE of an observed rate against a reference rate from its own draws."""
+    return combined_se(binomial_se(p, replicates), binomial_se(p, draws))
+
+
 def test_null_lrt_matches_finite_sample_reference(replicates):
     statistic, reference = null_statistics(replicates)
+    draws = reference.size
     p_zero = np.mean(reference <= ZERO_STATISTIC)
     observed = np.mean(statistic <= ZERO_STATISTIC)
-    assert abs(observed - p_zero) < 4 * binomial_se(p_zero, replicates)
+    assert abs(observed - p_zero) < 4 * two_sample_se(p_zero, replicates, draws)
     for level in (0.90, 0.95):
         exceedance = np.mean(statistic > np.quantile(reference, level))
         tail = 1.0 - level
-        assert abs(exceedance - tail) < 4 * binomial_se(tail, replicates)
+        assert abs(exceedance - tail) < 4 * two_sample_se(tail, replicates, draws)
     assert abs(p_zero - 0.5) > 0.02
 
 
