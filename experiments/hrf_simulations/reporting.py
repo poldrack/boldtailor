@@ -22,6 +22,9 @@ GROUPS = [
 
 
 def summarize(table):
+    # Historical results lack the qualification; absence is unknown, not a
+    # claim that the optimizer resolved every candidate comparison.
+    table = table.assign(provisional=table.get("provisional", pd.NA))
     groups = GROUPS + [
         c
         for c in (
@@ -41,6 +44,9 @@ def summarize(table):
         .agg(
             n=("failed", "size"),
             n_failed=("failed", "sum"),
+            n_qualified=("provisional", "count"),
+            n_provisional=("provisional", "sum"),
+            provisional_rate=("provisional", "mean"),
             failure_rate=("failed", "mean"),
             n_recovered=("curve_rmse", "count"),
             curve_rmse_mean=("curve_rmse", "mean"),

@@ -93,6 +93,7 @@ def _summarize(per_run, estimate):
         (summary.sse_nuisance - summary.sse_full) / summary.sst
     ).where(total_valid)
     summary["status"] = estimate.status
+    summary["provisional"] = estimate.diagnostics.get("provisional", pd.NA)
     summary.loc[total_valid & ~task_valid, "status"] = "zero_task_variance"
     summary.loc[~total_valid & summary.sst.notna(), "status"] = "zero_variance"
     return summary
