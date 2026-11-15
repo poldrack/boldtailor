@@ -66,6 +66,50 @@ def test_unit_rms_scaling_leaves_selection_and_fit_variance_consistent(
     )
 
 
+def _scaled_candidates(runs, library, model, convention):
+    """Each candidate's task+junk columns divided by its unit_rms scales."""
+    from experiments.hrf_simulations.design import task_design
+    from experiments.hrf_simulations.fitting import random_scales
+
+    out = []
+    for candidate in library.candidates:
+        parts = [task_design(r, candidate, model, convention) for r in runs]
+        scales = random_scales(parts, "unit_rms")
+        designs = [np.column_stack([p.task, p.junk]) / scales for p in parts]
+        out.append((parts, scales, designs))
+    return out
+
+
+def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
+    from boldtailor.reml import RemlGroup, select_random_design
+    from experiments.hrf_estimation.scoring import residuals
+    from experiments.hrf_simulations.fitting import fit
+
+    model, convention = "ConsDurRTMod", "stimulus"
+    scaled = _scaled_candidates(planted, library, model, convention)
+    for parts, _, designs in scaled:
+        projected = [residuals(p.nuisance, z)[0] for p, z in zip(parts, designs)]
+        pooled = sum(np.sum(z * z, axis=0) for z in projected)
+        rms = np.sqrt(pooled / sum(len(z) for z in projected))
+        np.testing.assert_allclose(rms, 1.0, rtol=1e-12)
+    groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in planted]
+    expected = select_random_design(groups, [d for _, _, d in scaled])
+    winner = int(expected.winner[0])
+    result = fit(
+        planted,
+        library,
+        model,
+        convention,
+        "iid",
+        settings={"regressor_scaling": "unit_rms"},
+    )
+    assert result.kernels[0] == library.candidates[winner]
+    assert result.diagnostics["variance_ratio"] == [float(expected.fit.ratio[0])]
+    assert result.diagnostics["sigma2"] == [float(expected.fit.noise_variance[0])]
+    assert result.diagnostics["criterion"] == [float(expected.fit.criterion[0])]
+    assert result.diagnostics["random_scales"] == [scaled[winner][1].tolist()]
+
+
 @pytest.mark.parametrize("noise_mode", ["iid", "ar1"])
 def test_matched_noiseless_recovery(runs, library, noise_mode):
     from experiments.hrf_simulations.fitting import fit
