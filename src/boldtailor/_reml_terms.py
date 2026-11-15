@@ -64,9 +64,15 @@ class RemlTerms:
         own_fields(self, ("singular2", "coordinates2", "residual_ss", "energy"))
 
 
+def _smaller_gram(matrix):
+    """Z'Z or ZZ', whichever is smaller; both share the nonzero eigenvalues."""
+    rows, columns = matrix.shape
+    return matrix.T @ matrix if columns <= rows else matrix @ matrix.T
+
+
 def _spectral_norm(matrix):
-    """Largest singular value from the small Gram matrix, without a second SVD."""
-    return np.sqrt(max(np.linalg.eigvalsh(matrix.T @ matrix)[-1], 0.0))
+    """Largest singular value from the smaller Gram matrix, without a second SVD."""
+    return np.sqrt(max(np.linalg.eigvalsh(_smaller_gram(matrix))[-1], 0.0))
 
 
 def _projected_random(projection, random_design):

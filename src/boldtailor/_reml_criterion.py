@@ -54,6 +54,12 @@ def pooled_criterion(ratios, pooled: PooledTerms) -> np.ndarray:
     return pooled.dof * np.log(q / pooled.dof) + logdet
 
 
+def pooled_criterion_at_zero(pooled: PooledTerms) -> np.ndarray:
+    """The criterion at lambda = 0, N log(energy / N), without (k, features) work."""
+    q = pooled.residual_ss + pooled.coordinates2.sum(axis=0)
+    return pooled.dof * np.log(q / pooled.dof)
+
+
 def pooled_slope(ratios, pooled: PooledTerms) -> np.ndarray:
     """Derivative of the criterion in log(lambda), from pooled statistics."""
     scaled = _scaled(ratios, pooled.singular2)

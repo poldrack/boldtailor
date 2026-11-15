@@ -12,6 +12,13 @@ When the random covariance is a multiple of the identity on the whole
 restricted space, the covariance is (sigma2 + tau2 c) I and the criterion is
 constant in lambda. Such fits are flagged unidentifiable instead of searched.
 
+Memory: features are searched in batches so that every temporary of the
+search, of shape (grid rows, k, features) or (k, crossings), and each
+retained (grid, features) table stays within ``_WORKING_BYTES``; a few such
+arrays are alive at once. A single feature is the smallest batch, so the
+floor is 8 k bytes per temporary. The pooled statistics themselves, of shape
+(k, features), are inputs and are not covered.
+
 The search is not a certified global minimisation: a minimum and a maximum
 that both fall strictly inside one grid cell leave no sign change and are not
 refined. The grid spacing never exceeds log(1e16) / (grid_size - 1), about
@@ -28,6 +35,7 @@ from boldtailor._reml_criterion import (
     PooledTerms,
     pool_terms,
     pooled_criterion,
+    pooled_criterion_at_zero,
     pooled_slope,
     pooled_value_and_slope,
 )
@@ -35,7 +43,7 @@ from boldtailor._reml_terms import RemlTerms
 
 _RELATIVE_SPAN = 1e8
 _ROUNDING_ULPS = 64
-_GRID_CHUNK_BYTES = 8 * 2**20
+_WORKING_BYTES = 8 * 2**20
 
 
 @dataclass(frozen=True)
@@ -73,7 +81,13 @@ def _log_grid(terms: Sequence[RemlTerms], size: int) -> np.ndarray:
 def _chunk_rows(pooled: PooledTerms) -> int:
     """Grid rows per chunk so one (rows, k, features) temporary stays bounded."""
     row_bytes = 8 * pooled.singular2.size * pooled.residual_ss.size
-    return max(1, _GRID_CHUNK_BYTES // max(row_bytes, 1))
+    return max(1, _WORKING_BYTES // max(row_bytes, 1))
+
+
+def _batch_features(pooled: PooledTerms, grid_points: int) -> int:
+    """Features per batch: one (k, features) temporary and one (grid, features)
+    table within the budget, and never fewer than one feature."""
+    return max(1, _WORKING_BYTES // (8 * max(pooled.singular2.size, grid_points)))
 
 
 def _grid_chunks(pooled: PooledTerms, log_grid):
@@ -112,12 +126,29 @@ def _bisect_slope(pooled, low, high, iterations):
     return 0.5 * (low + high)
 
 
+def _refined(pooled, log_grid, cell, feature, iterations):
+    """Slope root and its criterion for each (cell, feature) crossing."""
+    crossed = _take(pooled, feature)
+    root = _bisect_slope(crossed, log_grid[cell], log_grid[cell + 1], iterations)
+    return root, pooled_criterion(np.exp(root), crossed)
+
+
+def _stacked(parts, position):
+    """Concatenate one output of the refined chunks; empty when there are none."""
+    return np.concatenate([np.empty(0), *(part[position] for part in parts)])
+
+
 def _crossing_roots(pooled, log_grid, slopes, iterations):
     """Feature, slope root and criterion of every cell where the slope turns up."""
     cell, feature = np.nonzero((slopes[:-1] < 0) & (slopes[1:] > 0))
-    crossed = _take(pooled, feature)
-    root = _bisect_slope(crossed, log_grid[cell], log_grid[cell + 1], iterations)
-    return feature, root, pooled_criterion(np.exp(root), crossed)
+    step = _batch_features(pooled, 1)
+    parts = [
+        _refined(
+            pooled, log_grid, cell[i : i + step], feature[i : i + step], iterations
+        )
+        for i in range(0, cell.size, step)
+    ]
+    return feature, _stacked(parts, 0), _stacked(parts, 1)
 
 
 def _lowest_root(n_features, feature, root, value):
@@ -142,8 +173,7 @@ def _best_grid_point(values):
     return index, np.take_along_axis(values, index[None], axis=0)[0]
 
 
-def _best_positive(pooled, grid_size, iterations):
-    log_grid = _search_grid(pooled.singular2, grid_size)
+def _best_positive(pooled, log_grid, iterations):
     values, slopes = _on_grid(pooled, log_grid)
     index, grid_value = _best_grid_point(values)
     roots = _crossing_roots(pooled, log_grid, slopes, iterations)
@@ -161,7 +191,7 @@ def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
     flags = np.full(n_features, at_zero)
     return RatioOptimum(
         ratio=np.full(n_features, ratio),
-        criterion=pooled_criterion(np.zeros(n_features), pooled),
+        criterion=pooled_criterion_at_zero(pooled),
         at_zero=flags,
         at_upper=np.zeros(n_features, dtype=bool),
         unidentifiable=~flags,
@@ -181,9 +211,10 @@ def _confounded(pooled: PooledTerms) -> bool:
     return singular2.size == pooled.dof and spread <= tolerance
 
 
-def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
-    ratio, value, on_edge = _best_positive(pooled, grid_size, iterations)
-    at_zero_value = pooled_criterion(np.zeros(value.size), pooled)
+def _search_batch(pooled, log_grid, iterations) -> RatioOptimum:
+    """Search one batch of features and compare the result with zero."""
+    ratio, value, on_edge = _best_positive(pooled, log_grid, iterations)
+    at_zero_value = pooled_criterion_at_zero(pooled)
     at_zero = at_zero_value <= value + _rounding_slack(at_zero_value, pooled.dof)
     return RatioOptimum(
         ratio=np.where(at_zero, 0.0, ratio),
@@ -191,6 +222,24 @@ def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
         at_zero=at_zero,
         at_upper=on_edge & ~at_zero,
         unidentifiable=np.zeros(value.size, dtype=bool),
+    )
+
+
+def _joined(parts: Sequence[RatioOptimum]) -> RatioOptimum:
+    names = ("ratio", "criterion", "at_zero", "at_upper", "unidentifiable")
+    return RatioOptimum(
+        **{name: np.concatenate([getattr(p, name) for p in parts]) for name in names}
+    )
+
+
+def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
+    """Search the features batch by batch within the working budget."""
+    log_grid = _search_grid(pooled.singular2, grid_size)
+    n_features = pooled.residual_ss.size
+    step = _batch_features(pooled, log_grid.size)
+    batches = (slice(i, i + step) for i in range(0, n_features, step))
+    return _joined(
+        [_search_batch(_take(pooled, b), log_grid, iterations) for b in batches]
     )
 
 
