@@ -272,3 +272,20 @@ def test_lag_ratio_of_zero_signal_is_nan():
 
     _, design = _lag_problem(2)
     assert np.isnan(residual_lag_ratio(np.zeros((60, 2)), design)).all()
+
+
+def test_reference_carries_the_conditioning_of_its_basis(design):
+    scaled = design * np.logspace(0, 4, design.shape[1])
+    reference = prepare_reference(scaled)
+    singular = np.linalg.svd(scaled, compute_uv=False)
+    assert_allclose(reference.amplification, singular[0] / singular, rtol=1e-10)
+    assert not reference.amplification.flags.writeable
+
+
+def test_ill_conditioned_saturated_span_signal_is_degenerate():
+    rng = np.random.default_rng(19)
+    reference = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
+    signals = reference @ (
+        rng.normal(size=(9, 40)) * 10.0 ** rng.uniform(-3, 6, (9, 1))
+    )
+    assert np.isnan(estimate_rho([signals], [reference]).raw).all()

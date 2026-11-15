@@ -285,3 +285,11 @@ def test_shift_that_destroys_the_residual_is_no_signal():
     signals, fixed, planted, _ = _planted_problem(19, 1, 0.0)
     fit = fit_reml([RemlGroup(signals + 1e18, fixed)], [planted])
     assert fit.status == ("no_signal",) * 4
+
+
+def test_ill_conditioned_saturated_fixed_span_signal_is_no_signal():
+    rng = np.random.default_rng(19)
+    fixed = rng.normal(size=(10, 9)) * np.logspace(0, 9, 9)
+    signals = fixed @ (rng.normal(size=(9, 40)) * 10.0 ** rng.uniform(-3, 6, (9, 1)))
+    fit = fit_reml([RemlGroup(signals, fixed)], [rng.normal(size=(10, 2))])
+    assert fit.status == ("no_signal",) * 40
