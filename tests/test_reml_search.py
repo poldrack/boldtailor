@@ -179,3 +179,19 @@ def test_neighbour_bracket_shows_sign_change_for_interior_optima(cases):
     counts = np.array([_unbracketed_interior(terms) for terms in cases()])
     assert counts[:, 1].sum() > 0
     assert counts[:, 0].sum() == 0
+
+
+def test_grid_chunks_bound_temporaries_without_changing_the_optimum(monkeypatch):
+    import boldtailor._reml_search as search
+    from boldtailor._reml_criterion import pool_terms
+
+    _, terms = _simulated_terms(5, 1.0, n_features=1750)
+    pooled = pool_terms(terms)
+    row_bytes = 8 * pooled.singular2.size * pooled.residual_ss.size
+    assert search._chunk_rows(pooled) * row_bytes <= 32 * 2**20
+    whole = minimize_ratio(terms)
+    monkeypatch.setattr(search, "_GRID_CHUNK_BYTES", 3 * row_bytes)
+    assert search._chunk_rows(pooled) == 3
+    chunked = minimize_ratio(terms)
+    for name in ("ratio", "criterion", "at_zero", "at_upper"):
+        np.testing.assert_array_equal(getattr(chunked, name), getattr(whole, name))
