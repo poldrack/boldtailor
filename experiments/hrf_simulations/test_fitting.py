@@ -164,6 +164,8 @@ def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatc
         replace(r, signals=ar1(len(r.frame_times), 0.4, 1.0, rng)[:, None])
         for r in runs
     ]
+    designs = [reference_design(r) for r in data]
+    expected = package_ar1.estimate_rho([r.signals for r in data], designs)
     calls = []
     original = package_ar1.prepare_reference
 
@@ -176,8 +178,6 @@ def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatc
     fit(data, library, "ConsDurNoRT", "brief", "ar1", cache=cache)
     fit(data, library, "ConsDurRTDur", "stimulus", "ar1", cache=cache)
     assert len(calls) == len(data)
-    designs = [reference_design(r) for r in data]
-    expected = package_ar1.estimate_rho([r.signals for r in data], designs)
     assert estimate_rho(data, cache) == float(expected.pooled)
     assert len(calls) == len(data)
 
