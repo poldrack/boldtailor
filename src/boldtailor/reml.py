@@ -25,7 +25,11 @@ class RemlGroup:
 
 @dataclass(frozen=True)
 class RemlFit:
-    """Per-feature REML variance estimates; ``noise_variance`` is marginal."""
+    """Per-feature REML variance estimates; ``noise_variance`` is marginal.
+
+    ``unrefined`` marks a positive ratio taken from the search grid without a
+    verified stationary point; ``at_upper`` marks those at the grid's upper edge.
+    """
 
     ratio: np.ndarray
     noise_variance: np.ndarray
@@ -33,13 +37,14 @@ class RemlFit:
     criterion: np.ndarray
     status: tuple[str, ...]
     at_upper: np.ndarray
+    unrefined: np.ndarray
     rho: np.ndarray
     restricted_dof: int
 
     def __post_init__(self):
         own_fields(self, ("ratio", "noise_variance", "effect_variance"))
         own_fields(self, ("criterion", "rho"))
-        own_fields(self, ("at_upper",), dtype=bool)
+        own_fields(self, ("at_upper", "unrefined"), dtype=bool)
         own_tuples(self, ("status",))
 
 
@@ -105,6 +110,7 @@ def _fit_values(subset, random_design):
         "criterion": optimum.criterion,
         "status": _status(optimum),
         "at_upper": optimum.at_upper,
+        "unrefined": optimum.unrefined,
     }
 
 
@@ -116,6 +122,7 @@ def _empty_result(n_features):
         "criterion": np.full(n_features, np.nan),
         "status": np.full(n_features, "no_signal", dtype=object),
         "at_upper": np.zeros(n_features, dtype=bool),
+        "unrefined": np.zeros(n_features, dtype=bool),
     }
 
 
@@ -133,6 +140,7 @@ def _assemble(result, rho, restricted_dof) -> RemlFit:
         criterion=result["criterion"],
         status=tuple(str(s) for s in result["status"]),
         at_upper=result["at_upper"],
+        unrefined=result["unrefined"],
         rho=rho,
         restricted_dof=restricted_dof,
     )
@@ -187,16 +195,23 @@ def fit_reml(
 
 @dataclass(frozen=True)
 class RemlSelection:
-    """Per-feature best random design among candidates, by restricted likelihood."""
+    """Per-feature best random design among candidates, by restricted likelihood.
+
+    ``any_at_upper`` marks features for which some candidate's criterion was
+    truncated at the upper edge of its search range. That criterion is an
+    upper bound on the candidate's optimum, so the comparison is provisional.
+    """
 
     winner: np.ndarray
     fit: RemlFit
     gap: np.ndarray
     n_candidates: int
+    any_at_upper: np.ndarray
 
     def __post_init__(self):
         own_fields(self, ("winner",), dtype=np.int64)
         own_fields(self, ("gap",))
+        own_fields(self, ("any_at_upper",), dtype=bool)
 
 
 def _empty_race(n_features):
@@ -204,6 +219,7 @@ def _empty_race(n_features):
         "winner": np.full(n_features, -1, dtype=np.int64),
         "best": np.full(n_features, np.inf),
         "second": np.full(n_features, np.inf),
+        "any_at_upper": np.zeros(n_features, dtype=bool),
     }
 
 
@@ -217,6 +233,7 @@ def _compete(race, result, columns, values, candidate):
     race["second"][columns] = np.where(ok, runner_up, second)
     race["best"][columns] = np.where(better, value, best)
     race["winner"][columns[better]] = candidate
+    race["any_at_upper"][columns] |= values["at_upper"]
     _write(result, columns, values, better)
 
 
@@ -263,4 +280,5 @@ def select_random_design(
         fit=_assemble(result, rho, dof),
         gap=_gap(race),
         n_candidates=count,
+        any_at_upper=race["any_at_upper"],
     )

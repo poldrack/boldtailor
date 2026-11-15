@@ -8,6 +8,10 @@ best grid point unless it is worse beyond floating-point rounding, and the
 result is compared explicitly with lambda = 0: a positive ratio must improve
 on zero by more than the criterion's rounding noise.
 
+A positive ratio is a verified stationary point only when a root was
+accepted. Otherwise the best grid point stands and the optimum is flagged
+``unrefined``; the upper edge of the grid (``at_upper``) is one such case.
+
 When the random covariance is a multiple of the identity on the whole
 restricted space, the covariance is (sigma2 + tau2 c) I and the criterion is
 constant in lambda. Such fits are flagged unidentifiable instead of searched.
@@ -48,21 +52,27 @@ _ROUNDING_ULPS = 64
 # only a few percent from 1 MiB upward, and was 5-25% slower below that. 8 MiB
 # sits clear of the slow end while keeping each temporary small.
 _WORKING_BYTES = 8 * 2**20
+_FLAGS = ("at_zero", "at_upper", "unrefined", "unidentifiable")
 
 
 @dataclass(frozen=True)
 class RatioOptimum:
-    """Per-feature variance-ratio optimum and where it sits."""
+    """Per-feature variance-ratio optimum and where it sits.
+
+    ``unrefined`` marks a positive ratio that is a grid point, not a slope
+    root; ``at_upper`` marks those at the upper edge of the grid.
+    """
 
     ratio: np.ndarray
     criterion: np.ndarray
     at_zero: np.ndarray
     at_upper: np.ndarray
+    unrefined: np.ndarray
     unidentifiable: np.ndarray
 
     def __post_init__(self):
         own_fields(self, ("ratio", "criterion"))
-        own_fields(self, ("at_zero", "at_upper", "unidentifiable"), dtype=bool)
+        own_fields(self, _FLAGS, dtype=bool)
 
 
 def _search_grid(singular2, size):
@@ -186,7 +196,7 @@ def _best_positive(pooled, log_grid, iterations):
     best = np.where(accept, root, log_grid[index])
     # The grid's upper edge is a truncation, not an optimum: flag it.
     on_edge = (index == log_grid.size - 1) & ~accept
-    return np.exp(best), np.where(accept, root_value, grid_value), on_edge
+    return np.exp(best), np.where(accept, root_value, grid_value), on_edge, accept
 
 
 def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
@@ -198,6 +208,7 @@ def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
         criterion=pooled_criterion_at_zero(pooled),
         at_zero=flags,
         at_upper=np.zeros(n_features, dtype=bool),
+        unrefined=np.zeros(n_features, dtype=bool),
         unidentifiable=~flags,
     )
 
@@ -217,7 +228,7 @@ def _confounded(pooled: PooledTerms) -> bool:
 
 def _search_batch(pooled, log_grid, iterations) -> RatioOptimum:
     """Search one batch of features and compare the result with zero."""
-    ratio, value, on_edge = _best_positive(pooled, log_grid, iterations)
+    ratio, value, on_edge, refined = _best_positive(pooled, log_grid, iterations)
     at_zero_value = pooled_criterion_at_zero(pooled)
     at_zero = at_zero_value <= value + _rounding_slack(at_zero_value, pooled.dof)
     return RatioOptimum(
@@ -225,12 +236,13 @@ def _search_batch(pooled, log_grid, iterations) -> RatioOptimum:
         criterion=np.where(at_zero, at_zero_value, value),
         at_zero=at_zero,
         at_upper=on_edge & ~at_zero,
+        unrefined=~refined & ~at_zero,
         unidentifiable=np.zeros(value.size, dtype=bool),
     )
 
 
 def _joined(parts: Sequence[RatioOptimum]) -> RatioOptimum:
-    names = ("ratio", "criterion", "at_zero", "at_upper", "unidentifiable")
+    names = ("ratio", "criterion", *_FLAGS)
     return RatioOptimum(
         **{name: np.concatenate([getattr(p, name) for p in parts]) for name in names}
     )
