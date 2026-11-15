@@ -122,7 +122,11 @@ def test_noiseless_case_and_zero_signal_metrics(tmp_path, tiny_case):
         splits=False,
     )
     assert result.loc[result.estimator == "iid", "candidate_id"].iloc[0] == 0
-    assert result.loc[result.estimator == "iid", "provisional"].all()
+    # Noiseless data need not hit a search boundary when the fitted task model
+    # differs from the generating model. The table must retain the actual
+    # comparison's qualification, rather than infer it from the noise level.
+    fits = json.loads((tmp_path / "noiseless/fits.json").read_text())
+    assert result.provisional.tolist() == [f["provisional"][0] for f in fits]
 
 
 def test_cli_plan_does_not_require_nsd(capsys):

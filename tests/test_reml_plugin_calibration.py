@@ -78,3 +78,59 @@ def test_heterogeneous_noise_is_a_pooled_variance_not_each_runs_variance():
     expected = np.average(variances, weights=np.array(scans) - 1)
     assert abs(fit.noise_variance.mean() - expected) < 0.02
     assert np.all(np.abs(fit.noise_variance.mean() - np.array(variances)) > 0.2)
+
+
+def _correlation(n, rho):
+    return rho ** np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
+
+
+def test_omitted_smooth_task_signal_contaminates_noise_autocorrelation():
+    """Reference completeness is a scientific assumption, not a neutral knob."""
+    rng = np.random.default_rng(623)
+    signals, complete, incomplete = [], [], []
+    for _ in range(4):
+        n = 120
+        fixed = np.ones((n, 1))
+        task = np.linalg.cholesky(_correlation(n, 0.9)) @ rng.normal(size=(n, 3))
+        noise = np.linalg.cholesky(_correlation(n, 0.4)) @ rng.normal(size=(n, 1000))
+        signals.append(task @ rng.normal(scale=3, size=(3, 1000)) + noise)
+        complete.append(np.column_stack([fixed, task]))
+        incomplete.append(fixed)
+    identified = estimate_rho(signals, complete).pooled
+    contaminated = estimate_rho(signals, incomplete).pooled
+    assert abs(identified - 0.4) < 0.04
+    assert contaminated > identified + 0.2
+
+
+def test_group_heterogeneous_rho_is_not_recovered_by_one_pooled_scalar():
+    rng = np.random.default_rng(624)
+    truth = np.array([-0.5, 0.7])
+    n = 120
+    signals = [
+        np.linalg.cholesky(_correlation(n, r)) @ rng.normal(size=(n, 2000))
+        for r in truth
+    ]
+    estimates = estimate_rho(signals, [np.ones((n, 1))] * 2)
+    assert np.all(np.abs(np.nanmedian(estimates.values, axis=1) - truth) < 0.04)
+    assert np.all(np.abs(estimates.pooled - truth) > 0.2)
+
+
+def test_correlated_random_effects_require_their_covariance_factor():
+    rng = np.random.default_rng(625)
+    rotation = np.linalg.qr(rng.normal(size=(3, 3)))[0]
+    factor = rotation @ np.diag(np.sqrt([0.05, 1.0, 10.0]))
+    groups, matched, isotropic = [], [], []
+    for _ in range(24):
+        z = rng.normal(size=(40, 3))
+        correlated = z @ factor
+        signal = correlated @ rng.normal(size=(3, 1000)) + rng.normal(size=(40, 1000))
+        groups.append(RemlGroup(signal, np.ones((40, 1))))
+        matched.append(correlated)
+        isotropic.append(z)
+    correct = fit_reml(groups, matched)
+    misspecified = fit_reml(groups, isotropic)
+    assert abs(np.median(correct.ratio) - 1.0) < 0.15
+    assert abs(correct.noise_variance.mean() - 1.0) < 0.05
+    # A scalar fitted to the wrong coefficient covariance is a different
+    # estimand, not an estimate of the generating scale (one).
+    assert np.median(misspecified.ratio) > 2.0
