@@ -114,3 +114,12 @@ def test_wide_random_design_keeps_fixed_span_rank_policy(group):
     inside = fixed @ rng.normal(size=(fixed.shape[1], 80))
     terms = reml_terms(project_fixed(signals, fixed), inside)
     assert terms.singular2.size == 0
+
+
+@pytest.mark.parametrize("scale", [1e-200, 1e200])
+def test_spectral_norm_does_not_overflow_or_underflow(scale):
+    from boldtailor._reml_terms import _spectral_norm
+
+    base = np.random.default_rng(0).normal(size=(20, 5))
+    expected = scale * np.linalg.svd(base, compute_uv=False)[0]
+    assert_allclose(_spectral_norm(scale * base), expected, rtol=1e-12)

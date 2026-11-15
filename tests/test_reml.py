@@ -292,3 +292,42 @@ def test_features_without_a_fit_are_not_unrefined(data):
     fit = _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
     assert fit.status[1] == "no_signal"
     assert not fit.unrefined.any()
+
+
+def test_fit_values_pools_terms_once(data, monkeypatch):
+    import boldtailor._reml_criterion as crit
+
+    calls = 0
+    original = crit.pool_terms
+
+    def counted(terms):
+        nonlocal calls
+        calls += 1
+        return original(terms)
+
+    monkeypatch.setattr(crit, "pool_terms", counted)
+    # Also patch any direct import in _reml_search or reml
+    import boldtailor._reml_search as search
+
+    monkeypatch.setattr(search, "pool_terms", counted)
+    _fit(*data)
+    assert calls == 1
+
+
+def test_live_subset_computes_fixed_basis_once_when_mixing_dead_features(
+    data, monkeypatch
+):
+    import boldtailor._reml_terms as terms_mod
+
+    calls = 0
+    original = terms_mod.conditioned_basis
+
+    def counted(matrix):
+        nonlocal calls
+        calls += 1
+        return original(matrix)
+
+    monkeypatch.setattr(terms_mod, "conditioned_basis", counted)
+    signals, fixed, random = data
+    _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
+    assert calls == len(signals)

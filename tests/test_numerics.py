@@ -200,3 +200,15 @@ def test_exactly_removable_shift_in_unequal_units_is_above_the_floors():
     energy, _, uncertainty = _energies(signals, design)
     assert_allclose(energy, 5.0, rtol=1e-12)
     assert np.all(uncertainty < 1e-20)
+
+
+def test_project_out_does_not_overflow_uncertainty_floor_for_large_signals():
+    """Large signals with finite energy and high amplification must not overflow."""
+    basis = np.eye(25)[:, :2]
+    amplification = np.array([1.0, 1e6])
+    signals = np.zeros((25, 2))
+    signals[1, 0] = 1e150
+    signals[7, 1] = 1e150
+    _, rounding, uncertainty = project_out(signals, basis, amplification)
+    assert np.all(np.isfinite(rounding))
+    assert np.all(np.isfinite(uncertainty))

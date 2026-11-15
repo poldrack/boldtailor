@@ -417,3 +417,23 @@ def test_every_refined_positive_optimum_is_stationary(cases):
         assert np.all(np.abs(slope[refined]) <= 1e-9 * dof)
         checked += int(refined.sum())
     assert checked > 0
+
+
+def test_exact_zero_slope_grid_point_is_not_unrefined():
+    """A grid point whose analytic slope is 0.0 is an exact stationary point."""
+    from boldtailor._reml_terms import RemlTerms
+
+    terms = [
+        RemlTerms(
+            singular2=np.array([1.0]),
+            coordinates2=np.array([[2.0]]),
+            residual_ss=np.array([1.0]),
+            dof=2,
+            energy=np.array([3.0]),
+        )
+    ]
+    optimum = minimize_ratio(terms)
+    assert_allclose(optimum.ratio, [1.0], rtol=1e-12)
+    assert not optimum.unrefined.any()
+    assert not optimum.at_zero.any()
+    assert not optimum.at_upper.any()
