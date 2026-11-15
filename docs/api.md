@@ -441,15 +441,18 @@ reference is within the rounding of that projection or the uncertainty of its
 computed span. Estimates do not depend on the units of the reference columns. Non-2-D inputs, non-finite designs, scan mismatches and
 unequal feature counts raise `ValueError` naming the group.
 
-Correction requires a finite, numerically resolved, strictly monotone moment
-curve. Increasing and decreasing curves are interpolated, with observations
-outside their range clipped to the grid endpoints. Flat, nonmonotone or
-nonfinite curves return NaN corrected values even when the raw ratio is finite;
+Correction requires a finite moment curve that is numerically resolved and
+strictly monotone across the pooling range, ρ in [−0.8, 0.8]. The monotone
+branch spanning that range is interpolated, increasing or decreasing, for
+every observation, and observations beyond the branch are clipped to its
+ends; for a curve monotone over the whole grid these are the grid endpoints.
+A bend outside the pooling range, which confound-heavy and heavily censored
+designs can produce, therefore only shortens the branch: no finite raw ratio
+is dropped. A curve that is flat, nonfinite, or turns inside the pooling
+range returns NaN corrected values even when the raw ratio is finite;
 nearest-grid tie-breaking would not identify rho. Such values are excluded
 from pooling. The all-undefined pooled value of zero is a fallback, not an
-estimate. This is a conservative whole-curve policy: it does not try to select
-an inverse branch for observations in a locally unambiguous portion of a
-nonmonotone curve.
+estimate.
 
 ## HRF libraries, selection, and evaluation
 

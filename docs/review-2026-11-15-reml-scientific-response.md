@@ -29,6 +29,16 @@ when no finite values remain is still a documented fallback. This conservatively
 rejects the whole nonmonotone curve instead of choosing a possibly unique local
 branch for particular observations.
 
+*Revised after review of this branch.* Rejecting the whole curve also
+discarded usable estimates when the curve bends only near an end of the rho
+grid, and the pooled value then fell back to 0.0 (a true rho of 0.4 reported
+as 0.0 with half the volumes censored). The curve is now required to be
+monotone only across the pooling range, [−0.8, 0.8]; the branch spanning it
+is inverted for every value and values beyond it are clipped to its ends.
+Flat curves and curves that turn inside the pooling range still give NaN, so
+the demonstrated B2 failure stays fixed. See the REML conventions in
+`docs/development.md`.
+
 **M1, uncertainty reporting.** `RemlSelection.any_unrefined` now aggregates
 interior grid fallbacks as well as upper-bound fits from every candidate.
 Both experiment adapters preserve `unrefined`, `any_at_upper`, `any_unrefined`

@@ -396,13 +396,26 @@ simulations cache it per run. A feature is degenerate (NaN) when its residual
 denominator does not exceed the uncertainty floor above. `RhoEstimate.pooled` is the median
 over all groups and features of the finite corrected values, clipped to ±0.8,
 and `0.0` when none is finite.
-Inversion requires a finite strictly monotone curve with adjacent differences
-larger than `64 eps max(1, max(abs(expected)))`, a roundoff guard on the
-dimensionless lag ratio. Decreasing curves are reversed for interpolation.
-Nonfinite, flat, numerically unresolved and nonmonotone curves yield NaN;
-the entire curve is rejected rather than choosing an arbitrary inverse branch.
-Pooling excludes those values. The zero fallback when none remain is explicitly
-not an inferred absence of autocorrelation.
+Inversion requires the curve to be finite and strictly monotone across the
+pooling range, `[-0.8, 0.8]` cut to the grid, with adjacent differences larger
+than `64 eps max(1, max(abs(expected)))`, a roundoff guard on the
+dimensionless lag ratio. The monotone branch that spans that range, extended
+as far as it stays monotone, is inverted by interpolation for every value,
+and values beyond it are clipped to its ends, as a fully monotone curve clips
+at the ends of the grid. Decreasing branches are reversed for interpolation.
+A curve that is nonfinite, flat, or turns inside the pooling range yields NaN
+for every value. Pooling excludes those values. The zero fallback when none
+remain is explicitly not an inferred absence of autocorrelation.
+
+Two alternatives were tried and rejected. Rejecting the whole curve for a bend
+anywhere on the grid discards usable estimates: confound-heavy designs often
+bend only beyond `|ρ| > 0.9` (about 8% of designs drawn with 200 scans and 100
+censored volumes), and a true `ρ` of 0.4 was then pooled as 0.0. Inverting
+value by value, with NaN at the levels a bend repeats, drops observations
+according to their value and biases the pooled median: on designs with ten
+residual degrees of freedom it sat at the 0.8 limit for a true `ρ` of 0.4. The
+branch rule drops no value and keeps their order, and on those designs
+reproduces the estimates of plain monotone interpolation.
 
 Scientific regression coverage includes independent diagonal covariance and
 derivative oracles, known orthogonal energies near saturation, generated
