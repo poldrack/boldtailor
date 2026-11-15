@@ -48,7 +48,7 @@ def estimate_noise(runs, rt_mode="amplitude"):
         corrected_median=corrected,
         raw_median=raw,
         n_valid=n_valid,
-        clipped=bool(abs(corrected) > 0.8),
+        clipped=estimate.pooled_at_bound,
         training_run_ids=[r.run_id for r in runs],
         reference=REFERENCE_LABEL,
     )
