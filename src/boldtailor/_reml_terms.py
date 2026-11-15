@@ -12,13 +12,12 @@ def _rank_cutoff(matrix, spectral_norm):
     return max(matrix.shape) * np.finfo(float).eps * spectral_norm
 
 
-def _orthonormal_basis(matrix):
-    """Left singular vectors above the rank tolerance, plus singular values."""
+def _orthonormal_basis(matrix) -> np.ndarray:
+    """Left singular vectors above the rank tolerance."""
     if matrix.shape[1] == 0:
-        return np.empty((matrix.shape[0], 0)), np.empty(0)
+        return np.empty((matrix.shape[0], 0))
     u, s, _ = np.linalg.svd(matrix, full_matrices=False)
-    keep = s > _rank_cutoff(matrix, s[0])
-    return u[:, keep], s[keep]
+    return u[:, s > _rank_cutoff(matrix, s[0])]
 
 
 @dataclass(frozen=True)
@@ -39,7 +38,7 @@ class FixedProjection:
 def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
     """Whiten by AR(1) and remove the span of the fixed design."""
     y = whiten(signals, rho)
-    basis, _ = _orthonormal_basis(whiten(fixed_design, rho))
+    basis = _orthonormal_basis(whiten(fixed_design, rho))
     dof = y.shape[0] - basis.shape[1]
     if dof <= 0:
         raise ValueError("positive restricted degrees of freedom required")
@@ -63,33 +62,35 @@ class RemlTerms:
     residual_ss: np.ndarray
     dof: int
     energy: np.ndarray
-    raw_energy: np.ndarray
 
     def __post_init__(self):
-        own_fields(
-            self,
-            ("singular2", "coordinates2", "residual_ss", "energy", "raw_energy"),
-        )
+        own_fields(self, ("singular2", "coordinates2", "residual_ss", "energy"))
+
+
+def _spectral_norm(matrix):
+    """Largest singular value from the small Gram matrix, without a second SVD."""
+    return np.sqrt(max(np.linalg.eigvalsh(matrix.T @ matrix)[-1], 0.0))
 
 
 def _projected_random(projection, random_design):
     z = whiten(random_design, projection.rho)
-    norm2 = np.linalg.norm(z, 2) if z.shape[1] else 0.0
     projected = z - projection.basis @ (projection.basis.T @ z)
-    return projected, norm2
+    return projected, _spectral_norm(z)
 
 
 def _random_directions(projection, random_design):
     n = projection.signals.shape[0]
     if random_design is None or np.shape(random_design)[1] == 0:
         return np.empty((n, 0)), np.empty(0)
-    projected, norm2 = _projected_random(projection, np.asarray(random_design, float))
+    projected, norm = _projected_random(projection, np.asarray(random_design, float))
     u, s, _ = np.linalg.svd(projected, full_matrices=False)
-    keep = s > _rank_cutoff(projected, norm2)
+    keep = s > _rank_cutoff(projected, norm)
     return u[:, keep], s[keep]
 
 
-def reml_terms(projection: FixedProjection, random_design) -> RemlTerms:
+def reml_terms(
+    projection: FixedProjection, random_design: np.ndarray | None
+) -> RemlTerms:
     """Reduce a projected group to singular values and squared coordinates."""
     u, s = _random_directions(projection, random_design)
     coordinates2 = (u.T @ projection.signals) ** 2
@@ -100,5 +101,4 @@ def reml_terms(projection: FixedProjection, random_design) -> RemlTerms:
         residual_ss=np.maximum(energy - coordinates2.sum(axis=0), 0.0),
         dof=projection.dof,
         energy=energy,
-        raw_energy=projection.raw_energy,
     )
