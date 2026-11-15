@@ -353,6 +353,46 @@ Each test run needs at least two complete predictor rows. Nonfinite betas on
 included rows invalidate the affected feature fit/score; constant test targets
 have undefined R². Excluded trial predictions remain NaN.
 
+## Scalar REML
+
+From `boldtailor.reml`:
+
+```text
+RemlGroup(signals, fixed_design)
+fit_reml(groups, random_design, *, rho=0.0)
+select_random_design(groups, candidates, *, rho=0.0)
+```
+
+`RemlGroup` holds one group's `signals` `(scans, features)` and `fixed_design`
+`(scans, columns)`, the matrix C of unpenalised nuisance regressors.
+`random_design` is one matrix Z per group (scans by columns, or `None`) whose
+coefficients are random effects. `rho` is a scalar or one value per feature,
+with `|rho| < 1`. `candidates` is an iterable of such `random_design`
+sequences, consumed once.
+
+`RemlFit` has per-feature read-only `ratio` (variance ratio λ), `noise_variance`
+(marginal σ²), `effect_variance` (`ratio * noise_variance`), `criterion`
+(−2 restricted log-likelihood up to a constant), `status` (`"ok"`,
+`"variance_zero"`, or `"no_signal"`), `at_upper`, and `rho`, plus the integer
+`restricted_dof`. `RemlSelection` has `winner` (candidate index, `-1` when no
+candidate has status `ok`), the winner's `fit`, the criterion `gap` to the
+runner-up (NaN without one), and `n_candidates`. Criteria are comparable across
+candidates only at the same `fixed_design` and `rho`. Invalid input raises
+`ValueError`. See [REML conventions](development.md#reml-conventions).
+
+From `boldtailor.ar1`:
+
+```text
+whiten(values, rho)
+estimate_rho(signals, reference)
+```
+
+`whiten` returns rows whitened by AR(1) noise, normalised so the whitened noise
+has unit marginal variance. `estimate_rho` takes one signal array and one
+reference design per group and returns `RhoEstimate` with per-group `values`
+(bias-corrected, NaN where undefined), uncorrected `raw` estimates, and the
+`pooled` median clipped to ±0.8.
+
 ## HRF libraries, selection, and evaluation
 
 From `boldtailor.hrf_library`:

@@ -111,11 +111,12 @@ Names follow the package pattern (`fractional_ridge` / `_fractional_ridge`).
 
 | Module | Responsibility |
 | --- | --- |
-| `_ar1.py` | `whiten(values, rho)`; lag-one residual autocorrelation; the projection-bias correction (`tr(MLMR)/tr(MDMR)` inverted on a grid); pooling (median, clip to ±0.8). No REML knowledge. |
+| `_ar1_moments.py` | (public `whiten` lives in `ar1.py`) lag-one residual autocorrelation; the projection-bias correction (`tr(MLMR)/tr(MDMR)` inverted on a grid); pooling (median, clip to ±0.8). No REML knowledge. |
 | `_reml_terms.py` | `FixedProjection` (per group: orthonormal basis of whitened `C`, projected signals, `d_g`, raw energy), built **once** per problem; `RemlTerms` (per group: `s²`, `c²`, `r`, `d`); `reml_terms(projection, random_design)`. Rank tolerances live here only. |
 | `_reml_criterion.py` | `criterion(ratios, terms)` and `profiled_variance(ratios, terms)`: pure functions of sufficient statistics, vectorised over features. |
 | `_reml_search.py` | `minimize_ratio(terms)`: log grid over `λ·s²`, golden-section refinement, explicit `λ = 0` candidate; returns ratio, criterion, boundary flags. The only optimiser. |
-| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_design`, `estimate_rho`, result dataclasses. Validation of inputs. |
+| `ar1.py` (public) | `whiten`, `estimate_rho`, `RhoEstimate`; the lag-ratio moments live in `_ar1_moments.py`. |
+| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_design`, result dataclasses. Validation of inputs. |
 
 Public API sketch (names are the builder's to refine; shapes and semantics are not):
 
@@ -266,3 +267,16 @@ returns the full candidate × feature criterion table behind an option.
   `remlcomponents`, `remlshared` and `remlcombined` outputs or assert against
   `reports/reml_validation_summary.tsv` are deleted. Committed report files
   stay as historical records.
+
+## Decisions during implementation
+
+- The search polishes the golden-section result by bisection on the analytic
+  derivative of the criterion in `log λ`, accepted unless worse than the
+  incumbent beyond floating-point rounding, then compares with `λ = 0` (ties to
+  zero). The contract is the guarantees, not iteration counts.
+- `project_fixed` runs once per group per distinct `ρ`, plus once more for a
+  `ρ` subset mixing features with and without signal, so live features are
+  bit-identical whether or not dead features are present.
+- The `statsmodels` `MixedLM(reml=True)` oracle uses BFGS. Two cases are strict
+  xfails where MixedLM does not reach the optimum, confirmed against the dense
+  optimiser in `tests/reml_oracles.py`.

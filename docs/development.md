@@ -66,6 +66,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
+| Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_reml_terms`, `_reml_criterion`, `_reml_search`, `_ar1_moments` |
 | Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_denoising_pool`, `_denoising_cv`, `_denoising_gate`, `_denoising_identity`, `_mixture_threshold` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication`, `_software` |
 | Shared constants and deprecation shims | `_constants`, `_deprecation` |
@@ -234,6 +235,66 @@ comparison use the same timing/confound eligibility context. Production HRFs
 selected over all runs are shared by the final OLS and ridge fits.
 
 Nilearn 0.14 divides the OLS/AR(1) dispersion by `n - columns` (`regression.py:196`), inconsistent with its `df_residuals = n - rank`; Boldtailor avoids it by fitting rank-deficient designs in a full-rank basis (`_conventional._full_rank_basis`).
+
+### REML conventions
+
+`boldtailor.reml` fits, per feature, the model `y_g = C_g a_g + Z_g b_g + e_g`
+for each group (run) `g`, with `b_g ~ N(0, τ² I)` and `e_g ~ N(0, σ² R_g(ρ))`.
+`C_g` is `fixed_design`, the unpenalised nuisance regressors with their own
+coefficients in every group. `Z_g` is `random_design`, the matrix whose
+coefficients are random effects. Neither name refers to random numbers.
+`R_g` is the identity or the stationary AR(1) correlation matrix with known
+`ρ`. One variance ratio `λ = τ²/σ²` and one `σ²` are shared across groups.
+
+`σ²` is the marginal noise variance. The whitener in `boldtailor.ar1.whiten`
+is normalised so that `W R(ρ) W'` is the identity (first row unchanged, later
+rows `(x_t − ρ x_{t−1}) / sqrt(1 − ρ²)`), so `λ` and `σ²` mean the same thing
+at every `ρ`. In one synthetic scenario (AR(1) noise at `ρ = 0.5`, 16 groups of
+100 scans) a fit that ignored the autocorrelation underestimated the marginal
+noise variance by about 2%, while its median variance ratio was not worse than
+the AR(1) fit's; this is a finding from that scenario, not a general law.
+
+The criterion is the exact restricted likelihood, profiled over `σ²`. Its
+constant depends only on `C` and `ρ`, so criteria are comparable across random
+designs only at fixed `C` and `ρ`, never across `ρ` or `C`.
+`select_random_design` therefore compares candidates at the groups'
+`fixed_design` and a single `rho`.
+
+Per-feature `status` is `ok`, `variance_zero` (the optimum is `λ = 0`, so the
+data do not support the random design), or `no_signal` (no energy remains after
+projecting out `C`). `at_upper` flags an optimum at the upper edge of the
+search range. In a selection, the winner is the candidate with the lowest
+criterion among those with status `ok`; ties go to the earlier candidate. A
+feature with no `ok` candidate has winner `-1` and a NaN `gap` (the criterion
+difference to the runner-up, also NaN when only one candidate is `ok`).
+
+The search is a log grid over the variance ratio, golden-section refinement,
+and a polish that finds the root of the analytic derivative of the criterion
+with respect to `log λ` by bisection. The polish is accepted unless it is worse
+than the incumbent beyond floating-point rounding. The result is then compared
+explicitly with `λ = 0`, and ties go to zero. The guarantees, rather than the
+iteration counts, are the contract: an interior optimum is a stationary point
+of the criterion to near machine precision, it is never worse than the best
+grid point beyond rounding, `λ = 0` is an explicit boundary, and `at_upper`
+reports a boundary hit.
+
+Rank decisions use one tolerance, `max(shape) · eps · σ_max`, defined in
+`_reml_terms`. `project_fixed` runs once per group per distinct `ρ`, plus once
+more for a `ρ` subset that mixes features with and without signal, so results
+for live features are bit-identical whether or not dead features are present.
+Zero-feature signals, non-finite inputs, shape mismatches, `|ρ| >= 1`, an empty
+candidate iterable, and a candidate with the wrong number of groups raise
+`ValueError`. `ar1.estimate_rho` corrects the residual lag-one ratio for
+projection bias on a fixed grid, and `RhoEstimate.pooled` is the median clipped
+to ±0.8.
+
+`tests/reml_oracles.py` imports nothing from `boldtailor`. It holds a
+dense-covariance criterion and optimiser, a `statsmodels` `MixedLM(reml=True)`
+fit (BFGS), and a finite-sample null reference for the restricted
+likelihood-ratio statistic. Two oracle cases are strict xfails because MixedLM
+does not reach the optimum there; the dense optimiser confirms the package
+value. Heavier Monte Carlo runs are opt-in:
+`uv run pytest tests/test_reml_statistics.py -q --run-slow`.
 
 ## Source identity and provenance
 

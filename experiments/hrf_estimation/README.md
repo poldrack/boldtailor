@@ -108,8 +108,9 @@ into this checkout. Preserve that execution worktree while the queues run.
 
 The existing results notebook describes the earlier completed pilots; it does
 not yet include this running stage. The authorized REML extensions are documented in
-[reml_model.md](reml_model.md), implemented as `remlar1`, `remlcomponents`,
-`remlshared`, and `remlcombined`. They retain `reml` as the original baseline.
+[reml_model.md](reml_model.md). Only `reml` and `remlar1` remain; the
+multi-component variants were removed. REML now comes from `boldtailor.reml`
+through `experiments/hrf_estimation/reml_selection.py`.
 Powell remains available for historical reproducibility but is excluded from
 both active queues at the user’s request.
 
