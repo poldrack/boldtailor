@@ -244,3 +244,43 @@ def test_grid_spacing_does_not_grow_with_spectral_spread():
         assert grid[0] == pytest.approx(np.log(1e-8 / singular2.max()))
         assert grid[-1] == pytest.approx(np.log(1e8 / singular2.min()))
     assert _search_grid(np.array([3.0]), 121).size == 121
+
+
+def _nearly_flat_terms(seed):
+    """Saturated design whose spectrum differs only at rounding level: the
+    profile varies by less than the criterion's own rounding noise."""
+    from boldtailor._reml_terms import RemlTerms
+
+    y2 = np.random.default_rng(seed).normal(size=(6, 4)) ** 2
+    return [
+        RemlTerms(
+            singular2=1.0 + 4e-15 * np.arange(6),
+            coordinates2=y2,
+            residual_ss=np.zeros(4),
+            dof=6,
+            energy=y2.sum(axis=0),
+        )
+    ]
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_improvement_within_rounding_noise_does_not_beat_zero(seed):
+    optimum = minimize_ratio(_nearly_flat_terms(seed))
+    assert not optimum.unidentifiable.any()
+    assert optimum.at_zero.all()
+    assert_allclose(optimum.ratio, 0.0, atol=0.0)
+
+
+def test_saturated_equal_spectrum_is_unidentifiable():
+    terms = _nearly_flat_terms(0)
+    flat = [type(terms[0])(**{**vars(terms[0]), "singular2": np.full(6, 2.5)})]
+    optimum = minimize_ratio(flat)
+    assert optimum.unidentifiable.all()
+    assert np.isnan(optimum.ratio).all()
+    assert_allclose(optimum.criterion, criterion(np.zeros(4), flat), rtol=1e-13)
+    assert not optimum.at_zero.any() and not optimum.at_upper.any()
+
+
+def test_identifiable_optimum_is_not_flagged():
+    _, terms = _simulated_terms(3, 1.0)
+    assert not minimize_ratio(terms).unidentifiable.any()
