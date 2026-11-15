@@ -57,9 +57,13 @@ class RhoReference:
         own_fields(self, ("basis", "expected"))
 
 
-def _check_matrix(values, name, where=""):
+def _check_2d(values, name, where):
     if np.ndim(values) != 2:
         raise ValueError(f"{name}{where} must be 2-D")
+
+
+def _check_matrix(values, name, where=""):
+    _check_2d(values, name, where)
     if not np.all(np.isfinite(values)):
         raise ValueError(f"{name}{where} contains non-finite values")
 
@@ -74,7 +78,7 @@ def prepare_reference(design: np.ndarray) -> RhoReference:
 
 def _group_reference(signals, reference, index):
     where = f" of group {index}"
-    _check_matrix(signals, "signals", where)
+    _check_2d(signals, "signals", where)  # non-finite signals give NaN estimates
     if not isinstance(reference, RhoReference):
         _check_matrix(reference, "reference design", where)
         reference = prepare_reference(reference)
