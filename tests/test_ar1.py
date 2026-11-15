@@ -223,3 +223,13 @@ def test_estimator_moments_match_moment_polynomials_exactly(design, rho):
     polyval = np.polynomial.polynomial.polyval
     assert_allclose(numerator.sum(), polyval(rho, numerator_poly), rtol=1e-10)
     assert_allclose(denominator.sum(), polyval(rho, denominator_poly), rtol=1e-10)
+
+
+def test_non_finite_signal_feature_gives_nan_not_error():
+    signals, designs = _ar1_problem()
+    signals = [s.copy() for s in signals]
+    signals[1][4, 2] = np.nan
+    result = estimate_rho(signals, designs)
+    assert np.isnan(result.values[1, 2]) and np.isnan(result.raw[1, 2])
+    assert np.isfinite(np.delete(result.values[1], 2)).all()
+    assert np.isfinite(result.values[0]).all()
