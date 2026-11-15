@@ -195,3 +195,41 @@ def test_grid_chunks_bound_temporaries_without_changing_the_optimum(monkeypatch)
     chunked = minimize_ratio(terms)
     for name in ("ratio", "criterion", "at_zero", "at_upper"):
         np.testing.assert_array_equal(getattr(chunked, name), getattr(whole, name))
+
+
+def _two_basin_terms():
+    """The review's narrow minimum: bracketed by a slope crossing, yet not the
+    lowest grid point, so refining only around the grid argmin loses it."""
+    from boldtailor._reml_terms import RemlTerms
+
+    y = [5.659277805656175, 1.3575913902516368, 12.166250878076637]
+    y += [440.03410697431354, 0.024484911495792103, 0.2989731950657336]
+    y += [754.0944608984961, 0.023686778553470386]
+    y2 = np.array(y) ** 2
+    rest = 23.645757013142806**2 + 0.005169198169685577**2
+    return [
+        RemlTerms(
+            singular2=np.logspace(-10, 10, 8),
+            coordinates2=y2[:, None],
+            residual_ss=np.array([rest]),
+            dof=10,
+            energy=np.array([y2.sum() + rest]),
+        )
+    ]
+
+
+def test_every_slope_crossing_competes():
+    terms = _two_basin_terms()
+    fine = np.exp(np.linspace(-45.0, 45.0, 90001))
+    best = criterion(fine[:, None], terms).min()
+    assert minimize_ratio(terms).criterion[0] <= best + 1e-9
+
+
+def test_grid_spacing_does_not_grow_with_spectral_spread():
+    from boldtailor._reml_search import _search_grid
+
+    narrow = _search_grid(np.array([1.0, 2.0]), 121)
+    wide = _search_grid(np.logspace(-10, 10, 8), 121)
+    assert np.diff(wide).max() <= np.diff(narrow).max() * (1 + 1e-12)
+    assert wide[0] == pytest.approx(np.log(1e-8 / 1e10))
+    assert wide[-1] == pytest.approx(np.log(1e8 / 1e-10))
