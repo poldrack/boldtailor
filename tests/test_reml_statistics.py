@@ -264,10 +264,16 @@ def recovery_errors(fit):
 def test_ar1_fit_recovers_parameters(replicates):
     ar1, iid = ar1_fit_statistics(replicates)
     ratio_error, noise_error = recovery_errors(ar1)
-    iid_ratio_error, iid_noise_error = recovery_errors(iid)
     assert ratio_error < 0.05
     assert noise_error < 0.02
-    assert iid_noise_error >= 3 * noise_error or iid_ratio_error >= 3 * ratio_error
+    # The iid fit understates the marginal noise variance: the fixed design
+    # (the intercept above all) absorbs more than its share of AR(1) variance.
+    # Both fits use the same data, so the paired SE of the per-feature
+    # differences is the correct Monte Carlo error. No ratio comparison is
+    # asserted: the iid fit's median ratio is not worse (50k replicates:
+    # iid 1.006 vs AR(1) 0.986).
+    shortfall = ar1.noise_variance - iid.noise_variance
+    assert shortfall.mean() > 4 * mean_se(shortfall)
 
 
 # ---------------------------------------------------------------- selection
