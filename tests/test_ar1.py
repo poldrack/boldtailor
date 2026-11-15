@@ -9,6 +9,10 @@ from numpy.testing import assert_allclose
 from boldtailor._ar1_moments import (
     correct_lag_ratio,
     expected_lag_ratio,
+    invert_lag_ratio,
+    lag_moments,
+    moment_polynomials,
+    orthonormal_basis,
     pool_rho,
 )
 from boldtailor.ar1 import RhoReference, estimate_rho, prepare_reference, whiten
@@ -187,3 +191,35 @@ def test_estimate_rho_validates_groups():
     for group_signals, references, message in cases:
         with pytest.raises(ValueError, match=message):
             estimate_rho(group_signals, references)
+
+
+def test_inversion_interpolates_a_monotonic_expectation():
+    grid = np.linspace(-0.9, 0.9, 7)
+    expected = 0.5 * grid + 0.1
+    values = np.array([[0.1, np.nan], [0.5 * 0.45 + 0.1, 0.5 * -0.9 + 0.1]])
+    corrected = invert_lag_ratio(values, expected, grid)
+    assert_allclose(corrected[0, 0], 0.0, atol=1e-15)
+    assert np.isnan(corrected[0, 1])
+    assert_allclose(corrected[1], [0.45, -0.9], atol=1e-15)
+
+
+def test_inversion_takes_nearest_grid_value_when_not_monotonic():
+    grid = np.array([-0.6, -0.3, 0.0, 0.3, 0.6])
+    expected = np.array([0.0, 0.5, 0.4, 0.8, 1.0])
+    values = np.array([0.41, 0.52, 0.95, np.nan, -0.2])
+    corrected = invert_lag_ratio(values, expected, grid)
+    assert_allclose(corrected[[0, 1, 2, 4]], [0.0, -0.3, 0.6, -0.6], atol=0.0)
+    assert np.isnan(corrected[3])
+
+
+@pytest.mark.parametrize("rho", [0.0, 0.4, -0.3])
+def test_estimator_moments_match_moment_polynomials_exactly(design, rho):
+    """With the columns of chol(R) as features, sum_f e'Le = tr(MLMR)."""
+    basis = orthonormal_basis(design)
+    signals = np.linalg.cholesky(ar1_correlation(len(design), rho))
+    residuals = signals - basis @ (basis.T @ signals)
+    numerator, denominator = lag_moments(residuals)
+    numerator_poly, denominator_poly = moment_polynomials(basis)
+    polyval = np.polynomial.polynomial.polyval
+    assert_allclose(numerator.sum(), polyval(rho, numerator_poly), rtol=1e-10)
+    assert_allclose(denominator.sum(), polyval(rho, denominator_poly), rtol=1e-10)
