@@ -1,6 +1,12 @@
 """Dense reference constructions for REML tests; imports nothing from boldtailor."""
 
+import warnings
+
 import numpy as np
+import scipy.linalg
+from scipy.linalg import null_space
+from scipy.optimize import minimize_scalar
+from statsmodels.regression.mixed_linear_model import MixedLM, VCSpec
 
 
 def ar1_correlation(n: int, rho: float) -> np.ndarray:
@@ -48,8 +54,6 @@ def simulate(
 
 
 def _group_quadratic_and_logdet(y, c, z, ratio, rho):
-    from scipy.linalg import null_space
-
     k = null_space(c.T)
     cov = ar1_correlation(len(y), rho) + ratio * z @ z.T
     v = k.T @ cov @ k
@@ -74,13 +78,17 @@ def dense_criterion(signals, fixed, random, ratio: float, rho: float = 0.0):
     return n * np.log(q / n) + logdet
 
 
+def dense_profiled_variance(signals, fixed, random, ratio: float, rho: float = 0.0):
+    """Q(ratio) / N from dense covariances on unwhitened data."""
+    q, _, n = _dense_parts(signals, fixed, random, ratio, rho)
+    return q / n
+
+
 def _feature(signals, index):
     return [y[:, [index]] for y in signals]
 
 
 def _dense_feature_fit(signals, fixed, random, rho):
-    from scipy.optimize import minimize_scalar
-
     def objective(log_ratio):
         return dense_criterion(signals, fixed, random, np.exp(log_ratio), rho)[0]
 
@@ -106,11 +114,6 @@ def dense_fit(signals, fixed, random, rho: float = 0.0):
 
 def mixedlm_fit(signals, fixed, random):
     """Single-feature (ratio, sigma2) from statsmodels MixedLM with REML."""
-    import warnings
-
-    import scipy.linalg
-    from statsmodels.regression.mixed_linear_model import MixedLM, VCSpec
-
     groups = np.repeat(np.arange(len(signals)), [len(y) for y in signals])
     names = [[f"z{g}_{j}" for j in range(z.shape[1])] for g, z in enumerate(random)]
     vc = VCSpec(["z"], [names], [list(random)])
@@ -124,8 +127,6 @@ def mixedlm_fit(signals, fixed, random):
 
 
 def _projected_eigenvalues(c, z, tol):
-    from scipy.linalg import null_space
-
     k = null_space(c.T)
     projected = k.T @ z
     values = np.linalg.eigvalsh(projected @ projected.T)
@@ -139,38 +140,63 @@ def _pooled_eigenvalues(fixed, random, tol):
     return np.concatenate([p[0] for p in parts]), sum(p[1] for p in parts)
 
 
-def _restricted_null_objective(mu, n, w2, r):
-    """f(log lam) for one null draw; plain floats keep the per-draw search fast."""
-    import math
-
-    def f(log_lam):
-        lam, q, logdet = math.exp(log_lam), r, 0.0
-        for m, w in zip(mu, w2, strict=True):
-            q += w / (1.0 + lam * m)
-            logdet += math.log1p(lam * m)
-        return n * math.log(q / n) + logdet
-
-    return f
+_NULL_GRID = np.linspace(-30.0, 30.0, 241)
+_GOLDEN_ITERATIONS = 60
+_INVERSE_GOLDEN = (np.sqrt(5.0) - 1.0) / 2.0
 
 
-def _null_draw_statistic(mu, n, w2, r):
-    import math
+def _null_objective(log_lam, mu, n, w2, r):
+    """Restricted criterion of every null draw at its own log ratio."""
+    scaled = np.exp(log_lam)[:, None] * mu
+    q = r + np.sum(w2 / (1.0 + scaled), axis=1)
+    return n * np.log(q / n) + np.sum(np.log1p(scaled), axis=1)
 
-    from scipy.optimize import minimize_scalar
 
-    f0 = n * math.log((r + sum(w2)) / n)
-    objective = _restricted_null_objective(mu, n, w2, r)
-    found = minimize_scalar(objective, bounds=(-30.0, 30.0), method="bounded")
-    return f0 - min(f0, found.fun)
+def _null_grid_minimum(mu, n, w2, r):
+    """Index of the best grid point per draw."""
+    values = np.stack(
+        [_null_objective(np.full(r.size, g), mu, n, w2, r) for g in _NULL_GRID]
+    )
+    return np.argmin(values, axis=0), values.min(axis=0)
+
+
+def _null_golden(mu, n, w2, r, low, high):
+    """Golden-section minimum per draw on [low, high], vectorised over draws."""
+
+    def f(x):
+        return _null_objective(x, mu, n, w2, r)
+
+    c = high - _INVERSE_GOLDEN * (high - low)
+    d = low + _INVERSE_GOLDEN * (high - low)
+    fc, fd = f(c), f(d)
+    for _ in range(_GOLDEN_ITERATIONS):
+        left = fc < fd
+        high, low = np.where(left, d, high), np.where(left, low, c)
+        c, d = high - _INVERSE_GOLDEN * (high - low), low + _INVERSE_GOLDEN * (
+            high - low
+        )
+        fc, fd = f(c), f(d)
+    return np.minimum(fc, fd)
+
+
+def _null_statistics(mu, n, w2, r):
+    """Restricted LRT per draw: criterion at zero minus the minimum over lambda."""
+    f0 = n * np.log((r + w2.sum(axis=1)) / n)
+    index, grid_best = _null_grid_minimum(mu, n, w2, r)
+    last = _NULL_GRID.size - 1
+    low = _NULL_GRID[np.maximum(index - 1, 0)]
+    high = _NULL_GRID[np.minimum(index + 1, last)]
+    best = np.minimum(grid_best, _null_golden(mu, n, w2, r, low, high))
+    return f0 - np.minimum(f0, best)
 
 
 def null_lrt_reference(fixed, random, n_draws, seed, tol=1e-10) -> np.ndarray:
-    """Finite-sample null of the restricted LRT (Crainiceanu & Ruppert 2004)."""
+    """Finite-sample null of the restricted LRT (Crainiceanu & Ruppert 2004).
+
+    Grid over log ratio, then golden section per draw, vectorised over draws.
+    """
     mu, n = _pooled_eigenvalues(fixed, random, tol)
     rng = np.random.default_rng(seed)
-    w2 = (rng.normal(size=(n_draws, mu.size)) ** 2).tolist()
-    r = rng.chisquare(n - mu.size, size=n_draws).tolist()
-    mu = mu.tolist()
-    return np.array(
-        [_null_draw_statistic(mu, n, w, q) for w, q in zip(w2, r, strict=True)]
-    )
+    w2 = rng.normal(size=(n_draws, mu.size)) ** 2
+    r = rng.chisquare(n - mu.size, size=n_draws)
+    return _null_statistics(mu, n, w2, r)
