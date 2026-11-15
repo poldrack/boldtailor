@@ -1,3 +1,5 @@
+import dataclasses
+
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -9,7 +11,7 @@ from boldtailor._ar1_moments import (
     expected_lag_ratio,
     pool_rho,
 )
-from boldtailor.ar1 import estimate_rho, whiten
+from boldtailor.ar1 import RhoReference, estimate_rho, prepare_reference, whiten
 from tests.reml_oracles import ar1_correlation
 
 
@@ -93,3 +95,95 @@ def test_pooled_is_clipped_median():
 
 def test_no_valid_values_pools_to_zero():
     assert pool_rho(np.array([np.nan, np.nan])) == 0.0
+
+
+def _ar1_problem(seed=7, scans=(40, 52), n_features=5):
+    rng = np.random.default_rng(seed)
+    designs = [rng.normal(size=(n, 6)) for n in scans]
+    signals = [
+        d @ rng.normal(size=(6, n_features))
+        + np.linalg.cholesky(ar1_correlation(len(d), 0.4))
+        @ rng.normal(size=(len(d), n_features))
+        for d in designs
+    ]
+    return signals, designs
+
+
+def _assert_same_estimate(actual, expected):
+    np.testing.assert_array_equal(actual.values, expected.values)
+    np.testing.assert_array_equal(actual.raw, expected.raw)
+    assert actual.pooled == expected.pooled
+
+
+def test_prepared_reference_matches_design():
+    signals, designs = _ar1_problem()
+    expected = estimate_rho(signals, designs)
+    prepared = [prepare_reference(d) for d in designs]
+    assert all(isinstance(r, RhoReference) for r in prepared)
+    _assert_same_estimate(estimate_rho(signals, prepared), expected)
+    mixed = [prepared[0], designs[1]]
+    _assert_same_estimate(estimate_rho(signals, mixed), expected)
+
+
+def test_prepared_reference_is_reusable_across_signals():
+    signals, designs = _ar1_problem()
+    other, _ = _ar1_problem(seed=8)
+    prepared = [prepare_reference(d) for d in designs]
+    estimate_rho(signals, prepared)
+    _assert_same_estimate(estimate_rho(other, prepared), estimate_rho(other, designs))
+
+
+def test_prepared_reference_is_frozen_and_read_only(design):
+    reference = prepare_reference(design)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        reference.basis = np.zeros((40, 6))
+    for name in ("basis", "expected"):
+        with pytest.raises(ValueError):
+            getattr(reference, name)[0] = 0.0
+    assert reference.basis.shape == (40, 6)
+
+
+def test_prepared_reference_owns_its_design(design):
+    reference = prepare_reference(design)
+    before = reference.basis.copy()
+    design[:] = 0.0
+    np.testing.assert_array_equal(reference.basis, before)
+
+
+@pytest.mark.parametrize("value", [np.nan, np.inf])
+def test_prepare_reference_rejects_invalid_design(design, value):
+    with pytest.raises(ValueError, match="design"):
+        prepare_reference(design[:, 0])
+    corrupt = design.copy()
+    corrupt[3, 2] = value
+    with pytest.raises(ValueError, match="design"):
+        prepare_reference(corrupt)
+
+
+def _with(parts, index, value):
+    out = list(parts)
+    out[index] = value
+    return out
+
+
+def test_estimate_rho_validates_groups():
+    signals, designs = _ar1_problem()
+    bad_design = designs[1].copy()
+    bad_design[0, 0] = np.nan
+    cases = [
+        (_with(signals, 1, signals[1][:, 0]), designs, "signals.*group 1"),
+        (_with(signals, 1, signals[1][:-1]), designs, "scan.*group 1"),
+        (_with(signals, 1, signals[1][:, :3]), designs, "feature"),
+        (signals, _with(designs, 1, designs[1][:, 0]), "design.*group 1"),
+        (signals, _with(designs, 1, bad_design), "design.*group 1"),
+        (
+            signals,
+            _with(designs, 1, prepare_reference(designs[0])),
+            "scan.*group 1",
+        ),
+        (signals, designs[:1], "one .* per group"),
+        ([], [], "at least one group"),
+    ]
+    for group_signals, references, message in cases:
+        with pytest.raises(ValueError, match=message):
+            estimate_rho(group_signals, references)

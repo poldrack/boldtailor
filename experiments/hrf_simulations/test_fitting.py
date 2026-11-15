@@ -153,6 +153,35 @@ def test_rho_reference_is_model_independent_and_diagnostic(runs, library):
     assert a.diagnostics["training_run_ids"] == [r.run_id for r in runs]
 
 
+def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatch):
+    from boldtailor import ar1 as package_ar1
+    from experiments.hrf_simulations.design import reference_design
+    from experiments.hrf_simulations.fitting import DesignCache, estimate_rho, fit
+    from experiments.hrf_simulations.noise import ar1
+
+    rng = np.random.default_rng(3)
+    data = [
+        replace(r, signals=ar1(len(r.frame_times), 0.4, 1.0, rng)[:, None])
+        for r in runs
+    ]
+    calls = []
+    original = package_ar1.prepare_reference
+
+    def counting(design):
+        calls.append(1)
+        return original(design)
+
+    monkeypatch.setattr(package_ar1, "prepare_reference", counting)
+    cache = DesignCache()
+    fit(data, library, "ConsDurNoRT", "brief", "ar1", cache=cache)
+    fit(data, library, "ConsDurRTDur", "stimulus", "ar1", cache=cache)
+    assert len(calls) == len(data)
+    designs = [reference_design(r) for r in data]
+    expected = package_ar1.estimate_rho([r.signals for r in data], designs)
+    assert estimate_rho(data, cache) == float(expected.pooled)
+    assert len(calls) == len(data)
+
+
 def test_curve_metrics_and_failure_accounting(library):
     from experiments.hrf_simulations.metrics import recovery, library_floor
 
