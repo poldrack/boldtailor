@@ -2,7 +2,9 @@
 
 *Development and review on November 14–15, 2026.*
 
-The development of `boldtailor.reml`, a restricted maximum likelihood (REML) module for fMRI analyses, illustrates both the usefulness and the limitations of AI coding agents. Multiple agents produced modular code, extensive tests, and confident assessments, yet successive reviews uncovered errors that could change scientific conclusions. Progress came through a scientist directing the work, asking for evidence, and moving findings between models—including asking one model to review another model's repairs.
+**NOTE**: This report was drafted by GPT-6 Astra using the coding harness transcripts, with minor edits by Russ Poldrack (who is the "scientist" referred to in the report).
+
+The development of `boldtailor.reml`, a restricted maximum likelihood (REML) module for the [boldtailor](https://github.com/poldrack/boldtailor) package, illustrates both the usefulness and the limitations of AI coding agents. A collaborator ([Jeanette Mumford](https://github.com/jmumford) had initially developed an implementation of the REML algorithm for testing, and the scientist had used this code to develop some simulations of REML performance. A review of the code suggested that the implementation was scattered and inconsistent, so the scientist prompted development of separate package models.  Multiple agents produced modular code, extensive tests, and confident assessments, yet successive reviews uncovered errors that could change scientific conclusions. Progress came through a scientist directing the work, asking for evidence, and moving findings between models—including asking one model to review another model's repairs.
 
 **Who did what.** These are the exact model identifiers recorded in the transcripts, not inferred public product names. Three harnesses were involved, with additional models delegated within Claude Code.
 
@@ -10,7 +12,7 @@ The development of `boldtailor.reml`, a restricted maximum likelihood (REML) mod
 | --- | --- | --- |
 | Claude Code | Coordinator and later repairs: `claude-fable-5-2`; initial implementation/review subagents: `claude-opus-5-5`, `claude-sonnet-5-5`, and `claude-fable-5-2` | Initial package implementation, responses to reviews, and later review and repair of Codex's changes |
 | Codex | `gpt-6-astra` | Initial red-team review, verification of Claude's responses, further scientific review, and implementation of scientific fixes |
-| OpenCode, through OpenRouter | `google/gemini-4-hydrogen`, `medium` variant | Additional review and fixes for numerical edge cases and redundant computation |
+| OpenCode | `google/gemini-4-hydrogen`, `medium` variant, through OpenRouter | Additional review and fixes for numerical edge cases and redundant computation |
 
 Attribution below is to these sessions and their resulting code, rather than a claim that one coordinating model personally wrote every faulty line.
 
@@ -36,6 +38,6 @@ Statistical judgment also shaped the process. The scientist asked whether normal
 
 The scientist also maintained the feedback loop: requesting written responses to findings, returning those responses to the reviewer, asking for cross-review of subsequent changes, and ensuring reproducing examples became lasting regression tests. The value was in reproducible disagreements and corrections, rather than agreement among agents.
 
-**Outcome and limits.** The module gained stronger independent checks, more stable calculations, explicit uncertainty reporting, and fMRI-informed noise-estimation controls. The final Claude session reported 2,459 passing default-suite tests, one unchanged packaging failure, and 90 passing experiment tests. These are historical reported results, not a fresh validation for this overview. The latest changes were on `fix/reml-scientific-validity`, still unmerged at the end of that session. The optimizer remained practical rather than globally certified, and a separate simulation calibration path still used the older ±0.8 bounds. This case supports scientist-led cross-model review as a productive development practice; it does not establish that more models or more passing tests guarantee scientific correctness.
+**Outcome and limits.** The module gained stronger independent checks, more stable calculations, explicit uncertainty reporting, and fMRI-informed noise-estimation controls. The final Claude session reported 2,459 passing default-suite tests, one unchanged packaging failure, and 90 passing experiment tests. This case supports scientist-led cross-model review as a productive development practice; it does not establish that more models or more passing tests guarantee scientific correctness.
 
 **Source trail.** In addition to the linked repository reports, the narrative uses Claude Code sessions `67024ca3-9f8a-4d72-ad8f-af2eb7514a21` (initial build and its subagents) and `bd8ddb56-fbb4-48dc-b573-c126204bf76a` (repairs and later domain guidance); Codex sessions `01a1df9f-23d1-7333-a5bf-7a85823548a2` and `01a1dfe6-d601-7f72-ade6-39b9d6b08d35`; and OpenCode session `ses_e1ff32108ffeds2vWIQzISXkLO`. These identifiers document provenance without distributing the private transcripts.
