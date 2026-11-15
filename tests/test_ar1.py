@@ -203,13 +203,33 @@ def test_inversion_interpolates_a_monotonic_expectation():
     assert_allclose(corrected[1], [0.45, -0.9], atol=1e-15)
 
 
-def test_inversion_takes_nearest_grid_value_when_not_monotonic():
+def test_inversion_is_undefined_when_the_curve_is_not_identifying():
     grid = np.array([-0.6, -0.3, 0.0, 0.3, 0.6])
     expected = np.array([0.0, 0.5, 0.4, 0.8, 1.0])
     values = np.array([0.41, 0.52, 0.95, np.nan, -0.2])
     corrected = invert_lag_ratio(values, expected, grid)
-    assert_allclose(corrected[[0, 1, 2, 4]], [0.0, -0.3, 0.6, -0.6], atol=0.0)
-    assert np.isnan(corrected[3])
+    # Multiple inverse branches cannot identify a unique rho. This replaces
+    # the old nearest-grid policy, which invented an estimate on flat curves.
+    assert np.isnan(corrected).all()
+
+
+@pytest.mark.parametrize("curve", [np.zeros(7), np.linspace(0, 1e-15, 7),
+                                  np.full(7, np.nan), np.full(7, np.inf)])
+def test_uninformative_correction_curves_do_not_estimate_rho(curve):
+    corrected = invert_lag_ratio([0.0, 0.5], curve, np.linspace(-0.9, 0.9, 7))
+    assert np.isnan(corrected).all()
+
+
+def test_decreasing_identifiable_curve_is_inverted():
+    grid = np.linspace(-0.9, 0.9, 7)
+    assert_allclose(invert_lag_ratio([-0.2, 0.4], -grid, grid), [0.2, -0.4])
+
+
+def test_nonadjacent_residual_coordinates_do_not_identify_rho():
+    eye = np.eye(12)
+    estimate = estimate_rho([eye[:, [0]]], [eye[:, 1::2]])
+    assert np.isnan(estimate.values).all()
+    assert estimate.pooled == 0.0
 
 
 @pytest.mark.parametrize("rho", [0.0, 0.4, -0.3])
