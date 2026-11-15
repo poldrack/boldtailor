@@ -83,15 +83,23 @@ def expected_lag_ratio(design, rhos) -> np.ndarray:
 def invert_lag_ratio(values, expected, grid) -> np.ndarray:
     """Map observed ratios to rho through ``expected`` on ``grid``.
 
-    Linear interpolation where ``expected`` increases strictly, else the
-    nearest grid value; NaN stays NaN.
+    Interpolate a strictly monotone, numerically resolved curve, clipping
+    outside its range. Nonfinite, flat or nonmonotone curves give NaN: a
+    nearest-grid tie-break cannot identify rho. NaN observations stay NaN.
     """
     values = np.asarray(values, dtype=float)
-    if np.all(np.diff(expected) > 0):
-        corrected = np.interp(values, expected, grid)
-    else:
-        nearest = np.abs(expected[:, None] - values.ravel()[None, :]).argmin(axis=0)
-        corrected = grid[nearest].reshape(values.shape)
+    expected, grid = np.asarray(expected), np.asarray(grid)
+    if expected.size < 2 or not np.all(np.isfinite(expected)):
+        return np.full(values.shape, np.nan)
+    # Differences smaller than roundoff in the dimensionless lag ratio do
+    # not certify local invertibility, even if their floating-point signs do.
+    slack = 64 * np.finfo(float).eps * max(1.0, np.max(np.abs(expected)))
+    difference = np.diff(expected)
+    if np.all(difference < -slack):
+        expected, grid = expected[::-1], grid[::-1]
+    elif not np.all(difference > slack):
+        return np.full(values.shape, np.nan)
+    corrected = np.interp(values, expected, grid)
     return np.where(np.isfinite(values), corrected, np.nan)
 
 
