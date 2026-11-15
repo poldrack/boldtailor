@@ -273,3 +273,22 @@ def test_restricted_dof_must_agree_across_rho(data, dof_differs_at_half):
         _fit(signals, fixed, random, rho=rho)
     with pytest.raises(ValueError, match="restricted degrees of freedom"):
         select_random_design(_groups(signals, fixed), [random], rho=rho)
+
+
+def test_unrefined_flag_covers_the_upper_edge_and_is_read_only(data):
+    rng = np.random.default_rng(4)
+    _, fixed, random = simulate(rng, scans=(60,), n_features=2)
+    signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
+    edge = _fit(signals, fixed, random)
+    assert edge.at_upper.all() and edge.unrefined.all()
+    ordinary = _fit(*data)
+    assert ordinary.unrefined.dtype == bool and not ordinary.unrefined.any()
+    with pytest.raises(ValueError):
+        ordinary.unrefined[0] = True
+
+
+def test_features_without_a_fit_are_not_unrefined(data):
+    signals, fixed, random = data
+    fit = _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
+    assert fit.status[1] == "no_signal"
+    assert not fit.unrefined.any()

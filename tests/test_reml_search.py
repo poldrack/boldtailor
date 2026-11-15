@@ -359,3 +359,61 @@ def test_saturated_equal_spectrum_is_unidentifiable():
 def test_identifiable_optimum_is_not_flagged():
     _, terms = _simulated_terms(3, 1.0)
     assert not minimize_ratio(terms).unidentifiable.any()
+
+
+# ------------------------------------- follow-up F2: unrefined grid fallbacks
+
+
+def _fallback_terms():
+    """A spread spectrum whose optimum a very coarse grid cannot bracket."""
+    from tests.test_reml_adversarial import _diagonal_problem
+
+    y, z, _ = _diagonal_problem(54, "wide")
+    return [reml_terms(project_fixed(y, np.empty((len(y), 0))), z)]
+
+
+def test_grid_fallback_is_flagged_unrefined():
+    """With no accepted slope root the reported ratio is a grid point, which
+    need not be stationary; the optimum says so."""
+    terms = _fallback_terms()
+    optimum = minimize_ratio(terms, grid_size=3)
+    assert optimum.unrefined.all()
+    assert not optimum.at_zero.any() and not optimum.at_upper.any()
+    assert np.all(np.abs(criterion_slope(optimum.ratio, terms)) > 1.0)
+
+
+def test_default_grid_refines_the_same_problem():
+    terms = _fallback_terms()
+    optimum = minimize_ratio(terms)
+    assert not optimum.unrefined.any() and not optimum.at_zero.any()
+    assert np.all(np.abs(criterion_slope(optimum.ratio, terms)) <= 1e-9)
+
+
+def test_upper_edge_is_a_case_of_unrefined():
+    rng = np.random.default_rng(4)
+    _, fixed, random = simulate(rng, scans=(60,), n_features=2)
+    signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
+    optimum = minimize_ratio(_terms(signals, fixed, random))
+    assert optimum.at_upper.all() and optimum.unrefined.all()
+
+
+def test_boundary_optima_are_not_unrefined():
+    orthogonal = minimize_ratio(_terms(*_orthogonal_signal()))
+    assert orthogonal.at_zero.all() and not orthogonal.unrefined.any()
+    flat = _nearly_flat_terms(0)
+    confounded = [type(flat[0])(**{**vars(flat[0]), "singular2": np.full(6, 2.5)})]
+    assert not minimize_ratio(confounded).unrefined.any()
+
+
+@pytest.mark.parametrize("cases", [_oracle_cases, _property_style_cases])
+def test_every_refined_positive_optimum_is_stationary(cases):
+    """The stationarity guarantee, stated on exactly the optima it covers."""
+    checked = 0
+    for terms in cases():
+        optimum = minimize_ratio(terms)
+        refined = ~optimum.at_zero & ~optimum.unrefined & ~optimum.unidentifiable
+        slope = criterion_slope(np.where(refined, optimum.ratio, 1.0), terms)
+        dof = sum(t.dof for t in terms)
+        assert np.all(np.abs(slope[refined]) <= 1e-9 * dof)
+        checked += int(refined.sum())
+    assert checked > 0

@@ -276,3 +276,39 @@ def test_winner_and_gap_match_per_candidate_fits_in_every_order(graded):
         mapped = np.asarray(order)[selection.winner]
         assert_array_equal(mapped, winner)
         assert_allclose(selection.gap, gap, rtol=1e-12, atol=0.0)
+
+
+@pytest.fixture
+def noise_free():
+    """One feature exactly explained by a candidate, one ordinary feature."""
+    rng = np.random.default_rng(4)
+    signals, fixed, random = simulate(rng, scans=(60,), ratio=5.0, n_features=2)
+    exact = fixed[0] @ rng.normal(size=4) + random[0] @ rng.normal(size=3)
+    mixed = [np.column_stack([exact, signals[0][:, 1]])]
+    return mixed, fixed, random, _decoys(rng, fixed, 1)[0]
+
+
+@pytest.mark.parametrize("exact_first", [True, False])
+def test_selection_reports_features_with_a_truncated_candidate(noise_free, exact_first):
+    """A criterion truncated at the search edge is not a comparable optimum;
+    the selection says which features had one, whoever won."""
+    signals, fixed, exact, decoy = noise_free
+    candidates = [exact, decoy] if exact_first else [decoy, exact]
+    selection = select_random_design(_groups(signals, fixed), candidates)
+    assert_array_equal(selection.any_at_upper, [True, False])
+    assert selection.any_at_upper.dtype == bool
+    with pytest.raises(ValueError):
+        selection.any_at_upper[0] = False
+
+
+def test_selection_carries_the_winning_fit_unrefined_flag(noise_free):
+    signals, fixed, exact, decoy = noise_free
+    selection = select_random_design(_groups(signals, fixed), [decoy, exact])
+    assert_array_equal(selection.fit.unrefined, selection.fit.at_upper)
+    assert selection.fit.unrefined[0] and not selection.fit.unrefined[1]
+
+
+def test_untruncated_selection_has_no_flag(planted):
+    signals, fixed, candidates = planted
+    selection = select_random_design(_groups(signals, fixed), candidates)
+    assert not selection.any_at_upper.any()
