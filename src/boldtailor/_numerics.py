@@ -8,20 +8,27 @@ judged numerically, so that related kernels agree.
 import numpy as np
 
 PROJECTION_ERROR_FACTOR = 8
-"""Multiple of the projection's rounding scale below which a residual is noise.
+"""Multiple of a projection's rounding scale below which a residual is noise.
 
-A basis ``Q`` computed from a design ``C`` spans the range of ``C + E`` with
-``||E|| ~ n eps ||C||``, so for ``r = y - Q(Q'y)`` a component of ``y`` along
-the basis vector with singular value ``s_i`` leaves rounding of relative size
-``n eps s_max / s_i``. The error scale is therefore ``n eps`` times the norm
-of ``y`` with its coordinate on each basis vector amplified by
-``s_max / s_i``. Signals lying exactly in the span leave at most 1.0 times
-that scale over n = 10..1000, ranks from 1 to n - 1, condition numbers up to
-1e12, amplitudes 1e-3..1e6 and AR(1) whitening (observed while calibrating;
-pinned in ``tests/test_numerics.py``), whereas against ``||y||`` alone the
-residue reaches 1e5 times ``n eps``. The factor leaves most of an order of
-magnitude above the observed maximum. It is a floating-point floor, not a
-statistical test, and it cannot detect residual information already lost
+For ``r = y - Q(Q'y)`` with ``n`` scans there are two scales, both in norm
+units and both calibrated on signals lying exactly in the span of the design
+(``tests/test_numerics.py``):
+
+* rounding, ``n eps ||y||``: the arithmetic of the projection. With columns
+  normalised, exact-span signals leave at most about 1.2 times this scale
+  when ill-conditioning comes only from column units (condition numbers to
+  1e12, ranks from 1 to n - 1, n = 10..1000).
+* uncertainty, ``n eps`` times the norm of ``y`` with its coordinate on each
+  basis vector amplified by ``s_max / s_i`` of the normalised design. A basis
+  computed from ``C`` spans the range of ``C + E`` with ``||E|| ~ n eps``, so a
+  component of ``y`` along a weak direction, one that near-collinear columns
+  barely determine, leaves proportionally more. Exact-span signals leave at
+  most 1.0 times this scale, and up to 1e5 times the rounding scale.
+
+A residual above the uncertainty floor is resolved. One below the rounding
+floor is rounding. In between it may be real but cannot be told apart from
+the error of the computed span. These are floating-point floors in float64,
+not statistical tests, and cannot detect residual information already lost
 when the signal was stored.
 """
 
@@ -31,18 +38,34 @@ def rank_tolerance(shape, spectral_norm) -> float:
     return max(shape) * np.finfo(float).eps * spectral_norm
 
 
+def _unit_columns(matrix) -> np.ndarray:
+    """Nonzero columns scaled to unit norm, which leaves their span unchanged.
+
+    Each column is divided by its largest magnitude first, so that columns in
+    extreme units neither overflow nor underflow when their norm is taken.
+    """
+    peak = np.abs(matrix).max(axis=0)
+    scaled = matrix[:, peak > 0] / peak[peak > 0]
+    return scaled / np.linalg.norm(scaled, axis=0)
+
+
 def conditioned_basis(matrix) -> tuple[np.ndarray, np.ndarray]:
-    """Left singular vectors above the rank tolerance, and ``s_max / s_i`` each."""
-    matrix = np.asarray(matrix, dtype=float)
-    if matrix.shape[1] == 0:
-        return np.empty((matrix.shape[0], 0)), np.empty(0)
-    u, s, _ = np.linalg.svd(matrix, full_matrices=False)
-    keep = s > rank_tolerance(matrix.shape, s[0])
+    """Orthonormal basis of the column span, and ``s_max / s_i`` of each vector.
+
+    Columns are normalised first, so the basis, the rank decision and the
+    amplification depend on the span and the collinearity of the columns, not
+    on their units. Only exactly zero columns are dropped for their size.
+    """
+    scaled = _unit_columns(np.asarray(matrix, dtype=float))
+    if scaled.shape[1] == 0:
+        return np.empty((scaled.shape[0], 0)), np.empty(0)
+    u, s, _ = np.linalg.svd(scaled, full_matrices=False)
+    keep = s > rank_tolerance(scaled.shape, s[0])
     return u[:, keep], s[0] / s[keep]
 
 
 def orthonormal_basis(matrix) -> np.ndarray:
-    """Left singular vectors of ``matrix`` above the rank tolerance."""
+    """Orthonormal basis of the column span of ``matrix``."""
     return conditioned_basis(matrix)[0]
 
 
@@ -51,19 +74,21 @@ def residualise(signals, basis) -> np.ndarray:
     return signals - basis @ (basis.T @ signals)
 
 
-def _error_scale2(signals, coordinates, amplification):
+def _amplified_energy(energy, coordinates, amplification):
     """Squared norm of the signals with basis coordinates amplified."""
     excess = (amplification**2 - 1.0)[:, None] * coordinates**2
-    return np.sum(signals**2, axis=0) + excess.sum(axis=0)
+    return energy + excess.sum(axis=0)
 
 
-def project_out(signals, basis, amplification) -> tuple[np.ndarray, np.ndarray]:
-    """Residual off ``basis`` and the squared-norm floor of its rounding error.
+def project_out(signals, basis, amplification):
+    """Residual off ``basis`` with its rounding and uncertainty energy floors.
 
-    Residual energy at or below the floor is indistinguishable from the
-    rounding of the projection; see ``PROJECTION_ERROR_FACTOR``.
+    Returns ``(residual, rounding_floor, uncertainty_floor)``; the floors are
+    squared norms, per feature, with ``rounding_floor <= uncertainty_floor``.
+    See ``PROJECTION_ERROR_FACTOR``.
     """
     coordinates = basis.T @ signals
-    relative = PROJECTION_ERROR_FACTOR * len(signals) * np.finfo(float).eps
-    scale2 = _error_scale2(signals, coordinates, amplification)
-    return signals - basis @ coordinates, relative**2 * scale2
+    relative2 = (PROJECTION_ERROR_FACTOR * len(signals) * np.finfo(float).eps) ** 2
+    energy = np.sum(signals**2, axis=0)
+    amplified = _amplified_energy(energy, coordinates, amplification)
+    return signals - basis @ coordinates, relative2 * energy, relative2 * amplified

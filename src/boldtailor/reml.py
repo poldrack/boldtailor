@@ -48,30 +48,37 @@ class RemlFit:
 
 @dataclass(frozen=True)
 class _Subset:
-    """Live columns of one rho value and their fixed projections per group."""
+    """Live columns of one rho value and their fixed projections per group.
+
+    ``unresolved`` holds the columns whose energy is above projection rounding
+    but within the uncertainty of the computed fixed span.
+    """
 
     columns: np.ndarray
     projections: list
     dof: int
+    unresolved: np.ndarray
 
 
 def _project(groups, columns, rho):
     return [project_fixed(g.signals[:, columns], g.fixed_design, rho) for g in groups]
 
 
-def _live(projections):
-    """Features whose projected energy exceeds the projection's rounding floor."""
+def _above(projections, floor):
+    """Features whose pooled projected energy exceeds the pooled named floor."""
     energy = sum(p.energy for p in projections)
-    return energy > sum(p.floor for p in projections)
+    return energy > sum(getattr(p, floor) for p in projections)
 
 
 def _live_subset(groups, columns, rho):
     """Project one rho subset; when it mixes in dead features, re-project the live."""
     projections = _project(groups, columns, rho)
-    live = _live(projections)
+    live = _above(projections, "uncertainty_floor")
+    unresolved = columns[~live & _above(projections, "rounding_floor")]
     if live.any() and not live.all():
         projections = _project(groups, columns[live], rho)
-    return _Subset(columns[live], projections, sum(p.dof for p in projections))
+    dof = sum(p.dof for p in projections)
+    return _Subset(columns[live], projections, dof, unresolved)
 
 
 def _subsets(groups, rho):
@@ -102,6 +109,7 @@ def _fit_values(subset, random_design):
 
 
 def _empty_result(n_features):
+    """Every feature starts as no_signal; fits overwrite the live ones."""
     return {
         "ratio": np.zeros(n_features),
         "noise_variance": np.full(n_features, np.nan),
@@ -138,10 +146,20 @@ def _single_dof(subsets) -> int:
     return dofs.pop()
 
 
-def _prepare(groups, rho):
+def _mark_unresolved(result, subsets):
+    """Unresolved features claim neither a zero ratio nor an absent signal."""
+    for subset in subsets:
+        result["status"][subset.unresolved] = "unresolved"
+        result["ratio"][subset.unresolved] = np.nan
+
+
+def _start(groups, rho):
+    """Per-feature rho, its subsets, their dof and the result to fill in."""
     rho = feature_rho(rho, groups[0].signals.shape[1])
     subsets = _subsets(groups, rho)
-    return rho, subsets, _single_dof(subsets)
+    result = _empty_result(rho.size)
+    _mark_unresolved(result, subsets)
+    return rho, subsets, _single_dof(subsets), result
 
 
 def _fill(result, subsets, random_design):
@@ -159,8 +177,7 @@ def fit_reml(
     """Estimate the variance ratio of the random effects, feature by feature."""
     validate_groups(groups)
     random_design = checked_random(groups, random_design, "random_design")
-    rho, subsets, dof = _prepare(groups, rho)
-    result = _empty_result(rho.size)
+    rho, subsets, dof, result = _start(groups, rho)
     _fill(result, subsets, random_design)
     return _assemble(result, rho, dof)
 
@@ -238,8 +255,7 @@ def select_random_design(
 ) -> RemlSelection:
     """Pick, per feature, the candidate random design with the best criterion."""
     validate_groups(groups)
-    rho, subsets, dof = _prepare(groups, rho)
-    result = _empty_result(rho.size)
+    rho, subsets, dof, result = _start(groups, rho)
     _fill(result, subsets, [None] * len(groups))
     race, count = _run_race(groups, candidates, subsets, result)
     return RemlSelection(

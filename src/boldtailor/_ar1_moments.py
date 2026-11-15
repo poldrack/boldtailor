@@ -23,11 +23,11 @@ def lag_moments(residuals):
 def basis_lag_ratio(signals, basis, amplification) -> np.ndarray:
     """Lag-one ratio of residuals after projecting out ``basis``; NaN if degenerate.
 
-    A feature is degenerate when its denominator does not exceed the rounding
-    floor of the projection (see ``boldtailor._numerics.project_out``).
+    A feature is degenerate when its denominator does not exceed the
+    uncertainty floor of the projection (``boldtailor._numerics.project_out``).
     """
     signals = np.asarray(signals, dtype=float)
-    residuals, floor = project_out(signals, basis, amplification)
+    residuals, _, floor = project_out(signals, basis, amplification)
     numerator, denominator = lag_moments(residuals)
     valid = denominator > floor
     return np.where(valid, numerator / np.where(valid, denominator, 1.0), np.nan)

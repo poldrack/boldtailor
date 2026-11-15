@@ -18,18 +18,22 @@ from boldtailor.ar1 import whiten
 class FixedProjection:
     """Whitened signals with the whitened fixed design projected out.
 
-    ``floor`` is the energy below which ``energy`` is projection rounding.
+    ``energy`` at or below ``rounding_floor`` is projection rounding; at or
+    below ``uncertainty_floor`` it cannot be told apart from the error of the
+    computed fixed span.
     """
 
     basis: np.ndarray
     signals: np.ndarray
     energy: np.ndarray
-    floor: np.ndarray
+    rounding_floor: np.ndarray
+    uncertainty_floor: np.ndarray
     dof: int
     rho: float
 
     def __post_init__(self):
-        own_fields(self, ("basis", "signals", "energy", "floor"))
+        own_fields(self, ("basis", "signals", "energy"))
+        own_fields(self, ("rounding_floor", "uncertainty_floor"))
 
 
 def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
@@ -39,12 +43,13 @@ def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
     dof = y.shape[0] - basis.shape[1]
     if dof <= 0:
         raise ValueError("positive restricted degrees of freedom required")
-    residual, floor = project_out(y, basis, amplification)
+    residual, rounding, uncertainty = project_out(y, basis, amplification)
     return FixedProjection(
         basis=basis,
         signals=residual,
         energy=np.sum(residual**2, axis=0),
-        floor=floor,
+        rounding_floor=rounding,
+        uncertainty_floor=uncertainty,
         dof=dof,
         rho=float(rho),
     )
