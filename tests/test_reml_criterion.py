@@ -107,3 +107,13 @@ def test_slope_matches_finite_differences(rho):
     for r in SLOPE_RATIOS:
         expected = _richardson_difference(terms, r)
         assert_allclose(criterion_slope(_at(r), terms), expected, rtol=1e-6)
+
+
+def test_joint_value_and_slope_match_separate_evaluations(ar1):
+    from boldtailor._reml_criterion import pool_terms, pooled_value_and_slope
+
+    terms = ar1[3]
+    ratios = np.array([_at(r) for r in RATIOS])
+    value, slope = pooled_value_and_slope(ratios, pool_terms(terms))
+    assert_allclose(value, criterion(ratios, terms), rtol=1e-13)
+    assert_allclose(slope, criterion_slope(ratios, terms), rtol=1e-13, atol=1e-13)

@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
 from boldtailor._reml_criterion import criterion, criterion_slope
-from boldtailor._reml_search import _bracket, _log_grid, minimize_ratio
+from boldtailor._reml_search import _log_grid, minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 from tests.reml_oracles import dense_fit, simulate
 
@@ -161,6 +161,15 @@ def _oracle_cases():
         yield _terms(*_case_data(case), rho)
 
 
+def _bracket(log_grid, best_index):
+    """The best grid point's neighbours, clipped to the grid."""
+    last = log_grid.size - 1
+    return (
+        log_grid[np.maximum(best_index - 1, 0)],
+        log_grid[np.minimum(best_index + 1, last)],
+    )
+
+
 def _unbracketed_interior(terms):
     """Count features whose interior grid minimum lacks a slope sign change."""
     log_grid = _log_grid(terms, 121)
@@ -228,8 +237,10 @@ def test_every_slope_crossing_competes():
 def test_grid_spacing_does_not_grow_with_spectral_spread():
     from boldtailor._reml_search import _search_grid
 
-    narrow = _search_grid(np.array([1.0, 2.0]), 121)
-    wide = _search_grid(np.logspace(-10, 10, 8), 121)
-    assert np.diff(wide).max() <= np.diff(narrow).max() * (1 + 1e-12)
-    assert wide[0] == pytest.approx(np.log(1e-8 / 1e10))
-    assert wide[-1] == pytest.approx(np.log(1e8 / 1e-10))
+    base_step = 2 * np.log(1e8) / 120
+    for singular2 in (np.array([3.0]), np.array([1.0, 2.0]), np.logspace(-10, 10, 8)):
+        grid = _search_grid(singular2, 121)
+        assert np.diff(grid).max() <= base_step * (1 + 1e-12)
+        assert grid[0] == pytest.approx(np.log(1e-8 / singular2.max()))
+        assert grid[-1] == pytest.approx(np.log(1e8 / singular2.min()))
+    assert _search_grid(np.array([3.0]), 121).size == 121
