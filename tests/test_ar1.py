@@ -94,7 +94,8 @@ def test_degenerate_feature_is_nan(design):
 def test_pooled_is_clipped_median():
     assert pool_rho(np.array([[0.1, 0.2, np.nan, 0.9]])) == pytest.approx(0.2)
     assert pool_rho(np.array([0.95, 0.99, 0.97])) == pytest.approx(0.8)
-    assert pool_rho(np.array([-0.99, -0.95])) == pytest.approx(-0.8)
+    assert pool_rho(np.array([-0.99, -0.95])) == pytest.approx(-0.2)
+    assert pool_rho(np.array([-0.99, -0.95]), (-0.8, 0.8)) == pytest.approx(-0.8)
 
 
 def test_no_valid_values_pools_to_zero():
@@ -247,12 +248,76 @@ def test_a_flat_stretch_inside_the_pooling_range_identifies_nothing():
     assert np.isnan(corrected).all()
 
 
-def test_pooling_clips_at_the_limit_the_inversion_must_span():
-    from boldtailor._ar1_moments import POOLING_LIMIT
+def test_default_rho_range_excludes_strong_negative_autocorrelation():
+    from boldtailor._ar1_moments import RHO_RANGE
 
-    assert POOLING_LIMIT == 0.8
-    assert pool_rho(np.array([0.9, 0.95, 0.99])) == POOLING_LIMIT
-    assert pool_rho(np.array([-0.9, -0.95])) == -POOLING_LIMIT
+    assert RHO_RANGE == (-0.2, 0.8)
+    assert pool_rho(np.array([0.9, 0.95, 0.99])) == 0.8
+    assert pool_rho(np.array([-0.9, -0.95])) == -0.2
+
+
+def _curve_turning_at(turn):
+    """Rising with slope 0.6 above ``turn``, falling toward it from below."""
+    grid = np.linspace(-0.95, 0.95, 39)
+    return grid, 0.6 * np.abs(grid - turn)
+
+
+def test_a_bend_below_the_rho_range_does_not_block_inversion():
+    """A curve that turns at rho = -0.5 is unusable when strong negative
+    autocorrelation is admitted and usable when it is not."""
+    grid, expected = _curve_turning_at(-0.5)
+    values = np.array([0.36, 0.6, 0.01])
+    assert np.isnan(invert_lag_ratio(values, expected, grid, (-0.8, 0.8))).all()
+    corrected = invert_lag_ratio(values, expected, grid)
+    assert_allclose(corrected, values / 0.6 - 0.5, atol=1e-12)
+
+
+def test_a_bend_inside_the_default_rho_range_still_identifies_nothing():
+    grid, expected = _curve_turning_at(-0.1)
+    assert np.isnan(invert_lag_ratio(np.array([0.3]), expected, grid)).all()
+
+
+def test_values_below_the_range_are_clipped_to_the_branch_not_to_the_range():
+    """Per-feature estimates keep what the usable branch supports; only the
+    pooled value is confined to the range."""
+    grid = np.linspace(-0.95, 0.95, 39)
+    corrected = invert_lag_ratio(np.array([-0.3, -3.0]), 0.6 * grid, grid)
+    assert_allclose(corrected, [-0.5, -0.95], atol=1e-12)
+
+
+@pytest.mark.parametrize("true_rho", [-0.5, 0.4])
+def test_estimate_reports_whether_the_pooled_value_was_clipped(true_rho):
+    signals = [_ar1_noise(3, 150, 600, true_rho)]
+    reference = [np.ones((150, 1))]
+    default = estimate_rho(signals, reference)
+    wide = estimate_rho(signals, reference, rho_range=(-0.8, 0.8))
+    assert default.rho_range == (-0.2, 0.8) and wide.rho_range == (-0.8, 0.8)
+    assert wide.pooled == pytest.approx(true_rho, abs=0.03)
+    assert not wide.pooled_clipped
+    assert default.pooled_clipped == (true_rho < -0.2)
+    assert default.pooled == (wide.pooled if true_rho > 0 else -0.2)
+    assert_allclose(default.values, wide.values, atol=0.0)
+
+
+@pytest.mark.parametrize(
+    "rho_range",
+    [(0.8, -0.2), (0.3, 0.3), (-0.99, 0.8), (-0.2, 0.96), (np.nan, 0.8), (-0.2,)],
+)
+def test_invalid_rho_range_raises(rho_range):
+    signals, reference = [_ar1_noise(3, 60, 4, 0.2)], [np.ones((60, 1))]
+    with pytest.raises(ValueError, match="rho_range"):
+        estimate_rho(signals, reference, rho_range=rho_range)
+
+
+def test_rho_range_reaches_both_the_inversion_and_the_pooling():
+    """With a design whose curve turns below -0.83, the wide range rejects
+    the curve while the default range inverts it."""
+    design = _saturated_design(5)
+    signals = [_ar1_noise(2, 100, 500, 0.4)]
+    assert np.isfinite(estimate_rho(signals, [design]).values).all()
+    wide = estimate_rho(signals, [design], rho_range=(-0.9, 0.8))
+    assert np.isnan(wide.values).all() and wide.pooled == 0.0
+    assert not wide.pooled_clipped
 
 
 def _censored_design(seed, n=200, drift=10, random=29, censored=100):
