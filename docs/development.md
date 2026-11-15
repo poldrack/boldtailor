@@ -292,6 +292,17 @@ when only one candidate is `ok`), and its `fit` is the `λ = 0` fit (for an
 `unresolved` feature, the NaN fit). `RemlSelection.any_at_upper` marks the
 features for which any candidate, winner or not, was truncated: a truncated
 loser might have won at its true optimum, so those selections are provisional.
+`any_unrefined` additionally records interior fallbacks, including losing
+candidates. Both HRF experiment adapters preserve these qualifications in their
+diagnostics; `provisional` is `any_unrefined`, not a significance decision.
+
+Orthogonal residual energy is computed from `y - U(U'y)`, not the subtraction
+`||y||² - ||U'y||²`. The latter loses small noise energy at high SNR and can
+distort the likelihood at large ratios. When retained random rank fills the
+restricted space, its orthogonal complement has dimension zero and its energy
+is exactly zero. Otherwise the explicit residual calculation has rounding
+error in amplitude units; it does not guarantee accuracy for information below
+that arithmetic scale.
 
 The criterion depends on the groups only through pooled statistics (all
 singular values, the stacked squared coordinates, the summed residual sum of
@@ -385,6 +396,24 @@ simulations cache it per run. A feature is degenerate (NaN) when its residual
 denominator does not exceed the uncertainty floor above. `RhoEstimate.pooled` is the median
 over all groups and features of the finite corrected values, clipped to ±0.8,
 and `0.0` when none is finite.
+Inversion requires a finite strictly monotone curve with adjacent differences
+larger than `64 eps max(1, max(abs(expected)))`, a roundoff guard on the
+dimensionless lag ratio. Decreasing curves are reversed for interpolation.
+Nonfinite, flat, numerically unresolved and nonmonotone curves yield NaN;
+the entire curve is rejected rather than choosing an arbitrary inverse branch.
+Pooling excludes those values. The zero fallback when none remain is explicitly
+not an inferred absence of autocorrelation.
+
+Scientific regression coverage includes independent diagonal covariance and
+derivative oracles, known orthogonal energies near saturation, generated
+confounding classifications, dense AR(1) moment traces and time reversal.
+Bounded Monte Carlo checks cover estimated-rho recovery/null-tail behavior
+for matched references at rho ±0.5, and null selection as library size grows.
+A winner is not a significance test. Shared-variance estimates under unequal
+run variances summarize a pooled quantity, not each run's variance. These
+checks do not establish robustness to arbitrary temporal covariance,
+heterogeneous rho, correlated random coefficients or an incomplete reference
+design; those remain modeling sensitivity questions.
 
 `tests/reml_oracles.py` imports nothing from `boldtailor`. It holds a
 dense-covariance criterion and optimiser (a scan over `log λ` followed by a

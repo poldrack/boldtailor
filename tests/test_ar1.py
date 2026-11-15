@@ -213,8 +213,10 @@ def test_inversion_is_undefined_when_the_curve_is_not_identifying():
     assert np.isnan(corrected).all()
 
 
-@pytest.mark.parametrize("curve", [np.zeros(7), np.linspace(0, 1e-15, 7),
-                                  np.full(7, np.nan), np.full(7, np.inf)])
+@pytest.mark.parametrize(
+    "curve",
+    [np.zeros(7), np.linspace(0, 1e-15, 7), np.full(7, np.nan), np.full(7, np.inf)],
+)
 def test_uninformative_correction_curves_do_not_estimate_rho(curve):
     corrected = invert_lag_ratio([0.0, 0.5], curve, np.linspace(-0.9, 0.9, 7))
     assert np.isnan(corrected).all()

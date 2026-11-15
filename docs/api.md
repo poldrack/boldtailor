@@ -397,7 +397,10 @@ candidate has status `ok`), the winner's `fit` (for a feature with winner `-1`,
 the `λ = 0` fit, or the NaN fit of an `unresolved` feature), the criterion
 `gap` to the runner-up (NaN without one), `n_candidates`, and `any_at_upper`,
 which marks features for which any candidate, winner or not, was truncated at
-its upper edge and whose selection is therefore provisional. Criteria are
+its upper edge. `any_unrefined` also includes interior grid fallbacks of any
+candidate; these comparisons are provisional even when the winning fit is
+refined. Both experiment adapters save these flags, the winning `unrefined`
+flag, and a `provisional` diagnostic equal to `any_unrefined`. Criteria are
 comparable across candidates only at the same `fixed_design` and `rho`; the
 comparison is per feature, at that feature's `rho`. Invalid input raises
 `ValueError`, naming the group and, in a selection, the candidate index.
@@ -434,6 +437,16 @@ gets NaN estimates, as does one whose residual after projecting out the
 reference is within the rounding of that projection or the uncertainty of its
 computed span. Estimates do not depend on the units of the reference columns. Non-2-D inputs, non-finite designs, scan mismatches and
 unequal feature counts raise `ValueError` naming the group.
+
+Correction requires a finite, numerically resolved, strictly monotone moment
+curve. Increasing and decreasing curves are interpolated, with observations
+outside their range clipped to the grid endpoints. Flat, nonmonotone or
+nonfinite curves return NaN corrected values even when the raw ratio is finite;
+nearest-grid tie-breaking would not identify rho. Such values are excluded
+from pooling. The all-undefined pooled value of zero is a fallback, not an
+estimate. This is a conservative whole-curve policy: it does not try to select
+an inverse branch for observations in a locally unambiguous portion of a
+nonmonotone curve.
 
 ## HRF libraries, selection, and evaluation
 

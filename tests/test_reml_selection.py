@@ -322,12 +322,18 @@ def test_losing_interior_fallback_makes_selection_provisional(monkeypatch):
     from tests.test_reml_adversarial import _diagonal_problem
 
     y, z, _ = _diagonal_problem(54, "wide")
-    # Exercise the real optimizer's documented coarse-grid fallback. The
-    # signal-aligned candidate wins, but uncertainty of the loser must survive.
-    monkeypatch.setattr(api, "minimize_ratio", lambda t: minimize_ratio(t, grid_size=3))
+    # Compare the same covariance searched at two resolutions. The refined
+    # winner is interior, so only the losing candidate carries a qualification.
+    resolutions = iter([3, 121])
+
+    def search(terms):
+        size = next(resolutions) if terms.singular2.size else 121
+        return minimize_ratio(terms, grid_size=size)
+
+    monkeypatch.setattr(api, "minimize_ratio", search)
     groups = [RemlGroup(y, np.empty((len(y), 0)))]
-    loser = api.fit_reml(groups, [z])
-    assert loser.unrefined[0] and not loser.at_upper[0]
-    selected = api.select_random_design(groups, [[z], [y]])
+    selected = api.select_random_design(groups, [[z], [z]])
     assert selected.winner[0] == 1
+    assert not selected.fit.unrefined[0]
+    assert not selected.any_at_upper[0]
     assert selected.any_unrefined[0]
