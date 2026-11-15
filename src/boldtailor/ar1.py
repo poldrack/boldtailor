@@ -11,9 +11,9 @@ from boldtailor._ar1_moments import (
     basis_expected_lag_ratio,
     basis_lag_ratio,
     invert_lag_ratio,
-    orthonormal_basis,
     pool_rho,
 )
+from boldtailor._numerics import conditioned_basis
 
 
 def _check_rho(rho):
@@ -46,15 +46,18 @@ class RhoEstimate:
 class RhoReference:
     """Signal-independent work of one reference design, reusable across signals.
 
-    ``basis`` is an orthonormal basis ``(scans, rank)`` of the design and
+    ``basis`` is an orthonormal basis ``(scans, rank)`` of the design,
+    ``amplification`` the ratio of the design's largest singular value to
+    that of each basis vector (it scales the degeneracy floor), and
     ``expected`` the expected residual lag-one ratio on the fixed rho grid.
     """
 
     basis: np.ndarray
+    amplification: np.ndarray
     expected: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("basis", "expected"))
+        own_fields(self, ("basis", "amplification", "expected"))
 
 
 def _check_2d(values, name, where):
@@ -72,8 +75,9 @@ def prepare_reference(design: np.ndarray) -> RhoReference:
     """Precompute what ``estimate_rho`` needs from one reference design."""
     design = np.asarray(design, dtype=float)
     _check_matrix(design, "design")
-    basis = orthonormal_basis(design)
-    return RhoReference(basis=basis, expected=basis_expected_lag_ratio(basis, GRID))
+    basis, amplification = conditioned_basis(design)
+    expected = basis_expected_lag_ratio(basis, GRID)
+    return RhoReference(basis=basis, amplification=amplification, expected=expected)
 
 
 def _group_reference(signals, reference, index):
@@ -100,7 +104,7 @@ def _validated(signals, reference):
 
 
 def _group_estimates(signals, reference):
-    raw = basis_lag_ratio(signals, reference.basis)
+    raw = basis_lag_ratio(signals, reference.basis, reference.amplification)
     return raw, invert_lag_ratio(raw, reference.expected, GRID)
 
 

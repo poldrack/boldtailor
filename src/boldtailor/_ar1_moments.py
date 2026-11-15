@@ -9,22 +9,9 @@ last diagonal entry. Its expectation under AR(1) noise is approximated by
 
 import numpy as np
 
+from boldtailor._numerics import conditioned_basis, orthonormal_basis, project_out
+
 GRID = np.linspace(-0.95, 0.95, 2001)
-_DEGENERACY_FACTOR = 64
-
-
-def orthonormal_basis(design) -> np.ndarray:
-    """Left singular vectors of ``design`` above the rank tolerance."""
-    design = np.asarray(design, dtype=float)
-    if design.shape[1] == 0:
-        return np.empty((design.shape[0], 0))
-    q, singular, _ = np.linalg.svd(design, full_matrices=False)
-    rank = np.sum(singular > singular[0] * max(design.shape) * np.finfo(float).eps)
-    return q[:, :rank]
-
-
-def _residualise(signals, basis):
-    return signals - basis @ (basis.T @ signals)
 
 
 def lag_moments(residuals):
@@ -33,22 +20,22 @@ def lag_moments(residuals):
     return numerator, np.sum(residuals[:-1] ** 2, axis=0)
 
 
-def basis_lag_ratio(signals, basis) -> np.ndarray:
+def basis_lag_ratio(signals, basis, amplification) -> np.ndarray:
     """Lag-one ratio of residuals after projecting out ``basis``; NaN if degenerate.
 
-    A feature is degenerate when its denominator is at most
-    ``64 eps ||y||^2``, a floor relative to the feature's own energy.
+    A feature is degenerate when its denominator does not exceed the rounding
+    floor of the projection (see ``boldtailor._numerics.project_out``).
     """
     signals = np.asarray(signals, dtype=float)
-    numerator, denominator = lag_moments(_residualise(signals, basis))
-    floor = _DEGENERACY_FACTOR * np.finfo(float).eps * np.sum(signals**2, axis=0)
+    residuals, floor = project_out(signals, basis, amplification)
+    numerator, denominator = lag_moments(residuals)
     valid = denominator > floor
     return np.where(valid, numerator / np.where(valid, denominator, 1.0), np.nan)
 
 
 def residual_lag_ratio(signals, design) -> np.ndarray:
     """Lag-one ratio of OLS residuals per feature; NaN where degenerate."""
-    return basis_lag_ratio(signals, orthonormal_basis(design))
+    return basis_lag_ratio(signals, *conditioned_basis(design))
 
 
 def _lag_sums(matrix):

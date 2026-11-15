@@ -11,8 +11,6 @@ from boldtailor._reml_criterion import profiled_variance
 from boldtailor._reml_search import minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 
-_NO_SIGNAL_FACTOR = 64.0
-
 
 @dataclass(frozen=True)
 class RemlGroup:
@@ -62,9 +60,9 @@ def _project(groups, columns, rho):
 
 
 def _live(projections):
+    """Features whose projected energy exceeds the projection's rounding floor."""
     energy = sum(p.energy for p in projections)
-    raw_energy = sum(p.raw_energy for p in projections)
-    return energy > _NO_SIGNAL_FACTOR * np.finfo(float).eps * raw_energy
+    return energy > sum(p.floor for p in projections)
 
 
 def _live_subset(groups, columns, rho):
