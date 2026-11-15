@@ -44,9 +44,7 @@ def _assert_differences_match(data, rho):
     dense_base = dense_criterion(signals, fixed, random, 0.0, rho)
     for r in RATIOS:
         expected = dense_criterion(signals, fixed, random, r, rho) - dense_base
-        assert_allclose(
-            criterion(_at(r), terms) - base, expected, rtol=1e-9, atol=1e-9
-        )
+        assert_allclose(criterion(_at(r), terms) - base, expected, rtol=1e-9, atol=1e-9)
 
 
 def test_criterion_differences_match_dense_iid(iid):

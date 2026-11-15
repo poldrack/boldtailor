@@ -49,9 +49,10 @@ def _grid_values(terms, log_grid, n_features):
 
 def _bracket(log_grid, best_index):
     last = log_grid.size - 1
-    return log_grid[np.maximum(best_index - 1, 0)], log_grid[
-        np.minimum(best_index + 1, last)
-    ]
+    return (
+        log_grid[np.maximum(best_index - 1, 0)],
+        log_grid[np.minimum(best_index + 1, last)],
+    )
 
 
 class _Tracker:
