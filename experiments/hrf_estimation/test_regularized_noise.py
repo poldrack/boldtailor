@@ -36,7 +36,7 @@ def test_surface_smoothing_uses_mesh_paths_not_euclidean_proximity():
 
 
 def test_corrected_noise_matches_existing_pooled_estimator(planted_runs):
-    from experiments.hrf_estimation.reml_extensions import estimate_noise
+    from experiments.hrf_estimation.reml_selection import estimate_noise
     runs, _ = planted_runs
     rng = np.random.default_rng(123)
     runs = tuple(replace(r, signals=r.signals+rng.normal(size=r.signals.shape)) for r in runs)
@@ -47,20 +47,32 @@ def test_corrected_noise_matches_existing_pooled_estimator(planted_runs):
     np.testing.assert_allclose(api().run_rhos(runs[:3]), matrix)
 
 
+def _dense_vertex(runs, kernel, vertex):
+    from experiments.hrf_estimation.reml_selection import random_design
+    signals = [r.signals[:, [vertex]] for r in runs]
+    fixed = [r.confounds.to_numpy(dtype=float) for r in runs]
+    return signals, fixed, [random_design(r, kernel) for r in runs]
+
+
 def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
-    from experiments.hrf_estimation.reml_extensions import prepare_common, component_terms
-    from experiments.hrf_estimation.reml_scalar import fit_scalar_components
+    from tests.reml_oracles import dense_criterion, dense_fit
     runs, library = planted_runs
     rng = np.random.default_rng(53)
     runs = tuple(replace(r, signals=r.signals+rng.normal(0,.2,r.signals.shape)) for r in runs)
     rho = np.array([.2,.6])
     result = api().fit_grouped(runs, library, rho)
     for v in range(2):
-        single = tuple(api().subset_run(r, [v]) for r in runs)
-        common = prepare_common(single, rho[v])
-        scores = [fit_scalar_components(component_terms(single, k, common), {})[0]["criterion"] for k in library.candidates]
-        assert result.kernels[v].id == int(np.argmin(scores))
-        assert result.diagnostics["criterion"][v] == pytest.approx(min(scores), abs=1e-8)
+        scores, fits = [], []
+        for kernel in library.candidates:
+            data = _dense_vertex(runs, kernel, v)
+            fits.append(dense_fit(*data, rho[v]))
+            scores.append(dense_criterion(*data, fits[-1][0][0], rho[v])[0])
+        winner = int(np.argmin(scores))
+        assert result.kernels[v].id == winner
+        ratio, sigma2 = fits[winner]
+        assert result.diagnostics["variance_ratio"][v] == pytest.approx(ratio[0], rel=1e-5)
+        assert result.diagnostics["sigma2"][v] == pytest.approx(sigma2[0], rel=1e-5)
+        assert result.diagnostics["candidate_gap"][v] == pytest.approx(max(scores)-min(scores), rel=1e-6)
     assert result.training_run_ids == tuple(r.run_id for r in runs)
 
 
