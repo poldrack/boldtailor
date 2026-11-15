@@ -121,3 +121,56 @@ def mixedlm_fit(signals, fixed, random):
         warnings.simplefilter("ignore")
         result = model.fit(reml=True, method="bfgs", gtol=1e-10)
     return result.vcomp[0] / result.scale, result.scale
+
+
+def _projected_eigenvalues(c, z, tol):
+    from scipy.linalg import null_space
+
+    k = null_space(c.T)
+    projected = k.T @ z
+    values = np.linalg.eigvalsh(projected @ projected.T)
+    return values[values > tol], k.shape[1]
+
+
+def _pooled_eigenvalues(fixed, random, tol):
+    parts = [
+        _projected_eigenvalues(c, z, tol) for c, z in zip(fixed, random, strict=True)
+    ]
+    return np.concatenate([p[0] for p in parts]), sum(p[1] for p in parts)
+
+
+def _restricted_null_objective(mu, n, w2, r):
+    """f(log lam) for one null draw; plain floats keep the per-draw search fast."""
+    import math
+
+    def f(log_lam):
+        lam, q, logdet = math.exp(log_lam), r, 0.0
+        for m, w in zip(mu, w2, strict=True):
+            q += w / (1.0 + lam * m)
+            logdet += math.log1p(lam * m)
+        return n * math.log(q / n) + logdet
+
+    return f
+
+
+def _null_draw_statistic(mu, n, w2, r):
+    import math
+
+    from scipy.optimize import minimize_scalar
+
+    f0 = n * math.log((r + sum(w2)) / n)
+    objective = _restricted_null_objective(mu, n, w2, r)
+    found = minimize_scalar(objective, bounds=(-30.0, 30.0), method="bounded")
+    return f0 - min(f0, found.fun)
+
+
+def null_lrt_reference(fixed, random, n_draws, seed, tol=1e-10) -> np.ndarray:
+    """Finite-sample null of the restricted LRT (Crainiceanu & Ruppert 2004)."""
+    mu, n = _pooled_eigenvalues(fixed, random, tol)
+    rng = np.random.default_rng(seed)
+    w2 = (rng.normal(size=(n_draws, mu.size)) ** 2).tolist()
+    r = rng.chisquare(n - mu.size, size=n_draws).tolist()
+    mu = mu.tolist()
+    return np.array(
+        [_null_draw_statistic(mu, n, w, q) for w, q in zip(w2, r, strict=True)]
+    )
