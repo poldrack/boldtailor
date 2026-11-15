@@ -93,13 +93,18 @@ def _random_designs(parts, scaling):
     return [np.column_stack([p.task, p.junk]) / scales for p in parts]
 
 
-def _fit_diagnostics(fit, scales):
+def _fit_diagnostics(selection, scales):
+    fit = selection.fit
     return dict(
         criterion=[float(fit.criterion[0])],
         variance_ratio=[float(fit.ratio[0])],
         sigma2=[float(fit.noise_variance[0])],
         at_zero=[fit.status[0] == "variance_zero"],
         at_upper=[bool(fit.at_upper[0])],
+        unrefined=fit.unrefined.tolist(),
+        any_at_upper=selection.any_at_upper.tolist(),
+        any_unrefined=selection.any_unrefined.tolist(),
+        provisional=selection.any_unrefined.tolist(),
         random_scales=[None if scales is None else scales.tolist()],
     )
 
@@ -166,5 +171,5 @@ def fit(
     )
     if state != "no_signal":
         scales = None if kernel is None else random_scales(parts(kernel), scaling)
-        diagnostics.update(_fit_diagnostics(selection.fit, scales))
+        diagnostics.update(_fit_diagnostics(selection, scales))
     return _estimate(runs, kernel, state, diagnostics)
