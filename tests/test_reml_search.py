@@ -5,7 +5,7 @@ from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
 from boldtailor._reml_criterion import criterion, criterion_slope
-from boldtailor._reml_search import _log_grid, minimize_ratio
+from boldtailor._reml_search import _bracket, _log_grid, minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 from tests.reml_oracles import dense_fit, simulate
 
@@ -133,3 +133,49 @@ def test_polish_never_worsens_criterion_beyond_rounding(seed, true_ratio):
     n = sum(t.dof for t in terms)
     rounding = 64 * np.finfo(float).eps * (np.abs(grid_value) + n)
     assert np.all(minimize_ratio(terms).criterion <= grid_value + rounding)
+
+
+def _property_style_cases(count=300, seed=2026):
+    """Seeded draws over the property tests' simulation settings, some AR(1)."""
+    rng = np.random.default_rng(seed)
+    for _ in range(count):
+        n_groups = int(rng.integers(1, 5))
+        rho = float(rng.choice([0.0, 0.0, 0.5]))
+        data = simulate(
+            rng,
+            scans=tuple(int(n) for n in rng.integers(12, 41, size=n_groups)),
+            n_fixed=int(rng.integers(1, 5)),
+            n_random=int(rng.integers(1, 5)),
+            ratio=float(rng.choice([0.0, 0.1, 1.0, 10.0])),
+            rho=rho,
+            n_features=int(rng.integers(1, 4)),
+        )
+        yield _terms(*data, rho)
+
+
+def _oracle_cases():
+    from tests.test_reml_oracle import CASES, _case_data
+
+    for case in CASES:
+        rho = case.get("rho", 0.0)
+        yield _terms(*_case_data(case), rho)
+
+
+def _unbracketed_interior(terms):
+    """Count features whose interior grid minimum lacks a slope sign change."""
+    log_grid = _log_grid(terms, 121)
+    n_features = terms[0].residual_ss.shape[0]
+    ratios = np.broadcast_to(np.exp(log_grid)[:, None], (log_grid.size, n_features))
+    index = np.argmin(criterion(ratios, terms), axis=0)
+    low, high = _bracket(log_grid, index)
+    interior = (index > 0) & (index < log_grid.size - 1)
+    falling = criterion_slope(np.exp(low), terms) < 0
+    rising = criterion_slope(np.exp(high), terms) > 0
+    return int(np.sum(interior & ~(falling & rising))), int(np.sum(interior))
+
+
+@pytest.mark.parametrize("cases", [_oracle_cases, _property_style_cases])
+def test_neighbour_bracket_shows_sign_change_for_interior_optima(cases):
+    counts = np.array([_unbracketed_interior(terms) for terms in cases()])
+    assert counts[:, 1].sum() > 0
+    assert counts[:, 0].sum() == 0
