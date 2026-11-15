@@ -4,7 +4,7 @@ from numpy.testing import assert_allclose
 
 from boldtailor._reml_criterion import criterion, criterion_slope, profiled_variance
 from boldtailor._reml_terms import project_fixed, reml_terms
-from tests.reml_oracles import dense_criterion, simulate
+from tests.reml_oracles import dense_criterion, dense_profiled_variance, simulate
 
 RATIOS = [0.0, 0.01, 1.0, 10.0, 1e3]
 N_FEATURES = 3
@@ -55,13 +55,11 @@ def test_criterion_differences_match_dense_ar1(ar1):
     _assert_differences_match(ar1, 0.5)
 
 
-def test_profiled_variance_matches_dense_quadratic_form(iid):
-    signals, fixed, random, terms = iid
-    n = sum(t.dof for t in terms)
+@pytest.mark.parametrize("rho", [0.0, 0.5])
+def test_profiled_variance_matches_dense_quadratic_form(rho):
+    signals, fixed, random, terms = _build(rho)
     for r in RATIOS:
-        dense = dense_criterion(signals, fixed, random, r)
-        logdet = np.sum([np.log1p(r * t.singular2).sum() for t in terms])
-        expected = np.exp((dense - logdet) / n)
+        expected = dense_profiled_variance(signals, fixed, random, r, rho)
         assert_allclose(profiled_variance(_at(r), terms), expected, rtol=1e-9)
 
 
