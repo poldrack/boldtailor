@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
@@ -191,3 +193,41 @@ def test_fixed_projection_built_once_per_rho(planted, monkeypatch):
     rho = np.array([0.0, 0.0, 0.5, 0.5])
     select_random_design(_groups(signals, fixed), candidates[:4], rho=rho)
     assert len(calls) == 4
+
+
+def _noisy_copies(rng, random, levels):
+    """Candidates that perturb the generating design by increasing amounts."""
+    return [[z + level * rng.normal(size=z.shape) for z in random] for level in levels]
+
+
+@pytest.fixture
+def graded():
+    """Signals with several ok candidates per feature, plus one weak decoy."""
+    rng = np.random.default_rng(9)
+    signals, fixed, random = simulate(rng, ratio=3.0, n_features=6)
+    candidates = _noisy_copies(rng, random, (0.3, 0.6, 1.0, 1.5))
+    candidates.append(_decoys(rng, fixed, 1)[0])
+    return _groups(signals, fixed), candidates
+
+
+def _brute_force(groups, candidates):
+    """Winner and gap from one fit_reml per candidate, over ok fits only."""
+    fits = [fit_reml(groups, candidate) for candidate in candidates]
+    criteria = np.array([f.criterion for f in fits])
+    ok = np.array([[s == "ok" for s in f.status] for f in fits])
+    scores = np.where(ok, criteria, np.inf)
+    ordered = np.sort(scores, axis=0)
+    winner = np.where(ok.any(axis=0), np.argmin(scores, axis=0), -1)
+    gap = np.where(np.isfinite(ordered[1]), ordered[1] - ordered[0], np.nan)
+    return winner, gap, ok
+
+
+def test_winner_and_gap_match_per_candidate_fits_in_every_order(graded):
+    groups, candidates = graded
+    winner, gap, ok = _brute_force(groups, candidates)
+    assert (ok.sum(axis=0) >= 4).all()
+    for order in itertools.permutations(range(len(candidates))):
+        selection = select_random_design(groups, [candidates[i] for i in order])
+        mapped = np.asarray(order)[selection.winner]
+        assert_array_equal(mapped, winner)
+        assert_allclose(selection.gap, gap, rtol=1e-12, atol=0.0)

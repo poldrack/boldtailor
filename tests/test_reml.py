@@ -42,10 +42,20 @@ def test_fit_matches_layers(data):
     assert isinstance(fit, RemlFit)
     assert_array_equal(fit.ratio, optimum.ratio)
     assert_array_equal(fit.criterion, optimum.criterion)
+    assert_array_equal(fit.at_upper, optimum.at_upper)
     assert_allclose(fit.effect_variance, fit.ratio * fit.noise_variance, rtol=1e-15)
     assert fit.restricted_dof == sum(t.dof for t in terms)
     assert fit.status == ("ok",) * N_FEATURES
     assert_array_equal(fit.rho, np.zeros(N_FEATURES))
+
+
+def test_noise_free_signal_is_ok_at_upper_edge():
+    rng = np.random.default_rng(4)
+    _, fixed, random = simulate(rng, scans=(60,), n_features=2)
+    signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
+    fit = _fit(signals, fixed, random)
+    assert fit.at_upper.all()
+    assert fit.status == ("ok", "ok")
 
 
 def test_results_are_read_only(data):
