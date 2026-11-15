@@ -1,6 +1,6 @@
 # API reference
 
-[User guide](user-guide.md) · [Developer guide](development.md)
+[User guide](user-guide.md) · [Developer guide](development.md) · [Human code-review guide](code-review.md) · [Complete inventory](api-review/README.md)
 
 Import from the modules shown below, for example
 `from boldtailor.single_trial import fit_single_trials`. The top-level package

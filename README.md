@@ -170,6 +170,7 @@ betas and trial variables, transfer across runs. See the
 
 - [User guide](docs/user-guide.md): model choices, timing, confounds, HRFs, and interpretation.
 - [API reference](docs/api.md): entry points, options, and returned values.
+- [Human code-review guide](docs/code-review.md): reading routes, usage examples, and a complete module/function inventory.
 - [Result migration](docs/result-migration.md): current result classes and design access.
 - [Documentation index](docs/README.md): current guides and dated development records.
 - [GLMsingle comparison](docs/glmsingle-comparison.md): HRFs, denoising, regularization, and validation.

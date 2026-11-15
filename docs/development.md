@@ -2,6 +2,8 @@
 
 For running an analysis, start with the [user guide](user-guide.md).
 This page describes the implementation conventions used when extending Boldtailor.
+For a guided reading of the implementation, use the [human code-review guide](code-review.md)
+and its [complete module/function inventory](api-review/README.md).
 
 ## Environment and checks
 
