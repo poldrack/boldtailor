@@ -267,3 +267,51 @@ def test_result_classes_own_their_arrays(result_instance):
             _assert_kept(kept, original)
         owned += 1
     assert owned
+
+
+@pytest.fixture
+def reml_diagnostics():
+    """A real engine selection with a nontrivial library-position mapping."""
+    from boldtailor import hrf_results
+    from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
+
+    rng = np.random.default_rng(87)
+    z = rng.normal(size=(30, 2))
+    groups = [RemlGroup(z @ np.array([[3., 2.], [2., -3.]]) + rng.normal(size=(30, 2)), np.ones((30, 1)))]
+    selected = select_random_effects_design(groups, [[z]])
+    return hrf_results.RemlHrfDiagnostics(
+        selection=selected, candidate_ids=np.array([1]),
+        canonical_fit=fit_reml(groups, [None]),
+        delta_criterion=np.array([2., 3.]), reference_hrf_id=0,
+    )
+
+
+def test_hrf_results_distinguish_selection_methods(selected_fixture, reml_diagnostics):
+    """REML diagnostics never masquerade as CV scores, while CV stays compatible."""
+    _, cv = selected_fixture
+    assert cv.method == "cv" and cv.reml is None
+    ids = np.full(cv.hrf_indices.shape, -1)
+    # Use a matching two-feature result for this schema-level example.
+    ids = np.array([1, 1])
+    reml = replace(cv, method="reml", reml=reml_diagnostics, hrf_indices=ids,
+                   cv_r2=None, canonical_cv_r2=None, delta_cv_r2=None)
+    assert reml.cv_r2 is None
+    np.testing.assert_array_equal(reml.reml.candidate_ids, [1])
+    assert not reml.reml.candidate_ids.flags.writeable
+    assert not reml.reml.delta_criterion.flags.writeable
+    with pytest.raises(ValueError, match="diagnostic|CV|cv"):
+        replace(cv, reml=reml_diagnostics)
+    with pytest.raises(ValueError, match="diagnostic|CV|cv"):
+        replace(reml, cv_r2=np.zeros(2))
+    with pytest.raises(ValueError, match="method"):
+        replace(cv, method="other")
+
+
+def test_reml_diagnostics_own_arrays(reml_diagnostics):
+    """Mutating inputs to diagnostics cannot change saved IDs or comparisons."""
+    ids, delta = np.array([1]), np.array([3., 4.])
+    result = replace(reml_diagnostics, candidate_ids=ids, delta_criterion=delta)
+    ids[:] = 0
+    delta[:] = 9
+    np.testing.assert_array_equal(result.candidate_ids, [1])
+    np.testing.assert_array_equal(result.delta_criterion, [3., 4.])
