@@ -506,6 +506,15 @@ a validated record directly, avoiding a parent-record serialization round trip.
 Source identity formulas, scientific activities, and quality warnings are
 preserved; source fingerprints describe metadata, not BOLD contents.
 
+Ridge CV reads the final penalty explicitly from `tuning["all"]["selection"]`.
+The final refit does not depend on which tuning scope ran last.
+`tuning_provenance()` and `link_final_provenance()` take `encoding_mode`
+explicitly, so additional provenance activities do not change where metadata
+is read. `link_final_provenance()` returns a new result with independent block
+provenance; callers must use its return value. Numerical arrays are shared and
+left untouched. It rejects already linked fits to prevent duplicate refit
+activities; repeated calls on the original fit leave that fit unchanged.
+
 ## BIDS metadata projection
 
 `project_bids_provenance()` returns relative paths mapped to bytes without I/O:

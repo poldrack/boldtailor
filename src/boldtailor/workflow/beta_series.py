@@ -1,6 +1,7 @@
 """Fraction or shared-alpha tuning with independent odd/even evaluation."""
 
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
 import logging
@@ -222,7 +223,7 @@ def _tune(
         scores=scores,
         selection=selection,
         run_labels=[r.label for r in runs],
-        provenance=tuning_provenance(scores, selection),
+        provenance=tuning_provenance(scores, selection, encoding_mode=encoding_mode),
         summary_percentile=percentile,
     )
 
@@ -546,18 +547,24 @@ def fit_cv_beta_series(
             else f"selected alpha={alpha:g}"
         )
         log.info("Ridge CV (%s, %s): %s", mode, scope, description)
-    result["final"] = _final_fit(
+    final_selection = result["tuning"]["all"]["selection"]
+    final_penalty = (
+        final_selection.ridge_fraction if fractional else final_selection.ridge_alpha
+    )
+    final_fit = _final_fit(
         runs,
         root,
         blocks,
         library,
-        alpha,
+        final_penalty,
         n_jobs,
         fractional,
         task_model,
         selection_model,
     )
-    link_final_provenance(result["final"], result["tuning"]["all"]["provenance"])
+    result["final"] = link_final_provenance(
+        final_fit, result["tuning"]["all"]["provenance"], encoding_mode=encoding_mode
+    )
     result["provenance"] = dict(
         **encoding_metadata(encoding_mode),
         objective="percentile_of_" + encoding_metadata(encoding_mode)["score"],
@@ -566,7 +573,7 @@ def fit_cv_beta_series(
         validation_target="candidate_regularized_betas",
         hrf_model=mode,
         library_fingerprint=None if library is None else library.fingerprint,
-        final_ridge_alpha=None if fractional else alpha,
+        final_ridge_alpha=None if fractional else final_penalty,
         outer_splits="odd_to_even_and_even_to_odd",
     )
     if fractional:
@@ -580,7 +587,8 @@ def fit_cv_beta_series(
     return result
 
 
-def tuning_provenance(scores, selection):
+def tuning_provenance(scores, selection, *, encoding_mode):
+    """Record a tuning decision with the explicitly supplied scoring mode."""
     if isinstance(selection, FractionSelection):
         activity = dict(
             name="voxelwise_encoding_fraction_selection",
@@ -595,8 +603,7 @@ def tuning_provenance(scores, selection):
         )
     else:
         activity = _alpha_activity(selection)
-    mode = scores.provenance.to_dict()["activities"][-1]["encoding_mode"]
-    activity.update(encoding_metadata(mode))
+    activity.update(encoding_metadata(encoding_mode))
     if not isinstance(selection, FractionSelection):
         activity["objective"] = "percentile_of_" + activity["score"]
     activity.update(
@@ -639,17 +646,27 @@ def _alpha_activity(selection):
     )
 
 
-def link_final_provenance(result, decision):
-    """Keep block fitting records, adding a reference to the saved decision."""
-    for block in result["provenance"]:
+def link_final_provenance(result, decision, *, encoding_mode):
+    """Return a fit with new block records referencing the all-run decision.
+
+    Provenance is copied; numerical arrays are shared and are not modified.
+    Pass an unlinked fit: linking an already linked result raises ValueError.
+    """
+    blocks = deepcopy(result["provenance"])
+    for block in blocks:
         record = ProvenanceRecord.from_dict(block["record"])
+        if any(
+            activity.get("name") == "encoding_guided_ridge_refit"
+            for activity in record.to_dict()["activities"]
+        ):
+            raise ValueError("final fit provenance is already linked")
         identity = dict(
             fitting_analysis_fingerprint=record.analysis_fingerprint,
             tuning_analysis_fingerprint=decision.analysis_fingerprint,
         )
         activity = dict(
             name="encoding_guided_ridge_refit",
-            **encoding_metadata(decision.to_dict()["activities"][-1]["encoding_mode"]),
+            **encoding_metadata(encoding_mode),
             tuning_scope="all",
             selected_alpha=result["ridge_alpha"],
             tuning_execution_id=decision.execution_id,
@@ -667,6 +684,7 @@ def link_final_provenance(result, decision):
             warnings=(),
             analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
         ).to_dict()
+    return {**result, "provenance": blocks}
 
 
 @dataclass(frozen=True, kw_only=True)
