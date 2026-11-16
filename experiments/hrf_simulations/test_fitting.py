@@ -81,7 +81,7 @@ def _scaled_candidates(runs, library, model, convention):
 
 
 def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
-    from boldtailor.reml import RemlGroup, select_random_design
+    from boldtailor.reml import RemlGroup, select_random_effects_design
     from experiments.hrf_estimation.scoring import residuals
     from experiments.hrf_simulations.fitting import fit
 
@@ -93,7 +93,7 @@ def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
         rms = np.sqrt(pooled / sum(len(z) for z in projected))
         np.testing.assert_allclose(rms, 1.0, rtol=1e-12)
     groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in planted]
-    expected = select_random_design(groups, [d for _, _, d in scaled])
+    expected = select_random_effects_design(groups, [d for _, _, d in scaled])
     winner = int(expected.winner[0])
     result = fit(
         planted,

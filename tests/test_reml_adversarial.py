@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 
 N_SCANS = 12
 SPECTRA = ("wide", "moderate", "clustered", "repeated")
@@ -55,7 +55,7 @@ def test_optimum_is_no_worse_than_known_positive_ratio(narrow_minimum):
 
 def test_narrow_minimum_is_selectable(narrow_minimum):
     y, z = narrow_minimum
-    assert select_random_design(_no_fixed(y), [[z]]).winner[0] == 0
+    assert select_random_effects_design(_no_fixed(y), [[z]]).winner[0] == 0
 
 
 def _log10_spectrum(rng, kind, k):
@@ -198,7 +198,7 @@ def test_unidentifiable_candidate_never_wins(
 ):
     groups, planted, decoy = planted_with_saturated_decoy
     candidates = [planted, decoy] if planted_first else [decoy, planted]
-    selection = select_random_design(groups, candidates)
+    selection = select_random_effects_design(groups, candidates)
     expected = 0 if planted_first else 1
     np.testing.assert_array_equal(selection.winner, expected)
     assert selection.fit.status == ("ok", "ok")
@@ -209,7 +209,7 @@ def test_only_unidentifiable_candidates_leave_the_null_fit(
     planted_with_saturated_decoy,
 ):
     groups, _, decoy = planted_with_saturated_decoy
-    selection = select_random_design(groups, [decoy])
+    selection = select_random_effects_design(groups, [decoy])
     null = fit_reml(groups, [None])
     np.testing.assert_array_equal(selection.winner, -1)
     assert selection.fit.status == null.status
@@ -265,7 +265,9 @@ def test_fit_is_invariant_to_resolvable_fixed_span_shifts(n_fixed, rho, scale):
 def test_selection_is_invariant_to_resolvable_fixed_span_shifts(scale):
     signals, fixed, planted, decoy = _planted_problem(7, 2, 0.0)
     moved = _shifted(signals, fixed, scale)
-    selection = select_random_design([RemlGroup(moved, fixed)], [[decoy], [planted]])
+    selection = select_random_effects_design(
+        [RemlGroup(moved, fixed)], [[decoy], [planted]]
+    )
     np.testing.assert_array_equal(selection.winner, 1)
     assert selection.fit.status == ("ok",) * 4
 
@@ -385,7 +387,7 @@ def test_residual_below_the_span_uncertainty_is_unresolved():
     assert fit.status == ("unresolved",) * 5
     for name in ("ratio", "noise_variance", "effect_variance", "criterion"):
         assert np.isnan(getattr(fit, name)).all()
-    selection = select_random_design([RemlGroup(signals, fixed)], [[random]])
+    selection = select_random_effects_design([RemlGroup(signals, fixed)], [[random]])
     np.testing.assert_array_equal(selection.winner, -1)
     assert selection.fit.status == ("unresolved",) * 5
     assert np.isnan(selection.gap).all()

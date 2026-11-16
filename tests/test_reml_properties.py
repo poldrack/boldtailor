@@ -5,7 +5,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from numpy.testing import assert_allclose, assert_array_equal
 
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from tests.reml_oracles import simulate
 
 RTOL = 1e-6
@@ -199,8 +199,8 @@ def test_selection_is_invariant_to_candidate_order(params, order):
     signals, fixed, random, rng = _simulated(params)
     groups = _groups(signals, fixed)
     candidates = _candidates(random, rng)
-    base = select_random_design(groups, candidates)
-    permuted = select_random_design(groups, [candidates[i] for i in order])
+    base = select_random_effects_design(groups, candidates)
+    permuted = select_random_effects_design(groups, [candidates[i] for i in order])
     mapped = np.where(permuted.winner >= 0, np.asarray(order)[permuted.winner], -1)
     decisive = base.gap > 1e-8
     assert_array_equal(mapped[decisive], base.winner[decisive])

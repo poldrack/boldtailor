@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from boldtailor.ar1 import estimate_rho
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from tests.reml_oracles import simulate
 
 
@@ -59,8 +59,8 @@ def test_null_library_winners_are_not_a_significance_test():
         RemlGroup(rng.normal(size=(n, features)), np.ones((n, 1))) for _ in range(3)
     ]
     candidates = [[rng.normal(size=(n, 3)) for _ in groups] for _ in range(8)]
-    one = select_random_design(groups, candidates[:1])
-    many = select_random_design(groups, candidates)
+    one = select_random_effects_design(groups, candidates[:1])
+    many = select_random_effects_design(groups, candidates)
     # Nested libraries cannot lose existing support. Even one candidate is
     # selected far more than 5% of the time under a true null: winning != p<.05.
     assert np.all((one.winner < 0) | (many.winner >= 0))

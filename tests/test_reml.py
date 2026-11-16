@@ -8,7 +8,7 @@ from numpy.testing import assert_allclose, assert_array_equal
 from boldtailor._reml_search import minimize_ratio
 from boldtailor._reml_terms import project_fixed, reml_terms
 import boldtailor.reml as reml
-from boldtailor.reml import RemlFit, RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlFit, RemlGroup, fit_reml, select_random_effects_design
 from tests.reml_oracles import dense_fit, simulate
 
 N_FEATURES = 4
@@ -272,7 +272,7 @@ def test_restricted_dof_must_agree_across_rho(data, dof_differs_at_half):
     with pytest.raises(ValueError, match="restricted degrees of freedom"):
         _fit(signals, fixed, random, rho=rho)
     with pytest.raises(ValueError, match="restricted degrees of freedom"):
-        select_random_design(_groups(signals, fixed), [random], rho=rho)
+        select_random_effects_design(_groups(signals, fixed), [random], rho=rho)
 
 
 def test_unrefined_flag_covers_the_upper_edge_and_is_read_only(data):

@@ -5,7 +5,12 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
 import boldtailor.reml as reml
-from boldtailor.reml import RemlGroup, RemlSelection, fit_reml, select_random_design
+from boldtailor.reml import (
+    RemlGroup,
+    RemlSelection,
+    fit_reml,
+    select_random_effects_design,
+)
 from tests.reml_oracles import simulate
 
 N_FEATURES = 4
@@ -56,7 +61,7 @@ def _orthogonal_signals(rng, fixed, candidates):
 def test_planted_design_wins(planted):
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
-    selection = select_random_design(groups, candidates)
+    selection = select_random_effects_design(groups, candidates)
     assert isinstance(selection, RemlSelection)
     assert selection.n_candidates == 5
     assert selection.winner.dtype == np.int64
@@ -67,7 +72,7 @@ def test_planted_design_wins(planted):
 
 def test_results_are_read_only(planted):
     signals, fixed, candidates = planted
-    selection = select_random_design(_groups(signals, fixed), candidates)
+    selection = select_random_effects_design(_groups(signals, fixed), candidates)
     with pytest.raises(ValueError):
         selection.winner[0] = 0
     with pytest.raises(ValueError):
@@ -77,7 +82,7 @@ def test_results_are_read_only(planted):
 def test_ties_go_to_earlier_candidate(planted):
     signals, fixed, candidates = planted
     design = candidates[2]
-    selection = select_random_design(_groups(signals, fixed), [design, design])
+    selection = select_random_effects_design(_groups(signals, fixed), [design, design])
     assert_array_equal(selection.winner, np.zeros(N_FEATURES))
     assert_array_equal(selection.gap, np.zeros(N_FEATURES))
 
@@ -88,7 +93,7 @@ def test_no_supported_candidate_gives_sentinel():
     candidates = _decoys(rng, fixed, 3)
     signals = _orthogonal_signals(rng, fixed, candidates)
     groups = _groups(signals, fixed)
-    selection = select_random_design(groups, candidates)
+    selection = select_random_effects_design(groups, candidates)
     at_zero = fit_reml(groups, [None] * len(groups))
     assert_array_equal(selection.winner, [-1, -1])
     assert np.isnan(selection.gap).all()
@@ -103,8 +108,8 @@ def test_no_signal_feature_gives_sentinel(planted):
     signals, fixed, candidates = planted
     signals = [np.column_stack([y[:, 0], np.zeros(len(y)), y[:, 1]]) for y in signals]
     groups = _groups(signals, fixed)
-    selection = select_random_design(groups, candidates)
-    reference = select_random_design(
+    selection = select_random_effects_design(groups, candidates)
+    reference = select_random_effects_design(
         _groups(_columns(signals, [0, 2]), fixed), candidates
     )
     assert_array_equal(selection.winner, [2, -1, 2])
@@ -120,7 +125,7 @@ def test_no_signal_feature_gives_sentinel(planted):
 def test_single_ok_candidate_has_nan_gap(planted):
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
-    selection = select_random_design(groups, [[None, None], candidates[2]])
+    selection = select_random_effects_design(groups, [[None, None], candidates[2]])
     assert_array_equal(selection.winner, np.ones(N_FEATURES))
     assert np.isnan(selection.gap).all()
     _assert_same_fit(selection.fit, fit_reml(groups, candidates[2]))
@@ -145,7 +150,7 @@ def test_candidates_consumed_once(planted):
     signals, fixed, candidates = planted
     once = _OnePass(candidates)
     rho = np.array([0.0, 0.2, 0.2, 0.4])
-    selection = select_random_design(_groups(signals, fixed), once, rho=rho)
+    selection = select_random_effects_design(_groups(signals, fixed), once, rho=rho)
     assert once.calls == len(candidates)
     assert once.passes == 1
     assert selection.n_candidates == len(candidates)
@@ -156,12 +161,12 @@ def test_invalid_candidates_raise(planted):
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     with pytest.raises(ValueError, match="candidate"):
-        select_random_design(groups, [])
+        select_random_effects_design(groups, [])
     with pytest.raises(ValueError, match="group"):
-        select_random_design(groups, [candidates[0], candidates[1][:1]])
+        select_random_effects_design(groups, [candidates[0], candidates[1][:1]])
     short = [candidates[1][0][:-1], candidates[1][1]]
     with pytest.raises(ValueError, match="scan"):
-        select_random_design(groups, [candidates[0], short])
+        select_random_effects_design(groups, [candidates[0], short])
 
 
 @pytest.mark.parametrize("value", [np.nan, np.inf])
@@ -171,18 +176,18 @@ def test_invalid_candidate_message_names_candidate_and_group(planted, value):
     corrupt = [z.copy() for z in candidates[3]]
     corrupt[1][2, 0] = value
     with pytest.raises(ValueError, match=r"candidate 3.*group 1|group 1.*candidate 3"):
-        select_random_design(groups, [*candidates[:3], corrupt])
+        select_random_effects_design(groups, [*candidates[:3], corrupt])
     short = [candidates[3][0], candidates[3][1][:-1]]
     with pytest.raises(ValueError, match=r"candidate 2.*group 1|group 1.*candidate 2"):
-        select_random_design(groups, [*candidates[:2], short])
+        select_random_effects_design(groups, [*candidates[:2], short])
 
 
 def test_candidate_may_be_any_iterable_of_group_designs(planted):
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
-    expected = select_random_design(groups, candidates)
+    expected = select_random_effects_design(groups, candidates)
     lazy = ((z for z in candidate) for candidate in candidates)
-    selection = select_random_design(groups, lazy)
+    selection = select_random_effects_design(groups, lazy)
     assert_array_equal(selection.winner, expected.winner)
     assert_array_equal(selection.gap, expected.gap)
     _assert_same_fit(selection.fit, expected.fit)
@@ -205,17 +210,19 @@ def test_candidates_are_fitted_as_they_are_drawn(planted, monkeypatch):
             yield candidate
 
     monkeypatch.setattr(reml, "minimize_ratio", recording)
-    select_random_design(_groups(signals, fixed), stream())
+    select_random_effects_design(_groups(signals, fixed), stream())
     assert at_fit == list(range(len(candidates) + 1))
 
 
 def test_per_feature_rho_equals_separate_selections(planted):
     signals, fixed, candidates = planted
     rho = np.array([0.0, 0.3, 0.3, 0.6])
-    selection = select_random_design(_groups(signals, fixed), candidates, rho=rho)
+    selection = select_random_effects_design(
+        _groups(signals, fixed), candidates, rho=rho
+    )
     for value, index in ((0.0, [0]), (0.3, [1, 2]), (0.6, [3])):
         groups = _groups(_columns(signals, index), fixed)
-        single = select_random_design(groups, candidates, rho=value)
+        single = select_random_effects_design(groups, candidates, rho=value)
         assert_array_equal(selection.winner[index], single.winner)
         assert_array_equal(selection.gap[index], single.gap)
         for name in FIT_FIELDS:
@@ -236,7 +243,7 @@ def test_fixed_projection_built_once_per_rho(planted, monkeypatch):
 
     monkeypatch.setattr(reml, "project_fixed", counting)
     rho = np.array([0.0, 0.0, 0.5, 0.5])
-    select_random_design(_groups(signals, fixed), candidates[:4], rho=rho)
+    select_random_effects_design(_groups(signals, fixed), candidates[:4], rho=rho)
     assert len(calls) == 4
 
 
@@ -272,7 +279,7 @@ def test_winner_and_gap_match_per_candidate_fits_in_every_order(graded):
     winner, gap, ok = _brute_force(groups, candidates)
     assert (ok.sum(axis=0) >= 4).all()
     for order in itertools.permutations(range(len(candidates))):
-        selection = select_random_design(groups, [candidates[i] for i in order])
+        selection = select_random_effects_design(groups, [candidates[i] for i in order])
         mapped = np.asarray(order)[selection.winner]
         assert_array_equal(mapped, winner)
         assert_allclose(selection.gap, gap, rtol=1e-12, atol=0.0)
@@ -294,7 +301,7 @@ def test_selection_reports_features_with_a_truncated_candidate(noise_free, exact
     the selection says which features had one, whoever won."""
     signals, fixed, exact, decoy = noise_free
     candidates = [exact, decoy] if exact_first else [decoy, exact]
-    selection = select_random_design(_groups(signals, fixed), candidates)
+    selection = select_random_effects_design(_groups(signals, fixed), candidates)
     assert_array_equal(selection.any_at_upper, [True, False])
     assert_array_equal(selection.any_unrefined, [True, False])
     assert selection.any_at_upper.dtype == bool
@@ -304,14 +311,14 @@ def test_selection_reports_features_with_a_truncated_candidate(noise_free, exact
 
 def test_selection_carries_the_winning_fit_unrefined_flag(noise_free):
     signals, fixed, exact, decoy = noise_free
-    selection = select_random_design(_groups(signals, fixed), [decoy, exact])
+    selection = select_random_effects_design(_groups(signals, fixed), [decoy, exact])
     assert_array_equal(selection.fit.unrefined, selection.fit.at_upper)
     assert selection.fit.unrefined[0] and not selection.fit.unrefined[1]
 
 
 def test_untruncated_selection_has_no_flag(planted):
     signals, fixed, candidates = planted
-    selection = select_random_design(_groups(signals, fixed), candidates)
+    selection = select_random_effects_design(_groups(signals, fixed), candidates)
     assert not selection.any_at_upper.any()
     assert not selection.any_unrefined.any()
 
@@ -332,7 +339,7 @@ def test_losing_interior_fallback_makes_selection_provisional(monkeypatch):
 
     monkeypatch.setattr(api, "minimize_ratio", search)
     groups = [RemlGroup(y, np.empty((len(y), 0)))]
-    selected = api.select_random_design(groups, [[z], [z]])
+    selected = api.select_random_effects_design(groups, [[z], [z]])
     assert selected.winner[0] == 1
     assert not selected.fit.unrefined[0]
     assert not selected.any_at_upper[0]

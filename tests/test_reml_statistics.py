@@ -10,7 +10,7 @@ from numpy.testing import assert_allclose
 from boldtailor._reml_criterion import profiled_variance
 from boldtailor._reml_terms import project_fixed, reml_terms
 from boldtailor.ar1 import estimate_rho
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from tests.reml_oracles import (
     ar1_correlation,
     dense_criterion,
@@ -313,7 +313,7 @@ def selection_rate(replicates, ratio):
     parts = [planted_group(rng, 60, ratio, replicates) for _ in range(4)]
     groups = [RemlGroup(y, c) for y, c, _ in parts]
     candidates = [[p[2][k] for p in parts] for k in range(N_CANDIDATES)]
-    selection = select_random_design(groups, candidates)
+    selection = select_random_effects_design(groups, candidates)
     rate = float(np.mean(selection.winner == 0))
     return rate, binomial_se(rate, replicates)
 

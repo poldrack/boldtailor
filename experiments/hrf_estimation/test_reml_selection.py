@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from experiments.hrf_estimation import pilot
 from experiments.hrf_estimation import reml_selection as api
 from experiments.hrf_estimation.sensitivity import ar1_noise
@@ -70,7 +70,7 @@ def _package_selection(runs, library, rho):
     candidates = (
         [api.random_design(run, k) for run in runs] for k in library.candidates
     )
-    return select_random_design(groups, candidates, rho=rho)
+    return select_random_effects_design(groups, candidates, rho=rho)
 
 
 def test_estimate_matches_package_selection(planted_runs):
