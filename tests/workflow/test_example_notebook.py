@@ -22,7 +22,7 @@ def notebook_config(six_run_dataset, tmp_path):
         hrf_n_samples=2,
         ridge_fractions=(0.4, 1.0),
         n_jobs=1,
-        block_size=4,
+        block_size=2,
         surface_maps=False,
     )
 
@@ -35,11 +35,15 @@ def execute_notebook(config):
     return namespace
 
 
-def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config, monkeypatch):
+def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(
+    notebook_config, monkeypatch
+):
     from boldtailor.workflow import run, beta_series
 
     def opaque_workflow(*args, **kwargs):
-        pytest.fail("The teaching notebook must expose the stages, not call an orchestrator")
+        pytest.fail(
+            "The teaching notebook must expose the stages, not call an orchestrator"
+        )
 
     monkeypatch.setattr(run, "run_workflow", opaque_workflow)
     monkeypatch.setattr(beta_series, "fit_beta_models", opaque_workflow)
@@ -51,7 +55,8 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config,
     assert ns["result"].report_path.is_file()
     assert "map_summary" in ns, "demonstrate named CIFTI maps read from disk"
     assert len(ns["map_summary"]) == 3
-    assert (ns["map_summary"]["finite_grayordinates"] > 0).all()
+    assert len(ns["blocks"]) == 2  # Exercise assembly across spatial blocks.
+    assert (ns["map_summary"]["finite_grayordinates"] == 3).all()
     assert "beta_preview" in ns, "demonstrate beta rows joined to trial metadata"
     assert len(ns["beta_preview"]) > 0
     assert np.isfinite(ns["beta_preview"]["beta"]).any()
@@ -69,8 +74,13 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config,
         assert set(tuned["evaluation"]) == {"odd_to_even", "even_to_odd"}
     assert set(ns["activation"]) == set(ns["beta_models"])
     # The example's visible fit agrees with the saved optimized-GLM maps.
-    np.testing.assert_allclose(ns["glms"]["OptimizedGLM"]["r2"], ns["glm_values"],
-                               rtol=1e-6, atol=1e-7, equal_nan=True)
+    np.testing.assert_allclose(
+        ns["glms"]["OptimizedGLM"]["r2"],
+        ns["glm_values"],
+        rtol=1e-6,
+        atol=1e-7,
+        equal_nan=True,
+    )
 
 
 def test_walkthrough_reports_preflight_problems_without_writing(notebook_config):

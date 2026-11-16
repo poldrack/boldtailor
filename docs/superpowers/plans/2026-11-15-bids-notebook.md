@@ -31,3 +31,11 @@
 Execute in this session under the user's authorization to update the notebook; no additional approval checkpoint is needed. Use the current checkout commit as the worktree base. Results default to a local ignored results directory so dataset derivatives remain untouched.
 
 Validation evidence: `docs/validation/nsd-notebook-2026-11-15.md`.
+
+## Follow-up request: clarity through explicit API calls
+
+- [x] Commit a failing test that disables the two workflow orchestrators and requires inspectable stage results.
+- [x] Replace the runner cell with explicit loading, selection, GLM, reliability, beta/CV, diagnostic, and publication sections.
+- [x] Explain intermediate data structures, selection versus independent test scores, and the retained blockwise/CV API boundaries.
+- [x] Execute synthetic tests (including two spatial blocks), full suite, and real NSD notebook.
+- [x] Compare all real-data CIFTI and TSV outputs with the original run; record numerical parity in the validation document.

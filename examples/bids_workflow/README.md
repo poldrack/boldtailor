@@ -4,9 +4,10 @@ These notebooks demonstrate the **BIDS + fMRIPrep** path, the same one the
 `boldtailor run` command uses: raw BIDS events plus fMRIPrep fsLR 91k CIFTI
 time series and confounds. They use the Natural Scenes Dataset's fMRIPrep
 outputs as the example dataset. Start with the [full workflow notebook](nsd_workflow.py);
-the other two notebooks reuse or extend its results. The workflow notebook runs the
-package workflow, `boldtailor.workflow.run.run_workflow`, which is also available
-as the [`boldtailor run` command](#command-line-interface).
+the other two notebooks reuse or extend its results. The workflow notebook spells
+out the analysis stages behind the
+[`boldtailor run` command](#command-line-interface), using the underlying functions
+and keeping intermediate results available for inspection.
 
 The NSD replication experiments are separate. They live in
 [`experiments/nsd_replication/`](../../experiments/nsd_replication/README.md),
@@ -80,12 +81,12 @@ an actionable error. The helpers do not read `.env` files.
 
 The full notebook defaults to 128 grayordinates, four workers, and a block size of
 128, exercising every stage with all runs. Outputs go to the checkout's ignored
-`results/nsd_workflow/` directory (or `NSD_OUTPUT_ROOT`), isolating worktree results.
+`results/nsd_workflow_explicit/` directory (or `NSD_OUTPUT_ROOT`), isolating worktree results.
 For a full spatial analysis, set `max_grayordinates=None`, `block_size=4096`, and a
 new `output_root`. `NSD_CONFIG` overrides these defaults. The other notebooks
 retain their existing spatial and derivative defaults. To reuse this notebook's
 outputs in the companion notebooks, set `NSD_OUTPUT_ROOT` to this checkout's
-absolute `results/nsd_workflow` path for all notebooks (and use matching model
+absolute `results/nsd_workflow_explicit` path for all notebooks (and use matching model
 settings). This full walkthrough assumes all four workflow stages are enabled.
 
 Before fitting, the notebook calls `describe_inputs` to show the discovered runs,
@@ -108,12 +109,32 @@ optimized-HRF ridge CV needs at least three in each half. This
 notebook requires matching nuisance column names and order after trimming;
 it rejects mismatches before fitting.
 
-One `run_workflow` call fits two conventional GLMs, optimized HRF selection,
-odd/even reliability, canonical and optimized single-trial models,
-encoding-guided ridge CV, and RT checks, and publishes every output together
-with an HTML report. The notebook then shows the run table and the saved
-figures section by section. The task model is detected from the event columns;
-for NSD the conventional GLMs fit these predictors jointly, without
+The notebook executes these stages in separate cells, with explanations and
+intermediate tables/figures before publication:
+
+1. `inputs.load_session` loads events/confounds/timing; `detect_task_model` resolves
+   task regressors, and `inputs.make_blocks` defines the spatial subsets.
+2. `select_hrfs` selects all-run HRFs; two explicit `evaluate_hrf_split` calls
+   select on odd/even runs and predict the other half.
+3. `ModelSpec`, `fit`, and `task_delta_r2` fit canonical and optimized conventional
+   GLMs block by block, extract contrasts, and retain design matrices.
+4. `curve_correlations` and parameter-agreement plots compare half-session HRFs.
+5. Two `analysis.fit_beta_series` calls fit canonical and optimized OLS trial
+   models; this adapter handles spatial blocks around the single-trial APIs.
+6. `fit_cv_beta_series` tunes each HRF model separately. The notebook explains
+   its inner candidate scoring, independent outer evaluations, and final refit,
+   and displays each kind of result separately. Fixed ridge/off remain supported.
+7. `one_sample_t`, RT diagnostics, and optional surface rendering summarize fits.
+8. `workflow_artifacts`, `render_report`, and `publish_workflow` serialize and
+   publish the already computed results. These calls perform no model fitting.
+
+HRF-selection and conventional-GLM loops are deliberately sequential for teaching;
+`n_jobs` controls the blockwise beta and CV calls. The namespace retains `runs`,
+`task_model`, `library`, `selections`, `glms`, `ols_fits`, `cv_results`, and
+`activation` so readers can inspect or adapt each stage. The notebook does not
+call `run_workflow` or `fit_beta_models`.
+
+The task model is detected from the event columns; for NSD the conventional GLMs fit these predictors jointly, without
 orthogonalization:
 
 - `task`: unit amplitude for every presentation.
@@ -145,7 +166,7 @@ samples over the original grid's gamma-parameter ranges. Sampling balances
 coverage, but different candidates can still produce similar HRF shapes.
 Set `hrf_n_samples` to a power of two and `hrf_seed` to a nonnegative integer.
 The workflow saves a plot of every HRF, colored by time to peak
-(`desc-Library_plot.png`), which the notebook shows in section 5.
+(`desc-Library_plot.png`), which the notebook shows in section 4.
 
 For the previous grid, set `hrf_library="expanded"`; `"canonical"` uses SPM
 alone. The metadata JSON saves these settings; the library TSV and NPZ save the
