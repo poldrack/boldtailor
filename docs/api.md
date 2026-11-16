@@ -218,7 +218,8 @@ From `boldtailor.fractional_ridge`:
 ```text
 score_fraction_candidates(data, predictors, *, fractions, library=None,
                           run_labels=None, feature_signature=None,
-                      encoding_mode="within_run")
+                      encoding_mode="within_run", hrf_method="cv",
+                      reml_options=None, task_model=TaskModel())
 select_ridge_fractions(scores, *, feature_mask=None)
 select_ridge_fractions(candidate_r2, fractions, *, feature_mask=None)
 ```
@@ -258,7 +259,8 @@ From `boldtailor.ridge_selection`:
 ```text
 score_ridge_candidates(data, predictors, *, alphas, library=None,
                       run_labels=None, feature_signature=None,
-                      encoding_mode="within_run")
+                      encoding_mode="within_run", hrf_method="cv",
+                      reml_options=None, task_model=TaskModel())
 select_ridge_penalty(scores, *, percentile=90.0, feature_mask=None)
 select_ridge_penalty(candidate_r2, alphas, *, percentile=90.0, feature_mask=None)
 ```
@@ -271,7 +273,9 @@ regularization kind are rejected.
 event rows, with matching named columns. Do not include `task`: an intercept is
 added. Nonfinite predictor rows are excluded from encoding only. The scorer
 requires at least two runs (`library=None`, canonical SPM), or three with an
-`HrfLibrary`. Supplied libraries trigger fresh HRF selection within each
+`HrfLibrary` using CV. With a library and `hrf_method="reml"`, two runs suffice.
+Both scorers accept `reml_options` and `task_model` for foldwise HRF selection.
+REML requires a library; REML options with CV are rejected. Supplied libraries trigger fresh HRF selection within each
 inner-training set. Supply only outer-training runs when nesting the call.
 
 `CandidateScores` contains `regularization="normalized_ridge"`, ascending
@@ -536,10 +540,12 @@ From `boldtailor.hrf_selection`:
 
 ```text
 select_hrfs(data, *, library=None, run_labels=None, feature_signature=None,
-            candidate_batch_size=32, task_model=TaskModel())
+            candidate_batch_size=32, task_model=TaskModel(),
+            method="cv", reml_options=None)
 evaluate_hrf_split(data, *, library=None, train_runs, test_runs,
                    run_labels=None, feature_signature=None,
-                   task_model=TaskModel(), candidate_batch_size=32)
+                   task_model=TaskModel(), candidate_batch_size=32,
+                   method="cv", reml_options=None)
 ```
 
 `select_hrf` is a deprecated alias of `select_hrfs` for one release.
@@ -567,10 +573,11 @@ an unchecked candidate is not an excluded candidate.
 `HrfEvaluationResult` contains `training_selection`, `training_amplitudes`,
 `test_r2`, `canonical_test_r2`, `delta_test_r2`, `train_runs`, `test_runs`, and
 `provenance`. It fixes the HRF and one amplitude per task regressor before predicting the test runs.
-Selection requires two runs; independent evaluation requires two training runs
-and at least one test run. Undefined HRF indices are `-1`.
+CV selection requires two runs; its independent evaluation requires two training
+runs and at least one test run. REML requires one training run and at least one
+disjoint test run for evaluation. Undefined HRF indices are `-1`.
 
-Both functions score the task model's regressors;
+CV scores prediction of the task model's regressors;
 `HrfSelectionResult.task_model` records it.
 `HrfEvaluationResult.training_amplitudes` has one row per task regressor, in
 `amplitude_names` order. `HrfEvaluationResult.training_amplitudes` is now
@@ -578,6 +585,59 @@ two-dimensional, `(n_regressors, n_features)`; under the default task model
 index row 0 where earlier releases returned a one-dimensional array. Selection provenance records `task_model`,
 `task_model_fingerprint`, `task_regressors`, `profiled_regressors`,
 `min_onset`, and `oversampling`.
+
+### REML HRF selection
+
+From `boldtailor.hrf_options`: `RemlHrfOptions(rho=0.0, reference_hrf_id=0)`.
+Use `method="reml"` with either selection function; omitted options use these
+defaults. Unknown methods and REML options supplied with CV raise errors.
+`rho` is a finite scalar or a copied, read-only feature vector with
+`abs(rho) < 1`. The reference ID must belong to the supplied library.
+`options.subset(indices)` subsets featurewise rho for block processing.
+
+The fixed design contains run confounds, an intercept, and `TaskModel`
+columns (including missing indicators) convolved with the fixed reference HRF.
+It is held constant across candidate comparisons. Random designs contain one
+unit-peak response column per trial, without column-length normalization.
+Trial coefficients are independent zero-mean deviations; repeated stimulus IDs
+do not share coefficients. Trial and noise variances are per feature and shared
+across runs. Selection is conditional on this fixed mean and supplied rho;
+mean misspecification can affect the selected covariance shape. Rho is not
+estimated automatically. Any external estimate used in split evaluation must
+come from training data only.
+
+`HrfSelectionResult.method` is `"cv"` or `"reml"`. For REML, all three
+CV arrays are `None` and `reml` is a `RemlHrfDiagnostics` object containing:
+
+- `selection`: the engine's `RemlSelection`, including winning fit and flags.
+- `candidate_ids`: engine-position to library-ID mapping.
+- `canonical_fit`: canonical trial covariance fit under the same mean and rho.
+- `delta_criterion`: canonical minus winning criterion; NaN if unavailable.
+- `reference_hrf_id`: the fixed mean's HRF ID.
+
+Criteria are negative twice restricted log likelihood up to common constants.
+Lower is better; positive delta favors the selected HRF. The runner-up gap is
+`reml.selection.gap`. Neither quantity is R² or a significance test.
+Inspect winning `fit.status`, `fit.at_upper`, and `fit.unrefined`, plus
+`selection.any_at_upper` and `selection.any_unrefined` across all candidates.
+An unresolved losing candidate makes the comparison provisional. Unsupported
+features have HRF ID -1; no canonical fallback is applied.
+
+The eligibility table describes structural random-design validity. Featurewise
+numerical status is in the diagnostics. Wide random designs are allowed for
+selection, but downstream OLS fits still require estimable designs.
+Split evaluation predicts shared mean task responses, not random trial effects,
+and records undefined predictions without changing the training winner.
+REML streams candidates one at a time; `candidate_batch_size` is validated
+but does not affect its memory allocation or result.
+
+The workflow accepts `--hrf-method cv|reml`, `--reml-rho FLOAT`, and
+`--reml-reference-hrf-id INTEGER`. Corresponding `WorkflowSettings` fields
+are `hrf_method`, `reml_rho`, and `reml_reference_hrf_id`.
+REML-only flags are rejected in CV mode. REML maps include criteria, variance
+estimates, rho, winning and any-candidate flags, and status codes documented in
+the output JSON. Reports count unsupported and provisional selections.
+CV map names and default output paths are unchanged.
 
 From `boldtailor.model`: `Modulator(column, missing="error", kind="numeric",
 levels=None, reference=None)` and `TaskModel(modulators=())`, with `regressor_names`, `profiled_names`,

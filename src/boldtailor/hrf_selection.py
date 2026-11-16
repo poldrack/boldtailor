@@ -135,10 +135,12 @@ def select_hrfs(
 ) -> HrfSelectionResult:
     """Choose each feature's HRF by CV (default) or fixed-reference REML.
 
-    This is a selection statistic. Confounds and missing-value indicators are
-    profiled in each run; task-model amplitudes are learned only from other
-    runs. Anonymous arrays without feature_signature require the caller to
-    preserve feature order.
+    CV learns task amplitudes from other runs, profiling nuisance per run.
+    REML compares trial covariances conditional on a fixed reference mean and
+    supplied noise correlation. Its CV score fields are None; likelihood
+    estimates and search qualifications are in result.reml. Neither method's
+    selection statistic replaces independent evaluation. Anonymous arrays
+    without feature_signature require the caller to preserve feature order.
     """
     library = default_hrf_library() if library is None else library
     with fit_operation("hrf_selection", data.provenance) as operation:

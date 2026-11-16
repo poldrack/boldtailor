@@ -42,7 +42,7 @@ The integration suite is additional to every row.
 
 | Changed area | Focused test paths | Additional consumers to consider |
 | --- | --- | --- |
-| `reml`, `_reml_*` | `tests/test_reml*.py` | REML experiment adapters below |
+| `reml`, `_reml_*` | `tests/test_reml*.py` | `tests/test_hrf_reml*.py tests/workflow/test_reml_workflow.py`; optional experiment checks below |
 | `_numerics`, AR(1), `_ar1_moments` | `tests/test_numerics*.py tests/test_ar1.py tests/test_reml*.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_hrf_glm.py tests/test_single_trial.py` |
 | `model`, `design`, `_task_design`, task detection | `tests/test_model.py tests/test_design.py tests/test_task_model.py tests/test_task_design.py tests/test_task_detection.py` | Conventional, selected-HRF and single-trial fitting tests |
 | `fit`, `_standard_glm`, `_conventional`, results | `tests/test_fit.py tests/test_multirun.py tests/test_fit_diagnostics.py tests/test_result_schemas.py` | `tests/test_prepared_fit.py tests/test_hrf_glm.py` |
@@ -119,3 +119,7 @@ Prefer executing documented examples over asserting that prose contains specific
 words. Keep license, distribution and explicit architecture requirements tested.
 See the [test-suite review](test-suite-review-2026-11-16.md) for this review's
 removals, retained cases and timing findings.
+
+Public REML HRF adapter checks are in `tests/test_hrf_reml*.py`, including
+generated invariants, a dense likelihood oracle, and seeded model recovery.
+Workflow coverage includes `tests/workflow/test_reml_workflow.py`.

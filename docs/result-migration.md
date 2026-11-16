@@ -103,3 +103,16 @@ Related changes to saved records:
 - The selected-HRF `trial_table` (and saved `trials.tsv`) column order is now
   `trial_index`, `trial_id`, `run_label`, `event_index`, the event columns,
   then `run_index`, matching the shared-HRF table.
+
+## HRF selection methods
+
+Cross-validation remains the default. `HrfSelectionResult.method` identifies
+the estimator. CV results retain `cv_r2`, `canonical_cv_r2`, and
+`delta_cv_r2`; their `reml` field is `None`.
+With `method="reml"`, those CV fields are `None` and method-specific values
+are under `result.reml`. Code that reads selection scores must branch on
+`result.method`. HRF IDs and downstream fitting interfaces remain shared.
+
+Legacy provenance without a method field describes CV. New REML provenance
+records the fixed reference mean, supplied rho, normalization, and model
+identities. Likelihood criteria must not be written into CV R² maps.

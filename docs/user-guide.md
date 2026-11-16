@@ -2,6 +2,10 @@
 
 [README](../README.md) · [API reference](api.md) · [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md)
 
+For an introduction to the components and their use, start with the
+[practical guide](practical-guide.md). This page gives the method details and
+full workflow options.
+
 ## Preparing your data
 
 The Python API takes one signal array per run, shaped **time points × features**.
@@ -336,7 +340,13 @@ GLMs remain OLS, and the HRF reliability analysis is unchanged.
 
 ## Selecting an HRF for each location
 
-HRF selection requires at least two runs with matching feature order. In the
+REML is also available through `select_hrfs(..., method="reml")`.
+See [the REML guide](practical-guide.md#11-select-hrfs-with-reml) for the
+fixed reference mean, supplied AR(1) correlation, and numerical diagnostics.
+It needs one estimable run and returns the same assignment interface, with
+likelihood diagnostics instead of CV scores. The examples below use default CV.
+
+Default CV HRF selection requires at least two runs with matching feature order. In the
 following example, `multi_run_data` is an `AnalysisData` object created from
 lists of runs as described above:
 
@@ -1187,3 +1197,22 @@ Construction owns input arrays, and table/dictionary accessors return copies.
 Array access itself does not make another copy. Deliberately enabling writes
 on an exposed array can invalidate its owning result or analysis and the
 assumptions behind its provenance. The supported editing pattern is `.copy()`.
+
+### REML in the command-line workflow
+
+Add `--hrf-method reml` to use restricted likelihood for HRF selection.
+`--reml-rho` supplies scalar AR(1) correlation (default 0);
+`--reml-reference-hrf-id` selects the fixed mean HRF (default 0, canonical SPM).
+These flags are recorded in settings and the report's equivalent command.
+They are rejected with CV.
+
+REML requires one run per odd/even half for reliability, or two per half for
+nested optimized ridge. HRF-only selection can use one run. CV retains the
+run requirements described above. Every inner, outer, and final optimized-HRF
+selection uses the chosen method. Denoising's internal selection remains CV.
+
+REML selection maps contain criterion, canonical criterion, their difference,
+runner-up gap, variance ratio, noise and effect variance, rho, numerical flags,
+and status codes. Their metadata supplies the code and candidate-ID mappings.
+Unsupported HRFs are undefined in maps. Reports include unsupported and
+provisional counts; independent evaluation retains its prediction R² maps.

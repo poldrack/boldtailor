@@ -6,6 +6,7 @@ from their named modules; package initializers are empty.
 | Document | Purpose |
 | --- | --- |
 | [Project README](../README.md) | Installation and a runnable first model |
+| [Practical guide](practical-guide.md) | A plain-language introduction to each analysis component, with examples |
 | [User guide](user-guide.md) | Scientific methods, examples, interpretation, and [`boldtailor run`](user-guide.md#running-the-full-workflow) |
 | [API reference](api.md) | Signatures, defaults, result fields, and source records |
 | [Human code-review guide](code-review.md) | Reading routes, runnable examples, review questions and a complete module/function inventory |

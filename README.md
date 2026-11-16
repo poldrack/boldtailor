@@ -168,6 +168,7 @@ betas and trial variables, transfer across runs. See the
 
 ## Documentation
 
+- [Practical guide](docs/practical-guide.md): a step-by-step introduction to the components and their use.
 - [User guide](docs/user-guide.md): model choices, timing, confounds, HRFs, and interpretation.
 - [API reference](docs/api.md): entry points, options, and returned values.
 - [Human code-review guide](docs/code-review.md): reading routes, usage examples, and a complete module/function inventory.
@@ -193,3 +194,8 @@ It bundles one third-party file: GLMsingle's 20-HRF library
 Kendrick Kay), redistributed under the BSD 3-Clause License reproduced in
 `src/boldtailor/_resources/GLMsingle-LICENSE.txt`. That license covers only
 this data file.
+
+HRF selection supports cross-validation (default) and restricted maximum
+likelihood with `select_hrfs(..., method="reml")` or `--hrf-method reml`.
+See the [REML guide](docs/practical-guide.md#11-select-hrfs-with-reml) for the
+fixed mean model and supplied noise correlation.
