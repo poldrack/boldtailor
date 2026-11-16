@@ -211,12 +211,15 @@ def evaluate_hrf_split(
     feature_signature: str | None = None,
     task_model: TaskModel = TaskModel(),
     candidate_batch_size: int = 32,
+    method: str = "cv",
+    reml_options: RemlHrfOptions | None = None,
 ) -> HrfEvaluationResult:
     """Select within training runs, then freeze HRF and amplitudes for test runs.
 
     ``candidate_batch_size`` bounds memory exactly as in :func:`select_hrfs`;
     it never changes the result.
     """
+    options = resolve_reml_options(method, reml_options)
     library = default_hrf_library() if library is None else library
     with fit_operation("hrf_independent_evaluation", data.provenance) as operation:
         runs, labels, split = _prepare_split(
@@ -227,17 +230,31 @@ def evaluate_hrf_split(
             feature_signature,
             task_model,
             candidate_batch_size,
+            minimum_train=1 if method == "reml" else 2,
         )
-        selection = _train_selection(
-            data,
-            runs,
-            library,
-            labels,
-            feature_signature,
-            task_model,
-            split,
-            candidate_batch_size,
-        )
+        if method == "reml":
+            train, _ = split
+            selection = select_hrfs(
+                subset_runs(data, train),
+                library=library,
+                run_labels=[labels[r] for r in train],
+                feature_signature=feature_signature,
+                task_model=task_model,
+                candidate_batch_size=candidate_batch_size,
+                method=method,
+                reml_options=options,
+            )
+        else:
+            selection = _train_selection(
+                data,
+                runs,
+                library,
+                labels,
+                feature_signature,
+                task_model,
+                split,
+                candidate_batch_size,
+            )
         values, activity = _evaluation_values(
             data,
             runs,
@@ -278,10 +295,18 @@ def _train_selection(data, runs, library, labels, signature, task_model, split, 
 
 
 def _prepare_split(
-    data, library, split, run_labels, feature_signature, task_model, batch
+    data,
+    library,
+    split,
+    run_labels,
+    feature_signature,
+    task_model,
+    batch,
+    *,
+    minimum_train=2,
 ):
     _validate(library, feature_signature, batch, task_model)
-    train = _fold_indices(split[0], data.n_runs, 2, "train_runs")
+    train = _fold_indices(split[0], data.n_runs, minimum_train, "train_runs")
     test = _fold_indices(split[1], data.n_runs, 1, "test_runs")
     if set(train) & set(test):
         raise ValueError("training and test runs must be disjoint")
@@ -308,6 +333,12 @@ def _evaluation_values(
         training_selection=identity_activity(selection.provenance),
         frozen_task_amplitudes=True,
     )
+    if selection.method == "reml":
+        activity.update(
+            method="reml",
+            prediction_target="shared_task_mean",
+            prediction_ineligible_hrfs=_prediction_exclusions(runs, split),
+        )
     amplitudes, chosen, canonical, delta = scores
     return (
         dict(
@@ -328,6 +359,9 @@ def _held_out_scores(data, runs, selection, task_model, split, batch):
     train, test = split
     a, b, c, energy = signal_statistics(runs, data.signals, batch)
     amplitudes, scores = _predict(a, b, c, energy, train, test)
+    if selection.method == "reml":
+        for excluded in _prediction_exclusions(runs, split):
+            scores[excluded["hrf_id"]] = np.nan
     ids = selection.hrf_indices
     valid = np.flatnonzero(ids >= 0)
     chosen = np.full(data.n_features, np.nan)
@@ -339,3 +373,18 @@ def _held_out_scores(data, runs, selection, task_model, split, batch):
         canonical[:] = np.nan
     canonical[ids < 0] = np.nan
     return coefficient, chosen, canonical, chosen - canonical
+
+
+def _prediction_exclusions(runs, split):
+    """Prediction rank checks do not alter a likelihood-selected training winner."""
+    used = (*split[0], *split[1])
+    excluded = []
+    for cid in range(len(runs[0].library.candidates)):
+        reasons = [
+            f"run {r}: {runs[r].eligible(cid)[1]}"
+            for r in used
+            if not runs[r].eligible(cid)[0]
+        ]
+        if reasons:
+            excluded.append(dict(hrf_id=cid, reason="; ".join(reasons)))
+    return excluded

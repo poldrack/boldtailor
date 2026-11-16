@@ -141,7 +141,6 @@ def test_canonical_only_reml_has_no_runner_up(planted_reml_hrfs):
     assert np.all(selection.hrf_indices[:2] == 0)
 
 
-
 def test_reml_split_is_independent_of_test_signals(planted_reml_hrfs):
     """Held-out BOLD changes scores but cannot alter training fits or their identity."""
     from boldtailor.data import from_arrays
@@ -150,13 +149,24 @@ def test_reml_split_is_independent_of_test_signals(planted_reml_hrfs):
     data, library = planted_reml_hrfs
     options = dict(library=library, method="reml", train_runs=[0], test_runs=[1, 2])
     base = evaluate_hrf_split(data, **options)
-    changed = from_arrays([data.signals[0], data.signals[1] * 7, data.signals[2] * -3],
-                          data.events, frame_times=data.frame_times, confounds=data.confounds)
+    changed = from_arrays(
+        [data.signals[0], data.signals[1] * 7, data.signals[2] * -3],
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+    )
     altered = evaluate_hrf_split(changed, **options)
-    np.testing.assert_array_equal(base.training_selection.hrf_indices, altered.training_selection.hrf_indices)
-    np.testing.assert_array_equal(base.training_selection.reml.selection.fit.ratio, altered.training_selection.reml.selection.fit.ratio)
+    np.testing.assert_array_equal(
+        base.training_selection.hrf_indices, altered.training_selection.hrf_indices
+    )
+    np.testing.assert_array_equal(
+        base.training_selection.reml.selection.fit.ratio,
+        altered.training_selection.reml.selection.fit.ratio,
+    )
     np.testing.assert_array_equal(base.training_amplitudes, altered.training_amplitudes)
-    assert identity_activity(base.training_selection.provenance) == identity_activity(altered.training_selection.provenance)
+    assert identity_activity(base.training_selection.provenance) == identity_activity(
+        altered.training_selection.provenance
+    )
     assert not np.allclose(base.test_r2[:2], altered.test_r2[:2])
     assert np.isnan(base.test_r2[-1])
 
@@ -167,20 +177,30 @@ def test_reml_split_matches_training_only_mean_prediction(planted_reml_hrfs):
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = planted_reml_hrfs
-    result = evaluate_hrf_split(data, library=library, method="reml", train_runs=[0], test_runs=[1])
+    result = evaluate_hrf_split(
+        data, library=library, method="reml", train_runs=[0], test_runs=[1]
+    )
     for feature in range(2):
         cid = result.training_selection.hrf_indices[feature]
         residuals = []
         for r in [0, 1]:
-            nuisance = np.column_stack([data.confounds[r], np.ones(len(data.signals[r]))])
-            x = trial_regressors(data.events[r], data.frame_times[r], library.candidates[cid]).sum(axis=1)
+            nuisance = np.column_stack(
+                [data.confounds[r], np.ones(len(data.signals[r]))]
+            )
+            x = trial_regressors(
+                data.events[r], data.frame_times[r], library.candidates[cid]
+            ).sum(axis=1)
             y = data.signals[r][:, feature]
-            residuals.append((x - nuisance @ np.linalg.lstsq(nuisance, x, rcond=None)[0],
-                              y - nuisance @ np.linalg.lstsq(nuisance, y, rcond=None)[0]))
+            residuals.append(
+                (
+                    x - nuisance @ np.linalg.lstsq(nuisance, x, rcond=None)[0],
+                    y - nuisance @ np.linalg.lstsq(nuisance, y, rcond=None)[0],
+                )
+            )
         x, y = residuals[0]
         beta = (x @ y) / (x @ x)
         tx, ty = residuals[1]
-        expected = 1 - np.sum((ty - tx * beta) ** 2) / np.sum(ty ** 2)
+        expected = 1 - np.sum((ty - tx * beta) ** 2) / np.sum(ty**2)
         np.testing.assert_allclose(result.training_amplitudes[0, feature], beta)
         np.testing.assert_allclose(result.test_r2[feature], expected)
 
@@ -191,8 +211,9 @@ def test_reml_split_rejects_overlapping_runs(planted_reml_hrfs):
 
     data, library = planted_reml_hrfs
     with pytest.raises(ValueError, match="disjoint"):
-        evaluate_hrf_split(data, library=library, method="reml", train_runs=[0], test_runs=[0])
-
+        evaluate_hrf_split(
+            data, library=library, method="reml", train_runs=[0], test_runs=[0]
+        )
 
 
 def test_reml_split_keeps_winner_when_test_mean_is_unestimable(planted_reml_hrfs):
@@ -203,9 +224,15 @@ def test_reml_split_keeps_winner_when_test_mean_is_unestimable(planted_reml_hrfs
 
     data, library = planted_reml_hrfs
     confounds = list(data.confounds)
-    confounds[1]["task_overlap"] = trial_regressors(data.events[1], data.frame_times[1], library.candidates[1]).sum(axis=1)
-    changed = from_arrays(data.signals, data.events, frame_times=data.frame_times, confounds=confounds)
-    result = evaluate_hrf_split(changed, library=library, method="reml", train_runs=[0], test_runs=[1])
+    confounds[1]["task_overlap"] = trial_regressors(
+        data.events[1], data.frame_times[1], library.candidates[1]
+    ).sum(axis=1)
+    changed = from_arrays(
+        data.signals, data.events, frame_times=data.frame_times, confounds=confounds
+    )
+    result = evaluate_hrf_split(
+        changed, library=library, method="reml", train_runs=[0], test_runs=[1]
+    )
     assert result.training_selection.hrf_indices[0] == 1
     assert np.isnan(result.test_r2[0])
     assert identity_activity(result.provenance)["prediction_ineligible_hrfs"]
