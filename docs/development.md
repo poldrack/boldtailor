@@ -523,8 +523,12 @@ Workflows build `Artifact` objects in memory and pass them to
 `publish_artifact_set()`. Under a `FileLock`, it checks targets, stages files in
 `<destination>.boldtailor/stage-<uuid>/`, moves overwritten files to
 `backup-<uuid>/`, `os.replace`s each file into place, and fsyncs files (not
-directories). Failure restores the backups. Writers serialize; readers can see a
-partial set. Payloads are not parsed. The destination is resolved first (so a
+directories). With `manifest_path`, the old JSON manifest is read under the same
+lock; stale listed files are moved into those backups before promotion. Failure
+restores removed files as well as overwritten ones. No stale-file deletion occurs
+after releasing the lock. Missing/legacy manifests authorize no deletion;
+corrupt or unreadable manifests stop publication. Writers serialize; readers can
+see a partial set. New artifact payloads are not parsed. The destination is resolved first (so a
 linked destination or macOS `/tmp` works); symlinks inside it are refused, as
 are unrequested overwrites and outputs overlapping `source_paths`.
 `<destination>.boldtailor/` is a sibling, not part of the dataset (so no
@@ -605,3 +609,12 @@ remaining branches, with purposes taken from their last commit, are:
 
 The `safety/` and `task*-safety` branches are review snapshots; delete them once
 the maintainer confirms they are no longer needed.
+
+## Renamed keyword defaults
+
+While an old keyword remains supported, both old and new parameter defaults must
+use `UNSET`. `renamed_keyword(..., default=...)` resolves the effective default
+only after checking which names were supplied. Supplying both names raises,
+including when the new value equals its effective default. Do not infer argument
+omission from object identity or value equality. `fit_single_trials` still uses
+canonical SPM when neither HRF keyword is supplied.

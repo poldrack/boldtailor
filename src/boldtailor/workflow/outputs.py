@@ -1,7 +1,7 @@
 """Publish every workflow stage's maps, designs, tables, and provenance together."""
 
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from matplotlib.figure import Figure
 import numpy as np
@@ -90,33 +90,6 @@ def _names(paths, shown=5):
 def metadata_name(settings):
     """The settings file's path relative to the derivative root."""
     return f"{settings.stem}_desc-boldtailor_metadata.json"
-
-
-def _listed_artifacts(settings):
-    """The artifact paths an earlier run recorded in its settings file, if any."""
-    try:
-        text = (settings.output_dir / metadata_name(settings)).read_text()
-        listed = json.loads(text).get("artifacts")
-    except (OSError, ValueError, AttributeError):
-        return []
-    if not isinstance(listed, list):
-        return []
-    return [p for p in listed if isinstance(p, str) and _inside(p)]
-
-
-def _inside(relative):
-    path = PurePosixPath(relative)
-    return not path.is_absolute() and ".." not in path.parts and "\\" not in relative
-
-
-def _remove_stale(settings, listed, published, sources):
-    """Delete files the earlier run listed that this run did not write again."""
-    keep = {Path(p).resolve() for p in (*published, *sources)}
-    root = settings.output_dir.resolve()
-    for relative in listed:
-        path = root / relative
-        if path.is_file() and not path.is_symlink() and path.resolve() not in keep:
-            path.unlink()
 
 
 def _design_artifact(settings, descriptor, result, runs):
@@ -1123,7 +1096,6 @@ def _root_artifacts(report_html, settings):
 def publish_workflow(settings, runs, artifacts, report_html):
     """Publish ``workflow_artifacts`` with the report and dataset description at once."""
     overwrite = settings.existing_results == "overwrite"
-    listed = _listed_artifacts(settings) if overwrite else []
     sources = [p for r in runs for p in input_paths(r.inputs)]
     paths = publish_artifact_set(
         settings.output_dir,
@@ -1132,9 +1104,8 @@ def publish_workflow(settings, runs, artifacts, report_html):
         overwrite=overwrite,
         lock_timeout=LOCK_TIMEOUT,
         keep_existing=() if overwrite else ("dataset_description.json",),
+        manifest_path=metadata_name(settings) if overwrite else None,
     )
-    if overwrite:
-        _remove_stale(settings, listed, paths, sources)
     return paths
 
 

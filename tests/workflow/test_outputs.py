@@ -822,13 +822,19 @@ def test_check_output_message_stays_short_for_many_files(
 
 
 @pytest.mark.parametrize("contents", ["not json", "[]", '{"artifacts": "invalid"}'])
-def test_overwrite_refuses_corrupt_previous_manifest(four_runs, settings_for, tmp_path, contents):
+def test_overwrite_refuses_corrupt_previous_manifest(
+    four_runs, settings_for, tmp_path, contents
+):
     root, _ = four_runs
-    settings = settings_for(root, output_dir=tmp_path / "out", existing_results="overwrite")
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", existing_results="overwrite"
+    )
     _save_inputs_only(settings)
     manifest = settings.output_dir / outputs.metadata_name(settings)
     manifest.write_text(contents)
     before = {p: p.read_bytes() for p in settings.output_dir.rglob("*") if p.is_file()}
     with pytest.raises(ValueError, match="manifest"):
         _save_inputs_only(settings)
-    assert {p: p.read_bytes() for p in settings.output_dir.rglob("*") if p.is_file()} == before
+    assert {
+        p: p.read_bytes() for p in settings.output_dir.rglob("*") if p.is_file()
+    } == before

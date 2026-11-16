@@ -71,3 +71,22 @@ The ledger is best effort: it cannot be guaranteed when its directory or file
 is unwritable. Diagnostic-writing failure does not remove recovery backups or
 replace the original exception. Records omit exception text and custom class
 names; this is not a privacy guarantee for arbitrary artifact contents.
+
+## Manifest cleanup is transactional (2026-11-16)
+
+`publish_artifact_set(..., overwrite=True, manifest_path="metadata.json")` now
+supports replacing a manifest and removing its obsolete files in one locked
+transaction. The manifest must be one of the supplied replacement artifacts;
+its previous JSON object has an `artifacts` list of relative paths. The workflow
+uses this with its existing `*_desc-boldtailor_metadata.json` file.
+
+The previous manifest is read after lock acquisition. Stale files are moved to
+rollback backups before promotion, so a later failure restores the entire old
+set. Unlisted files, protected inputs, and `keep_existing` files are retained.
+This replaces the workflow's former unlocked, post-publication deletion step.
+
+Missing manifests and legacy objects without an `artifacts` field remain
+supported, without inferring files to delete. Invalid JSON or invalid list types
+now raise `ValueError` instead of silently disabling cleanup; unreadable manifests
+propagate their I/O error. These errors occur before replacing output files.
+Readers still do not receive an atomic directory snapshot.

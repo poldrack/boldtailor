@@ -74,6 +74,7 @@ def publish_artifact_set(
     overwrite: bool = False,
     lock_timeout: float = 30.0,
     keep_existing: Iterable[str] = (),
+    manifest_path: str | None = None,
 ) -> tuple[Path, ...]:
     """Publish a file set under one writer lock, rolling back on failure.
 
@@ -81,12 +82,21 @@ def publish_artifact_set(
     are written only if absent once the lock is held; an existing file there
     is left untouched and omitted from the returned paths.
 
+    With ``overwrite=True``, ``manifest_path`` names a manifest being replaced
+    in this set. Its previous JSON ``artifacts`` list is read under the lock;
+    listed files absent from the requested set are backed up and removed in the
+    same transaction. Protected sources and ``keep_existing`` paths are retained.
+    Missing manifests or legacy objects without ``artifacts`` authorize no
+    removals; malformed or unreadable manifests stop publication. Unsafe relative
+    paths in an otherwise valid list are ignored, never used as deletion targets.
+
     Lock, staging, backups, and the failure ledger live in the sibling
     ``<destination>.boldtailor/`` directory, not in the dataset. Concurrent
     readers may observe a partially replaced set.
     """
     requested = _prepare_artifacts(artifacts)
     keep = frozenset(keep_existing)
+    _validate_manifest_option(manifest_path, requested, keep, overwrite)
     _validate_lock_timeout(lock_timeout)
     root = _resolve_destination(destination)
     control = root.with_name(root.name + _CONTROL_SUFFIX)
@@ -97,11 +107,92 @@ def publish_artifact_set(
     try:
         with FileLock(control / "lock", timeout=lock_timeout):
             wanted = _unless_kept(root, requested, keep)
-            return _publish_locked(root, control, wanted, overwrite=overwrite)
+            stale = _stale_paths(root, manifest_path, requested, keep, sources)
+            return _publish_locked(
+                root, control, wanted, overwrite=overwrite, stale_paths=stale
+            )
     except Timeout as error:
         _record_failure(control, str(uuid4()), error)
         message = f"publication lock timed out for destination {root}"
         raise PublicationError(message) from error
+
+
+def _validate_manifest_option(
+    manifest: str | None,
+    artifacts: Sequence[Artifact],
+    keep: frozenset[str],
+    overwrite: bool,
+) -> None:
+    if manifest is None:
+        return
+    try:
+        _validate_artifact_path(manifest)
+    except ValueError as error:
+        raise ValueError(f"invalid manifest path: {manifest!r}") from error
+    if not overwrite or manifest not in {artifact.path for artifact in artifacts}:
+        raise ValueError(
+            "manifest_path requires overwrite and a replacement manifest artifact"
+        )
+    if manifest in keep:
+        raise ValueError("manifest_path cannot be kept unchanged")
+
+
+def _previous_artifacts(root: Path, manifest: str) -> tuple[str, ...]:
+    _check_target(root, manifest, overwrite=True)
+    try:
+        text = (root / manifest).read_text()
+    except FileNotFoundError:
+        return ()
+    except UnicodeError as error:
+        raise ValueError(f"invalid publication manifest: {manifest}") from error
+    try:
+        contents = json.loads(text)
+    except ValueError as error:
+        raise ValueError(f"invalid publication manifest: {manifest}") from error
+    if not isinstance(contents, dict):
+        raise ValueError(f"publication manifest must be a JSON object: {manifest}")
+    listed = contents.get("artifacts", [])
+    if not isinstance(listed, list) or any(
+        not isinstance(path, str) for path in listed
+    ):
+        raise ValueError(
+            f"publication manifest artifacts must be a list of paths: {manifest}"
+        )
+    return _safe_manifest_paths(listed)
+
+
+def _safe_manifest_paths(listed: Sequence[str]) -> tuple[str, ...]:
+    safe = []
+    for path in dict.fromkeys(listed):
+        try:
+            _validate_artifact_path(path)
+        except ValueError:
+            continue
+        safe.append(path)
+    return tuple(safe)
+
+
+def _stale_paths(
+    root: Path,
+    manifest: str | None,
+    artifacts: Sequence[Artifact],
+    keep: frozenset[str],
+    sources: Sequence[Path],
+) -> tuple[str, ...]:
+    if manifest is None:
+        return ()
+    retained = keep | {artifact.path for artifact in artifacts}
+    stale = []
+    for path in _previous_artifacts(root, manifest):
+        if path in retained:
+            continue
+        target = root / path
+        if any(_paths_overlap(target.resolve(), source) for source in sources):
+            continue
+        _check_target(root, path, overwrite=True)
+        if target.is_file():
+            stale.append(path)
+    return tuple(stale)
 
 
 def _unless_kept(
@@ -120,6 +211,7 @@ def _publish_locked(
     artifacts: tuple[Artifact, ...],
     *,
     overwrite: bool,
+    stale_paths: Sequence[str] = (),
 ) -> tuple[Path, ...]:
     for artifact in artifacts:
         _check_target(destination, artifact.path, overwrite=overwrite)
@@ -127,7 +219,11 @@ def _publish_locked(
     try:
         _stage_artifacts(transaction, artifacts)
         if overwrite:
-            _backup_existing(destination, transaction, artifacts)
+            _backup_existing(
+                destination,
+                transaction,
+                (*stale_paths, *(artifact.path for artifact in artifacts)),
+            )
         _promote_staged(destination, transaction, artifacts)
     except Exception as error:
         raise _handle_failure(destination, transaction, error) from error
@@ -194,9 +290,13 @@ def _resolve_destination(destination: str | os.PathLike[str]) -> Path:
 def _reject_source_overlap(targets: Sequence[Path], sources: Sequence[Path]) -> None:
     for target in targets:
         for source in sources:
-            width = min(len(target.parts), len(source.parts))
-            if target.parts[:width] == source.parts[:width]:
+            if _paths_overlap(target, source):
                 raise ValueError(f"source and output paths overlap: {target}")
+
+
+def _paths_overlap(left: Path, right: Path) -> bool:
+    width = min(len(left.parts), len(right.parts))
+    return left.parts[:width] == right.parts[:width]
 
 
 def _check_target(destination: Path, path: str, *, overwrite: bool) -> None:
@@ -232,18 +332,18 @@ def _stage_artifacts(transaction: _Transaction, artifacts: Sequence[Artifact]) -
 def _backup_existing(
     destination: Path,
     transaction: _Transaction,
-    artifacts: Sequence[Artifact],
+    paths: Sequence[str],
 ) -> None:
-    for artifact in artifacts:
-        target = destination / artifact.path
+    for relative in paths:
+        target = destination / relative
         if not target.exists():
             continue
         if transaction.backups not in transaction.created:
             _make_transaction_directory(transaction, transaction.backups)
-        backup = transaction.backups / artifact.path
+        backup = transaction.backups / relative
         backup.parent.mkdir(parents=True, exist_ok=True)
         os.replace(target, backup)
-        transaction.backed_up.append(artifact.path)
+        transaction.backed_up.append(relative)
 
 
 def _promote_staged(

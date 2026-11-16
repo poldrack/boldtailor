@@ -788,7 +788,7 @@ provenance label table, and file GeneratedBy and Sources relationships).
 
 `boldtailor.publication.Artifact(path, payload)` describes a file to
 save. `publish_artifact_set(destination, artifacts, *, source_paths=(),
-overwrite=False, lock_timeout=30.0, keep_existing=())` returns the saved
+overwrite=False, lock_timeout=30.0, keep_existing=(), manifest_path=None)` returns the saved
 paths. Paths listed in `keep_existing` (shared files such as a
 `dataset_description.json`) are written only if absent once the lock is held;
 an existing file there is kept and left out of the returned paths. Files are replaced individually under a writer lock; publication is
@@ -801,6 +801,20 @@ transaction directory and `rollback_errors` contains the recovery exceptions.
 The original operation error remains the exception's cause. See the
 [publication migration](publication-migration.md) for recovery and the removed
 `retain_incomplete` argument.
+For overwrite publication, `manifest_path` can name a JSON manifest included in
+the replacement artifacts. Its previous `artifacts` list is read only after the
+writer lock is acquired. Previously listed files absent from the new set are
+moved to rollback backups, along with overwritten files, before promotion.
+Protected source paths and `keep_existing` paths are retained. A failure restores
+both replaced and removed files. The workflow passes its metadata manifest here;
+it no longer deletes stale files after publication returns.
+
+A missing manifest, or a legacy JSON object without an `artifacts` field,
+authorizes no deletions. Invalid JSON, an invalid field type, or an unreadable
+manifest stops publication before output changes. Unsafe relative paths in a
+valid list are ignored. A manifest must be replaced (`overwrite=True`, included
+in `artifacts`, and not in `keep_existing`) to authorize stale-file removal.
+
 `is_control_directory(path)` is True for a path ending in `.boldtailor`, the
 `<destination>.boldtailor` sibling that holds the writer lock and staging files.
 

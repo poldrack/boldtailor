@@ -37,7 +37,7 @@ def fit_single_trials(
     *,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
-    hrf_model: str | HrfCandidate = "spm",
+    hrf_model: str | HrfCandidate = UNSET,
     ridge_fraction: float | np.ndarray | None = None,
     hrf: object = UNSET,
 ) -> SingleTrialResult:
@@ -54,7 +54,7 @@ def fit_single_trials(
     cannot be combined with ridge_fraction. Fractional results include the
     selected fractions and implied alpha for each run and feature.
 
-    ``hrf_model`` is 'spm' or one identified ``HrfCandidate`` used everywhere;
+    ``hrf_model`` defaults to 'spm', or can be one identified ``HrfCandidate`` used everywhere;
     the old keyword ``hrf`` is a deprecated alias.
     """
     hrf_model = renamed_keyword(
