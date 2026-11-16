@@ -15,6 +15,7 @@ def load(root, settings_for):
 
 
 def test_confounds_use_24_motion_top_six_combined_components_and_cosines(confounds):
+    """Verify confounds use 24 motion top six combined components and cosines."""
     table, metadata = confounds
     result = workflow_files.select_confounds(table, metadata)
     expected = list(table.columns[:30]) + ["cosine00", "non_steady_state_outlier00"]
@@ -25,6 +26,7 @@ def test_confounds_use_24_motion_top_six_combined_components_and_cosines(confoun
 
 @pytest.mark.parametrize("column,row", [("trans_x", 0), ("rot_z_derivative1", 2)])
 def test_only_initial_motion_derivative_nans_are_filled(confounds, column, row):
+    """Verify only initial motion derivative NaNs are filled."""
     table, metadata = confounds
     table.loc[row, column] = np.nan
     with pytest.raises(ValueError, match="finite|missing"):
@@ -32,6 +34,7 @@ def test_only_initial_motion_derivative_nans_are_filled(confounds, column, row):
 
 
 def test_fewer_than_six_retained_combined_components_is_an_error(confounds):
+    """Verify fewer than six retained combined components is an error."""
     table, metadata = confounds
     for i in (5, 6, 7):
         metadata[f"a_comp_cor_{i:02d}"]["Retained"] = False
@@ -40,6 +43,7 @@ def test_fewer_than_six_retained_combined_components_is_an_error(confounds):
 
 
 def test_discovery_requires_every_run_to_have_cifti(dataset, settings_for):
+    """Verify discovery requires every run to have CIFTI."""
     root, prep, *_ = dataset
     next(prep.rglob("*run-02*.dtseries.nii")).unlink()
     with pytest.raises((ValueError, FileNotFoundError), match="run-02|CIFTI"):
@@ -47,6 +51,7 @@ def test_discovery_requires_every_run_to_have_cifti(dataset, settings_for):
 
 
 def test_inconsistent_grayordinate_order_is_rejected(dataset, settings_for):
+    """Verify inconsistent grayordinate order is rejected."""
     root, prep, *_ = dataset
     path = next(prep.rglob("*run-02*.dtseries.nii"))
     image = nib.load(path, mmap=False)
@@ -58,6 +63,7 @@ def test_inconsistent_grayordinate_order_is_rejected(dataset, settings_for):
 
 
 def test_confounds_length_must_match_cifti(dataset, settings_for):
+    """Verify confounds length must match CIFTI."""
     root, prep, *_ = dataset
     path = next(prep.rglob("*run-01*confounds_timeseries.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -67,6 +73,7 @@ def test_confounds_length_must_match_cifti(dataset, settings_for):
 
 
 def test_frame_times_follow_the_sidecar_start_time(dataset, settings_for):
+    """Verify frame times follow the sidecar start time."""
     root, prep, *_ = dataset
     runs, brain = load(root, settings_for)
     assert [r.label for r in runs] == ["run-01", "run-02"]
@@ -76,6 +83,7 @@ def test_frame_times_follow_the_sidecar_start_time(dataset, settings_for):
 
 
 def test_slice_timing_correction_requires_a_start_time(dataset, settings_for):
+    """Verify slice timing correction requires a start time."""
     root, prep, *_ = dataset
     sidecar = next(prep.rglob("*run-01*_bold.json"))
     sidecar.write_text('{"RepetitionTime": 1.6, "SliceTimingCorrected": true}')
@@ -84,12 +92,14 @@ def test_slice_timing_correction_requires_a_start_time(dataset, settings_for):
 
 
 def test_bids_labels_need_the_entity_prefix_and_alphanumerics():
+    """Verify BIDS labels need the entity prefix and alphanumerics."""
     assert workflow_files.bids_label("sub-07", "sub")
     assert not workflow_files.bids_label("ses-07", "sub")
     assert not workflow_files.bids_label("sub-07_x", "sub")
 
 
 def test_discovery_uses_the_task_and_space_from_settings(dataset, settings_for):
+    """Verify discovery uses the task and space from settings."""
     root, prep, *_ = dataset
     runs = workflow_files.discover_runs(settings_for(root))
     assert [r.stem for r in runs] == [
@@ -106,6 +116,7 @@ def _run(**columns):
 
 
 def test_reaction_times_keep_clean_columns_and_require_them_by_default():
+    """Verify reaction times keep clean columns and require them by default."""
     rt = workflow_files.reaction_times([_run(response_time=[0.5, np.nan, 1.0])])
     np.testing.assert_allclose(rt[0], [0.5, np.nan, 1.0])
     with pytest.raises(AttributeError):
@@ -113,6 +124,7 @@ def test_reaction_times_keep_clean_columns_and_require_them_by_default():
 
 
 def test_missing_ok_reaction_times_tolerate_absent_or_text_values():
+    """Verify missing ok reaction times tolerate absent or text values."""
     runs = [_run(onset=[0, 1, 2]), _run(response_time=["0.5", "n/a", 2])]
     rt = workflow_files.reaction_times(runs, missing_ok=True)
     np.testing.assert_array_equal(np.isnan(rt[0]), [True, True, True])

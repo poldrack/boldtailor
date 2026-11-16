@@ -3,6 +3,7 @@ import pytest
 
 
 def test_nested_ols_tolerance_keeps_roundoff_but_rejects_material_loss():
+    """Verify nested OLS tolerance keeps roundoff but rejects material loss."""
     from boldtailor._fit_diagnostics import validate_nested_ols_delta
 
     validate_nested_ols_delta(np.array([-1e-12, 0.0, 0.5]))
@@ -11,6 +12,7 @@ def test_nested_ols_tolerance_keeps_roundoff_but_rejects_material_loss():
 
 
 def test_contrast_metadata_preserves_expression_weights_and_ownership():
+    """Verify contrast metadata preserves expression weights and ownership."""
     from boldtailor.model import contrast_metadata
 
     weights = {"face": 1.0, "house": -1.0}
@@ -23,6 +25,7 @@ def test_contrast_metadata_preserves_expression_weights_and_ownership():
 
 
 def test_nested_ols_delta_returns_r2_pair_and_rejects_nonmonotone(single_run_problem):
+    """Verify nested OLS delta returns R-squared pair and rejects nonmonotone."""
     from boldtailor._fit_diagnostics import nested_ols_delta
 
     signals, _, design, _ = single_run_problem
@@ -36,6 +39,7 @@ def test_nested_ols_delta_returns_r2_pair_and_rejects_nonmonotone(single_run_pro
 
 
 def test_delta_activity_schema_is_shared():
+    """Verify delta activity schema is shared."""
     from boldtailor._fit_diagnostics import delta_r2_activity
 
     activity = delta_r2_activity(
@@ -60,6 +64,7 @@ def test_delta_activity_schema_is_shared():
 
 
 def test_delta_result_constructor_rejects_impossible_negative_delta():
+    """Verify delta result constructor rejects impossible negative delta."""
     import pandas as pd
 
     from boldtailor.results import make_task_delta_r2_result
@@ -74,6 +79,7 @@ def test_delta_result_constructor_rejects_impossible_negative_delta():
 
 
 def test_delta_identity_is_activity_minus_run_specific_keys():
+    """Verify delta identity is activity minus run specific keys."""
     from boldtailor._fit_diagnostics import delta_r2_activity, delta_r2_identity
 
     kwargs = dict(

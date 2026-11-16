@@ -108,6 +108,7 @@ def defined(n=N_FEATURES):
 
 
 def test_onoff_r2_matches_the_stacked_oracle(fixture, statistic):
+    """Verify ON-OFF R-squared matches the stacked oracle."""
     expected = oracle_onoff(fixture.data, fixture.library)
     np.testing.assert_array_equal(np.isnan(statistic), np.isnan(expected))
     finite = np.isfinite(expected)
@@ -116,12 +117,14 @@ def test_onoff_r2_matches_the_stacked_oracle(fixture, statistic):
 
 
 def test_onoff_r2_is_nan_for_zero_residual_energy(fixture, statistic):
+    """Verify ON-OFF R-squared is NaN for zero residual energy."""
     assert np.isnan(statistic[fixture.groups["constant"]]).all()
     others = np.setdiff1d(np.arange(N_FEATURES), fixture.groups["constant"])
     assert np.isfinite(statistic[others]).all()
 
 
 def test_onoff_r2_separates_task_from_noise_features(fixture, statistic):
+    """Verify ON-OFF R-squared separates task from noise features."""
     groups = fixture.groups
     task = np.r_[groups["task"], groups["rt"], groups["outside_task"]]
     noise = np.r_[groups["noise"], groups["outside_noise"]]
@@ -143,6 +146,7 @@ def test_onoff_r2_ignores_modulators_and_uses_canonical_hrf(fixture, statistic):
 
 
 def test_onoff_r2_handles_categorical_events(fixture, statistic):
+    """Verify ON-OFF R-squared handles categorical events."""
     events = [
         e.assign(cond=np.where(np.arange(len(e)) % 2 == 0, "a", "b"))
         for e in fixture.data.events
@@ -152,6 +156,7 @@ def test_onoff_r2_handles_categorical_events(fixture, statistic):
 
 
 def test_onoff_r2_uses_every_run_with_its_own_nuisance(fixture):
+    """Verify ON-OFF R-squared uses every run with its own nuisance."""
     subset = subset_runs(fixture.data, [0, 2, 3])
     expected = oracle_onoff(subset, fixture.library)
     got = onoff_r2(subset, fixture.library)
@@ -159,6 +164,7 @@ def test_onoff_r2_uses_every_run_with_its_own_nuisance(fixture):
 
 
 def test_onoff_design_errors_name_the_run_label(fixture):
+    """Verify ON-OFF design errors name the run label."""
     events = list(fixture.data.events)
     events[2] = events[2].copy()
     events[2].loc[0, "onset"] = fixture.data.frame_times[2][-1] + 10.0
@@ -171,6 +177,7 @@ def test_onoff_design_errors_name_the_run_label(fixture):
 
 
 def test_pool_is_below_and_scoring_above_the_threshold(statistic):
+    """Verify pool is below and scoring above the threshold."""
     values = np.linspace(-0.2, 0.2, N_FEATURES)
     values[3] = 0.05
     masks = pool_masks(values, 0.05, hrf_indices=defined())
@@ -183,6 +190,7 @@ def test_pool_is_below_and_scoring_above_the_threshold(statistic):
 
 
 def test_nonfinite_values_are_in_neither_mask():
+    """Verify nonfinite values are in neither mask."""
     values = np.full(N_FEATURES, -0.5)
     values[:3] = [np.nan, -np.inf, np.inf]
     values[3:5] = 0.9
@@ -192,6 +200,7 @@ def test_nonfinite_values_are_in_neither_mask():
 
 
 def test_undefined_hrfs_are_excluded_from_scoring_only():
+    """Verify undefined HRFs are excluded from scoring only."""
     values = np.full(N_FEATURES, -0.5)
     values[:4] = 0.9
     indices = defined()
@@ -202,6 +211,7 @@ def test_undefined_hrfs_are_excluded_from_scoring_only():
 
 
 def test_every_feature_is_a_candidate_without_any_mask_parameter():
+    """Verify every feature is a candidate without any mask parameter."""
     import inspect
 
     parameters = inspect.signature(pool_masks).parameters
@@ -212,6 +222,7 @@ def test_every_feature_is_a_candidate_without_any_mask_parameter():
 
 
 def test_masks_are_owned_and_readonly():
+    """Verify masks are owned and read-only."""
     values = np.linspace(-1, 1, N_FEATURES)
     masks = pool_masks(values, 0.0, hrf_indices=defined())
     before = masks.pool.copy()
@@ -225,6 +236,7 @@ def test_masks_are_owned_and_readonly():
     "threshold", [np.nan, np.inf, -np.inf, "0", "Auto", "", None, True]
 )
 def test_threshold_must_be_auto_or_finite_real(threshold):
+    """Verify threshold must be auto or finite real."""
     with pytest.raises(ValueError, match="pool_r2_threshold"):
         pool_masks(np.zeros(N_FEATURES), threshold, hrf_indices=defined())
 
@@ -233,11 +245,13 @@ def test_threshold_must_be_auto_or_finite_real(threshold):
     "values", [np.zeros(3), np.zeros((N_FEATURES, 1)), ["a"] * N_FEATURES]
 )
 def test_statistic_must_be_a_real_vector_in_feature_order(values):
+    """Verify statistic must be a real vector in feature order."""
     with pytest.raises(ValueError, match="statistic"):
         pool_masks(values, 0.0, hrf_indices=defined())
 
 
 def test_masks_must_be_disjoint_unless_the_fallback_was_used():
+    """Verify masks must be disjoint unless the fallback was used."""
     with pytest.raises(ValueError, match="disjoint"):
         PoolMasks(pool=[True, False], scoring=[True, True], threshold=0.0)
     masks = PoolMasks(
@@ -257,6 +271,7 @@ def bimodal_statistic(n=N_FEATURES, seed=5):
 
 
 def test_auto_threshold_is_the_mixture_threshold_of_all_finite_values():
+    """Verify auto threshold is the mixture threshold of all finite values."""
     values = bimodal_statistic()
     values[1] = np.nan
     indices = defined()
@@ -273,6 +288,7 @@ def test_auto_threshold_is_the_mixture_threshold_of_all_finite_values():
 
 
 def test_auto_threshold_on_the_fixture_pools_the_noise_features(fixture, statistic):
+    """Verify auto threshold on the fixture pools the noise features."""
     masks = pool_masks(statistic, "auto", hrf_indices=defined())
     groups = fixture.groups
     np.testing.assert_array_equal(
@@ -285,6 +301,7 @@ def test_auto_threshold_on_the_fixture_pools_the_noise_features(fixture, statist
 
 
 def test_degenerate_auto_threshold_names_the_context_and_suggests_a_fixed_one():
+    """Verify degenerate auto threshold names the context and suggests a fixed one."""
     with pytest.raises(ValueError, match="pool_r2_threshold") as error:
         pool_masks(
             np.full(N_FEATURES, 0.1),
@@ -301,6 +318,7 @@ def test_degenerate_auto_threshold_names_the_context_and_suggests_a_fixed_one():
 
 
 def test_fallback_scores_the_100_highest_defined_features():
+    """Verify fallback scores the 100 highest defined features."""
     rng = np.random.default_rng(2)
     n = 150
     values = rng.permutation(np.linspace(-0.5, 0.0, n))
@@ -317,6 +335,7 @@ def test_fallback_scores_the_100_highest_defined_features():
 
 
 def test_fallback_with_fewer_candidates_scores_all_of_them():
+    """Verify fallback with fewer candidates scores all of them."""
     values = np.linspace(-0.5, 0.0, N_FEATURES)
     values[0] = np.nan
     masks = pool_masks(values, 1.0, hrf_indices=defined())
@@ -325,6 +344,7 @@ def test_fallback_with_fewer_candidates_scores_all_of_them():
 
 
 def test_no_fallback_when_some_feature_passes():
+    """Verify no fallback when some feature passes."""
     values = np.linspace(-0.5, 0.0, N_FEATURES)
     values[4] = 2.0
     masks = pool_masks(values, 1.0, hrf_indices=defined())
@@ -332,6 +352,7 @@ def test_no_fallback_when_some_feature_passes():
 
 
 def test_empty_pool_is_reported_not_substituted(fixture, statistic):
+    """Verify empty pool is reported not substituted."""
     masks = pool_masks(statistic, -1.0, hrf_indices=defined())
     assert masks.pool_size == 0 and not masks.pool.any()
     comps = analysis_components(fixture.data, masks.pool)
@@ -366,6 +387,7 @@ def rank_two():
 
 
 def test_rank_two_oracle_span_orthonormal_and_nuisance_orthogonal(rank_two):
+    """Verify rank two oracle span orthonormal and nuisance orthogonal."""
     y, confounds, pool = rank_two
     result = run_components(y, confounds, pool)
     normalized = oracle_normalized_pool(y[:, pool], confounds.to_numpy())
@@ -383,6 +405,7 @@ def test_rank_two_oracle_span_orthonormal_and_nuisance_orthogonal(rank_two):
 
 
 def test_singular_values_are_those_of_the_normalized_projected_pool(rank_two):
+    """Verify singular values are those of the normalized projected pool."""
     y, confounds, pool = rank_two
     result = run_components(y, confounds, pool)
     normalized = oracle_normalized_pool(y[:, pool], confounds.to_numpy())
@@ -395,6 +418,7 @@ def test_singular_values_are_those_of_the_normalized_projected_pool(rank_two):
 
 
 def test_sign_convention_largest_absolute_entry_positive(rank_two):
+    """Verify sign convention largest absolute entry positive."""
     y, confounds, pool = rank_two
     c = run_components(y, confounds, pool).components
     flipped = run_components(-y, confounds, pool).components
@@ -404,6 +428,7 @@ def test_sign_convention_largest_absolute_entry_positive(rank_two):
 
 
 def test_column_scaling_does_not_change_components(rank_two):
+    """Verify column scaling does not change components."""
     y, confounds, pool = rank_two
     scaled = y * np.r_[1e3, 1e-2, 5, 1, 1, 0.3, 80, 2, 1, 1, 1]
     a = run_components(y, confounds, pool)
@@ -413,6 +438,7 @@ def test_column_scaling_does_not_change_components(rank_two):
 
 
 def test_components_ignore_nonpool_features(rank_two):
+    """Verify components ignore nonpool features."""
     y, confounds, pool = rank_two
     changed = y.copy()
     changed[:, ~pool] *= -17
@@ -423,6 +449,7 @@ def test_components_ignore_nonpool_features(rank_two):
 
 
 def test_outputs_are_owned_and_readonly(rank_two):
+    """Verify outputs are owned and read-only."""
     y, confounds, pool = rank_two
     y, pool = y.copy(), pool.copy()
     result = run_components(y, confounds, pool)
@@ -435,6 +462,7 @@ def test_outputs_are_owned_and_readonly(rank_two):
 
 
 def test_duplicate_nuisance_columns_do_not_create_components(rank_two):
+    """Verify duplicate nuisance columns do not create components."""
     y, confounds, pool = rank_two
     duplicated = confounds.assign(
         motion_copy=confounds.motion, double=2 * confounds.drift
@@ -448,6 +476,7 @@ def test_duplicate_nuisance_columns_do_not_create_components(rank_two):
 
 
 def test_all_pool_columns_in_nuisance_span_give_rank_zero(rank_two):
+    """Verify all pool columns in nuisance span give rank zero."""
     y, confounds, _ = rank_two
     pool = np.zeros(y.shape[1], bool)
     pool[[3, 4]] = True  # constant and pure-nuisance columns
@@ -458,6 +487,7 @@ def test_all_pool_columns_in_nuisance_span_give_rank_zero(rank_two):
 
 
 def test_short_run_rank_is_capped_by_residual_dimension():
+    """Verify short run rank is capped by residual dimension."""
     rng = np.random.default_rng(3)
     length = 6
     confounds = pd.DataFrame(dict(motion=rng.normal(size=length)))
@@ -471,6 +501,7 @@ def test_short_run_rank_is_capped_by_residual_dimension():
 
 
 def test_reserved_constant_confound_is_rejected(rank_two):
+    """Verify reserved constant confound is rejected."""
     y, confounds, pool = rank_two
     with pytest.raises(ValueError, match="constant"):
         run_components(y, confounds.assign(constant=1.0), pool)
@@ -478,6 +509,7 @@ def test_reserved_constant_confound_is_rejected(rank_two):
 
 @pytest.mark.parametrize("pool", [np.ones(3, bool), np.ones(11, int)])
 def test_pool_must_be_boolean_feature_mask(rank_two, pool):
+    """Verify pool must be boolean feature mask."""
     y, confounds, _ = rank_two
     with pytest.raises(ValueError, match="pool"):
         run_components(y, confounds, pool)
@@ -501,6 +533,7 @@ def tied():
 
 
 def test_tied_block_cutoff_is_unavailable(tied):
+    """Verify tied block cutoff is unavailable."""
     y, confounds, pool = tied
     result = run_components(y, confounds, pool)
     assert result.rank == 3
@@ -514,6 +547,7 @@ def test_tied_block_cutoff_is_unavailable(tied):
 
 
 def test_prefix_returns_leading_components_and_rejects_unavailable(tied):
+    """Verify prefix returns leading components and rejects unavailable."""
     y, confounds, pool = tied
     result = run_components(y, confounds, pool)
     assert result.prefix(0).shape == (len(y), 0)
@@ -529,6 +563,7 @@ def test_prefix_returns_leading_components_and_rejects_unavailable(tied):
 
 
 def test_available_cutoffs_define_a_unique_subspace(tied):
+    """Verify available cutoffs define a unique subspace."""
     y, confounds, pool = tied
     a = run_components(y, confounds, pool)
     b = run_components(y[:, [3, 2, 1, 0]], confounds, pool)
@@ -542,6 +577,7 @@ def test_available_cutoffs_define_a_unique_subspace(tied):
 
 
 def test_analysis_components_are_per_run_and_recover_latent(fixture, statistic):
+    """Verify analysis components are per run and recover latent."""
     masks = pool_masks(statistic, "auto", hrf_indices=defined())
     comps = analysis_components(fixture.data, masks.pool)
     assert len(comps) == fixture.data.n_runs

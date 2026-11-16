@@ -14,6 +14,7 @@ from experiments.nsd_replication.metrics import (
 
 
 def test_columnwise_corr_nan_for_constant_or_nonfinite():
+    """Verify columnwise corr NaN for constant or nonfinite."""
     a = np.array([[1.0, 1, 1, np.nan], [2, 1, 3, 1], [3, 1, 2, 2]])
     b = np.array([[1.0, 2, 3, 1], [2, 3, 1, 2], [3, 4, 2, 3]])
     out = columnwise_corr(a, b)
@@ -23,6 +24,7 @@ def test_columnwise_corr_nan_for_constant_or_nonfinite():
 
 
 def test_reliability_hand_computed():
+    """Match repeated-image reliability to a hand-computed correlation."""
     reps = np.zeros((3, 4, 1))
     reps[:, :, 0] = [[1, 2, 3, 4], [1, 2, 3, 5], [2, 2, 3, 4]]
     expected = np.mean(
@@ -35,12 +37,14 @@ def test_reliability_hand_computed():
 
 
 def test_reliability_constant_feature_is_nan():
+    """Verify reliability constant feature is NaN."""
     reps = np.ones((3, 4, 1))
     with np.errstate(all="raise"):
         assert np.isnan(voxel_reliability(reps)).all()
 
 
 def test_threshold_curves_difference_from_composite():
+    """Verify threshold curves difference from composite."""
     rel = {"b1": np.array([0.1, 0.3, 0.5]), "b4": np.array([0.3, 0.5, 0.7])}
     # Composite is [0.2, 0.4, 0.6]; thresholds sit between composite values.
     curves = threshold_curves(
@@ -65,6 +69,7 @@ def _lag_trials():
 
 
 def test_lagged_correlation_same_run_only():
+    """Verify lagged correlation same run only."""
     betas = np.array([[1.0, 0, 0], [1, 0.1, 0], [0, 0, 1], [1, 0, 0]])
     table = lagged_correlation(betas, _lag_trials(), np.ones(3, bool), max_lag=2)
     lag1 = table.query("lag == 1").iloc[0]
@@ -76,6 +81,7 @@ def test_lagged_correlation_same_run_only():
 
 
 def test_lagged_correlation_uses_positional_rows_for_nondefault_index():
+    """Verify lagged correlation uses positional rows for nondefault index."""
     betas = np.array([[1.0, 0, 0], [1, 0.1, 0], [0, 0, 1], [1, 0, 0]])
     shifted = _lag_trials().set_index(pd.Index([10, 11, 12, 13]))
     expected = lagged_correlation(betas, _lag_trials(), np.ones(3, bool), max_lag=2)
@@ -84,12 +90,14 @@ def test_lagged_correlation_uses_positional_rows_for_nondefault_index():
 
 
 def test_lagged_correlation_length_mismatch_raises():
+    """Verify lagged correlation length mismatch raises."""
     betas = np.ones((3, 3))
     with pytest.raises(ValueError, match="trials"):
         lagged_correlation(betas, _lag_trials(), np.ones(3, bool))
 
 
 def test_rdm_and_agreement():
+    """Construct representational dissimilarities and compare agreement across subjects."""
     patterns = np.array([[1.0, 2, 3], [3, 2, 1], [1, 2, 4]])
     d = rdm(patterns)
     assert d[0, 1] == pytest.approx(2.0) and np.allclose(np.diag(d), 0)
@@ -98,6 +106,7 @@ def test_rdm_and_agreement():
 
 
 def test_decoding_perfect_on_separable_images():
+    """Verify decoding perfect on separable images."""
     rng = np.random.default_rng(0)
     prototypes = rng.normal(size=(5, 20)) * 5
     reps = prototypes[None] + rng.normal(scale=0.1, size=(3, 5, 20))
@@ -111,6 +120,7 @@ def test_decoding_perfect_on_separable_images():
 
 
 def test_decoding_too_few_features_returns_nan():
+    """Verify decoding too few features returns NaN."""
     reps = np.zeros((3, 5, 20))
     mask = np.zeros(20, bool)
     mask[:5] = True
@@ -124,6 +134,7 @@ def _decoding_reps():
 
 
 def test_decoding_accuracies_parallel_matches_serial():
+    """Verify decoding accuracies parallel matches serial."""
     from experiments.nsd_replication.metrics import decoding_accuracies
 
     reps = _decoding_reps()
@@ -137,6 +148,7 @@ def test_decoding_accuracies_parallel_matches_serial():
 
 
 def test_decoding_logs_each_fold(caplog):
+    """Verify decoding logs each fold."""
     from experiments.nsd_replication.metrics import decoding_accuracies
 
     caplog.set_level("INFO", logger="experiments.nsd_replication")

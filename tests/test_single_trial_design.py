@@ -34,6 +34,7 @@ def inputs():
 
 
 def test_subtr_timing_repeat_identity_and_row_order(inputs):
+    """Verify subtr timing repeat identity and row order."""
     events, times, confounds = inputs
     x, n, trials = compiler()(events, times, confounds, "run-01")
     assert trials.event_index.tolist() == [0, 1]
@@ -52,6 +53,7 @@ def test_subtr_timing_repeat_identity_and_row_order(inputs):
 
 
 def test_rt_and_image_identity_have_no_design_effect(inputs):
+    """Verify response-time and image identity have no design effect."""
     events, times, confounds = inputs
     x, _, _ = compiler()(events, times, confounds, "run-01")
     changed = events.assign(response_time=[np.nan, -1], **{"73k_id": [12, 13]})
@@ -60,6 +62,7 @@ def test_rt_and_image_identity_have_no_design_effect(inputs):
 
 
 def test_zero_duration_has_nilearn_impulse_convention(inputs):
+    """Verify zero duration has Nilearn impulse convention."""
     events, times, confounds = inputs
     events.loc[0, "duration"] = 0.0
     x, _, _ = compiler()(events, times, confounds, "run-01")
@@ -76,6 +79,7 @@ def test_zero_duration_has_nilearn_impulse_convention(inputs):
     "column,value", [("onset", np.nan), ("duration", -1), ("duration", np.inf)]
 )
 def test_invalid_timing_is_rejected(inputs, column, value):
+    """Verify invalid timing is rejected."""
     events, times, confounds = inputs
     events.loc[0, column] = value
     with pytest.raises(ValueError, match="timing|duration|finite"):
@@ -84,6 +88,7 @@ def test_invalid_timing_is_rejected(inputs, column, value):
 
 @pytest.mark.parametrize("onset", [-1000.0, 1000.0])
 def test_events_without_supported_response_are_rejected(inputs, onset):
+    """Verify events without supported response are rejected."""
     events, times, confounds = inputs
     events.loc[0, "onset"] = onset
     with pytest.raises(ValueError, match="support|onset|sample"):
@@ -94,6 +99,7 @@ def test_events_without_supported_response_are_rejected(inputs, onset):
     "name", ["trial_id", "trial_index", "run_index", "run_label", "event_index"]
 )
 def test_reserved_event_names_are_rejected(inputs, name):
+    """Verify reserved event names are rejected."""
     events, times, confounds = inputs
     events[name] = 1
     with pytest.raises(ValueError, match="reserved"):
@@ -101,6 +107,7 @@ def test_reserved_event_names_are_rejected(inputs, name):
 
 
 def test_invalid_nuisance_is_rejected(inputs):
+    """Verify invalid nuisance is rejected."""
     events, times, confounds = inputs
     for bad in (
         confounds.assign(constant=1),
@@ -113,6 +120,7 @@ def test_invalid_nuisance_is_rejected(inputs):
 
 
 def test_input_tables_are_not_mutated(inputs):
+    """Verify input tables are not mutated."""
     events, times, confounds = inputs
     original_events, original_confounds = events.copy(), confounds.copy()
     _, _, trials = compiler()(events, times, confounds, "run-01")
@@ -122,6 +130,7 @@ def test_input_tables_are_not_mutated(inputs):
 
 
 def test_nuisance_cannot_reuse_a_generated_trial_name(inputs):
+    """Verify nuisance cannot reuse a generated trial name."""
     events, times, confounds = inputs
     confounds = confounds.rename(columns={confounds.columns[0]: "run-01_trial-0001"})
     with pytest.raises(ValueError, match="trial|reserved|collision"):
@@ -130,6 +139,7 @@ def test_nuisance_cannot_reuse_a_generated_trial_name(inputs):
 
 @pytest.mark.parametrize("selected", [False, True])
 def test_both_single_trial_paths_share_one_trial_table(selected_fixture, selected):
+    """Verify both single trial paths share one trial table."""
     from boldtailor._single_trial_design import trial_table
     from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 

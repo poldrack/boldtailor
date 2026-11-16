@@ -17,6 +17,7 @@ from experiments.nsd_replication.lss import (
 
 
 def test_lss_run_matches_per_trial_ols():
+    """Verify LSS run matches per trial OLS."""
     rng = np.random.default_rng(0)
     x = rng.normal(size=(80, 5))
     nuisance = np.column_stack([np.ones(80), np.linspace(-1, 1, 80)])
@@ -30,6 +31,7 @@ def test_lss_run_matches_per_trial_ols():
 
 
 def test_lss_single_trial_equals_joint_ols():
+    """Verify LSS single trial equals joint OLS."""
     rng = np.random.default_rng(1)
     x = rng.normal(size=(40, 1))
     nuisance = np.ones((40, 1))
@@ -39,6 +41,7 @@ def test_lss_single_trial_equals_joint_ols():
 
 
 def test_lss_canonical_shape(synthetic_session):
+    """Verify LSS canonical shape."""
     indices = np.arange(30)
     data = analysis_data(synthetic_session, indices)
     result = fit_single_trials(data, run_labels=list(synthetic_session.labels))
@@ -70,6 +73,7 @@ def _expected_column(result, signals, feature):
 
 
 def test_lss_selected_matches_per_feature_lss(synthetic_session):
+    """Verify LSS selected matches per feature LSS."""
     result = _selected_fit(synthetic_session)
     signals = synthetic_session.signals
     betas = lss_selected(result, signals)
@@ -84,6 +88,7 @@ def test_lss_selected_matches_per_feature_lss(synthetic_session):
 
 
 def test_lss_selected_unselected_features_are_nan(synthetic_session):
+    """Verify LSS selected unselected features are NaN."""
     result = _selected_fit(synthetic_session)
     ids = result.design.hrf_indices.copy()
     ids[[3, 17]] = -1

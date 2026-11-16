@@ -60,6 +60,7 @@ def generated(data, library, cid, task_model, amplitudes, profiled_gain=2.0):
 
 
 def test_statistics_shapes_and_profiled_columns(task_fixture):
+    """Verify statistics shapes and profiled columns."""
     from boldtailor._hrf_cv import prepare_runs, signal_statistics
 
     data, library = task_fixture
@@ -88,6 +89,7 @@ def test_statistics_shapes_and_profiled_columns(task_fixture):
 
 @pytest.mark.parametrize("batch", [1, 2, 32])
 def test_task_model_loro_matches_stacked_nilearn_ols(task_fixture, batch):
+    """Verify task model loro matches stacked Nilearn OLS."""
     from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
 
     data, library = task_fixture
@@ -98,6 +100,7 @@ def test_task_model_loro_matches_stacked_nilearn_ols(task_fixture, batch):
 
 
 def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
+    """Verify task only model reproduces mean stimulus statistics."""
     from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
 
     data, library = task_fixture
@@ -111,6 +114,7 @@ def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
 
 
 def test_noise_free_task_model_scores_one_only_with_the_full_model(task_fixture):
+    """Verify noise free task model scores one only with the full model."""
     from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
 
     data, library = task_fixture
@@ -126,6 +130,7 @@ def test_noise_free_task_model_scores_one_only_with_the_full_model(task_fixture)
 
 
 def test_singular_pooled_training_matrix_marks_candidate_ineligible():
+    """Verify singular pooled training matrix marks candidate ineligible."""
     from boldtailor._hrf_cv import loro_scores, pooled_amplitude
 
     a = np.zeros((3, 2, 2, 2))
@@ -146,6 +151,7 @@ def test_singular_pooled_training_matrix_marks_candidate_ineligible():
 
 
 def test_run_level_rank_failures_are_candidate_specific(task_fixture):
+    """Verify run level rank failures are candidate specific."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -167,6 +173,7 @@ def test_run_level_rank_failures_are_candidate_specific(task_fixture):
 
 
 def test_profiled_column_inside_nuisance_span_is_ineligible(task_fixture):
+    """Verify profiled column inside nuisance span is ineligible."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -183,6 +190,7 @@ def test_profiled_column_inside_nuisance_span_is_ineligible(task_fixture):
 
 
 def test_trial_eligibility_is_separate_from_task_model_eligibility(task_fixture):
+    """Verify trial eligibility is separate from task model eligibility."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -193,6 +201,7 @@ def test_trial_eligibility_is_separate_from_task_model_eligibility(task_fixture)
 
 
 def test_cache_key_includes_task_model_and_modulator_values(task_fixture):
+    """Verify cache key includes task model and modulator values."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -213,6 +222,7 @@ def test_cache_key_includes_task_model_and_modulator_values(task_fixture):
 
 
 def test_onsets_outside_supported_window_are_rejected(task_fixture):
+    """Verify onsets outside supported window are rejected."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -226,6 +236,7 @@ def test_onsets_outside_supported_window_are_rejected(task_fixture):
 
 
 def test_run_ineligible_candidate_scores_minus_inf(task_fixture):
+    """Verify run ineligible candidate scores minus infinity."""
     from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
 
     data, library = task_fixture
@@ -244,6 +255,7 @@ def test_run_ineligible_candidate_scores_minus_inf(task_fixture):
 
 
 def test_prediction_loss_tolerance_sums_absolute_regressor_cross_terms():
+    """Verify prediction loss tolerance sums absolute regressor cross terms."""
     from boldtailor._hrf_cv import prediction_loss
 
     a = np.eye(2)[None]
@@ -258,6 +270,7 @@ def test_prediction_loss_tolerance_sums_absolute_regressor_cross_terms():
     "broken,column", [(0, "response_time"), (2, "late_onset"), (3, "confounds")]
 )
 def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column):
+    """Verify prepare runs names runs by supplied labels."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -287,6 +300,7 @@ def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column
 
 
 def test_blocks_keep_the_unprojected_task_columns(task_fixture):
+    """Verify blocks keep the unprojected task columns."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture
@@ -298,6 +312,7 @@ def test_blocks_keep_the_unprojected_task_columns(task_fixture):
 
 
 def test_ineligible_blocks_have_zero_unprojected_columns(task_fixture):
+    """Verify ineligible blocks have zero unprojected columns."""
     from boldtailor._hrf_cv import prepare_runs
 
     data, library = task_fixture

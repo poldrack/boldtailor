@@ -53,6 +53,7 @@ def commit_pair(repo):
 
 
 def test_ignored_notebooks_export_only_inputs_and_require_staging(repo):
+    """Verify ignored notebooks export only inputs and require staging."""
     result = sync(repo)
     assert result.returncode == 1
     path = repo / "experiments/hrf_estimation/demo.py"
@@ -68,6 +69,7 @@ def test_ignored_notebooks_export_only_inputs_and_require_staging(repo):
 
 
 def test_hook_rejects_staged_notebook_even_if_forced(repo):
+    """Verify hook rejects staged notebook even if forced."""
     git(repo, "add", "-f", "experiments/hrf_estimation/demo.ipynb")
     result = sync(repo)
     assert result.returncode != 0
@@ -75,6 +77,7 @@ def test_hook_rejects_staged_notebook_even_if_forced(repo):
 
 
 def test_divergent_edits_are_not_silently_overwritten(repo):
+    """Verify divergent edits are not silently overwritten."""
     commit_pair(repo)
     script = repo / "experiments/hrf_estimation/demo.py"
     script.write_text(script.read_text().replace("x = 1", "x = 2"))
@@ -90,6 +93,7 @@ def test_divergent_edits_are_not_silently_overwritten(repo):
 
 
 def test_notebook_edits_update_python_without_altering_staged_content(repo):
+    """Verify notebook edits update python without altering staged content."""
     commit_pair(repo)
     script = repo / "experiments/hrf_estimation/demo.py"
     original = git(repo, "show", "HEAD:experiments/hrf_estimation/demo.py")
@@ -102,6 +106,7 @@ def test_notebook_edits_update_python_without_altering_staged_content(repo):
 
 
 def test_python_edit_updates_local_notebook_and_keeps_unaffected_outputs(repo):
+    """Verify python edit updates local notebook and keeps unaffected outputs."""
     commit_pair(repo)
     path = repo / "experiments/hrf_estimation/demo.py"
     path.write_text(path.read_text() + "\n# %%\ny = 2\n")
@@ -113,12 +118,14 @@ def test_python_edit_updates_local_notebook_and_keeps_unaffected_outputs(repo):
 
 
 def test_python_only_checkout_needs_no_rendered_notebooks(repo):
+    """Verify python only checkout needs no rendered notebooks."""
     commit_pair(repo)
     (repo / "experiments/hrf_estimation/demo.ipynb").unlink()
     assert sync(repo).returncode == 0
 
 
 def test_simulation_notebooks_use_same_text_only_workflow(repo):
+    """Verify simulation notebooks use same text only workflow."""
     commit_pair(repo)
     folder = repo / "experiments/hrf_simulations"
     folder.mkdir()
@@ -131,6 +138,7 @@ def test_simulation_notebooks_use_same_text_only_workflow(repo):
 
 
 def test_ci_rejects_committed_rendered_notebooks(repo):
+    """Verify ci rejects committed rendered notebooks."""
     git(repo, "add", "-f", "experiments/hrf_estimation/demo.ipynb")
     git(repo, "commit", "-m", "accidental rendered notebook")
     result = subprocess.run(

@@ -18,6 +18,7 @@ def _func(settings):
 def test_full_run_writes_every_stage_and_the_report(
     six_run_dataset, settings_for, tmp_path
 ):
+    """Verify full run writes every stage and the report."""
     root, _ = six_run_dataset
     settings = settings_for(
         root,
@@ -90,6 +91,7 @@ def _assert_report_tables(html):
 
 
 def test_disabled_stages_write_nothing_of_their_own(four_runs, settings_for, tmp_path):
+    """Verify disabled stages write nothing of their own."""
     root, _ = four_runs
     settings = settings_for(
         root,
@@ -106,6 +108,7 @@ def test_disabled_stages_write_nothing_of_their_own(four_runs, settings_for, tmp
 def test_reliability_is_skipped_with_a_reason_when_a_parity_is_short(
     dataset, settings_for, tmp_path
 ):
+    """Verify reliability is skipped with a reason when a parity is short."""
     root, *_ = dataset  # two runs: one odd, one even
     settings = settings_for(
         root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
@@ -129,6 +132,7 @@ def test_ridge_cv_with_a_short_parity_stops_before_any_fitting(
     session, request, settings_for, tmp_path, monkeypatch
 ):
     # Two runs (1 odd, 1 even) or four (2 and 2): optimized ridge CV needs 3 and 3.
+    """Verify ridge cross-validation with a short parity stops before any fitting."""
     root = request.getfixturevalue(session)[0]
 
     def refuse(*args, **kwargs):
@@ -151,6 +155,7 @@ def test_ridge_cv_with_a_short_parity_stops_before_any_fitting(
 def test_a_failed_stage_leaves_no_report(
     four_runs, settings_for, tmp_path, monkeypatch
 ):
+    """Verify a failed stage leaves no report."""
     root, _ = four_runs
 
     def fail(*args, **kwargs):
@@ -170,6 +175,7 @@ def test_a_failed_stage_leaves_no_report(
 def test_second_run_into_the_same_output_stops_before_loading(
     four_runs, settings_for, tmp_path
 ):
+    """Verify second run into the same output stops before loading."""
     root, _ = four_runs
     settings = settings_for(
         root,
@@ -195,6 +201,7 @@ def test_second_run_into_the_same_output_stops_before_loading(
 def test_describe_inputs_reports_the_problems_a_run_would_hit(
     four_runs, settings_for, tmp_path
 ):
+    """Verify describe inputs reports the problems a run would hit."""
     root, _ = four_runs
     out = tmp_path / "out"
     info = workflow_run.describe_inputs(
@@ -214,6 +221,7 @@ def test_describe_inputs_reports_the_problems_a_run_would_hit(
 def test_describe_inputs_reports_runs_model_and_output(
     four_runs, settings_for, tmp_path
 ):
+    """Verify describe inputs reports runs model and output."""
     root, _ = four_runs
     info = workflow_run.describe_inputs(
         settings_for(root, output_dir=tmp_path / "out", hrf_library="canonical")
@@ -232,6 +240,7 @@ def test_describe_inputs_reports_runs_model_and_output(
 def test_surfaces_are_looked_up_only_when_requested(
     four_runs, settings_for, tmp_path, monkeypatch
 ):
+    """Verify surfaces are looked up only when requested."""
     root, _ = four_runs
 
     def refuse(*args, **kwargs):
@@ -262,6 +271,7 @@ def test_surfaces_are_looked_up_only_when_requested(
 def test_task_only_session_runs_without_rt_or_trial_type(
     four_runs, settings_for, tmp_path
 ):
+    """Verify task only session runs without response-time or trial type."""
     import pandas as pd
 
     root, _ = four_runs
@@ -292,6 +302,7 @@ def test_task_only_session_runs_without_rt_or_trial_type(
 def test_string_trial_type_is_expanded_into_indicators(
     four_runs, settings_for, tmp_path
 ):
+    """Verify string trial type is expanded into indicators."""
     from tests.workflow.synthetic_bids import face_house_events, rewrite_events
 
     root, _ = four_runs
@@ -321,6 +332,7 @@ def _three_level_events(table):
 def test_string_trial_type_run_writes_indicator_maps_and_describes_them(
     four_runs, settings_for, tmp_path
 ):
+    """Verify string trial type run writes indicator maps and describes them."""
     import nibabel as nib
 
     from tests.workflow.synthetic_bids import rewrite_events
@@ -352,6 +364,7 @@ def test_string_trial_type_run_writes_indicator_maps_and_describes_them(
 def test_run_missing_a_level_is_an_input_error_naming_the_run_once(
     four_runs, settings_for, tmp_path
 ):
+    """Verify run missing a level is an input error naming the run once."""
     import pandas as pd
 
     root, _ = four_runs
@@ -368,6 +381,7 @@ def test_run_missing_a_level_is_an_input_error_naming_the_run_once(
 def test_ridge_cv_without_modulators_stops_before_any_fitting(
     six_run_dataset, settings_for, tmp_path, monkeypatch
 ):
+    """Verify ridge cross-validation without modulators stops before any fitting."""
     from tests.workflow.synthetic_bids import rewrite_events, task_only_events
 
     root, _ = six_run_dataset
@@ -387,6 +401,7 @@ def test_ridge_cv_without_modulators_stops_before_any_fitting(
 
 
 def test_loading_errors_become_input_errors(four_runs, settings_for, tmp_path):
+    """Verify loading errors become input errors."""
     root, prep = four_runs
     path = next(prep.rglob("*run-02*confounds_timeseries.tsv"))
     pd.read_csv(path, sep="\t").drop(columns="cosine00").to_csv(
@@ -404,6 +419,7 @@ def test_loading_errors_become_input_errors(four_runs, settings_for, tmp_path):
 def test_missing_explicit_surface_mesh_stops_before_any_fitting(
     four_runs, settings_for, tmp_path, monkeypatch
 ):
+    """Verify missing explicit surface mesh stops before any fitting."""
     root, _ = four_runs
 
     def refuse(*args, **kwargs):
@@ -426,6 +442,7 @@ def test_missing_explicit_surface_mesh_stops_before_any_fitting(
 def test_missing_or_ambiguous_meshes_skip_surface_figures_with_a_note(
     four_runs, settings_for, tmp_path, copies
 ):
+    """Verify missing or ambiguous meshes skip surface figures with a note."""
     root, prep = four_runs
     for session in range(copies):
         anat = prep / "sub-07" / f"ses-{session}" / "anat"
@@ -463,6 +480,7 @@ def _predictor_table(result):
 def test_fractional_cv_tunes_with_categorical_trial_type_indicators(
     six_run_dataset, settings_for, tmp_path
 ):
+    """Verify fractional cross-validation tunes with categorical trial type indicators."""
     from tests.workflow.synthetic_bids import rewrite_events
 
     root, _ = six_run_dataset
@@ -482,6 +500,7 @@ def test_fractional_cv_tunes_with_categorical_trial_type_indicators(
 def test_cv_ridge_with_categorical_indicator_missing_row(
     six_run_dataset, settings_for, tmp_path
 ):
+    """Verify cross-validation ridge with categorical indicator missing row."""
     from boldtailor.model import Modulator
     from tests.workflow.synthetic_bids import rewrite_events
 
@@ -517,16 +536,19 @@ def loaded_session(four_runs, settings_for, tmp_path):
 
 
 def test_glm_stage_requires_selected_hrfs(loaded_session):
+    """Verify GLM stage requires selected HRFs."""
     with pytest.raises(ValueError, match="selections"):
         workflow_run._fit_glms(loaded_session, selections=None)
 
 
 def test_summary_stage_requires_fitted_beta_models():
+    """Verify summary stage requires fitted beta models."""
     with pytest.raises(ValueError, match="beta models"):
         workflow_run._summarize_betas(beta_models={})
 
 
 def test_glm_stage_returns_results_without_populating_session(loaded_session):
+    """Verify GLM stage returns results without populating session."""
     session = loaded_session
     before = set(vars(session))
     selections = workflow_run.analysis.select_hrfs(

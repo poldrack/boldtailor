@@ -85,6 +85,7 @@ def unbiased_statistics(replicates):
 
 
 def test_noise_variance_unbiased_at_true_ratio(replicates):
+    """Verify noise variance unbiased at true ratio."""
     reml, ml = unbiased_statistics(replicates)
     assert abs(reml.mean() - 2.0) < 3 * mean_se(reml)
     assert abs(ml.mean() - 2.0) > 10 * mean_se(ml)
@@ -115,6 +116,7 @@ def assert_non_increasing(biases):
 
 
 def test_estimates_are_consistent(replicates):
+    """Verify estimates are consistent."""
     stats = [consistency_statistics(replicates, g) for g in GROUP_COUNTS]
     assert_non_increasing([s["ratio"] for s in stats])
     assert_non_increasing([s["noise"] for s in stats])
@@ -156,6 +158,7 @@ def two_sample_se(p, replicates, draws):
 
 
 def test_null_lrt_matches_finite_sample_reference(replicates):
+    """Verify null lrt matches finite sample reference."""
     statistic, reference = null_statistics(replicates)
     draws = reference.size
     p_zero = np.mean(reference <= ZERO_STATISTIC)
@@ -180,6 +183,7 @@ def dense_restricted_lrt(signals, fixed, random):
 
 @pytest.mark.slow
 def test_null_lrt_matches_dense_fits():
+    """Verify null lrt matches dense fits."""
     signals, fixed, random = null_problem(500)
     assert_allclose(
         restricted_lrt(signals, fixed, random),
@@ -240,6 +244,7 @@ def rho_statistics(replicates, rho):
 
 @pytest.mark.parametrize("rho", [0.0, 0.3, 0.6])
 def test_rho_correction_removes_projection_bias(replicates, rho):
+    """Verify rho correction removes projection bias."""
     estimate = rho_statistics(replicates, rho)
     assert abs(estimate.pooled - rho) < 0.02
     if rho == 0.6:
@@ -268,6 +273,7 @@ def recovery_errors(fit):
 
 
 def test_ar1_fit_recovers_parameters(replicates):
+    """Verify AR(1) fit recovers parameters."""
     ar1, iid = ar1_fit_statistics(replicates)
     ratio_error, noise_error = recovery_errors(ar1)
     assert ratio_error < 0.05
@@ -319,6 +325,7 @@ def selection_rate(replicates, ratio):
 
 
 def test_selection_rate_rises_with_snr(replicates):
+    """Verify selection rate rises with snr."""
     rates = [selection_rate(replicates, r) for r in SELECTION_RATIOS]
     for (previous, previous_se), (current, current_se) in zip(
         rates, rates[1:], strict=False

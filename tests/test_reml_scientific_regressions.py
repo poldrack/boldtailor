@@ -22,6 +22,7 @@ def _diagonal_criterion(signal, random, ratio):
 
 
 def test_full_restricted_random_rank_has_no_orthogonal_remainder(saturated_diagonal):
+    """Verify full restricted random rank has no orthogonal remainder."""
     signal, fixed, random = saturated_diagonal
     terms = reml_terms(project_fixed(signal, fixed), random)
     assert len(terms.singular2) == terms.dof
@@ -29,6 +30,7 @@ def test_full_restricted_random_rank_has_no_orthogonal_remainder(saturated_diago
 
 
 def test_fit_matches_its_covariance_and_a_better_feasible_point(saturated_diagonal):
+    """Verify fit matches its covariance and a better feasible point."""
     signal, fixed, random = saturated_diagonal
     fit = fit_reml([RemlGroup(signal, fixed)], [random])
     direct = _diagonal_criterion(signal, random, fit.ratio[0])
@@ -38,6 +40,7 @@ def test_fit_matches_its_covariance_and_a_better_feasible_point(saturated_diagon
 
 
 def test_iid_row_permutation_preserves_profile_likelihood(saturated_diagonal):
+    """Verify independent-noise row permutation preserves profile likelihood."""
     signal, fixed, random = saturated_diagonal
     original = fit_reml([RemlGroup(signal, fixed)], [random])
     reversed_fit = fit_reml([RemlGroup(signal[::-1], fixed)], [random[::-1]])
@@ -47,6 +50,7 @@ def test_iid_row_permutation_preserves_profile_likelihood(saturated_diagonal):
 
 
 def test_small_positive_orthogonal_noise_is_preserved(saturated_diagonal):
+    """Verify small positive orthogonal noise is preserved."""
     signal, _, random = saturated_diagonal
     signal = np.vstack([signal, [[1e-5]]])
     random = np.vstack([random, np.zeros((1, 10))])
@@ -60,6 +64,7 @@ def test_small_positive_orthogonal_noise_is_preserved(saturated_diagonal):
 
 
 def test_flat_ar1_moment_curve_does_not_produce_a_rho_estimate():
+    """Verify flat AR(1) moment curve does not produce a rho estimate."""
     eye = np.eye(10)
     reference = prepare_reference(eye[:, 1:])
     np.testing.assert_array_equal(reference.expected, 0.0)

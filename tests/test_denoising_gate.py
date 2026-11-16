@@ -202,12 +202,14 @@ def oracle_gate(
 
 
 def test_gate_settings_are_validated():
+    """Verify gate settings are validated."""
     assert validate_gate(True, 0.05, 0.01) == (True, 0.05, 0.01)
     assert validate_gate(False, 0.5, 0.5) == (False, 0.5, 0.5)
 
 
 @pytest.mark.parametrize("value", [0, 1, 0.0, 1.0, -0.1, 1.5, np.nan, np.inf, True])
 def test_gate_alphas_must_be_finite_and_strictly_between_zero_and_one(value):
+    """Verify gate alphas must be finite and strictly between zero and one."""
     with pytest.raises(ValueError, match="gate_alpha"):
         validate_gate(True, value, 0.05)
     with pytest.raises(ValueError, match="gate_binomial_alpha"):
@@ -216,22 +218,26 @@ def test_gate_alphas_must_be_finite_and_strictly_between_zero_and_one(value):
 
 @pytest.mark.parametrize("value", [1, 0, "yes", None, np.True_])
 def test_significance_gate_must_be_a_bool(value):
+    """Verify significance gate must be a bool."""
     with pytest.raises(ValueError, match="significance_gate"):
         validate_gate(value, 0.05, 0.05)
 
 
 def test_gate_alpha_strings_are_rejected():
+    """Verify gate alpha strings are rejected."""
     with pytest.raises(ValueError, match="gate_alpha"):
         validate_gate(True, "0.05", 0.05)
 
 
 @pytest.mark.parametrize("value", NOISE_MODELS)
 def test_gate_noise_models_are_accepted(value):
+    """Verify gate noise models are accepted."""
     assert validate_noise_model(value) == value
 
 
 @pytest.mark.parametrize("value", ["AR1", "ar2", "ar(1)", "", None, 1, True])
 def test_unknown_gate_noise_models_are_rejected(value):
+    """Verify unknown gate noise models are rejected."""
     with pytest.raises(ValueError, match="gate_noise_model"):
         validate_noise_model(value)
 
@@ -260,6 +266,7 @@ def variant_setups(fixture):
 def test_f_statistics_match_the_stacked_oracle(
     fixture, variant_setups, name, count, noise_model
 ):
+    """Verify f statistics match the stacked oracle."""
     data, model, inputs, setup = variant_setups[name]
     want = oracle_gate(
         data,
@@ -309,6 +316,7 @@ def test_ar1_coefficients_follow_nilearn_run_glm():
 
 
 def test_rho_is_estimated_separately_for_each_run(base):
+    """Verify rho is estimated separately for each run."""
     _, setup = base
     result = gate(setup, 2)
     rho = result.ar_coefficients[:, result.tested]
@@ -317,6 +325,7 @@ def test_rho_is_estimated_separately_for_each_run(base):
 
 
 def test_zero_coefficients_reproduce_the_ols_gate(base, monkeypatch):
+    """Verify zero coefficients reproduce the OLS gate."""
     import boldtailor._denoising_gate as module
 
     _, setup = base
@@ -332,6 +341,7 @@ def test_zero_coefficients_reproduce_the_ols_gate(base, monkeypatch):
 
 
 def test_ols_gate_records_no_coefficients(base):
+    """Verify OLS gate records no coefficients."""
     _, setup = base
     result = gate(setup, 2, noise_model="ols")
     assert result.noise_model == "ols"
@@ -363,6 +373,7 @@ def white_setup(fixture, base):
 
 
 def test_whitening_white_noise_stays_close_to_ols(white_setup):
+    """Verify whitening white noise stays close to OLS."""
     ar1 = gate(white_setup, 2)
     ols = gate(white_setup, 2, noise_model="ols")
     tested = ar1.tested
@@ -373,6 +384,7 @@ def test_whitening_white_noise_stays_close_to_ols(white_setup):
 
 
 def test_binomial_decision_matches_scipy(base, pcstop_count):
+    """Match the significance-gate binomial probability and decision to SciPy."""
     _, setup = base
     result = gate(setup, pcstop_count)
     tested = result.tested
@@ -388,6 +400,7 @@ def test_binomial_decision_matches_scipy(base, pcstop_count):
 
 @pytest.mark.parametrize("binomial_alpha", [0.01, 0.2])
 def test_gate_alpha_settings_change_the_test_as_specified(base, binomial_alpha):
+    """Verify gate alpha settings change the test as specified."""
     _, setup = base
     result = gate(setup, 2, alpha=0.01, binomial_alpha=binomial_alpha)
     m = int(np.sum(result.p_value[result.tested] < 0.01))
@@ -399,6 +412,7 @@ def test_gate_alpha_settings_change_the_test_as_specified(base, binomial_alpha):
 
 def test_shared_noise_keeps_the_pcstop_count(base, pcstop_count):
     # The fixture's shared latent series loads on the task features.
+    """Verify shared noise keeps the pcstop count."""
     _, setup = base
     assert pcstop_count > 0
     result = gate(setup, pcstop_count)
@@ -417,6 +431,7 @@ def white_noise_components(data, seed=11, n=40):
 
 
 def test_independent_noise_components_are_rejected(fixture, base):
+    """Verify independent noise components are rejected."""
     inputs, _ = base
     selection, masks, _ = inputs
     setup = prepare_scoring(
@@ -436,6 +451,7 @@ def test_independent_noise_components_are_rejected(fixture, base):
 
 
 def test_zero_count_skips_the_gate(base):
+    """Verify zero count skips the gate."""
     _, setup = base
     result = gate(setup, 0)
     assert result.decision == "skipped_zero_count"
@@ -445,6 +461,7 @@ def test_zero_count_skips_the_gate(base):
 
 
 def test_disabled_gate_returns_the_pcstop_count(base, pcstop_count):
+    """Verify disabled gate returns the pcstop count."""
     _, setup = base
     result = gate(setup, pcstop_count, enabled=False, alpha=1e-300)
     assert result.decision == "disabled" and result.enabled is False
@@ -453,6 +470,7 @@ def test_disabled_gate_returns_the_pcstop_count(base, pcstop_count):
 
 
 def test_no_significant_feature_rejects(base, pcstop_count):
+    """Reject the denoising gate when no feature passes its significance test."""
     _, setup = base
     result = gate(setup, pcstop_count, alpha=1e-300)
     assert result.m == 0 and result.binomial_p == pytest.approx(1.0)
@@ -509,6 +527,7 @@ def two_hrf_setup(fixture, base):
 def test_rank_deficient_features_are_excluded_from_n(
     fixture, base, two_hrf_setup, noise_model
 ):
+    """Verify rank deficient features are excluded from n."""
     inputs, _ = base
     _, masks, _ = inputs
     indices, comps, setup = two_hrf_setup
@@ -555,6 +574,7 @@ def test_rank_deficient_features_are_excluded_from_n(
 def test_gate_tests_exactly_the_features_pcstop_scored(fixture, base, noise_model):
     # Features 0 and 7 are in the baseline span in every run; feature 1 in
     # run 3 only. pcstop scores neither, so the gate must not test them.
+    """Verify gate tests exactly the features pcstop scored."""
     inputs, _ = base
     data = fixture.data
     for run in range(data.n_runs):
@@ -620,6 +640,7 @@ def indicator_components(data, candidate):
 
 def test_pcs_inside_the_indicator_span_leave_nothing_to_test(fixture, base):
     # df1 = 0 for every feature, so n = 0: rejected with a NaN binomial p.
+    """Verify principal-components inside the indicator span leave nothing to test."""
     _, masks, _ = base[0]
     data = missing_everywhere(fixture.data)
     setup = prepare_scoring(
@@ -644,6 +665,7 @@ def test_pcs_inside_the_indicator_span_leave_nothing_to_test(fixture, base):
 def test_internal_errors_in_the_fit_are_not_hidden_as_exclusions(
     base, pcstop_count, monkeypatch
 ):
+    """Verify internal errors in the fit are not hidden as exclusions."""
     import boldtailor._denoising_gate as module
 
     def broken(*args):
@@ -659,6 +681,7 @@ def test_internal_errors_in_the_fit_are_not_hidden_as_exclusions(
 
 
 def test_gate_arrays_are_read_only_and_the_result_is_frozen(base, pcstop_count):
+    """Verify gate arrays are read only and the result is frozen."""
     _, setup = base
     result = gate(setup, pcstop_count)
     assert isinstance(result, SignificanceGate)
@@ -693,6 +716,7 @@ def result(fixture):
 
 
 def test_gate_defaults_are_declared_in_the_signature():
+    """Verify gate defaults are declared in the signature."""
     parameters = inspect.signature(select_denoising).parameters
     assert parameters["significance_gate"].default is True
     assert parameters["gate_alpha"].default == 0.05
@@ -715,11 +739,13 @@ def test_gate_defaults_are_declared_in_the_signature():
     ],
 )
 def test_select_denoising_validates_gate_settings(fixture, options, match):
+    """Verify select denoising validates gate settings."""
     with pytest.raises(ValueError, match=match):
         run_selection(fixture, **options)
 
 
 def test_result_records_pcstop_and_gated_counts(base, pcstop_count, result):
+    """Verify result records pcstop and gated counts."""
     _, setup = base
     want = gate(setup, pcstop_count)
     assert result.pcstop_count == pcstop_count
@@ -737,6 +763,7 @@ def test_result_records_pcstop_and_gated_counts(base, pcstop_count, result):
 
 
 def test_ols_noise_model_reaches_the_gate(fixture, base, pcstop_count):
+    """Verify OLS noise model reaches the gate."""
     _, setup = base
     ols = run_selection(fixture, gate_noise_model="ols")
     want = gate(setup, pcstop_count, noise_model="ols")
@@ -745,6 +772,7 @@ def test_ols_noise_model_reaches_the_gate(fixture, base, pcstop_count):
 
 
 def test_disabled_gate_reproduces_pcstop_only_selection(fixture, pcstop_count):
+    """Verify disabled gate reproduces pcstop only selection."""
     disabled = run_selection(fixture, significance_gate=False)
     assert disabled.n_components == disabled.pcstop_count == pcstop_count
     assert disabled.significance_gate.decision == "disabled"
@@ -752,6 +780,7 @@ def test_disabled_gate_reproduces_pcstop_only_selection(fixture, pcstop_count):
 
 
 def test_rejected_gate_returns_zero_components(fixture, pcstop_count):
+    """Verify rejected gate returns zero components."""
     rejected = run_selection(fixture, gate_alpha=1e-300)
     assert rejected.pcstop_count == pcstop_count > 0
     assert rejected.n_components == 0
@@ -781,6 +810,7 @@ def rho_summary(recorded, labels):
 
 
 def test_provenance_records_the_gate(result):
+    """Record the significance-gate settings and outcome in denoising provenance."""
     activity = result.provenance.to_dict()["activities"][-1]
     recorded = result.significance_gate
     assert activity["count_rule"] == "glmsingle_pcstop"
@@ -810,6 +840,7 @@ def test_provenance_records_the_gate(result):
 
 
 def test_provenance_records_the_ols_gate(fixture):
+    """Verify provenance records the OLS gate."""
     ols = run_selection(fixture, gate_noise_model="ols")
     record = ols.provenance.to_dict()["activities"][-1]["significance_gate"]
     assert record["test"] == "ols_nested_f_in_sample_all_runs"
@@ -819,6 +850,7 @@ def test_provenance_records_the_ols_gate(fixture):
 
 
 def test_result_rejects_an_inconsistent_gate(result):
+    """Verify result rejects an inconsistent gate."""
     from dataclasses import replace
 
     with pytest.raises(ValueError, match="significance_gate"):

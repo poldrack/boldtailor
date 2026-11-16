@@ -13,6 +13,7 @@ from experiments.hrf_estimation.test_library_cv import planted_runs
 def test_pilot_records_refit_scores_and_preserves_unprocessed_vertices(
     planted_runs, tmp_path
 ):
+    """Verify pilot records refit scores and preserves unprocessed vertices."""
     runs, library = planted_runs
     brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
     fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
@@ -37,6 +38,7 @@ def test_pilot_records_refit_scores_and_preserves_unprocessed_vertices(
 
 
 def test_comparison_supports_experimental_estimators(planted_runs, tmp_path):
+    """Verify comparison supports experimental estimators."""
     runs, library = planted_runs
     brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
     fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
@@ -54,6 +56,7 @@ def test_comparison_supports_experimental_estimators(planted_runs, tmp_path):
 
 
 def test_duration_manifest_records_actual_model(planted_runs, tmp_path):
+    """Verify duration manifest records actual model."""
     runs, library = planted_runs
     brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
     fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
@@ -63,6 +66,7 @@ def test_duration_manifest_records_actual_model(planted_runs, tmp_path):
 
 
 def test_verified_resume_rejects_changed_data(planted_runs, tmp_path):
+    """Verify verified resume rejects changed data."""
     runs, library = planted_runs
     brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
     fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
@@ -83,6 +87,7 @@ def test_verified_resume_rejects_changed_data(planted_runs, tmp_path):
 
 
 def test_export_axis_must_match_run_anatomy(planted_runs, tmp_path):
+    """Verify export axis must match run anatomy."""
     from dataclasses import replace
 
     runs, library = planted_runs

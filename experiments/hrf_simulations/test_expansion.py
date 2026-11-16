@@ -5,6 +5,7 @@ from experiments.hrf_simulations.test_runner import tiny_case
 
 
 def test_balanced_expansion():
+    """Expand synthetic trials while retaining the requested balance across conditions."""
     from experiments.hrf_simulations.cases import simulation_cases
 
     cases = simulation_cases("expanded", replicates=1)
@@ -17,6 +18,7 @@ def test_balanced_expansion():
 
 
 def test_run_variation_preserves_noise(tiny_case):
+    """Verify run variation preserves noise."""
     from experiments.hrf_simulations.dataset import generate
 
     runs, library, profile, case = tiny_case
@@ -30,6 +32,7 @@ def test_run_variation_preserves_noise(tiny_case):
 
 
 def test_crossed_evaluation_and_floor(tmp_path, tiny_case):
+    """Evaluate crossed simulation conditions and report their noise-floor comparisons."""
     from experiments.hrf_simulations.runner import run_case
     from experiments.hrf_simulations.reporting import build_report
 
@@ -70,6 +73,7 @@ def test_crossed_evaluation_and_floor(tmp_path, tiny_case):
 
 
 def test_scaling_uses_projected_training_design(tiny_case):
+    """Verify scaling uses projected training design."""
     from experiments.hrf_simulations.fitting import random_scales
     from experiments.hrf_simulations.design import task_design
     from experiments.hrf_estimation.scoring import residuals

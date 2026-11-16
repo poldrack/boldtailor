@@ -6,6 +6,7 @@ import sys
 
 
 def test_integration_selection_covers_public_boundaries_without_unit_cases():
+    """Verify integration selection covers public boundaries without unit cases."""
     root = Path(__file__).resolve().parents[1]
     collected = subprocess.run(
         [

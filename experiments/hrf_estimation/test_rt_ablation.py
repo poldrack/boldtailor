@@ -11,6 +11,7 @@ from tests.reml_oracles import dense_fit
 
 
 def test_no_rt_omits_only_the_rt_regressor(event_run):
+    """Verify no response-time omits only the response-time regressor."""
     kernel=HrfCandidate(0,"spm",CANONICAL_PARAMETERS)
     full=build_design(event_run,kernel,"amplitude")
     reduced=build_design(event_run,kernel,"none")
@@ -27,6 +28,7 @@ def test_no_rt_omits_only_the_rt_regressor(event_run):
 
 
 def test_no_rt_reml_matches_dense_four_effect_covariance(planted_runs):
+    """Verify no response-time REML matches dense four effect covariance."""
     from experiments.hrf_estimation.reml_selection import fit_library_reml
     runs,library=planted_runs
     rng=np.random.default_rng(37)
@@ -46,6 +48,7 @@ def test_no_rt_reml_matches_dense_four_effect_covariance(planted_runs):
 
 
 def test_crossed_evaluation_separates_selection_and_evaluation_rt(planted_runs):
+    """Verify crossed evaluation separates selection and evaluation response-time."""
     from experiments.hrf_estimation.reml_selection import fit_library_reml
     api=importlib.import_module("experiments.hrf_estimation.rt_ablation")
     runs,library=planted_runs

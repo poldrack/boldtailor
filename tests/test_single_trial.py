@@ -99,6 +99,7 @@ def problem():
 
 
 def test_normalized_ridge_leaves_nuisance_unpenalized():
+    """Verify normalized ridge leaves nuisance unpenalized."""
     x = np.array([[1.0, 0.0], [0.0, 2.0], [-1.0, 0.0], [0.0, -2.0]]) + 3
     n = np.ones((4, 1))
     y = 10 + x @ np.array([[2.0], [4.0]])
@@ -113,6 +114,7 @@ def test_normalized_ridge_leaves_nuisance_unpenalized():
 @pytest.mark.parametrize("ill_conditioned", [False, True])
 @pytest.mark.parametrize("prepared", [False, True])
 def test_beta_path_matches_augmented_ols(problem, ill_conditioned, prepared):
+    """Verify beta path matches augmented OLS."""
     data, x, ns = problem
     x = x * [1.0, 2.0, 3.0, 4.0]
     if ill_conditioned:
@@ -152,6 +154,7 @@ def test_beta_path_matches_augmented_ols(problem, ill_conditioned, prepared):
 @pytest.mark.parametrize("case", ["rank", "support", "dof", "alpha"])
 @pytest.mark.parametrize("prepared", [False, True])
 def test_beta_path_retains_solver_rejections(case, prepared):
+    """Verify beta path retains solver rejections."""
     x = np.arange(12.0).reshape(6, 2)
     n, y = np.ones((6, 1)), np.arange(6.0)[:, None]
     if case == "support":
@@ -172,6 +175,7 @@ def test_beta_path_retains_solver_rejections(case, prepared):
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 2.0])
 def test_betas_and_pooled_r2_match_independent_augmented_ols(problem, alpha):
+    """Verify betas and pooled R-squared match independent augmented OLS."""
     data, x, ns = problem
     result = entry()(data, ridge_alpha=alpha)
     full_sse, nuisance_sse, sst = [], [], []
@@ -206,6 +210,7 @@ def test_betas_and_pooled_r2_match_independent_augmented_ols(problem, alpha):
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
 def test_rt_and_stimulus_ids_never_change_fit(problem, alpha):
+    """Verify response-time and stimulus ids never change fit."""
     data, _, _ = problem
     first = entry()(data, ridge_alpha=alpha)
     events = [
@@ -221,6 +226,7 @@ def test_rt_and_stimulus_ids_never_change_fit(problem, alpha):
 
 
 def test_constant_features_keep_nan_positions_and_zero_sums():
+    """Verify constant features keep NaN positions and zero sums."""
     x = np.array([[1.0], [-1.0], [1.0], [-1.0], [0.0]])
     n = np.ones((5, 1))
     y = np.column_stack([2 * x[:, 0] + 10, np.zeros(5), np.ones(5) * 100])
@@ -232,6 +238,7 @@ def test_constant_features_keep_nan_positions_and_zero_sums():
 
 
 def test_redundant_nuisance_has_same_fit():
+    """Verify redundant nuisance has same fit."""
     x = np.arange(8, dtype=float)[:, None] ** 2
     n = np.column_stack([np.ones(8), np.arange(8)])
     y = 3 * x + 2 * n[:, [1]] + 100
@@ -243,12 +250,14 @@ def test_redundant_nuisance_has_same_fit():
 
 @pytest.mark.parametrize("alpha", [-1, np.inf, np.nan, True, "0.1"])
 def test_invalid_alpha_rejected(problem, alpha):
+    """Verify invalid alpha rejected."""
     with pytest.raises(ValueError, match="alpha"):
         entry()(problem[0], ridge_alpha=alpha)
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
 def test_unidentifiable_trials_rejected(alpha):
+    """Verify unidentifiable trials rejected."""
     n = np.ones((5, 1))
     for x in [n, np.column_stack([np.arange(5), np.arange(5)])]:
         with pytest.raises(ValueError, match="rank|identif|support"):
@@ -256,17 +265,20 @@ def test_unidentifiable_trials_rejected(alpha):
 
 
 def test_no_residual_degrees_of_freedom_rejected():
+    """Verify no residual degrees of freedom rejected."""
     with pytest.raises(ValueError, match="degrees of freedom"):
         solve(np.eye(3)[:, :2], np.ones((3, 1)), np.arange(3)[:, None], 0.1)
 
 
 def test_run_labels_are_unique_and_checked(problem):
+    """Verify run labels are unique and checked."""
     for labels in [["same", "same"], ["only-one"], ["run-1", "/private/run-2"]]:
         with pytest.raises(ValueError, match="label"):
             entry()(problem[0], run_labels=labels)
 
 
 def test_results_are_readonly_and_metadata_is_copied(problem):
+    """Verify results are read-only and metadata is copied."""
     result = entry()(problem[0], ridge_alpha=0.1)
     for values in [*result.run_betas, result.full_r2, result.delta_r2]:
         assert type(values) is np.ndarray
@@ -285,6 +297,7 @@ def test_results_are_readonly_and_metadata_is_copied(problem):
 
 
 def test_provenance_tracks_design_and_penalty_without_behavior_values(problem, caplog):
+    """Verify provenance tracks design and penalty without behavior values."""
     data, _, _ = problem
     first = entry()(data)
     assert first.provenance.analysis_fingerprint
@@ -315,6 +328,7 @@ def test_provenance_tracks_design_and_penalty_without_behavior_values(problem, c
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
 def test_known_rt_variability_with_ar_noise_and_nuisance_only_feature(alpha):
+    """Verify known response-time variability with ar noise and nuisance only feature."""
     rng = np.random.default_rng(842)
     times = np.arange(220) * 1.6
     rt = rng.uniform(0.4, 2.0, 30)
@@ -354,6 +368,7 @@ def test_known_rt_variability_with_ar_noise_and_nuisance_only_feature(alpha):
 
 
 def test_nested_event_metadata_is_owned_on_every_result_access(problem):
+    """Verify nested event metadata is owned on every result access."""
     data, _, _ = problem
     events = data.events
     for table in events:
@@ -370,6 +385,7 @@ def test_nested_event_metadata_is_owned_on_every_result_access(problem):
 
 @pytest.mark.parametrize("alpha", [0.0, 1e-12, 0.1])
 def test_ols_and_ridge_preserve_supported_trials_with_small_hrf_support(alpha):
+    """Verify OLS and ridge preserve supported trials with small HRF support."""
     times = np.arange(80) * 1.6
     onset = times[-1] - 0.1
     x = compute_regressor(
@@ -397,6 +413,7 @@ def _same_trials(left, right):
 
 
 def test_fit_single_trials_names_its_hrf_hrf_model(selected_fixture):
+    """Verify fit single trials names its HRF HRF model."""
     data, selection = selected_fixture
     candidate = selection.library.candidates[1]
     named = entry()(data, hrf_model=candidate)
@@ -408,6 +425,7 @@ def test_fit_single_trials_names_its_hrf_hrf_model(selected_fixture):
 
 
 def test_fit_selected_hrfs_names_its_input_hrf_selection(selected_fixture):
+    """Verify fit selected HRFs names its input HRF selection."""
     data, selection = selected_fixture
     function = entry(name="fit_selected_hrfs")
     signature = dict(feature_signature="ordered-axis")
@@ -425,12 +443,14 @@ def test_fit_selected_hrfs_names_its_input_hrf_selection(selected_fixture):
 def test_renamed_hrf_rejects_both_names_even_when_new_value_is_default(
     selected_fixture, new_value
 ):
+    """Verify renamed HRF rejects both names even when new value is default."""
     data, selection = selected_fixture
     with pytest.raises(TypeError, match="both"):
         entry()(data, hrf=selection.library.candidates[1], hrf_model=new_value)
 
 
 def test_omitted_hrf_still_uses_canonical_default(selected_fixture):
+    """Verify omitted HRF still uses canonical default."""
     data, _ = selected_fixture
     _same_trials(entry()(data), entry()(data, hrf_model="spm"))
 
@@ -440,6 +460,7 @@ def test_omitted_hrf_still_uses_canonical_default(selected_fixture):
 def test_trial_operations_can_run_without_public_wrappers(
     selected_fixture, selected, penalty
 ):
+    """Verify trial operations can run without public wrappers."""
     from boldtailor._shared_hrf_fit import fit_shared_hrf_trials
     from boldtailor._selected_hrf_fit import fit_selected_hrf_trials
     from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs

@@ -104,6 +104,7 @@ def assert_matches(result, expected):
 
 @pytest.mark.parametrize("values", [bimodal(), wide_lower()], ids=["tail", "wide"])
 def test_threshold_matches_an_independent_mixture_fit(values):
+    """Verify threshold matches an independent mixture fit."""
     result = mixture_threshold(values)
     assert isinstance(result, MixtureThreshold)
     assert_matches(result, oracle(values))
@@ -114,6 +115,7 @@ def test_threshold_matches_an_independent_mixture_fit(values):
 def test_reported_parameters_put_the_tail_posterior_crossing_at_the_threshold(
     values,
 ):
+    """Verify reported parameters put the tail posterior crossing at the threshold."""
     result = mixture_threshold(values)
     step = oracle(values)["step"]
 
@@ -129,6 +131,7 @@ def test_reported_parameters_put_the_tail_posterior_crossing_at_the_threshold(
 
 
 def test_bimodal_threshold_lies_between_the_modes():
+    """Verify bimodal threshold lies between the modes."""
     result = mixture_threshold(bimodal())
     assert 0.0 < result.threshold < 0.4
     assert result.means[0] == pytest.approx(0.0, abs=0.01)
@@ -137,6 +140,7 @@ def test_bimodal_threshold_lies_between_the_modes():
 
 
 def test_threshold_shifts_with_a_common_shift_of_both_modes():
+    """Verify threshold shifts with a common shift of both modes."""
     base, shifted = mixture_threshold(bimodal()), mixture_threshold(bimodal(0, 0.05))
     assert shifted.threshold == pytest.approx(base.threshold + 0.05, abs=1e-9)
     np.testing.assert_allclose(shifted.means, np.add(base.means, 0.05), atol=1e-9)
@@ -144,11 +148,13 @@ def test_threshold_shifts_with_a_common_shift_of_both_modes():
 
 
 def test_threshold_is_deterministic():
+    """Return the same fitted mixture threshold for repeated calls on identical data."""
     values = bimodal(3)
     assert mixture_threshold(values) == mixture_threshold(values.copy())
 
 
 def test_nonfinite_values_are_ignored():
+    """Exclude nonfinite observations when fitting the mixture threshold."""
     values = bimodal()
     padded = np.concatenate([values, [np.nan, np.inf, -np.inf]])
     result = mixture_threshold(padded)
@@ -157,6 +163,7 @@ def test_nonfinite_values_are_ignored():
 
 
 def test_input_is_not_modified():
+    """Leave the caller-owned input array unchanged while fitting the mixture threshold."""
     values = bimodal()
     before = values.copy()
     mixture_threshold(values)
@@ -168,6 +175,7 @@ def test_input_is_not_modified():
 
 def test_unimodal_normal_completes_and_records_convergence():
     # Run under -W error: ConvergenceWarning must not escape.
+    """Verify unimodal normal completes and records convergence."""
     values = np.random.default_rng(0).normal(0.0, 0.02, 2000)
     result = mixture_threshold(values)
     assert_matches(result, oracle(values))
@@ -178,6 +186,7 @@ def test_unimodal_normal_completes_and_records_convergence():
 
 
 def test_heavy_tailed_unimodal_gives_a_stable_pool_fraction():
+    """Verify heavy tailed unimodal gives a stable pool fraction."""
     fractions = []
     for seed in range(10):
         values = np.random.default_rng(seed).standard_t(3, 2000) * 0.02
@@ -190,6 +199,7 @@ def test_heavy_tailed_unimodal_gives_a_stable_pool_fraction():
 
 
 def test_robust_range_excludes_an_extreme_outlier():
+    """Verify robust range excludes an extreme outlier."""
     values = np.random.default_rng(4).normal(0.0, 1.0, 5000)
     with_outlier = np.append(values, 1e6)
     low, high = robust_range(with_outlier)
@@ -199,11 +209,13 @@ def test_robust_range_excludes_an_extreme_outlier():
 
 
 def test_robust_range_of_clean_data_is_the_data_range():
+    """Verify robust range of clean data is the data range."""
     values = np.linspace(-1.0, 1.0, 101)
     assert robust_range(values) == (-1.0, 1.0)
 
 
 def test_large_inputs_are_subsampled_deterministically(monkeypatch):
+    """Verify large inputs are subsampled deterministically."""
     monkeypatch.setattr(module, "MAX_VALUES", 500)
     values = np.concatenate([bimodal(7), bimodal(8), bimodal(9), bimodal(10)])
     pick = np.sort(np.random.default_rng(0).choice(len(values), 500, replace=False))
@@ -221,18 +233,21 @@ def test_large_inputs_are_subsampled_deterministically(monkeypatch):
     [np.array([]), np.array([0.2]), np.full(50, 0.1), np.array([np.nan, 0.3, 0.3])],
 )
 def test_fewer_than_two_distinct_values_raise(values):
+    """Verify fewer than two distinct values raise."""
     with pytest.raises(ValueError, match="distinct"):
         mixture_threshold(values)
 
 
 @pytest.mark.parametrize("values", [np.zeros((10, 2)), ["a", "b"], None])
 def test_values_must_be_a_real_vector(values):
+    """Verify values must be a real vector."""
     with pytest.raises(ValueError, match="vector"):
         mixture_threshold(values)
 
 
 def test_failed_fit_raises_a_value_error():
     # Two tied clusters: with reg_covar=0 the covariances are singular.
+    """Verify failed fit raises a value error."""
     values = np.repeat([0.0, 1.0], 50)
     with pytest.raises(ValueError, match="mixture fit failed"):
         mixture_threshold(values)
@@ -244,12 +259,14 @@ class _AlwaysTail(GaussianMixture):
 
 
 def test_tail_posterior_never_at_or_below_one_half_raises(monkeypatch):
+    """Verify tail posterior never at or below one half raises."""
     monkeypatch.setattr(module, "GaussianMixture", _AlwaysTail)
     with pytest.raises(ValueError, match="0.5"):
         mixture_threshold(bimodal())
 
 
 def test_record_names_method_settings_and_fit():
+    """Verify record names method settings and fit."""
     result = mixture_threshold(bimodal())
     record = result.to_dict()
     assert record["method"] == "gaussian_mixture_tail_threshold"

@@ -9,6 +9,7 @@ from boldtailor.model import Modulator, TaskModel, level_name
 
 
 def test_default_task_model_is_task_only():
+    """Verify default task model is task only."""
     model = TaskModel()
     assert model.regressor_names == ("task",)
     assert model.profiled_names == ()
@@ -18,6 +19,7 @@ def test_default_task_model_is_task_only():
 
 
 def test_nsd_task_model_names_and_dict():
+    """Verify NSD task model names and dict."""
     model = TaskModel(
         (
             Modulator("response_time", missing="indicator"),
@@ -36,6 +38,7 @@ def test_nsd_task_model_names_and_dict():
 
 
 def test_fingerprint_is_sha256_of_canonical_dict_and_changes_with_settings():
+    """Verify fingerprint is sha256 of canonical dict and changes with settings."""
     model = TaskModel((Modulator("response_time"),))
     assert len(model.fingerprint) == 64
     assert int(model.fingerprint, 16) >= 0
@@ -71,11 +74,13 @@ def test_fingerprint_is_sha256_of_canonical_dict_and_changes_with_settings():
     ],
 )
 def test_task_model_rejects_invalid_arguments(build, message):
+    """Verify task model rejects invalid arguments."""
     with pytest.raises(ValueError, match=message):
         build()
 
 
 def test_task_model_is_immutable_and_owns_its_tuple():
+    """Verify task model is immutable and owns its tuple."""
     modulators = [Modulator("rt")]
     model = TaskModel(modulators)
     modulators.append(Modulator("other"))
@@ -85,6 +90,7 @@ def test_task_model_is_immutable_and_owns_its_tuple():
 
 
 def test_subset_requires_identical_shared_modulators():
+    """Verify subset requires identical shared modulators."""
     rt = Modulator("response_time", missing="indicator")
     trial = Modulator("trial_type")
     full = TaskModel((rt, trial))
@@ -117,15 +123,18 @@ def test_subset_requires_identical_shared_modulators():
     ],
 )
 def test_level_name_canonicalises_values(value, expected):
+    """Verify level name canonicalises values."""
     assert level_name(value) == expected
 
 
 def test_level_name_rejects_other_types():
+    """Verify level name rejects other types."""
     with pytest.raises(ValueError, match="categorical value"):
         level_name([1])
 
 
 def test_categorical_levels_are_sorted_and_reference_defaults_to_first():
+    """Verify categorical levels are sorted and reference defaults to first."""
     mod = Modulator(
         "trial_type", kind="categorical", levels=("scrambled", "face", "house")
     )
@@ -135,12 +144,14 @@ def test_categorical_levels_are_sorted_and_reference_defaults_to_first():
 
 
 def test_numeric_levels_sort_numerically_and_normalise():
+    """Verify numeric levels sort numerically and normalise."""
     mod = Modulator("cond", kind="categorical", levels=(10, 2.0, "1"))
     assert mod.levels == ("1", "2", "10")
     assert mod.regressor_names == ("cond[2]", "cond[10]")
 
 
 def test_explicit_reference_and_binary_naming():
+    """Verify explicit reference and binary naming."""
     mod = Modulator("trial_type", kind="categorical", levels=(0, 1), reference=1)
     assert mod.reference == "1"
     assert mod.regressor_names == ("trial_type[0]",)
@@ -162,11 +173,13 @@ def test_explicit_reference_and_binary_naming():
     ],
 )
 def test_invalid_categorical_modulators(kwargs, message):
+    """Verify invalid categorical modulators."""
     with pytest.raises(ValueError, match=message):
         Modulator("cond", **kwargs)
 
 
 def test_unresolved_categorical_gets_levels_later():
+    """Verify unresolved categorical gets levels later."""
     mod = Modulator("trial_type", kind="categorical", reference="house")
     assert not mod.resolved
     with pytest.raises(ValueError, match="no levels"):
@@ -177,6 +190,7 @@ def test_unresolved_categorical_gets_levels_later():
 
 
 def test_task_model_expands_and_rejects_unresolved_or_duplicate_names():
+    """Verify task model expands and rejects unresolved or duplicate names."""
     cat = Modulator("trial_type", kind="categorical", levels=("a", "b", "c"))
     model = TaskModel((Modulator("response_time", missing="indicator"), cat))
     assert model.regressor_names == (
@@ -193,6 +207,7 @@ def test_task_model_expands_and_rejects_unresolved_or_duplicate_names():
 
 
 def test_to_dict_and_fingerprint_record_kind_levels_and_reference():
+    """Verify to dict and fingerprint record kind levels and reference."""
     cat = Modulator(
         "trial_type", kind="categorical", levels=("a", "b"), missing="indicator"
     )
@@ -236,6 +251,7 @@ def test_to_dict_and_fingerprint_record_kind_levels_and_reference():
     ],
 )
 def test_level_name_canonicalises_numeric_strings(value, expected):
+    """Verify level name canonicalises numeric strings."""
     assert level_name(value) == expected
 
 
@@ -252,17 +268,20 @@ def test_level_name_canonicalises_numeric_strings(value, expected):
     ],
 )
 def test_level_name_rejects_infinite_values(value):
+    """Verify level name rejects infinite values."""
     with pytest.raises(ValueError, match="must be finite"):
         level_name(value)
 
 
 @pytest.mark.parametrize("value", [True, False, np.bool_(True)])
 def test_level_name_rejects_booleans(value):
+    """Verify level name rejects booleans."""
     with pytest.raises(ValueError, match="categorical value"):
         level_name(value)
 
 
 def test_one_level_written_three_ways_is_one_level():
+    """Verify one level written three ways is one level."""
     mod = Modulator("cond", kind="categorical", levels=(1, 2))
     assert Modulator("cond", kind="categorical", levels=("1", "2.0")) == mod
     with pytest.raises(ValueError, match="distinct"):
@@ -270,6 +289,7 @@ def test_one_level_written_three_ways_is_one_level():
 
 
 def test_mixed_numeric_and_text_levels_sort_lexically():
+    """Verify mixed numeric and text levels sort lexically."""
     mod = Modulator("cond", kind="categorical", levels=("10", "b", "2", "a"))
     assert mod.levels == ("10", "2", "a", "b")
     assert mod.reference == "10"

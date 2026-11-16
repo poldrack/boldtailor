@@ -102,3 +102,20 @@ numerical tolerances. Run notebook checks when their workflow or dependencies
 change. The scheduled/manual examples CI job executes notebooks; the default
 package job keeps running all default package tests and reports the 20 slowest
 phases. Neither suite is reduced by the integration marker.
+
+## Test purpose and maintenance
+
+Every test function has a short purpose docstring. The documentation check scans
+package, experiment and example tests without executing the optional suites:
+
+```bash
+uv run pytest tests/test_test_documentation.py -q
+```
+
+Describe the behavior or failure being checked; include the oracle or boundary
+when it matters. Keep one or two sentences, and retain detailed setup rationale
+in comments. Shared bodies with different parameter grids are not redundant.
+Prefer executing documented examples over asserting that prose contains specific
+words. Keep license, distribution and explicit architecture requirements tested.
+See the [test-suite review](test-suite-review-2026-11-16.md) for this review's
+removals, retained cases and timing findings.

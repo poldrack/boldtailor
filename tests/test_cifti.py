@@ -19,6 +19,7 @@ def cortical_axis():
 
 
 def test_surface_values_use_vertex_ids_and_exclude_volume(cortical_axis):
+    """Verify surface values use vertex ids and exclude volume."""
     values = np.array([0.1, -0.2, np.nan, 99, 0.7, 0, -0.6, 0.3])
     original = values.copy()
     projected = cifti.cortical_values(values, cortical_axis)
@@ -35,6 +36,7 @@ def test_surface_values_use_vertex_ids_and_exclude_volume(cortical_axis):
 def test_scalar_artifact_round_trips_names_axis_and_float32_values(
     cortical_axis, tmp_path
 ):
+    """Verify scalar artifact round trips names axis and float32 values."""
     values = np.arange(16, dtype=float).reshape(2, 8) / 3
     values[1, 2] = np.nan
     artifact = cifti.scalar_artifact(
@@ -51,6 +53,7 @@ def test_scalar_artifact_round_trips_names_axis_and_float32_values(
 
 
 def test_read_scalar_checks_the_spatial_axis_and_map_names(cortical_axis, tmp_path):
+    """Verify read scalar checks the spatial axis and map names."""
     path = tmp_path / "map.dscalar.nii"
     values = np.ones((1, 8))
     path.write_bytes(
@@ -65,6 +68,7 @@ def test_read_scalar_checks_the_spatial_axis_and_map_names(cortical_axis, tmp_pa
 
 
 def test_spatial_signature_identifies_axis_and_ordered_indices(cortical_axis):
+    """Verify spatial signature identifies axis and ordered indices."""
     header = nib.Cifti2Header.from_axes(
         (nib.cifti2.ScalarAxis(["spatial_identity"]), cortical_axis)
     )

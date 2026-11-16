@@ -8,6 +8,7 @@ import pytest
 
 
 def test_source_checkout_version_is_explicitly_unknown(monkeypatch):
+    """Verify source checkout version is explicitly unknown."""
     software = importlib.import_module("boldtailor._software")
 
     def missing(name):
@@ -20,6 +21,7 @@ def test_source_checkout_version_is_explicitly_unknown(monkeypatch):
 
 
 def test_source_import_does_not_require_own_distribution_metadata():
+    """Verify source import does not require own distribution metadata."""
     code = textwrap.dedent("""
         from importlib import metadata
         installed_version = metadata.version
@@ -39,6 +41,7 @@ def test_source_import_does_not_require_own_distribution_metadata():
 
 
 def test_imports_do_not_query_versions():
+    """Verify imports do not query versions."""
     code = textwrap.dedent("""
         import importlib
         from importlib import metadata
@@ -60,6 +63,7 @@ def test_imports_do_not_query_versions():
 
 
 def test_software_environment_lists_interpreter_platform_and_packages():
+    """Verify software environment lists interpreter platform and packages."""
     import platform
 
     import nilearn

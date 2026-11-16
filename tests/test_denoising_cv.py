@@ -244,6 +244,7 @@ def glmsingle_choice(counts, perf, pcstop):
 
 
 def test_counts_are_sorted_deduplicated_integers_including_zero():
+    """Verify counts are sorted deduplicated integers including zero."""
     assert validate_counts((4, 0, np.int64(2), 2, 1)) == (0, 1, 2, 4)
     assert validate_counts([0]) == (0,)
 
@@ -252,11 +253,13 @@ def test_counts_are_sorted_deduplicated_integers_including_zero():
     "counts", [(), (1, 2), (0, -1), (0, True), (0, 1.0), (0, "2"), (False, 1), 3]
 )
 def test_invalid_counts_are_rejected(counts):
+    """Verify invalid counts are rejected."""
     with pytest.raises(ValueError, match="counts"):
         validate_counts(counts)
 
 
 def test_pcstop_must_be_finite_and_at_least_one():
+    """Verify pcstop must be finite and at least one."""
     assert validate_pcstop(1) == 1.0 and validate_pcstop(1.05) == 1.05
     for value in (0.99, 0, -1, np.nan, np.inf, True, "1.05", None):
         with pytest.raises(ValueError, match="pcstop"):
@@ -267,6 +270,7 @@ def test_pcstop_must_be_finite_and_at_least_one():
 
 
 def test_pcstop_follows_glmsingle_semantics():
+    """Choose the smallest eligible component count reaching the pcstop score threshold."""
     counts = (0, 1, 2, 4)
     perf = (0.10, 0.20, 0.205, 0.19)  # curve (0, .10, .105, .09)
     assert choose_count(counts, perf, 1.05) == 1  # .10 * 1.05 >= .105
@@ -277,6 +281,7 @@ def test_pcstop_follows_glmsingle_semantics():
 
 
 def test_pcstop_walks_past_counts_far_below_the_maximum():
+    """Verify pcstop walks past counts far below the maximum."""
     counts = (0, 1, 2, 3, 4)
     perf = (0.0, 0.05, 0.02, 0.098, 0.1)
     assert choose_count(counts, perf, 1.05) == 3  # .098 * 1.05 >= .1
@@ -285,6 +290,7 @@ def test_pcstop_walks_past_counts_far_below_the_maximum():
 
 
 def test_unavailable_counts_are_skipped():
+    """Verify unavailable counts are skipped."""
     counts = (0, 1, 2, 4)
     assert choose_count(counts, (0.10, np.nan, 0.205, 0.19), 1.05) == 2
     assert choose_count(counts, (0.10, np.nan, np.nan, np.nan), 1.05) == 0
@@ -292,6 +298,7 @@ def test_unavailable_counts_are_skipped():
 
 
 def test_choice_requires_a_scored_zero_count_and_aligned_scores():
+    """Verify choice requires a scored zero count and aligned scores."""
     with pytest.raises(ValueError, match="zero"):
         choose_count((0, 1), (np.nan, 0.2), 1.05)
     with pytest.raises(ValueError, match="zero"):
@@ -319,6 +326,7 @@ def variant_setups(fixture):
 
 
 def test_missing_and_categorical_variants_exercise_indicators(fixture):
+    """Verify missing and categorical variants exercise indicators."""
     data, _ = variant(fixture, "missing_rt")
     names = [
         run_task_columns(
@@ -340,6 +348,9 @@ def test_missing_and_categorical_variants_exercise_indicators(fixture):
 @pytest.mark.parametrize("name", VARIANTS)
 @pytest.mark.parametrize("count", COUNTS)
 def test_scores_match_stacked_oracle(fixture, variant_setups, name, count):
+    """Compare denoising cross-validation scores with an independently stacked regression
+    oracle.
+    """
     data, model, inputs, setup = variant_setups[name]
     want = oracle_count(data, inputs, fixture.library, model, count, setup.scored)
     score = score_count(setup, count)
@@ -359,6 +370,7 @@ def test_scores_match_stacked_oracle(fixture, variant_setups, name, count):
 
 
 def test_scoring_features_are_the_task_features(fixture, base):
+    """Verify scoring features are the task features."""
     inputs, setup = base
     groups = fixture.groups
     expected = np.r_[groups["task"], groups["rt"], groups["outside_task"]]
@@ -370,6 +382,7 @@ def test_scoring_features_are_the_task_features(fixture, base):
 def test_target_denominator_and_scored_features_are_fixed_across_counts(
     variant_setups, name
 ):
+    """Verify target denominator and scored features are fixed across counts."""
     setup = variant_setups[name][3]
     np.testing.assert_array_equal(setup.scored, setup.scoring)
     assert not setup.zero_target.any()
@@ -384,6 +397,7 @@ def test_target_denominator_and_scored_features_are_fixed_across_counts(
 
 
 def test_coefficients_change_with_count_so_the_comparison_is_live(base):
+    """Verify coefficients change with count so the comparison is live."""
     setup = base[1]
     zero, one = score_count(setup, 0), score_count(setup, 1)
     scored = setup.scored
@@ -392,6 +406,7 @@ def test_coefficients_change_with_count_so_the_comparison_is_live(base):
 
 
 def test_setup_and_score_arrays_are_read_only(base):
+    """Verify setup and score arrays are read only."""
     setup = base[1]
     score = score_count(setup, 1)
     for array in (setup.scored, setup.scoring, setup.zero_target, setup.target_energy):
@@ -403,6 +418,7 @@ def test_setup_and_score_arrays_are_read_only(base):
 def test_scoring_reuses_cached_task_columns(fixture, base, monkeypatch):
     # Run designs (and their blocks) are cached, so a repeated setup must
     # not convolve the task design again for any run or HRF.
+    """Verify scoring reuses cached task columns."""
     from boldtailor._hrf_cv import RunDesign
 
     data, model = fixture.data, fixture.task_model
@@ -424,6 +440,7 @@ def test_scoring_reuses_cached_task_columns(fixture, base, monkeypatch):
 
 
 def test_component_count_selection_uses_median_pooled_r2_and_pcstop(fixture, base):
+    """Verify component count selection uses median pooled R-squared and pcstop."""
     inputs, setup = base
     data, model = fixture.data, fixture.task_model
     chosen = select_count(data, model, fixture.library, inputs, counts=(4, 0, 2, 1))
@@ -453,11 +470,13 @@ def test_component_count_selection_uses_median_pooled_r2_and_pcstop(fixture, bas
 
 
 def test_selection_finds_a_positive_count_on_the_fixture(fixture, base):
+    """Verify selection finds a positive count on the fixture."""
     chosen = select_count(fixture.data, fixture.task_model, fixture.library, base[0])
     assert chosen.n_components >= 1
 
 
 def test_selection_requires_three_runs(fixture, base):
+    """Verify selection requires three runs."""
     data = subset_runs(fixture.data, [0, 1])
     selection, masks, comps = base[0]
     with pytest.raises(ValueError, match="three runs"):
@@ -468,6 +487,7 @@ def test_selection_requires_three_runs(fixture, base):
 
 @pytest.mark.parametrize("pcstop", [0.5, np.nan, True])
 def test_selection_rejects_invalid_pcstop(fixture, base, pcstop):
+    """Verify selection rejects invalid pcstop."""
     with pytest.raises(ValueError, match="pcstop"):
         select_count(
             fixture.data, fixture.task_model, fixture.library, base[0], pcstop=pcstop
@@ -484,6 +504,7 @@ def heldout_replaced(data, run, features, values):
 
 
 def test_zero_energy_targets_are_excluded_for_every_fold_and_count(fixture, base):
+    """Verify zero energy targets are excluded for every fold and count."""
     inputs = base[0]
     model, run = fixture.task_model, 3
     in_nuisance = 50.0 + 4.0 * fixture.data.confounds[run]["drift"].to_numpy()
@@ -503,6 +524,7 @@ def test_zero_energy_targets_are_excluded_for_every_fold_and_count(fixture, base
 
 
 def test_no_nonzero_validation_target_raises(fixture, base):
+    """Verify no nonzero validation target raises."""
     run = 3
     in_nuisance = 50.0 + 4.0 * fixture.data.confounds[run]["cosine"].to_numpy()
     data = heldout_replaced(fixture.data, run, np.arange(26), in_nuisance)
@@ -511,6 +533,7 @@ def test_no_nonzero_validation_target_raises(fixture, base):
 
 
 def test_empty_scoring_mask_raises(fixture, base):
+    """Verify empty scoring mask raises."""
     selection, masks, comps = base[0]
     empty = pool_masks(np.zeros(26), 0.0, hrf_indices=-np.ones(26, dtype=int))
     with pytest.raises(ValueError, match="no supported task signal"):
@@ -523,6 +546,7 @@ def test_empty_scoring_mask_raises(fixture, base):
 
 
 def test_empty_pool_leaves_only_zero(fixture, base):
+    """Verify empty pool leaves only zero."""
     selection, masks, _ = base[0]
     data, model = fixture.data, fixture.task_model
     empty = analysis_components(data, np.zeros(26, dtype=bool))
@@ -541,6 +565,7 @@ def test_empty_pool_leaves_only_zero(fixture, base):
 
 
 def test_count_beyond_pool_rank_is_unavailable_not_capped(base):
+    """Verify count beyond pool rank is unavailable not capped."""
     inputs, setup = base
     too_many = max(c.rank for c in inputs[2]) + 1
     score = score_count(setup, too_many)
@@ -568,6 +593,7 @@ def short_run_data(fixture, extra=40, length=30):
 
 
 def test_count_without_positive_residual_df_is_unavailable_in_training_folds(fixture):
+    """Verify count without positive residual df is unavailable in training folds."""
     data, model = short_run_data(fixture), fixture.task_model
     inputs = frozen_inputs(data, model, fixture.library)
     dof_limit = 30 - 4 - len(model.regressor_names)  # scans - baseline - task
@@ -596,6 +622,7 @@ def test_count_without_positive_residual_df_is_unavailable_in_training_folds(fix
 
 
 def test_heldout_bold_never_enters_the_fold_coefficients(fixture, base):
+    """Verify heldout bold never enters the fold coefficients."""
     inputs, setup = base
     run = 1
     rng = np.random.default_rng(3)
@@ -616,6 +643,7 @@ def test_heldout_bold_never_enters_the_fold_coefficients(fixture, base):
 
 
 def test_heldout_pcs_never_enter_their_own_fold(fixture, base):
+    """Verify heldout principal-components never enter their own fold."""
     inputs, setup = base
     selection, masks, comps = inputs
     run = 2
@@ -681,6 +709,7 @@ def naive_projected_r2(data, run, setup, inputs, count):
 
 
 def test_task_aligned_pcs_cannot_gain_by_removing_target_variance(fixture):
+    """Verify task aligned principal-components cannot gain by removing target variance."""
     data, model, run = echo_data(fixture), fixture.task_model, 0
     inputs = frozen_inputs(data, model, fixture.library)
     echo = np.arange(26, 32)
@@ -702,6 +731,7 @@ def test_task_aligned_pcs_cannot_gain_by_removing_target_variance(fixture):
 
 @pytest.mark.filterwarnings("ignore:Matrix is singular:UserWarning")
 def test_invalid_design_for_a_frozen_hrf_raises_naming_the_run(fixture, base):
+    """Verify invalid design for a frozen HRF raises naming the run."""
     events = [e.copy() for e in fixture.data.events]
     events[3]["response_time"] = 0.9  # task and RT columns become collinear
     data = rebuild(fixture.data, events=events)
@@ -712,6 +742,7 @@ def test_invalid_design_for_a_frozen_hrf_raises_naming_the_run(fixture, base):
 
 
 def test_fold_messages_and_tables_use_run_labels(fixture, base):
+    """Verify fold messages and tables use run labels."""
     chosen = select_count(
         fixture.data,
         fixture.task_model,
@@ -730,6 +761,7 @@ def test_fold_messages_and_tables_use_run_labels(fixture, base):
 
 @pytest.mark.parametrize("broken", [0, 2, 3])
 def test_invalid_run_design_names_only_that_run(fixture, base, broken):
+    """Verify invalid run design names only that run."""
     events = list(fixture.data.events)
     events[broken] = events[broken].drop(columns="response_time")
     data = rebuild(fixture.data, events=events)

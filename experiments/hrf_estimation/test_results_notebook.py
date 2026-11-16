@@ -16,6 +16,7 @@ def results_notebook(executed_notebook):
     return executed_notebook("results")
 
 def test_notebook_is_fully_executed_without_errors(results_notebook):
+    """Verify notebook is fully executed without errors."""
     cells = [cell for cell in results_notebook.cells if cell.cell_type == "code"]
     assert cells
     # A full rerun in an existing kernel need not restart its counter at one.
@@ -27,6 +28,7 @@ def test_notebook_is_fully_executed_without_errors(results_notebook):
 
 
 def test_notebook_summary_matches_saved_pooled_results(results_notebook):
+    """Verify notebook summary matches saved pooled results."""
     bundles = [output.get("data", {}).get("application/json", {})
                for cell in results_notebook.cells if cell.cell_type == "code"
                for output in cell.outputs]
@@ -42,6 +44,7 @@ def test_notebook_summary_matches_saved_pooled_results(results_notebook):
 
 
 def test_notebook_contains_rendered_result_figures(results_notebook):
+    """Verify notebook contains rendered result figures."""
     figures = [output.get("data", {}).get("image/png")
                for cell in results_notebook.cells if cell.cell_type == "code"
                for output in cell.outputs if "image/png" in output.get("data", {})]

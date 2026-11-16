@@ -48,6 +48,7 @@ def _synthetic_trials(session_data, session):
 
 
 def test_fit_session_writes_and_skips(config, patched):
+    """Verify fit session writes and skips."""
     paths = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     assert all(is_complete(p) for p in paths)
     mtime = (paths[0] / "betas.npy").stat().st_mtime_ns
@@ -56,6 +57,7 @@ def test_fit_session_writes_and_skips(config, patched):
 
 
 def test_fit_session_logs_fitted_and_skipped_levels(config, patched, caplog):
+    """Verify fit session logs fitted and skipped levels."""
     caplog.set_level("INFO", logger="experiments.nsd_replication")
     run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
@@ -65,6 +67,7 @@ def test_fit_session_logs_fitted_and_skipped_levels(config, patched, caplog):
 
 
 def test_metadata_is_complete_and_trials_use_session_label(config, patched):
+    """Verify metadata is complete and trials use session label."""
     (path,) = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     _, trials, meta = read_fit(path)
     assert set(trials["session"]) == {"ses-a"}
@@ -74,6 +77,7 @@ def test_metadata_is_complete_and_trials_use_session_label(config, patched):
 
 
 def test_digest_mismatch_raises_unless_refit(config, patched):
+    """Verify digest mismatch raises unless refit."""
     (path,) = run.fit_session(config, "nsdpreproc", "sub-07", "ses-a", ("b1",))
     meta = path / "metadata.json"
     meta.write_text(
@@ -85,11 +89,13 @@ def test_digest_mismatch_raises_unless_refit(config, patched):
 
 
 def test_unfitted_source_is_rejected(config):
+    """Verify unfitted source is rejected."""
     with pytest.raises(ValueError, match="source"):
         run._load(config, "released", "sub-07", "ses-a")
 
 
 def test_subject_metrics_end_to_end(config, patched):
+    """Verify subject metrics end to end."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2", "b4"))
     tables = run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1", "b2", "b4"))
@@ -104,6 +110,7 @@ def test_subject_metrics_end_to_end(config, patched):
 
 
 def test_group_rsa_writes_agreement(config, patched):
+    """Verify group RSA writes agreement."""
     for subject in ("sub-07", "sub-08"):
         for ses in config.sessions:
             run.fit_session(config, "nsdpreproc", subject, ses, ("b1",))
@@ -123,6 +130,7 @@ def _fit_and_measure(config, levels=("b1",)):
 
 
 def test_discard_betas_marks_metadata_and_is_not_refit(config, patched):
+    """Verify discard betas marks metadata and is not refit."""
     _fit_and_measure(config)
     run.discard_betas(config, "nsdpreproc", "sub-07", ("b1",), multiple_subjects=False)
     path = fit_dir(config.output_dir, "nsdpreproc", "sub-07", "ses-a", "b1")
@@ -134,6 +142,7 @@ def test_discard_betas_marks_metadata_and_is_not_refit(config, patched):
 
 
 def test_discard_refuses_when_a_metric_is_missing(config, patched):
+    """Verify discard refuses when a metric is missing."""
     _fit_and_measure(config)
     out = config.output_dir / "metrics/nsdpreproc/sub-07"
     (out / "r6.tsv").unlink()
@@ -146,6 +155,7 @@ def test_discard_refuses_when_a_metric_is_missing(config, patched):
 
 
 def test_main_fit_then_metrics_with_discard(config, patched):
+    """Verify main fit then metrics with discard."""
     toml = config.bids_dir / "config.toml"
     toml.write_text(f"""bids_dir = "{config.bids_dir}"
 output_dir = "{config.output_dir}"
@@ -167,6 +177,7 @@ block_size = 16
 
 
 def test_main_rejects_unknown_command(config):
+    """Verify main rejects unknown command."""
     with pytest.raises(SystemExit):
         run.main(["bogus", "--config", "x.toml"])
 
@@ -192,6 +203,7 @@ def _fit_comparison(config, perturb=False):
 
 
 def test_comparison_metrics_combined_versions(config, patched):
+    """Verify comparison metrics combined versions."""
     _fit_comparison(config)
     tables = run.comparison_metrics(config, "sub-07")
     expected = {
@@ -206,12 +218,14 @@ def test_comparison_metrics_combined_versions(config, patched):
 
 
 def test_trial_tables_must_match(config, patched):
+    """Verify trial tables must match."""
     _fit_comparison(config, perturb=True)
     with pytest.raises(ValueError, match="ses-b"):
         run.comparison_metrics(config, "sub-07")
 
 
 def test_alignment_table_rows_and_floor(config, patched):
+    """Verify alignment table rows and floor."""
     _fit_comparison(config)
     table = run.alignment_table(config, "sub-07")
     assert list(table["session"]) == ["ses-a", "ses-b"]
@@ -224,6 +238,7 @@ def test_alignment_table_rows_and_floor(config, patched):
 
 
 def test_main_metrics_released_and_comparison(config, patched):
+    """Verify main metrics released and comparison."""
     toml = config.bids_dir / "config.toml"
     toml.write_text(f"""bids_dir = "{config.bids_dir}"
 output_dir = "{config.output_dir}"
@@ -240,6 +255,7 @@ sessions = ["ses-a", "ses-b"]
 
 
 def test_floor_failure_keeps_alignment_but_skips_comparison(config, patched):
+    """Verify floor failure keeps alignment but skips comparison."""
     _fit_comparison(config)
     floored = replace(config, alignment_floor=1.5)
     with pytest.raises(ValueError, match="sub-07.*ses-a.*ses-b"):
@@ -250,6 +266,7 @@ def test_floor_failure_keeps_alignment_but_skips_comparison(config, patched):
 
 
 def test_comparison_runs_alignment_then_metrics(config, patched):
+    """Verify comparison runs alignment then metrics."""
     _fit_comparison(config)
     run.run_comparison(config, "sub-07")
     out = config.output_dir / "metrics/comparison/sub-07"
@@ -257,6 +274,7 @@ def test_comparison_runs_alignment_then_metrics(config, patched):
 
 
 def test_discard_requires_comparison_outputs_when_released_configured(config, patched):
+    """Verify discard requires comparison outputs when released configured."""
     _fit_and_measure(config)
     configured = replace(config, released_dir=config.bids_dir)
     with pytest.raises(FileNotFoundError, match="metrics --source comparison"):
@@ -266,6 +284,7 @@ def test_discard_requires_comparison_outputs_when_released_configured(config, pa
 
 
 def test_discard_succeeds_after_comparison_outputs(config, patched):
+    """Verify discard succeeds after comparison outputs."""
     _fit_and_measure(config)
     out = config.output_dir / "metrics/comparison/sub-07"
     _write_comparison_outputs(out)
@@ -276,6 +295,7 @@ def test_discard_succeeds_after_comparison_outputs(config, patched):
 
 
 def test_trial_tables_compare_all_columns(config, patched):
+    """Verify trial tables compare all columns."""
     _fit_comparison(config)
     path = fit_dir(config.output_dir, "released", "sub-07", "ses-a", "b2")
     table = path / "trials.tsv"
@@ -324,6 +344,7 @@ def _synthetic_metrics(config):
 
 
 def test_figures_command_saves_pngs_and_skips_missing(config, capsys):
+    """Verify figures command saves pngs and skips missing."""
     config = replace(config, subjects=("sub-01", "sub-02"))
     _synthetic_metrics(config)
     run.make_figures(config)
@@ -337,6 +358,7 @@ def test_figures_command_saves_pngs_and_skips_missing(config, capsys):
 
 
 def test_figures_cli(tmp_path, config):
+    """Verify figures CLI."""
     config_toml = tmp_path / "c.toml"
     config_toml.write_text(
         f'bids_dir="{tmp_path}"\noutput_dir="{config.output_dir}"\n'
@@ -349,6 +371,7 @@ def test_figures_cli(tmp_path, config):
 
 
 def test_completed_level_survives_a_later_failure(config, patched, monkeypatch):
+    """Verify completed level survives a later failure."""
     from experiments.nsd_replication import ladder
 
     def boom(ladder_):
@@ -371,6 +394,7 @@ def _metric_mtimes(config, names=run.SUBJECT_TABLES):
 
 
 def test_existing_metric_tables_skipped_unless_recompute(config, patched):
+    """Verify existing metric tables skipped unless recompute."""
     _fit_and_measure(config)
     before = _metric_mtimes(config)
     run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
@@ -381,6 +405,7 @@ def test_existing_metric_tables_skipped_unless_recompute(config, patched):
 
 
 def test_metric_tables_written_before_a_later_failure(config, patched, monkeypatch):
+    """Verify metric tables written before a later failure."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
 
@@ -395,6 +420,7 @@ def test_metric_tables_written_before_a_later_failure(config, patched, monkeypat
 
 
 def test_r6_written_per_level_then_combined(config, patched):
+    """Verify r6 written per level then combined."""
     tables = _fit_and_measure(config, ("b1", "b2"))
     out = config.output_dir / "metrics/nsdpreproc/sub-07"
     parts = [pd.read_csv(out / f"r6_{lv}.tsv", sep="\t") for lv in ("b1", "b2")]
@@ -403,6 +429,7 @@ def test_r6_written_per_level_then_combined(config, patched):
 
 
 def test_r6_resumes_from_the_level_that_failed(config, patched, monkeypatch):
+    """Verify r6 resumes from the level that failed."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
     real = run.decoding_accuracies
@@ -433,6 +460,7 @@ def test_r6_resumes_from_the_level_that_failed(config, patched, monkeypatch):
 
 
 def test_main_metrics_recompute_flag(config, patched):
+    """Verify main metrics recompute flag."""
     toml = config.bids_dir / "config.toml"
     toml.write_text(f"""bids_dir = "{config.bids_dir}"
 output_dir = "{config.output_dir}"
@@ -452,6 +480,7 @@ block_size = 16
 
 
 def test_r6_same_with_one_or_two_jobs(config, patched):
+    """Verify r6 same with one or two jobs."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
     tables = {}
@@ -466,6 +495,7 @@ def test_r6_same_with_one_or_two_jobs(config, patched):
 
 
 def test_r6_uses_config_jobs(config, patched, monkeypatch):
+    """Verify r6 uses config jobs."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
     seen = []
@@ -483,6 +513,7 @@ def test_r6_uses_config_jobs(config, patched, monkeypatch):
 def test_subject_metrics_sliced_to_roi_with_identical_results(
     config, patched, monkeypatch
 ):
+    """Verify subject metrics sliced to roi with identical results."""
     from experiments.nsd_replication.betas import zscore
     from experiments.nsd_replication.metrics import threshold_curves
     from experiments.nsd_replication.trials import images_with, repetition_array
@@ -516,6 +547,7 @@ def test_subject_metrics_sliced_to_roi_with_identical_results(
 
 
 def test_comparison_metrics_all_tables_share_one_composite(config, patched):
+    """Verify comparison metrics all tables share one composite."""
     _fit_comparison(config)
     tables = run.comparison_metrics(config, "sub-07")
     expected = {
@@ -537,6 +569,7 @@ def test_comparison_metrics_all_tables_share_one_composite(config, patched):
 
 
 def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
+    """Verify HRF consistency writes R-squared for fitted levels."""
     import pandas as pd
 
     for ses in config.sessions:
@@ -557,6 +590,7 @@ def test_hrf_consistency_writes_r2_for_fitted_levels(config, patched):
 
 
 def test_hrf_consistency_uses_matching_library(config, patched):
+    """Verify HRF consistency uses matching library."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b2-lib20",))
     run.hrf_consistency(config, "sub-07")
@@ -574,6 +608,7 @@ def test_hrf_consistency_uses_matching_library(config, patched):
 
 
 def test_main_metrics_runs_r2(config, patched):
+    """Verify main metrics runs R-squared."""
     toml = config.bids_dir / "config.toml"
     toml.write_text(f"""bids_dir = "{config.bids_dir}"
 output_dir = "{config.output_dir}"
@@ -589,6 +624,7 @@ block_size = 16
 
 
 def test_figures_render_r2_summary(config):
+    """Verify figures render R-squared summary."""
     import pandas as pd
 
     out = config.output_dir / "metrics/nsdpreproc/sub-07"
@@ -620,6 +656,7 @@ block_size = 16
 
 
 def test_nsdpreproc_default_levels_include_lss(config, monkeypatch):
+    """Verify nsdpreproc default levels include LSS."""
     from experiments.nsd_replication.ladder import LEVELS as ALL, LSS_LEVELS
 
     seen = {}
@@ -642,6 +679,7 @@ def test_nsdpreproc_default_levels_include_lss(config, monkeypatch):
 
 
 def test_metric_tables_record_composite_levels(config, patched):
+    """Verify metric tables record composite levels."""
     import pandas as pd
 
     for subject in ("sub-07", "sub-08"):
@@ -662,6 +700,7 @@ def test_metric_tables_record_composite_levels(config, patched):
 
 
 def test_comparison_tables_record_composite_levels(config, patched):
+    """Verify comparison tables record composite levels."""
     import pandas as pd
 
     from experiments.nsd_replication.comparison import VERSIONS
@@ -675,6 +714,7 @@ def test_comparison_tables_record_composite_levels(config, patched):
 
 
 def test_different_level_set_requires_recompute(config, patched):
+    """Verify different level set requires recompute."""
     import pandas as pd
 
     for ses in config.sessions:
@@ -696,6 +736,7 @@ def test_different_level_set_requires_recompute(config, patched):
 
 
 def test_discard_requires_tables_covering_requested_levels(config, patched):
+    """Verify discard requires tables covering requested levels."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1", "b2"))
     run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
@@ -711,6 +752,7 @@ def test_discard_requires_tables_covering_requested_levels(config, patched):
 
 
 def test_subject_metrics_requires_matching_trials_across_levels(config, patched):
+    """Verify subject metrics requires matching trials across levels."""
     import pandas as pd
 
     for ses in config.sessions:
@@ -735,6 +777,7 @@ def _write_comparison_outputs(out, skip=()):
 
 @pytest.mark.parametrize("missing", ["r6.tsv", "r4_t0.3.tsv", "r1_difference_b4.npy"])
 def test_discard_requires_every_comparison_output(config, patched, missing):
+    """Verify discard requires every comparison output."""
     _fit_and_measure(config)
     out = config.output_dir / "metrics/comparison/sub-07"
     _write_comparison_outputs(out, skip=(missing,))
@@ -746,6 +789,7 @@ def test_discard_requires_every_comparison_output(config, patched, missing):
 
 
 def test_group_rsa_keyed_by_subject_set(config, patched):
+    """Verify group RSA keyed by subject set."""
     for subject in ("sub-01", "sub-02", "sub-05", "sub-06"):
         for ses in config.sessions:
             run.fit_session(config, "nsdpreproc", subject, ses, ("b1",))
@@ -759,6 +803,7 @@ def test_group_rsa_keyed_by_subject_set(config, patched):
 
 
 def test_session_window_change_requires_recompute(config, patched):
+    """Verify session window change requires recompute."""
     for ses in config.sessions:
         run.fit_session(config, "nsdpreproc", "sub-07", ses, ("b1",))
     run.subject_metrics(config, "nsdpreproc", "sub-07", ("b1",))
@@ -771,6 +816,7 @@ def test_session_window_change_requires_recompute(config, patched):
 
 
 def test_sources_name_nsdpreproc_not_ppdata():
+    """Verify sources name nsdpreproc not ppdata."""
     assert run.SOURCES == ("nsdpreproc", "released", "comparison")
     args = run._parser().parse_args(["fit", "--config", "c.toml"])
     assert args.source == "nsdpreproc"
@@ -801,6 +847,7 @@ def test_r6_classes_are_images_every_subject_saw_three_times(
 
 
 def test_r6_with_one_subject_decodes_its_own_images(config, patched):
+    """Verify r6 with one subject decodes its own images."""
     r6 = _fit_and_measure(config)["r6"]
     assert set(r6["n_classes"]) == {40}
 
@@ -808,6 +855,7 @@ def test_r6_with_one_subject_decodes_its_own_images(config, patched):
 def test_existing_r6_from_another_class_set_raises_unless_recompute(
     config, patched, monkeypatch, synthetic_session
 ):
+    """Verify existing r6 from another class set raises unless recompute."""
     _fit_and_measure(config)
     config = replace(config, subjects=("sub-07", "sub-08"))
     _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
@@ -820,6 +868,7 @@ def test_existing_r6_from_another_class_set_raises_unless_recompute(
 def test_comparison_r6_uses_the_shared_classes(
     config, patched, monkeypatch, synthetic_session
 ):
+    """Verify comparison r6 uses the shared classes."""
     _fit_comparison(config)
     config = replace(config, subjects=("sub-07", "sub-08"))
     _without_images(monkeypatch, synthetic_session, "sub-08", range(10))
@@ -860,12 +909,14 @@ def test_main_subjects_runs_only_those_subjects_and_skips_group_stages(config, p
 
 
 def test_main_subjects_must_be_configured(config, patched):
+    """Verify main subjects must be configured."""
     common = _two_subject_toml(config)
     with pytest.raises(ValueError, match="sub-09"):
         run.main(["fit", *common, "--subjects", "sub-09"])
 
 
 def test_main_subjects_refuses_discard_before_group_stages(config, patched):
+    """Verify main subjects refuses discard before group stages."""
     common = _two_subject_toml(config)
     run.main(["fit", *common, "--subjects", "sub-08"])
     with pytest.raises(ValueError, match="discard"):
@@ -916,17 +967,20 @@ def _run_records(config):
 
 
 def test_main_fit_limited_to_selected_sessions(config, fitted_sessions):
+    """Verify main fit limited to selected sessions."""
     toml = _write_config(config)
     run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
     assert fitted_sessions == ["ses-b"]
 
 
 def test_main_without_sessions_fits_every_session(config, fitted_sessions):
+    """Verify main without sessions fits every session."""
     run.main(["fit", "--config", str(_write_config(config)), "--levels", "b1"])
     assert fitted_sessions == ["ses-a", "ses-b"]
 
 
 def test_main_rejects_unconfigured_session(config, fitted_sessions):
+    """Verify main rejects unconfigured session."""
     toml = _write_config(config)
     with pytest.raises(ValueError, match="ses-z"):
         run.main(["fit", "--config", str(toml), "--sessions", "ses-a", "ses-z"])
@@ -934,12 +988,14 @@ def test_main_rejects_unconfigured_session(config, fitted_sessions):
 
 
 def test_main_prints_sessions_run(config, fitted_sessions, capsys):
+    """Verify main prints sessions run."""
     toml = _write_config(config)
     run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
     assert "sessions: ses-b (1 of 2 in config)" in capsys.readouterr().out
 
 
 def test_main_writes_completed_run_record(config, fitted_sessions):
+    """Verify main writes completed run record."""
     toml = _write_config(config)
     run.main(["fit", "--config", str(toml), "--levels", "b1", "--sessions", "ses-b"])
     (path,) = _run_records(config)
@@ -951,6 +1007,7 @@ def test_main_writes_completed_run_record(config, fitted_sessions):
 
 
 def test_failed_run_keeps_record_without_completion(config, monkeypatch):
+    """Verify failed run keeps record without completion."""
     def boom(*args):
         raise RuntimeError("fit failed")
 
@@ -962,6 +1019,7 @@ def test_failed_run_keeps_record_without_completion(config, monkeypatch):
 
 
 def test_feature_merge_on_a_subset_keeps_config_order(config):
+    """Verify feature merge on a subset keeps config order."""
     sessions = ("ses-a", "ses-b", "ses-c")
     full = replace(config, sessions=sessions, configured_sessions=None)
     narrowed = select_sessions(full, ["ses-b"])

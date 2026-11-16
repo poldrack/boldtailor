@@ -16,6 +16,7 @@ from tests.oracles import replace_indices, scaled_condition
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
 @pytest.mark.integration
 def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha):
+    """Verify grouped betas and r squared match augmented OLS."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture
@@ -91,6 +92,7 @@ def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha
 
 
 def test_identity_checks_and_apply_to_new_runs(selected_fixture):
+    """Verify identity checks and apply to new runs."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture
@@ -136,6 +138,7 @@ def test_identity_checks_and_apply_to_new_runs(selected_fixture):
 
 
 def test_canonical_only_matches_legacy_including_per_run_constant(selected_fixture):
+    """Verify canonical only matches legacy including per run constant."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, _ = selected_fixture
@@ -155,6 +158,7 @@ def test_canonical_only_matches_legacy_including_per_run_constant(selected_fixtu
 
 
 def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture):
+    """Verify grouped results own nested metadata and record designs."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture
@@ -186,6 +190,7 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
 
 
 def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
+    """Verify selected design rebuilds the fitted matrix on demand."""
     from boldtailor._hrf_cv import prepare_runs
     from boldtailor.single_trial import fit_selected_hrfs
 
@@ -206,6 +211,7 @@ def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
     "key", [(0, 0), (0, 2), (0, 3), (3, 1), (-1, 1), (0, -1), (1.0, 1)]
 )
 def test_selected_design_rejects_pairs_that_were_not_fitted(selected_fixture, key):
+    """Verify selected design rejects pairs that were not fitted."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture
@@ -237,6 +243,7 @@ def _design_bytes(design):
 
 
 def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
+    """Verify result memory does not scale with selected HRF count."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture
@@ -262,6 +269,7 @@ def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
 
 
 def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
+    """Verify fit run returns a named group run fit."""
     from hashlib import sha256
 
     from boldtailor import _selected_hrf_fit as module
@@ -284,6 +292,7 @@ def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
 
 
 def test_selected_trial_operation_takes_keywords_only():
+    """Verify selected trial operation takes keywords only."""
     import inspect
 
     from boldtailor._selected_hrf_fit import fit_selected_hrf_trials
@@ -296,6 +305,7 @@ def test_selected_trial_operation_takes_keywords_only():
 
 
 def test_explicit_trial_design_rebuild_and_materialization(selected_fixture):
+    """Verify explicit trial design rebuild and materialization."""
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture

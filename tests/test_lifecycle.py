@@ -250,6 +250,7 @@ def _assert_context_reset():
 def test_success_logs_started_then_completed_with_one_execution_id(
     name, run_entry_point, caplog
 ):
+    """Verify success logs started then completed with one execution id."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
     run_entry_point(name)
@@ -266,6 +267,7 @@ def test_success_logs_started_then_completed_with_one_execution_id(
 def test_completion_log_and_provenance_share_operation_identity(
     name, run_entry_point, caplog
 ):
+    """Verify completion log and provenance share operation identity."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
     provenance = run_entry_point(name).provenance
@@ -287,6 +289,7 @@ def test_completion_log_and_provenance_share_operation_identity(
 def test_late_failure_logs_failed_and_never_completed(
     name, run_entry_point, break_late, caplog
 ):
+    """Verify late failure logs failed and never completed."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
     with break_late() as failure, pytest.raises(RuntimeError) as caught:
@@ -308,6 +311,7 @@ def test_late_failure_logs_failed_and_never_completed(
 def test_early_argument_failure_logs_failed_and_never_completed(
     name, run_bad_argument, caplog
 ):
+    """Verify early argument failure logs failed and never completed."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
     with pytest.raises(ValueError):
@@ -326,6 +330,7 @@ def test_early_argument_failure_logs_failed_and_never_completed(
 
 @pytest.mark.parametrize("name", ENTRY_POINTS)
 def test_every_operation_records_the_software_environment(name, run_entry_point):
+    """Verify every operation records the software environment."""
     result = run_entry_point(name)
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["software"] == software_environment()
@@ -371,6 +376,7 @@ def sourced_calls(selected_fixture, selected_glm_problem, complete_sources):
 def test_analysis_ids_do_not_depend_on_the_software_environment(
     name, sourced_calls, monkeypatch
 ):
+    """Verify analysis ids do not depend on the software environment."""
     first = sourced_calls[name]().provenance
     assert first.analysis_fingerprint is not None
     changed = {k: f"changed-{v}" for k, v in software_environment().items()}

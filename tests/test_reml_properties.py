@@ -76,6 +76,7 @@ def _permuted_fit(fit, order):
 @PROPERTY_SETTINGS
 @given(parameters())
 def test_fixed_reparameterisation_is_invariant(params):
+    """Verify fixed reparameterisation is invariant."""
     signals, fixed, random, rng = _simulated(params)
     moved = [c @ _well_conditioned(rng, c.shape[1]) for c in fixed]
     _assert_same_fit(_fit(signals, moved, random), _fit(signals, fixed, random))
@@ -84,6 +85,7 @@ def test_fixed_reparameterisation_is_invariant(params):
 @PROPERTY_SETTINGS
 @given(parameters())
 def test_random_rotation_is_invariant(params):
+    """Verify random rotation is invariant."""
     signals, fixed, random, rng = _simulated(params)
     rotated = [z @ _orthogonal(rng, z.shape[1]) for z in random]
     _assert_same_fit(_fit(signals, fixed, rotated), _fit(signals, fixed, random))
@@ -92,6 +94,7 @@ def test_random_rotation_is_invariant(params):
 @PROPERTY_SETTINGS
 @given(parameters(), st.randoms(use_true_random=False))
 def test_group_permutation_is_invariant(params, shuffler):
+    """Verify group permutation is invariant."""
     signals, fixed, random, _ = _simulated(params)
     order = list(range(len(signals)))
     shuffler.shuffle(order)
@@ -102,6 +105,7 @@ def test_group_permutation_is_invariant(params, shuffler):
 @PROPERTY_SETTINGS
 @given(parameters(), st.randoms(use_true_random=False))
 def test_feature_permutation_is_equivariant(params, shuffler):
+    """Verify feature permutation is equivariant."""
     signals, fixed, random, _ = _simulated(params)
     order = list(range(signals[0].shape[1]))
     shuffler.shuffle(order)
@@ -117,6 +121,7 @@ def test_feature_permutation_is_equivariant(params, shuffler):
 @PROPERTY_SETTINGS
 @given(parameters(), SCALES)
 def test_scaling_signals_is_equivariant(params, k):
+    """Verify scaling signals is equivariant."""
     signals, fixed, random, _ = _simulated(params)
     scaled = _fit([k * y for y in signals], fixed, random)
     base = _fit(signals, fixed, random)
@@ -130,6 +135,7 @@ def test_scaling_signals_is_equivariant(params, k):
 @PROPERTY_SETTINGS
 @given(parameters(), SCALES)
 def test_scaling_random_design_is_equivariant(params, k):
+    """Verify scaling random design is equivariant."""
     signals, fixed, random, _ = _simulated(params)
     scaled = _fit(signals, fixed, [k * z for z in random])
     base = _fit(signals, fixed, random)
@@ -144,6 +150,7 @@ def test_scaling_random_design_is_equivariant(params, k):
 @PROPERTY_SETTINGS
 @given(parameters())
 def test_adding_fixed_span_to_signals_changes_nothing(params):
+    """Verify adding fixed span to signals changes nothing."""
     signals, fixed, random, rng = _simulated(params)
     shifted = [
         y + c @ rng.normal(scale=10.0, size=(c.shape[1], y.shape[1]))
@@ -155,6 +162,7 @@ def test_adding_fixed_span_to_signals_changes_nothing(params):
 @PROPERTY_SETTINGS
 @given(parameters())
 def test_appending_random_column_inside_fixed_span_changes_nothing(params):
+    """Verify appending random column inside fixed span changes nothing."""
     signals, fixed, random, rng = _simulated(params)
     widened = [
         np.column_stack([z, c @ rng.normal(size=c.shape[1])])
@@ -175,6 +183,7 @@ def _assert_identical_fit(actual, expected):
 @PROPERTY_SETTINGS
 @given(parameters())
 def test_zero_rho_matches_default(params):
+    """Verify zero rho matches default."""
     signals, fixed, random, _ = _simulated(params)
     default = _fit(signals, fixed, random)
     n_features = signals[0].shape[1]
@@ -196,6 +205,7 @@ def _candidates(random, rng):
 @PROPERTY_SETTINGS
 @given(parameters(), st.permutations(range(4)))
 def test_selection_is_invariant_to_candidate_order(params, order):
+    """Verify selection is invariant to candidate order."""
     signals, fixed, random, rng = _simulated(params)
     groups = _groups(signals, fixed)
     candidates = _candidates(random, rng)

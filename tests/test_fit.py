@@ -160,6 +160,7 @@ def _nuisance_ols_designs(data, model):
 
 @pytest.mark.integration
 def test_fit_matches_nilearn_ols_contrast(single_run_problem):
+    """Verify fit matches Nilearn OLS contrast."""
     signals, events, design, model = single_run_problem
 
     result = fit(from_arrays(signals, events, tr=2.0), model)
@@ -180,6 +181,7 @@ def test_fit_matches_nilearn_ols_contrast(single_run_problem):
 
 @pytest.mark.integration
 def test_fit_matches_nilearn_ar1_contrast(single_run_problem):
+    """Verify fit matches Nilearn AR(1) contrast."""
     signals, events, design, _ = single_run_problem
     model = ModelSpec(
         contrasts={"face_gt_house": "face - house"},
@@ -202,6 +204,7 @@ def test_fit_accepts_zero_sst_features_without_inference_warnings(
     single_run_problem,
     noise_model,
 ):
+    """Verify fit accepts zero SST features without inference warnings."""
     signals, events, design, _ = single_run_problem
     varying = signals[:, :1]
     mixed = np.column_stack(
@@ -244,6 +247,7 @@ def test_fit_accepts_zero_sst_features_without_inference_warnings(
 
 
 def test_feature_constant_in_one_run_has_undefined_contrasts(single_run_problem):
+    """Verify feature constant in one run has undefined contrasts."""
     signals, events, _, _ = single_run_problem
     first = np.column_stack([signals[:, 0], signals[:, 0] * 0.5 + 1.0])
     second = first.copy()
@@ -262,6 +266,7 @@ def test_feature_constant_in_one_run_has_undefined_contrasts(single_run_problem)
 def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
     single_run_problem,
 ):
+    """Verify fit rejects run without positive residual degrees of freedom."""
     signals, events, _, _ = single_run_problem
     saturated_times = np.array([0.0, 2.0])
     saturated_events = pd.DataFrame(
@@ -304,6 +309,7 @@ def test_fit_rejects_run_without_positive_residual_degrees_of_freedom(
 
 
 def test_fit_returns_readonly_arrays(single_run_problem):
+    """Verify fit returns read-only arrays."""
     signals, events, design, model = single_run_problem
 
     result = fit(from_arrays(signals, events, tr=2.0), model)
@@ -334,6 +340,7 @@ def test_fit_returns_readonly_arrays(single_run_problem):
 
 
 def test_fit_owns_designs_and_exposes_immutable_provenance(single_run_problem):
+    """Verify fit owns designs and exposes immutable provenance."""
     signals, events, _, model = single_run_problem
     result = fit(from_arrays(signals, events, tr=2.0), model)
 
@@ -350,6 +357,7 @@ def test_fit_owns_designs_and_exposes_immutable_provenance(single_run_problem):
 def test_fit_extends_input_provenance_and_exposes_result_provenance(
     single_run_problem, complete_sources
 ):
+    """Verify fit extends input provenance and exposes result provenance."""
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
     before = data.provenance.to_dict()
@@ -371,6 +379,7 @@ def test_fit_extends_input_provenance_and_exposes_result_provenance(
 def test_fit_analysis_fingerprint_depends_on_data_and_model(
     single_run_problem, complete_sources
 ):
+    """Verify fit analysis fingerprint depends on data and model."""
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, tr=2.0, sources=complete_sources(1))
 
@@ -410,6 +419,7 @@ def test_fit_analysis_fingerprint_depends_on_data_and_model(
 def test_fit_serializes_model_spec_and_run_diagnostics(
     single_run_problem, complete_sources
 ):
+    """Verify fit serializes model spec and run diagnostics."""
     signals, events, _, _ = single_run_problem
     signals = signals.copy()
     signals[0, 0] = 987654.5
@@ -484,6 +494,7 @@ def test_fit_serializes_model_spec_and_run_diagnostics(
 def test_fit_marks_local_callable_hrf_as_partially_reproducible(
     single_run_problem, complete_sources
 ):
+    """Verify fit marks local callable HRF as partially reproducible."""
     signals, events, _, _ = single_run_problem
 
     def local_hrf(frame_times, oversampling=50):
@@ -516,6 +527,7 @@ def test_fit_marks_local_callable_hrf_as_partially_reproducible(
 
 
 def test_task_delta_r2_compares_complete_and_nuisance_models(delta_r2_problem):
+    """Verify task delta R-squared compares complete and nuisance models."""
     data, model, full_result = delta_r2_problem
 
     comparison = task_delta_r2(data, model, full_result)
@@ -576,6 +588,7 @@ def test_make_task_delta_r2_result_rejects_invalid_inputs(
     full,
     nuisance,
 ):
+    """Verify make task delta R-squared result rejects invalid inputs."""
     _, _, full_result = delta_r2_problem
 
     with pytest.raises(ValueError):
@@ -590,6 +603,7 @@ def test_make_task_delta_r2_result_rejects_invalid_inputs(
 def test_make_task_delta_r2_result_rejects_overflow_without_warning(
     delta_r2_problem,
 ):
+    """Verify make task delta R-squared result rejects overflow without warning."""
     _, _, full_result = delta_r2_problem
     maximum = np.finfo(np.float64).max
 
@@ -619,6 +633,9 @@ def test_make_task_delta_r2_result_rejects_nonfinite_or_nonnumeric_nuisance_desi
     delta_r2_problem,
     nuisance_design,
 ):
+    """Verify make task delta R-squared result rejects nonfinite or nonnumeric nuisance
+    designs.
+    """
     _, _, full_result = delta_r2_problem
 
     with pytest.raises(
@@ -634,6 +651,7 @@ def test_make_task_delta_r2_result_rejects_nonfinite_or_nonnumeric_nuisance_desi
 
 
 def test_task_delta_r2_rejects_full_result_for_changed_model(delta_r2_problem):
+    """Verify task delta R-squared rejects full result for changed model."""
     data, model, full_result = delta_r2_problem
     changed_model = ModelSpec(
         contrasts=model.contrasts,
@@ -648,6 +666,7 @@ def test_task_delta_r2_rejects_full_result_for_changed_model(delta_r2_problem):
 
 
 def test_task_delta_r2_rejects_full_result_for_changed_data(delta_r2_problem):
+    """Verify task delta R-squared rejects full result for changed data."""
     data, model, full_result = delta_r2_problem
     changed_data = from_arrays(
         data.signals,
@@ -662,6 +681,7 @@ def test_task_delta_r2_rejects_full_result_for_changed_data(delta_r2_problem):
 
 
 def test_task_delta_r2_requires_fingerprintable_provenance(delta_r2_problem):
+    """Verify task delta R-squared requires fingerprintable provenance."""
     data, model, _ = delta_r2_problem
     anonymous = from_arrays(
         data.signals,
@@ -676,6 +696,7 @@ def test_task_delta_r2_requires_fingerprintable_provenance(delta_r2_problem):
 
 
 def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
+    """Verify task delta R-squared records parent model and diagnostics."""
     data, model, full_result = delta_r2_problem
 
     comparison = task_delta_r2(data, model, full_result)
@@ -717,6 +738,7 @@ def _assert_constant_feature_undefined(result, name, index):
 def test_rounding_level_constants_are_undefined(
     single_run_problem, value, dtype, noise_model
 ):
+    """Verify rounding level constants are undefined."""
     signals, events, _, _ = single_run_problem
     mixed = np.column_stack([signals[:, 0], np.full(len(signals), value)])
     model = ModelSpec(
@@ -732,6 +754,7 @@ def test_rounding_level_constants_are_undefined(
 
 @pytest.mark.parametrize("hrf_name", ["spm", "glover"])
 def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name):
+    """Verify plain string HRF designs use peak kernels."""
     from dataclasses import replace
 
     from tests.oracles import oracle_event_scales, peak_kernel
@@ -755,6 +778,7 @@ def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name)
 
 
 def test_canonical_selection_and_plain_spm_fit_agree_in_scale(selected_fixture):
+    """Verify canonical selection and plain spm fit agree in scale."""
     from boldtailor.model import TaskModel
 
     data, selection = selected_fixture
@@ -778,6 +802,7 @@ def test_canonical_selection_and_plain_spm_fit_agree_in_scale(selected_fixture):
 
 @pytest.mark.parametrize("hrf_name", ["spm", "glover"])
 def test_plain_string_hrf_fit_records_peak_normalization(single_run_problem, hrf_name):
+    """Verify plain string HRF fit records peak normalization."""
     from dataclasses import replace
 
     signals, events, _, model = single_run_problem
@@ -791,6 +816,7 @@ def test_plain_string_hrf_fit_records_peak_normalization(single_run_problem, hrf
 def test_nilearn_basis_fit_records_nilearn_sum_normalization(
     single_run_problem, hrf_name
 ):
+    """Verify Nilearn basis fit records Nilearn sum normalization."""
     from dataclasses import replace
 
     signals, events, _, model = single_run_problem
@@ -802,6 +828,7 @@ def test_nilearn_basis_fit_records_nilearn_sum_normalization(
 
 @pytest.mark.parametrize("hrf_name", ["spm", "glover"])
 def test_plain_fit_prints_nothing(single_run_problem, hrf_name, capsys):
+    """Verify plain fit prints nothing."""
     from dataclasses import replace
 
     signals, events, _, model = single_run_problem
@@ -817,6 +844,7 @@ def _user_kernel(tr, oversampling=50):
 
 @pytest.mark.parametrize("hrf_model", ["fir", _user_kernel])
 def test_fir_and_user_kernels_record_no_normalization(single_run_problem, hrf_model):
+    """Verify fir and user kernels record no normalization."""
     from dataclasses import replace
 
     from boldtailor.model import model_identity
@@ -827,6 +855,7 @@ def test_fir_and_user_kernels_record_no_normalization(single_run_problem, hrf_mo
 
 
 def test_standard_glm_operation_can_run_without_public_dispatch(delta_r2_problem):
+    """Verify standard GLM operation can run without public dispatch."""
     from boldtailor._standard_glm import fit_standard_glm, standard_task_delta_r2
 
     data, model, expected = delta_r2_problem

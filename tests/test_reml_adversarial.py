@@ -46,6 +46,7 @@ def narrow_minimum():
 
 
 def test_optimum_is_no_worse_than_known_positive_ratio(narrow_minimum):
+    """Verify optimum is no worse than known positive ratio."""
     y, z = narrow_minimum
     fit = fit_reml(_no_fixed(y), [z])
     assert fit.criterion[0] <= _dense_criterion(y, z, 7.126268271680137e-7) + 1e-9
@@ -54,6 +55,7 @@ def test_optimum_is_no_worse_than_known_positive_ratio(narrow_minimum):
 
 
 def test_narrow_minimum_is_selectable(narrow_minimum):
+    """Verify narrow minimum is selectable."""
     y, z = narrow_minimum
     assert select_random_effects_design(_no_fixed(y), [[z]]).winner[0] == 0
 
@@ -94,6 +96,7 @@ def _scan_minimum(y, eigenvalues, points=40001):
 @pytest.mark.parametrize("kind", SPECTRA)
 @pytest.mark.parametrize("seed", range(60))
 def test_optimum_is_no_worse_than_fine_scan(seed, kind):
+    """Verify optimum is no worse than fine scan."""
     y, z, eigenvalues = _diagonal_problem(seed, kind)
     fit = fit_reml(_no_fixed(y), [z])
     assert fit.criterion[0] <= _scan_minimum(y, eigenvalues) + 1e-8
@@ -124,12 +127,14 @@ def _ar1_root(n, rho):
 
 @pytest.mark.parametrize("seed", range(8))
 def test_identity_random_covariance_is_unidentifiable(seed):
+    """Verify identity random covariance is unidentifiable."""
     y = np.random.default_rng(seed).normal(size=(10, 3))
     _assert_unidentifiable(fit_reml(_no_fixed(y), [np.eye(10)]))
 
 
 @pytest.mark.parametrize("seed", range(4))
 def test_confounding_after_fixed_projection_is_unidentifiable(seed):
+    """Verify confounding after fixed projection is unidentifiable."""
     rng = np.random.default_rng(seed)
     fixed = np.column_stack([np.ones(14), rng.normal(size=(14, 2))])
     y = rng.normal(size=(14, 2))
@@ -139,6 +144,7 @@ def test_confounding_after_fixed_projection_is_unidentifiable(seed):
 
 @pytest.mark.parametrize("rho", [0.3, 0.6])
 def test_random_covariance_proportional_to_ar1_noise_is_unidentifiable(rho):
+    """Verify random covariance proportional to AR(1) noise is unidentifiable."""
     y = np.random.default_rng(1).normal(size=(12, 2))
     z = 0.8 * _ar1_root(12, rho)
     _assert_unidentifiable(fit_reml(_no_fixed(y), [z], rho=rho))
@@ -158,11 +164,13 @@ def _scaled_identity_groups(seed, scales, n=40, n_features=3, tau2=4.0):
 
 
 def test_common_scale_across_groups_is_unidentifiable():
+    """Verify common scale across groups is unidentifiable."""
     groups, random = _scaled_identity_groups(0, (2.0, 2.0))
     _assert_unidentifiable(fit_reml(groups, random))
 
 
 def test_differing_scales_across_groups_identify_the_ratio():
+    """Verify differing scales across groups identify the ratio."""
     groups, random = _scaled_identity_groups(0, (0.2, 3.0), n=400)
     fit = fit_reml(groups, random)
     assert fit.status == ("ok",) * 3
@@ -171,6 +179,7 @@ def test_differing_scales_across_groups_identify_the_ratio():
 
 
 def test_unsaturated_isotropic_design_stays_identifiable():
+    """Verify unsaturated isotropic design stays identifiable."""
     rng = np.random.default_rng(3)
     z = np.linalg.qr(rng.normal(size=(60, 5)))[0]
     y = z @ rng.normal(scale=3.0, size=(5, 2)) + rng.normal(size=(60, 2))
@@ -178,6 +187,7 @@ def test_unsaturated_isotropic_design_stays_identifiable():
 
 
 def test_near_confounded_design_is_not_flagged_unidentifiable():
+    """Verify near confounded design is not flagged unidentifiable."""
     rng = np.random.default_rng(0)
     z = np.eye(10) + 1e-2 * rng.normal(size=(10, 10))
     fit = fit_reml(_no_fixed(rng.normal(size=(10, 3))), [z])
@@ -196,6 +206,7 @@ def planted_with_saturated_decoy():
 def test_unidentifiable_candidate_never_wins(
     planted_with_saturated_decoy, planted_first
 ):
+    """Verify unidentifiable candidate never wins."""
     groups, planted, decoy = planted_with_saturated_decoy
     candidates = [planted, decoy] if planted_first else [decoy, planted]
     selection = select_random_effects_design(groups, candidates)
@@ -208,6 +219,7 @@ def test_unidentifiable_candidate_never_wins(
 def test_only_unidentifiable_candidates_leave_the_null_fit(
     planted_with_saturated_decoy,
 ):
+    """Verify only unidentifiable candidates leave the null fit."""
     groups, _, decoy = planted_with_saturated_decoy
     selection = select_random_effects_design(groups, [decoy])
     null = fit_reml(groups, [None])
@@ -248,6 +260,7 @@ def _shifted(signals, fixed, scale, seed=0):
 @pytest.mark.parametrize("rho", [0.0, 0.4])
 @pytest.mark.parametrize("n_fixed", [1, 3])
 def test_fit_is_invariant_to_resolvable_fixed_span_shifts(n_fixed, rho, scale):
+    """Verify fit is invariant to resolvable fixed span shifts."""
     signals, fixed, planted, _ = _planted_problem(19, n_fixed, rho)
     base = fit_reml([RemlGroup(signals, fixed)], [planted], rho=rho)
     moved = _shifted(signals, fixed, scale)
@@ -263,6 +276,7 @@ def test_fit_is_invariant_to_resolvable_fixed_span_shifts(n_fixed, rho, scale):
 
 @pytest.mark.parametrize("scale", SHIFT_SCALES)
 def test_selection_is_invariant_to_resolvable_fixed_span_shifts(scale):
+    """Verify selection is invariant to resolvable fixed span shifts."""
     signals, fixed, planted, decoy = _planted_problem(7, 2, 0.0)
     moved = _shifted(signals, fixed, scale)
     selection = select_random_effects_design(
@@ -276,6 +290,7 @@ def test_selection_is_invariant_to_resolvable_fixed_span_shifts(scale):
 @pytest.mark.parametrize("rho", [0.0, 0.6])
 @pytest.mark.parametrize("n_fixed", [1, 3, 8])
 def test_signals_inside_the_fixed_span_are_no_residual_signal(n_fixed, rho, scale):
+    """Verify signals inside the fixed span are no residual signal."""
     _, fixed, planted, _ = _planted_problem(3, n_fixed, rho, n=200)
     coefficients = np.random.default_rng(4).normal(size=(n_fixed, 6))
     signals = scale * (fixed @ coefficients)
@@ -284,6 +299,7 @@ def test_signals_inside_the_fixed_span_are_no_residual_signal(n_fixed, rho, scal
 
 
 def test_shift_that_destroys_the_residual_is_no_residual_signal():
+    """Verify shift that destroys the residual is no residual signal."""
     signals, fixed, planted, _ = _planted_problem(19, 1, 0.0)
     fit = fit_reml([RemlGroup(signals + 1e18, fixed)], [planted])
     assert fit.status == ("no_residual_signal",) * 4
@@ -299,6 +315,7 @@ def _weak_column_problem(seed=0):
 
 
 def test_ill_conditioned_saturated_fixed_span_signal_is_no_residual_signal():
+    """Verify ill conditioned saturated fixed span signal is no residual signal."""
     signals, fixed = _weak_column_problem()
     random = np.random.default_rng(1).normal(size=(10, 2))
     fit = fit_reml([RemlGroup(signals, fixed)], [random])
@@ -318,6 +335,7 @@ def scaled_fixed_problem():
 
 
 def test_exactly_removable_shift_preserves_reml(scaled_fixed_problem):
+    """Verify exactly removable shift preserves REML."""
     fixed, random, signal, shifted = scaled_fixed_problem
     base = fit_reml([RemlGroup(signal, fixed)], [random])
     moved = fit_reml([RemlGroup(shifted, fixed)], [random])
@@ -338,6 +356,7 @@ def _drift_problem(seed=2, n=300):
 
 @pytest.mark.parametrize("scale", [1.0, 1e4, 1e8])
 def test_fit_is_invariant_to_shifts_in_a_fixed_span_of_unequal_units(scale):
+    """Verify fit is invariant to shifts in a fixed span of unequal units."""
     signals, fixed, planted = _drift_problem()
     unit_shift = _unit_columns(fixed) @ np.random.default_rng(0).normal(size=(10, 1))
     moved = signals + scale * unit_shift
@@ -355,6 +374,7 @@ def _unit_columns(design):
 
 @pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e6, 1e-9, 1.0)])
 def test_fit_does_not_depend_on_fixed_column_units(scales):
+    """Verify fit does not depend on fixed column units."""
     signals, fixed, planted, _ = _planted_problem(19, 3, 0.0)
     base = fit_reml([RemlGroup(signals, fixed)], [planted])
     rescaled = fit_reml([RemlGroup(signals, fixed * np.array(scales))], [planted])
@@ -365,6 +385,7 @@ def test_fit_does_not_depend_on_fixed_column_units(scales):
 
 
 def test_tiny_unit_fixed_column_still_costs_a_degree_of_freedom():
+    """Verify tiny unit fixed column still costs a degree of freedom."""
     signals, fixed, planted, _ = _planted_problem(19, 3, 0.0)
     tiny = fixed * np.array([1.0, 1e-30, 1.0])
     assert fit_reml([RemlGroup(signals, tiny)], [planted]).restricted_dof == 37
@@ -404,6 +425,7 @@ def test_collinear_fixed_design_alone_does_not_make_a_fit_unresolved():
 
 
 def test_unresolved_features_do_not_affect_resolved_ones():
+    """Verify unresolved features do not affect resolved ones."""
     rng = np.random.default_rng(0)
     fixed, weak = _collinear_fixed(rng)
     random = rng.normal(size=(30, 2))

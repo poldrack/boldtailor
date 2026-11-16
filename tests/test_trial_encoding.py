@@ -34,6 +34,9 @@ def encoding_runs():
 
 
 def test_no_validation_intercept_refit():
+    """Use the training intercept when predicting validation data instead of refitting
+    it.
+    """
     x = np.array([-1.0, 0.0, 1.0, 2.0])
     predictors = [pd.DataFrame({"response_time": x}) for _ in range(3)]
     betas = [(2 + 3 * x)[:, None], (2 + 3 * x)[:, None], (12 + 3 * x)[:, None]]
@@ -45,6 +48,7 @@ def test_no_validation_intercept_refit():
 
 
 def test_predictions_and_pooled_loss_match_independent_ols(encoding_runs):
+    """Verify predictions and pooled loss match independent OLS."""
     betas, predictors = encoding_runs
     predictors[0].loc[2, "response_time"] = np.nan
     predictors[2].loc[1, "response_time"] = np.inf
@@ -96,6 +100,7 @@ def test_predictions_and_pooled_loss_match_independent_ols(encoding_runs):
 
 
 def test_validation_covariates_do_not_change_training_transform(encoding_runs):
+    """Verify validation covariates do not change training transform."""
     betas, predictors = encoding_runs
     first = evaluate(betas, predictors, train_runs=[0, 1], test_runs=[2, 3])
     predictors[2] = predictors[2].assign(response_time=99.0, trial_type=0)
@@ -106,6 +111,7 @@ def test_validation_covariates_do_not_change_training_transform(encoding_runs):
 
 
 def test_constant_and_incomplete_features_are_undefined(encoding_runs):
+    """Verify constant and incomplete features are undefined."""
     betas, predictors = encoding_runs
     betas = [np.column_stack([y, np.ones(len(y))]) for y in betas]
     betas[0][1, 1] = np.nan
@@ -129,6 +135,7 @@ def test_constant_and_incomplete_features_are_undefined(encoding_runs):
     ],
 )
 def test_bad_splits_rejected(encoding_runs, train, test):
+    """Verify bad splits rejected."""
     with pytest.raises(ValueError, match="run|split"):
         evaluate(*encoding_runs, train_runs=train, test_runs=test)
 
@@ -147,6 +154,7 @@ def test_bad_splits_rejected(encoding_runs, train, test):
     ],
 )
 def test_invalid_predictors_rejected(encoding_runs, case):
+    """Verify invalid predictors rejected."""
     betas, predictors = encoding_runs
     if case == "rows":
         predictors[0] = predictors[0].iloc[:-1]
@@ -186,6 +194,7 @@ def offset_runs():
 
 @pytest.mark.parametrize("mode", ["within_run", "absolute"])
 def test_run_intercepts_and_scores_match_dummy_ols(offset_runs, mode):
+    """Verify run intercepts and scores match dummy OLS."""
     betas, predictors = offset_runs
     train, test = [1, 0], [3, 2]
     masks = [np.isfinite(p).all(axis=1).to_numpy() for p in predictors]
@@ -239,6 +248,7 @@ def test_run_intercepts_and_scores_match_dummy_ols(offset_runs, mode):
 
 @pytest.mark.parametrize("test_slope,expected", [(3, 1), (4, 15 / 16), (0.5, -24)])
 def test_default_centers_offsets_but_retains_slope_error(test_slope, expected):
+    """Verify default centers offsets but retains slope error."""
     x = np.array([-1.0, 0.0, 1.0, 2.0])
     predictors = [pd.DataFrame({"x": x}) for _ in range(3)]
     betas = [
@@ -254,6 +264,7 @@ def test_default_centers_offsets_but_retains_slope_error(test_slope, expected):
 
 
 def test_run_shifts_leave_slopes_and_scores_invariant(offset_runs):
+    """Verify run shifts leave slopes and scores invariant."""
     betas, predictors = offset_runs
     options = dict(train_runs=[0, 1], test_runs=[2, 3])
     before = evaluate(betas, predictors, **options)
@@ -291,6 +302,7 @@ def test_run_shifts_leave_slopes_and_scores_invariant(offset_runs):
 
 @pytest.mark.parametrize("mode", ["within_run", "absolute"])
 def test_feature_invalidity_and_zero_sst_are_preserved(offset_runs, mode):
+    """Verify feature invalidity and zero SST are preserved."""
     betas, predictors = offset_runs
     betas = [np.column_stack([b, np.ones(len(b))]) for b in betas]
     betas[0][0, 1] = np.nan
@@ -307,6 +319,7 @@ def test_feature_invalidity_and_zero_sst_are_preserved(offset_runs, mode):
 
 @pytest.mark.parametrize("case", ["empty", "df", "between", "masked_rank"])
 def test_within_run_design_rejects_unidentifiable_slopes(case):
+    """Verify within run design rejects unidentifiable slopes."""
     x = [np.arange(5.0, dtype=float) + r * 10 for r in range(3)]
     if case == "between":
         x[:2] = [np.ones(5) * r for r in range(2)]
@@ -324,6 +337,7 @@ def test_within_run_design_rejects_unidentifiable_slopes(case):
 
 @pytest.mark.parametrize("sizes", [(5,), (1, 5)])
 def test_single_training_run_or_single_row_run_can_fit(sizes):
+    """Verify single training run or single row run can fit."""
     predictors = [pd.DataFrame({"x": np.arange(n, dtype=float)}) for n in (*sizes, 4)]
     betas = [(10 * r + 3 * p.x.to_numpy())[:, None] for r, p in enumerate(predictors)]
     result = evaluate(
@@ -337,12 +351,14 @@ def test_single_training_run_or_single_row_run_can_fit(sizes):
 
 @pytest.mark.parametrize("mode", ["centered", "", None, [], 1])
 def test_unknown_encoding_mode_rejected(encoding_runs, mode):
+    """Verify unknown encoding mode rejected."""
     with pytest.raises(ValueError, match="encoding_mode"):
         evaluate(*encoding_runs, train_runs=[0, 1], test_runs=[2], encoding_mode=mode)
 
 
 @pytest.mark.parametrize("encoding_mode", ["absolute", "within_run"])
 def test_current_alpha_score_matches_matched_filter_limit(encoding_mode):
+    """Verify current alpha score matches matched filter limit."""
     from tests.oracles import trial_beta_path
     from boldtailor.trial_encoding import evaluate_trial_encoding
 
@@ -395,6 +411,7 @@ def trial_events():
 
 
 def test_trial_predictors_select_modulator_columns_in_model_order(trial_events):
+    """Verify trial predictors select modulator columns in model order."""
     tables = predictors([trial_events, trial_events], TaskModel((RT, TT)))
     assert [list(t.columns) for t in tables] == [["response_time", "trial_type[1]"]] * 2
     assert all(len(t) == len(trial_events) for t in tables)
@@ -402,11 +419,13 @@ def test_trial_predictors_select_modulator_columns_in_model_order(trial_events):
 
 
 def test_trial_predictors_follow_the_task_model(trial_events):
+    """Verify trial predictors follow the task model."""
     (table,) = predictors([trial_events], TaskModel((TT,)))
     assert list(table.columns) == ["trial_type[1]"]
 
 
 def test_trial_predictors_make_nonpositive_or_missing_rt_nan(trial_events):
+    """Verify trial predictors make nonpositive or missing response-time NaN."""
     events = trial_events.copy()
     events.loc[:2, "response_time"] = [-1.0, 0.0, np.nan]
     (table,) = predictors([events], TaskModel((RT, TT)))
@@ -415,12 +434,14 @@ def test_trial_predictors_make_nonpositive_or_missing_rt_nan(trial_events):
 
 
 def test_trial_predictors_leave_other_columns_untouched():
+    """Verify trial predictors leave other columns untouched."""
     events = pd.DataFrame(dict(effort=[-1.0, 0.0, 2.0]))
     (table,) = predictors([events], TaskModel((Modulator("effort"),)))
     assert table.effort.tolist() == [-1.0, 0.0, 2.0]
 
 
 def test_trial_predictors_missing_column_names_the_run(trial_events):
+    """Verify trial predictors missing column names the run."""
     broken = trial_events.drop(columns="response_time")
     with pytest.raises(ValueError, match="run-02.*response_time"):
         predictors(
@@ -431,11 +452,13 @@ def test_trial_predictors_missing_column_names_the_run(trial_events):
 
 
 def test_trial_predictors_reject_nonbinary_trial_type(trial_events):
+    """Verify trial predictors reject nonbinary trial type."""
     with pytest.raises(ValueError, match="trial_type"):
         predictors([trial_events.assign(trial_type=3)], TaskModel((TT,)))
 
 
 def test_trial_predictors_emit_indicator_columns_with_missing_as_nan(trial_events):
+    """Verify trial predictors emit indicator columns with missing as NaN."""
     mod = Modulator(
         "trial_type", kind="categorical", levels=("0", "1"), missing="indicator"
     )
@@ -448,5 +471,6 @@ def test_trial_predictors_emit_indicator_columns_with_missing_as_nan(trial_event
 
 
 def test_trial_predictors_labels_must_match_the_tables(trial_events):
+    """Verify trial predictors labels must match the tables."""
     with pytest.raises(ValueError, match="labels"):
         predictors([trial_events, trial_events], TaskModel((RT,)), labels=["run-01"])

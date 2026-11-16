@@ -87,6 +87,7 @@ def _left_cortex_meshes(directory):
 def test_session_hrf_notebook_fits_three_sessions_exports_comparisons_and_resumes(
     session_data, tmp_path
 ):
+    """Verify session HRF notebook fits three sessions exports comparisons and resumes."""
     assert SESSION_NOTEBOOK.exists(), "The session HRF reliability notebook is missing"
     root, prep = session_data
     output = tmp_path / "output"
@@ -237,6 +238,7 @@ def _assert_reuse_without_fitting(fit_config, loaded, monkeypatch):
 def test_multisession_notebook_fits_missing_sessions_pairs_and_reuses_them(
     two_raw_sessions, tmp_path, monkeypatch
 ):
+    """Verify multisession notebook fits missing sessions pairs and reuses them."""
     _drop_one_run01_rt(two_raw_sessions["bids_root"])
     output = tmp_path / "output"
     config = dict(
@@ -361,6 +363,7 @@ def _assert_metadata(files, library_config, curves):
 def test_workflow_notebook_runs_the_package_workflow_and_shows_its_outputs(
     four_runs, tmp_path
 ):
+    """Verify workflow notebook runs the package workflow and shows its outputs."""
     library_config = {"hrf_library": "sobol", "hrf_n_samples": 4, "hrf_seed": 7}
     root, prep = four_runs
     output = tmp_path / "output"

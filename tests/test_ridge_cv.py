@@ -109,6 +109,7 @@ def reference_scores(
 def test_cv_matches_independent_augmented_ols_and_encoding(
     ridge_problem, optimized, encoding_mode
 ):
+    """Verify cross-validation matches independent augmented OLS and encoding."""
     data, predictors, library = ridge_problem
     library = library if optimized else None
     result = score(
@@ -144,6 +145,7 @@ def test_cv_matches_independent_augmented_ols_and_encoding(
 
 
 def test_validation_targets_use_candidate_penalty(ridge_problem):
+    """Verify validation targets use candidate penalty."""
     data, predictors, _ = ridge_problem
     result = score(data, predictors, alphas=[0.0, 1.0])
     loss, total, _ = reference_scores(
@@ -157,6 +159,7 @@ def test_validation_targets_use_candidate_penalty(ridge_problem):
 def test_fold_record_takes_predictor_means_from_the_first_alpha_fit(
     ridge_problem, monkeypatch
 ):
+    """Verify fold record takes predictor means from the first alpha fit."""
     import dataclasses
 
     data, predictors, library = ridge_problem
@@ -185,6 +188,7 @@ def test_fold_record_takes_predictor_means_from_the_first_alpha_fit(
 
 
 def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatch):
+    """Verify inner validation cannot train HRF or encoding."""
     data, predictors, library = ridge_problem
     score(data, predictors, alphas=[0.0], library=library)
     module = importlib.import_module("boldtailor._ridge_cv")
@@ -242,6 +246,7 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
 
 @pytest.mark.parametrize("optimized,count", [(True, 2), (False, 1)])
 def test_too_few_runs_rejected(ridge_problem, optimized, count):
+    """Verify too few runs rejected."""
     data, predictors, library = ridge_problem
     with pytest.raises(ValueError, match="runs"):
         score(
@@ -253,6 +258,7 @@ def test_too_few_runs_rejected(ridge_problem, optimized, count):
 
 
 def test_validation_design_failure_names_fold_and_run(ridge_problem):
+    """Verify validation design failure names fold and run."""
     data, predictors, library = ridge_problem
     events = list(data.events)
     events[0].loc[1, "onset"] = events[0].loc[0, "onset"]
@@ -267,6 +273,7 @@ def test_validation_design_failure_names_fold_and_run(ridge_problem):
 
 @pytest.mark.parametrize("fractional", [False, True])
 def test_modes_identify_objective_and_default(ridge_problem, fractional):
+    """Verify modes identify objective and default."""
     from boldtailor.fractional_ridge import score_fraction_candidates
 
     data, predictors, _ = ridge_problem
@@ -328,6 +335,7 @@ def test_modes_identify_objective_and_default(ridge_problem, fractional):
 def test_encoding_preflight_precedes_hrf_fitting(
     ridge_problem, monkeypatch, fractional, case
 ):
+    """Verify encoding preflight precedes HRF fitting."""
     from boldtailor.fractional_ridge import score_fraction_candidates
     import boldtailor._ridge_cv as cv
 
@@ -352,6 +360,7 @@ def test_encoding_preflight_precedes_hrf_fitting(
 def test_prepared_run_betas_preserve_feature_order_and_candidate_independence(
     ridge_problem, optimized
 ):
+    """Verify prepared run betas preserve feature order and candidate independence."""
     from boldtailor import _ridge_cv as cv
 
     data, _, library = ridge_problem

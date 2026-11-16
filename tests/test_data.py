@@ -20,6 +20,7 @@ def events():
 
 
 def test_from_arrays_normalizes_one_run_from_tr(events):
+    """Verify from arrays normalizes one run from tr."""
     signals = np.arange(20.0).reshape(10, 2)
 
     data = from_arrays(signals, events, tr=2.0)
@@ -44,6 +45,7 @@ def test_from_arrays_normalizes_one_run_from_tr(events):
 
 
 def test_from_arrays_accepts_run_wise_frame_times(events):
+    """Verify from arrays accepts run wise frame times."""
     signals = [np.ones((10, 2)), np.ones((12, 2))]
     frame_times = [np.arange(10) * 1.5 + 0.75, np.arange(12) * 2.0 + 1.0]
 
@@ -59,6 +61,7 @@ def test_from_arrays_accepts_run_wise_frame_times(events):
 
 
 def test_from_arrays_owns_readonly_copies(events):
+    """Verify from arrays owns read-only copies."""
     signals = np.arange(20.0).reshape(10, 2)
     frame_times = np.arange(10, dtype=float) * 2.0
     confounds = pd.DataFrame({"motion": np.linspace(0.0, 1.0, 10)})
@@ -86,6 +89,7 @@ def test_from_arrays_owns_readonly_copies(events):
 
 
 def test_from_arrays_accepts_negative_onsets_without_trial_type():
+    """Verify from arrays accepts negative onsets without trial type."""
     events = pd.DataFrame({"onset": [-2.0, 4.0], "duration": [1.0, 0.0]})
 
     data = from_arrays(np.ones((10, 2)), events, tr=2.0)
@@ -143,6 +147,7 @@ def _two_runs(features=(2, 2)):
 def test_from_arrays_rejects_invalid_arguments(
     events, complete_sources, overrides, message
 ):
+    """Verify from arrays rejects invalid arguments."""
     run_events = {"one": events.iloc[:1], "two": [events, events.copy()]}
     kwargs = {"signals": np.ones((10, 2)), "events": events, "tr": 2.0}
     kwargs.update(overrides)
@@ -156,6 +161,7 @@ def test_from_arrays_rejects_invalid_arguments(
 
 
 def test_from_arrays_keeps_path_like_provenance_metadata(events):
+    """Verify from arrays keeps path like provenance metadata."""
     data = from_arrays(
         np.ones((10, 2)), events, tr=2.0, provenance_metadata={"cwd": "./notes"}
     )
@@ -165,6 +171,7 @@ def test_from_arrays_keeps_path_like_provenance_metadata(events):
 
 @pytest.mark.parametrize("tr", [2, 2.5, np.int64(3), np.float64(1.5)])
 def test_from_arrays_accepts_real_scalar_tr_values(events, tr):
+    """Verify from arrays accepts real scalar tr values."""
     data = from_arrays(np.ones((10, 2)), events, tr=tr)
 
     assert data.frame_times[0][1] == float(tr)
@@ -173,6 +180,7 @@ def test_from_arrays_accepts_real_scalar_tr_values(events, tr):
 def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(
     events, complete_sources
 ):
+    """Verify from arrays accepts run wise sources and stable fingerprint."""
     signals = [np.ones((10, 2)), np.ones((10, 2)) * 2.0]
     run_events = [events, events.copy()]
     run_confounds = [
@@ -226,6 +234,7 @@ def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(
 def test_normalization_builds_one_record(
     events, monkeypatch, caplog, complete, complete_sources
 ):
+    """Create one provenance record while normalizing the input analysis data."""
     import hashlib
     import json
     import logging
@@ -272,6 +281,7 @@ def test_normalization_builds_one_record(
 def test_normalization_catches_final_failures_and_isolates_context(
     events, caplog, monkeypatch, outcome
 ):
+    """Verify normalization catches final failures and isolates context."""
     import json
     import logging
 
@@ -335,6 +345,7 @@ def test_normalization_catches_final_failures_and_isolates_context(
 
 
 def test_normalization_activity_records_the_software_environment(events):
+    """Verify normalization activity records the software environment."""
     data = from_arrays(np.arange(20.0).reshape(10, 2), events, tr=2.0)
     assert data.provenance.activities[0]["software"] == software_environment()
 
@@ -346,11 +357,13 @@ def two_run_data(events):
 
 
 def test_run_labels_for_defaults_to_numbered_labels(two_run_data):
+    """Verify run labels for defaults to numbered labels."""
     assert run_labels_for(two_run_data, None) == ("run-01", "run-02")
 
 
 @pytest.mark.parametrize("labels", [["a", "a"], ["a b", "c"], ["only-one"], [1, 2]])
 def test_run_labels_for_rejects_invalid_labels(two_run_data, labels):
+    """Verify run labels for rejects invalid labels."""
     with pytest.raises(ValueError, match="run labels must be unique"):
         run_labels_for(two_run_data, labels)
 
@@ -391,5 +404,6 @@ def run_entry_point_with_labels(ridge_problem, selected_fixture):
 def test_every_entry_point_uses_the_same_run_label_error(
     entry, run_entry_point_with_labels
 ):
+    """Verify every entry point uses the same run label error."""
     with pytest.raises(ValueError, match="run labels must be unique"):
         run_entry_point_with_labels(entry, ["a b", "c"])

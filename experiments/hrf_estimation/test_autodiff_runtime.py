@@ -15,6 +15,7 @@ def runtime_probe():
 
 
 def test_worker_receives_memory_guard_and_disk_cache(tmp_path):
+    """Verify worker receives memory guard and disk cache."""
     pytest.importorskip("jax")
     api = importlib.import_module("experiments.hrf_estimation.autodiff_runtime")
     limit = 8 * 1024**3
@@ -28,6 +29,7 @@ def test_worker_receives_memory_guard_and_disk_cache(tmp_path):
 
 
 def test_runtime_rejects_invalid_memory_limit(tmp_path):
+    """Verify runtime rejects invalid memory limit."""
     pytest.importorskip("jax")
     api = importlib.import_module("experiments.hrf_estimation.autodiff_runtime")
     with pytest.raises(ValueError, match="positive"):
@@ -39,6 +41,7 @@ from experiments.hrf_estimation.test_library_cv import planted_runs
 
 
 def test_continuous_fit_writes_persistent_cache(offgrid, tmp_path):
+    """Verify continuous fit writes persistent cache."""
     pytest.importorskip("jax")
     from experiments.hrf_estimation.continuous import fit_continuous
     runs, library, _ = offgrid

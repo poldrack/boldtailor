@@ -16,6 +16,7 @@ def records(notebook, kind):
 
 
 def test_notebook_executes_and_renders_comparisons(notebook):
+    """Verify notebook executes and renders comparisons."""
     cells=[c for c in notebook.cells if c.cell_type=="code"]
     assert cells and all(isinstance(c.execution_count,int) for c in cells)
     outputs=[o for c in cells for o in c.outputs]
@@ -24,6 +25,7 @@ def test_notebook_executes_and_renders_comparisons(notebook):
 
 
 def test_coverage_distinguishes_missing_models(notebook):
+    """Verify coverage distinguishes missing models."""
     coverage=pd.DataFrame(records(notebook,"model_coverage"))
     ar1=coverage.query("method == 'AR(1) REML' and mode == 'amplitude' and state == 'complete'")
     assert set(ar1.session)==set(range(10,20))
@@ -32,6 +34,7 @@ def test_coverage_distinguishes_missing_models(notebook):
 
 
 def test_session14_ar1_score_matches_raw_output(notebook):
+    """Verify session14 AR(1) score matches raw output."""
     summary=pd.DataFrame(records(notebook,"all_methods_summary"))
     row=summary.query("session == 14 and mode == 'amplitude' and method == 'AR(1) REML'").iloc[0]
     source=Path(__file__).parent/'reports/all_methods_scores.tsv.gz'
@@ -47,6 +50,7 @@ def test_session14_ar1_score_matches_raw_output(notebook):
 
 
 def test_prior_modeling_approaches_are_included(notebook):
+    """Verify prior modeling approaches are included."""
     coverage=pd.DataFrame(records(notebook,"model_coverage"))
     available=set(coverage.loc[coverage.state.eq("complete"),"method"])
     assert {"Canonical","Library CV","Original REML","Parametric library CV",

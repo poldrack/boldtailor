@@ -19,6 +19,7 @@ def _events(onsets, images):
 
 
 def test_trial_table_orders_runs_and_onsets():
+    """Verify trial table orders runs and onsets."""
     events = [_events([8.0, 4.0], [5, 6]), _events([4.0], [5])]
     table = trial_table(events, ["run-01", "run-02"], "ses-nsd10", "73k_id")
     assert list(table.columns) == ["session", "run", "trial", "onset", "image"]
@@ -28,6 +29,7 @@ def test_trial_table_orders_runs_and_onsets():
 
 
 def test_trial_table_missing_image_column_raises():
+    """Verify trial table missing image column raises."""
     with pytest.raises(ValueError, match="73k_id"):
         trial_table(
             [_events([4.0], [1]).drop(columns="73k_id")], ["run-01"], "s", "73k_id"
@@ -39,6 +41,7 @@ def _trials(rows):
 
 
 def test_repetition_array_uses_first_three_in_time_order():
+    """Verify repetition array uses first three in time order."""
     trials = _trials(
         [
             ("ses-b", "run-01", 0, 4.0, 9),  # 3rd presentation (later session)
@@ -55,6 +58,9 @@ def test_repetition_array_uses_first_three_in_time_order():
 
 
 def test_images_with_and_counts():
+    """Count image presentations and select images satisfying the requested occurrence
+    rule.
+    """
     trials = _trials(
         [("s", "r", i, float(i), img) for i, img in enumerate([1, 1, 1, 2, 2, 3])]
     )
@@ -64,6 +70,7 @@ def test_images_with_and_counts():
 
 
 def test_out_of_sample_requires_distinct_sessions():
+    """Verify out of sample requires distinct sessions."""
     trials = _trials(
         [
             ("s1", "r", 0, 0.0, 1),

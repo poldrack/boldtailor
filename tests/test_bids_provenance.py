@@ -104,6 +104,7 @@ def projection_options():
 def test_projection_uses_installed_version(
     monkeypatch, provenance_record, projection_options
 ):
+    """Verify projection uses installed version."""
     from importlib import metadata
 
     original = metadata.version
@@ -132,6 +133,7 @@ def test_projection_matches_hand_authored_pinned_draft_fixture(
     provenance_record,
     projection_options,
 ):
+    """Verify projection matches hand authored pinned draft fixture."""
     expected = _fixture_projection()
 
     projected = project_bids_provenance(provenance_record, **projection_options)
@@ -144,6 +146,7 @@ def test_projection_is_immutable_bytes_and_performs_no_io(
     projection_options,
     monkeypatch,
 ):
+    """Verify projection is immutable bytes and performs no io."""
     expected_paths = tuple(_fixture_projection())
 
     def unexpected_io(*args, **kwargs):
@@ -166,6 +169,7 @@ def test_projection_is_immutable_bytes_and_performs_no_io(
 def test_file_entities_carry_digest_only_when_supplied(
     provenance_record, projection_options
 ):
+    """Verify file entities carry digest only when supplied."""
     payload = provenance_record.to_dict()
     payload["sources"][0]["signal"]["sha256"] = "a" * 64
     record = ProvenanceRecord.from_dict(payload)
@@ -182,6 +186,7 @@ def test_draft_records_form_semantic_activity_source_graph(
     provenance_record,
     projection_options,
 ):
+    """Verify draft records form semantic activity source graph."""
     projected = project_bids_provenance(provenance_record, **projection_options)
     activities = json.loads(projected["prov/prov-boldtailor_act.json"])["Activities"]
     entities = json.loads(projected["prov/prov-boldtailor_ent.json"])["Files"]
@@ -206,6 +211,7 @@ def test_opt_out_omits_only_pinned_draft_projection(
     provenance_record,
     projection_options,
 ):
+    """Verify opt out omits only pinned draft projection."""
     projected = project_bids_provenance(
         provenance_record,
         **projection_options,
@@ -223,6 +229,7 @@ def test_logs_are_deterministic_newline_terminated_and_exclude_sensitive_runtime
     provenance_record,
     projection_options,
 ):
+    """Verify logs are deterministic newline terminated and exclude sensitive runtime."""
     first = project_bids_provenance(provenance_record, **projection_options)
     second = project_bids_provenance(provenance_record, **projection_options)
     canonical = first["logs/boldtailor_provenance.json"]
@@ -277,6 +284,7 @@ _MODEL_SIDECAR = "sub-01/func/sub-01_desc-model_bold.json"
     ],
 )
 def test_projection_rejects_invalid_options(provenance_record, options, message):
+    """Verify projection rejects invalid options."""
     with pytest.raises(ValueError, match=message):
         project_bids_provenance(provenance_record, **options)
 
@@ -306,6 +314,7 @@ def record_from_fit(complete_sources):
 
 @pytest.mark.integration
 def test_bids_activity_has_command_and_timestamps(record_from_fit):
+    """Verify BIDS activity has command and timestamps."""
     from boldtailor._software import software_environment
 
     projected = project_bids_provenance(record_from_fit)
@@ -341,6 +350,7 @@ def test_bids_activity_has_command_and_timestamps(record_from_fit):
     ],
 )
 def test_bids_command_names_the_entry_point(provenance_record, name, command):
+    """Verify BIDS command names the entry point."""
     payload = provenance_record.to_dict()
     payload["activities"][-1]["name"] = name
     projected = project_bids_provenance(ProvenanceRecord.from_dict(payload))
@@ -348,6 +358,7 @@ def test_bids_command_names_the_entry_point(provenance_record, name, command):
 
 
 def test_projection_equals_record_for_sensitive_looking_keys(provenance_record):
+    """Verify projection equals record for sensitive looking keys."""
     payload = provenance_record.to_dict()
     payload["sources"][0]["signal"]["annotations"] = {"hostname": "h", "cwd": "c"}
     payload["activities"][-1]["cwd"] = "kept"
@@ -361,6 +372,7 @@ def test_projection_equals_record_for_sensitive_looking_keys(provenance_record):
 
 
 def test_bids_projection_uses_the_shared_relative_path_rule():
+    """Verify BIDS projection uses the shared relative path rule."""
     import boldtailor.bids_provenance as bids
     import boldtailor.provenance as provenance
 
@@ -371,6 +383,7 @@ def test_bids_projection_uses_the_shared_relative_path_rule():
 def test_sidecar_paths_differing_only_in_case_are_both_projected(
     provenance_record,
 ):
+    """Verify sidecar paths differing only in case are both projected."""
     upper = "sub-01/func/SUB-01_desc-model_bold.json"
     projected = project_bids_provenance(
         provenance_record,

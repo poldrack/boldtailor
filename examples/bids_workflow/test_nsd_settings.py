@@ -22,6 +22,7 @@ def config(dataset, tmp_path):
 
 
 def test_notebook_paths_become_settings_paths_and_the_task_defaults(config):
+    """Verify notebook paths become settings paths and the task defaults."""
     settings = nsd_settings(config)
     assert isinstance(settings, WorkflowSettings)
     assert settings.bids_dir == Path(config["bids_root"])
@@ -32,6 +33,7 @@ def test_notebook_paths_become_settings_paths_and_the_task_defaults(config):
 
 
 def test_overrides_win_and_the_configuration_is_unchanged(config):
+    """Verify overrides win and the configuration is unchanged."""
     original = dict(config)
     settings = nsd_settings(config, session="ses-nsd11", surface_maps=False)
     assert settings.session == "ses-nsd11"
@@ -40,11 +42,13 @@ def test_overrides_win_and_the_configuration_is_unchanged(config):
 
 
 def test_settings_reject_unknown_configuration_keys(config):
+    """Verify settings reject unknown configuration keys."""
     with pytest.raises(TypeError):
         nsd_settings({**config, "not_a_setting": 1})
 
 
 def test_paths_come_from_the_configuration_then_the_environment(monkeypatch, tmp_path):
+    """Verify paths come from the configuration then the environment."""
     for name in ("NSD_BIDS_ROOT", "NSD_FMRIPREP_ROOT", "NSD_OUTPUT_ROOT"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(ValueError, match="NSD_BIDS_ROOT"):

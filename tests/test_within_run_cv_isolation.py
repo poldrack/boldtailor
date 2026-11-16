@@ -13,6 +13,7 @@ from tests.oracles import subset_runs as subset
 def test_only_informative_run_cannot_supply_training_rank(
     ridge_problem, monkeypatch, fractional
 ):
+    """Verify only informative run cannot supply training rank."""
     data, predictors, library = ridge_problem
     predictors = [
         p if r == 0 else p.assign(response_time=float(r))
@@ -35,6 +36,7 @@ def test_only_informative_run_cannot_supply_training_rank(
 def test_candidate_predictions_ignore_held_out_outcomes(
     ridge_problem, monkeypatch, fractional
 ):
+    """Verify candidate predictions ignore held out outcomes."""
     data, predictors, library = ridge_problem
     fits = []
     evaluate = cv.evaluate_trial_encoding

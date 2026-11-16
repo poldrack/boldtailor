@@ -28,6 +28,7 @@ PUBLIC = [
 
 @pytest.mark.parametrize("public,name,origin", PUBLIC)
 def test_public_module_reexports_the_implementation(public, name, origin):
+    """Verify public module reexports the implementation."""
     module = importlib.import_module(f"boldtailor.{public}")
     implementation = importlib.import_module(f"boldtailor.{origin}")
     assert getattr(module, name) is getattr(implementation, name)
@@ -39,6 +40,7 @@ ANNOTATED += ["fractional_ridge", "denoising"]
 
 @pytest.mark.parametrize("module_name", ANNOTATED)
 def test_public_functions_are_annotated(module_name):
+    """Verify public functions are annotated."""
     import inspect
 
     module = importlib.import_module(f"boldtailor.{module_name}")

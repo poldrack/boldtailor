@@ -44,6 +44,7 @@ def _best_of_grid_and_zero(terms):
 )
 @given(seed=st.integers(0, 10_000), ratio=st.sampled_from([0.0, 0.1, 10.0]))
 def test_optimum_not_worse_than_any_grid_point_or_zero(seed, ratio):
+    """Verify optimum not worse than any grid point or zero."""
     _, terms = _simulated_terms(seed, ratio)
     optimum = minimize_ratio(terms)
     assert np.all(optimum.criterion <= _best_of_grid_and_zero(terms) + 1e-9)
@@ -52,6 +53,7 @@ def test_optimum_not_worse_than_any_grid_point_or_zero(seed, ratio):
 @pytest.mark.parametrize("rho", [0.0, 0.5])
 @pytest.mark.parametrize("true_ratio", [0.05, 1.0, 20.0])
 def test_matches_dense_fit(true_ratio, rho):
+    """Compare REML variance estimates and likelihood with the dense covariance oracle."""
     (signals, fixed, random), terms = _simulated_terms(3, true_ratio, rho)
     expected, _ = dense_fit(signals, fixed, random, rho)
     assert_allclose(minimize_ratio(terms).ratio, expected, rtol=1e-5)
@@ -65,6 +67,7 @@ def _orthogonal_signal():
 
 
 def test_signal_orthogonal_to_random_design_is_at_zero():
+    """Verify signal orthogonal to random design is at zero."""
     optimum = minimize_ratio(_terms(*_orthogonal_signal()))
     assert optimum.at_zero.all()
     assert_allclose(optimum.ratio, 0.0, atol=0.0)
@@ -72,6 +75,7 @@ def test_signal_orthogonal_to_random_design_is_at_zero():
 
 
 def test_noise_free_signal_hits_upper_edge():
+    """Verify noise free signal hits upper edge."""
     rng = np.random.default_rng(4)
     _, fixed, random = simulate(rng, scans=(60,), n_features=2)
     signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
@@ -81,6 +85,7 @@ def test_noise_free_signal_hits_upper_edge():
 
 
 def test_no_directions_returns_zero():
+    """Verify no directions returns zero."""
     signals, fixed, _ = simulate(np.random.default_rng(2), scans=(50,), n_features=3)
     empty = [np.empty((50, 0))]
     optimum = minimize_ratio(_terms(signals, fixed, empty))
@@ -91,6 +96,7 @@ def test_no_directions_returns_zero():
 
 @pytest.mark.parametrize("true_ratio", [0.05, 1.0, 20.0])
 def test_optimum_is_a_score_root(true_ratio):
+    """Verify optimum is a score root."""
     _, terms = _simulated_terms(3, true_ratio)
     optimum = minimize_ratio(terms)
     interior = ~optimum.at_zero & ~optimum.at_upper
@@ -110,6 +116,7 @@ def _shift_example():
 
 
 def test_optimum_is_stable_under_fixed_span_shift():
+    """Verify optimum is stable under fixed span shift."""
     base_terms, shifted_terms = _shift_example()
     base = minimize_ratio(base_terms)
     shifted = minimize_ratio(shifted_terms)
@@ -128,6 +135,7 @@ def _best_search_grid_value(terms, n_features):
 @pytest.mark.parametrize("true_ratio", [0.0, 0.1, 1.0, 10.0])
 @pytest.mark.parametrize("seed", range(5))
 def test_polish_never_worsens_criterion_beyond_rounding(seed, true_ratio):
+    """Verify polish never worsens criterion beyond rounding."""
     _, terms = _simulated_terms(seed, true_ratio)
     grid_value = _best_search_grid_value(terms, N_FEATURES)
     n = sum(t.dof for t in terms)
@@ -185,6 +193,7 @@ def _unbracketed_interior(terms):
 
 @pytest.mark.parametrize("cases", [_oracle_cases, _property_style_cases])
 def test_neighbour_bracket_shows_sign_change_for_interior_optima(cases):
+    """Verify neighbour bracket shows sign change for interior optima."""
     counts = np.array([_unbracketed_interior(terms) for terms in cases()])
     assert counts[:, 1].sum() > 0
     assert counts[:, 0].sum() == 0
@@ -272,6 +281,7 @@ def test_default_budget_bounds_a_wide_problem(monkeypatch):
 
 
 def test_budget_below_one_feature_falls_back_to_single_features(monkeypatch):
+    """Verify budget below one feature falls back to single features."""
     import boldtailor._reml_search as search
 
     _, terms = _simulated_terms(5, 1.0, n_features=7)
@@ -284,6 +294,7 @@ def test_budget_below_one_feature_falls_back_to_single_features(monkeypatch):
 
 
 def test_batches_do_not_change_a_multi_basin_optimum(monkeypatch):
+    """Verify batches do not change a multi basin optimum."""
     import boldtailor._reml_search as search
 
     terms = _two_basin_terms()
@@ -303,6 +314,7 @@ def test_batches_do_not_change_a_multi_basin_optimum(monkeypatch):
 
 
 def test_every_slope_crossing_competes():
+    """Verify every slope crossing competes."""
     terms = _two_basin_terms()
     fine = np.exp(np.linspace(-45.0, 45.0, 90001))
     best = criterion(fine[:, None], terms).min()
@@ -310,6 +322,7 @@ def test_every_slope_crossing_competes():
 
 
 def test_grid_spacing_does_not_grow_with_spectral_spread():
+    """Verify grid spacing does not grow with spectral spread."""
     from boldtailor._reml_search import _search_grid
 
     base_step = 2 * np.log(1e8) / 120
@@ -340,6 +353,7 @@ def _nearly_flat_terms(seed):
 
 @pytest.mark.parametrize("seed", range(10))
 def test_improvement_within_rounding_noise_does_not_beat_zero(seed):
+    """Verify improvement within rounding noise does not beat zero."""
     optimum = minimize_ratio(_nearly_flat_terms(seed))
     assert not optimum.unidentifiable.any()
     assert optimum.at_zero.all()
@@ -347,6 +361,7 @@ def test_improvement_within_rounding_noise_does_not_beat_zero(seed):
 
 
 def test_saturated_equal_spectrum_is_unidentifiable():
+    """Verify saturated equal spectrum is unidentifiable."""
     terms = _nearly_flat_terms(0)
     flat = [type(terms[0])(**{**vars(terms[0]), "singular2": np.full(6, 2.5)})]
     optimum = minimize_ratio(flat)
@@ -357,6 +372,7 @@ def test_saturated_equal_spectrum_is_unidentifiable():
 
 
 def test_identifiable_optimum_is_not_flagged():
+    """Verify identifiable optimum is not flagged."""
     _, terms = _simulated_terms(3, 1.0)
     assert not minimize_ratio(terms).unidentifiable.any()
 
@@ -383,6 +399,7 @@ def test_grid_fallback_is_flagged_unrefined():
 
 
 def test_default_grid_refines_the_same_problem():
+    """Verify default grid refines the same problem."""
     terms = _fallback_terms()
     optimum = minimize_ratio(terms)
     assert not optimum.unrefined.any() and not optimum.at_zero.any()
@@ -390,6 +407,7 @@ def test_default_grid_refines_the_same_problem():
 
 
 def test_upper_edge_is_a_case_of_unrefined():
+    """Verify upper edge is a case of unrefined."""
     rng = np.random.default_rng(4)
     _, fixed, random = simulate(rng, scans=(60,), n_features=2)
     signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
@@ -398,6 +416,7 @@ def test_upper_edge_is_a_case_of_unrefined():
 
 
 def test_boundary_optima_are_not_unrefined():
+    """Verify boundary optima are not unrefined."""
     orthogonal = minimize_ratio(_terms(*_orthogonal_signal()))
     assert orthogonal.at_zero.all() and not orthogonal.unrefined.any()
     flat = _nearly_flat_terms(0)

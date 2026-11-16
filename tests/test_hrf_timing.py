@@ -30,12 +30,14 @@ from boldtailor.hrf_library import (
     ],
 )
 def test_spm_and_timing_parameterizations_round_trip_exactly(spm):
+    """Verify spm and timing parameterizations round trip exactly."""
     timing = timing_parameters(spm)
     assert len(timing) == len(TIMING_NAMES) == 7
     np.testing.assert_allclose(spm_parameters(timing), spm, rtol=0, atol=1e-12)
 
 
 def test_canonical_spm_has_the_expected_timing():
+    """Verify canonical spm has the expected timing."""
     timing = dict(zip(TIMING_NAMES, timing_parameters(CANONICAL_PARAMETERS)))
     assert timing["response_peak"] == pytest.approx(5.0)
     assert timing["response_sd"] == pytest.approx(np.sqrt(6.0))
@@ -47,6 +49,7 @@ def test_canonical_spm_has_the_expected_timing():
 
 
 def test_response_peak_predicts_the_sampled_kernel_peak():
+    """Verify response peak predicts the sampled kernel peak."""
     library = sobol_hrf_library(n_samples=64, seed=0)
     errors = []
     for candidate in library.candidates[1:]:
@@ -57,6 +60,7 @@ def test_response_peak_predicts_the_sampled_kernel_peak():
 
 
 def test_realized_timing_measures_the_combined_curve():
+    """Verify realized timing measures the combined curve."""
     peak_time, fwhm, trough_time, undershoot_fwhm, depth = realized_timing(
         CANONICAL_PARAMETERS
     )
@@ -82,6 +86,7 @@ def test_realized_timing_measures_the_combined_curve():
     ],
 )
 def test_realized_targets_are_hit_after_refinement(target):
+    """Verify realized targets are hit after refinement."""
     spm = spm_parameters_from_realized(target)
     peak_time, fwhm, trough_time, undershoot_fwhm, depth = realized_timing(spm)
     assert peak_time == pytest.approx(target[0], abs=0.01)
@@ -94,6 +99,7 @@ def test_realized_targets_are_hit_after_refinement(target):
 
 def test_infeasible_realized_targets_are_rejected():
     # a trough 5 s after a 6 s peak cannot coexist with a 3.8 s response FWHM
+    """Verify infeasible realized targets are rejected."""
     with pytest.raises(ValueError, match="feasible"):
         spm_parameters_from_realized((6.05, 3.81, 11.29, 6.10, 0.335, 0.0, 36.0))
     with pytest.raises(ValueError, match="feasible"):
@@ -101,6 +107,7 @@ def test_infeasible_realized_targets_are_rejected():
 
 
 def test_timing_sampler_hits_realized_bounds_and_records_rejections():
+    """Verify timing sampler hits realized bounds and records rejections."""
     bounds = {
         "peak_time": (3.5, 7.5),
         "response_fwhm": (3.0, 6.0),
@@ -129,6 +136,7 @@ def test_timing_sampler_hits_realized_bounds_and_records_rejections():
 
 
 def test_timing_sampler_is_deterministic_and_rejects_bad_requests():
+    """Verify timing sampler is deterministic and rejects bad requests."""
     first = timing_hrf_library(n_samples=16, seed=1)
     second = timing_hrf_library(n_samples=16, seed=1)
     assert first.fingerprint == second.fingerprint
@@ -142,6 +150,7 @@ def test_timing_sampler_is_deterministic_and_rejects_bad_requests():
 
 
 def test_timing_table_reports_both_parameterizations():
+    """Verify timing table reports both parameterizations."""
     library = timing_hrf_library(n_samples=8, seed=0)
     table = library.timing_table
     assert list(table.columns[:2]) == ["hrf_id", "kind"]
@@ -156,11 +165,13 @@ def test_timing_table_reports_both_parameterizations():
 def test_realized_timing_rejects_a_round_off_trough():
     # The second gamma never pulls this curve below zero; the only negative
     # samples are round-off near t = 0, which must not count as a trough.
+    """Verify realized timing rejects a round off trough."""
     with pytest.raises(ValueError, match="trough"):
         realized_timing((14.4309, 15.1078, 2.4947, 2.6716, 1.6176, 0.0, 36.0))
 
 
 def test_default_timing_bounds_cover_the_requested_ranges():
+    """Verify default timing bounds cover the requested ranges."""
     assert dict(TIMING_BOUNDS) == {
         "peak_time": (2.5, 8.5),
         "response_fwhm": (2.0, 6.5),
@@ -173,6 +184,7 @@ def test_default_timing_bounds_cover_the_requested_ranges():
 def test_timing_sampler_keeps_drawing_when_most_of_the_box_is_infeasible():
     # A late, wide response with troughs allowed from 8 s on: roughly one
     # Sobol point in six is realizable, far below a fixed 4x oversample.
+    """Verify timing sampler keeps drawing when most of the box is infeasible."""
     bounds = {"peak_time": (8.0, 8.5), "response_fwhm": (5.5, 6.5)}
     library = timing_hrf_library(n_samples=32, seed=0, bounds=bounds)
     assert len(library.candidates) == 33
@@ -183,6 +195,7 @@ def test_timing_sampler_keeps_drawing_when_most_of_the_box_is_infeasible():
 
 
 def test_trough_depth_is_sampled_log_uniformly():
+    """Verify trough depth is sampled log uniformly."""
     assert LOG_SCALED_TIMING == ("trough_depth",)
     library = timing_hrf_library(n_samples=256, seed=5)
     depths = np.array(

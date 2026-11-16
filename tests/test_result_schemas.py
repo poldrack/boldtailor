@@ -10,6 +10,7 @@ from boldtailor.ridge_selection import score_ridge_candidates
 
 @pytest.mark.parametrize("fractional", [False, True])
 def test_candidate_scores_name_the_grid_and_scientific_basis(ridge_problem, fractional):
+    """Verify candidate scores name the grid and scientific basis."""
     from boldtailor import ridge_results
 
     data, predictors, _ = ridge_problem
@@ -37,6 +38,7 @@ def test_candidate_scores_name_the_grid_and_scientific_basis(ridge_problem, frac
 def test_trial_results_share_science_and_name_their_design(
     selected_fixture, selected, fractional
 ):
+    """Verify trial results share science and name their design."""
     from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
     from boldtailor import single_trial_results as results
 
@@ -71,6 +73,7 @@ def test_trial_results_share_science_and_name_their_design(
 
 
 def test_shared_trial_design_owns_its_input_table():
+    """Verify shared trial design owns its input table."""
     from boldtailor.single_trial_results import SharedTrialDesign
 
     matrix = pd.DataFrame({"trial": [1.0, 2.0], "constant": [1.0, 1.0]})
@@ -81,6 +84,7 @@ def test_shared_trial_design_owns_its_input_table():
 
 
 def test_selected_trial_design_owns_arrays_and_rebuilt_matrices(selected_fixture):
+    """Verify selected trial design owns arrays and rebuilt matrices."""
     from boldtailor.single_trial_results import SelectedTrialDesign
 
     _, selection = selected_fixture
@@ -104,6 +108,7 @@ def test_selected_trial_design_owns_arrays_and_rebuilt_matrices(selected_fixture
 
 
 def test_custom_hrf_has_a_shared_trial_design(selected_fixture):
+    """Verify custom HRF has a shared trial design."""
     from boldtailor.single_trial import fit_single_trials
     from boldtailor.single_trial_results import SharedTrialDesign
 
@@ -209,6 +214,7 @@ def result_instance(request):
 
 
 def test_result_classes_reject_positional_construction(result_instance):
+    """Verify result classes reject positional construction."""
     cls = type(result_instance)
     assert all(item.kw_only for item in fields(cls))
     values = [getattr(result_instance, f.name) for f in fields(cls) if f.init]
@@ -247,6 +253,7 @@ def _assert_kept(kept, original):
 
 
 def test_result_classes_own_their_arrays(result_instance):
+    """Verify result classes own their arrays."""
     owned = 0
     for item in fields(result_instance):
         source = _writable_copies(getattr(result_instance, item.name))

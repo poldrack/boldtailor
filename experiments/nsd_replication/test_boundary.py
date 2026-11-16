@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
     ],
 )
 def test_each_violation_form_is_caught(source):
+    """Verify each violation form is caught."""
     assert violations(source)
 
 
@@ -41,6 +42,7 @@ def test_each_violation_form_is_caught(source):
     ],
 )
 def test_allowed_sources_pass(source):
+    """Verify allowed sources pass."""
     assert violations(source) == []
 
 
@@ -50,6 +52,7 @@ def _checked(path):
 
 
 def test_experiments_respect_the_boundary():
+    """Verify experiments respect the boundary."""
     found = {
         str(path.relative_to(ROOT)): problems
         for path in sorted(ROOT.rglob("*.py"))
@@ -60,6 +63,7 @@ def test_experiments_respect_the_boundary():
 
 
 def test_test_modules_are_still_checked_for_imports(tmp_path):
+    """Verify test modules are still checked for imports."""
     path = tmp_path / "test_decoy.py"
     path.write_text('import boldtailor.workflow\nP = "x_den-91k_bold.dtseries.nii"\n')
     assert _checked(path) == ["line 1: imports boldtailor.workflow"]

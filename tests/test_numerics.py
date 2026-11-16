@@ -21,6 +21,7 @@ def _design(rng, n, p, condition=1.0):
 
 
 def test_basis_is_orthonormal_and_spans_the_design():
+    """Verify basis is orthonormal and spans the design."""
     design = _design(np.random.default_rng(0), 40, 5)
     basis = orthonormal_basis(design)
     assert_allclose(basis.T @ basis, np.eye(5), atol=1e-13)
@@ -28,16 +29,19 @@ def test_basis_is_orthonormal_and_spans_the_design():
 
 
 def test_basis_drops_redundant_columns():
+    """Return an orthonormal basis with duplicate or dependent design columns removed."""
     design = _design(np.random.default_rng(1), 30, 3)
     redundant = np.column_stack([design, design[:, 1] - 2 * design[:, 2]])
     assert orthonormal_basis(redundant).shape == (30, 3)
 
 
 def test_basis_of_no_columns_is_empty():
+    """Verify basis of no columns is empty."""
     assert orthonormal_basis(np.empty((7, 0))).shape == (7, 0)
 
 
 def test_basis_accepts_array_likes():
+    """Accept list-like design inputs when constructing an orthonormal basis."""
     assert orthonormal_basis([[1, 0], [1, 1], [1, 2]]).shape == (3, 2)
 
 
@@ -53,10 +57,12 @@ def test_basis_is_row_major_like_its_owned_copies():
 
 
 def test_rank_tolerance_scales_with_size_and_norm():
+    """Verify rank tolerance scales with size and norm."""
     assert rank_tolerance((50, 4), 3.0) == pytest.approx(50 * EPS * 3.0)
 
 
 def test_residuals_are_orthogonal_to_the_basis():
+    """Verify residuals are orthogonal to the basis."""
     rng = np.random.default_rng(2)
     basis = orthonormal_basis(_design(rng, 40, 4))
     residual = residualise(rng.normal(size=(40, 3)), basis)
@@ -68,6 +74,7 @@ def _unit_columns(design):
 
 
 def test_amplification_is_the_inverse_relative_singular_value_of_unit_columns():
+    """Verify amplification is the inverse relative singular value of unit columns."""
     design = _design(np.random.default_rng(4), 30, 3, condition=1e4)
     basis, amplification = conditioned_basis(design)
     singular = np.linalg.svd(_unit_columns(design), compute_uv=False)
@@ -77,6 +84,7 @@ def test_amplification_is_the_inverse_relative_singular_value_of_unit_columns():
 
 @pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e-200, 1e100, 1.0)])
 def test_basis_and_amplification_do_not_depend_on_column_units(scales):
+    """Verify basis and amplification do not depend on column units."""
     design = _design(np.random.default_rng(6), 30, 3)
     basis, amplification = conditioned_basis(design)
     rescaled, rescaled_amplification = conditioned_basis(design * np.array(scales))
@@ -85,6 +93,7 @@ def test_basis_and_amplification_do_not_depend_on_column_units(scales):
 
 
 def test_only_exactly_zero_columns_are_dropped_for_their_norm():
+    """Verify only exactly zero columns are dropped for their norm."""
     design = _design(np.random.default_rng(7), 30, 3)
     tiny = np.column_stack([design, 1e-250 * design[:, 1] ** 2, np.zeros(30)])
     assert orthonormal_basis(tiny).shape == (30, 4)
@@ -92,11 +101,13 @@ def test_only_exactly_zero_columns_are_dropped_for_their_norm():
 
 
 def test_orthogonal_columns_in_unequal_units_have_no_amplification():
+    """Verify orthogonal columns in unequal units have no amplification."""
     design = np.eye(30)[:, :2] * np.array([1e-12, 1.0])
     assert_allclose(conditioned_basis(design)[1], 1.0, rtol=1e-12)
 
 
 def test_project_out_returns_the_residual():
+    """Verify project out returns the residual."""
     rng = np.random.default_rng(5)
     basis, amplification = conditioned_basis(_design(rng, 40, 4))
     signals = rng.normal(size=(40, 3))
@@ -162,6 +173,7 @@ def _collinear_problem(rng, n, p, gap):
 @pytest.mark.parametrize("gap", [1e-3, 1e-6, 1e-9])
 @pytest.mark.parametrize("n,p", [(10, 9), (30, 5), (300, 30)])
 def test_uncertainty_floor_covers_span_signals_of_collinear_designs(n, p, gap):
+    """Verify uncertainty floor covers span signals of collinear designs."""
     rng = np.random.default_rng(n * p)
     for _ in range(5):
         energy, _, uncertainty = _energies(*_collinear_problem(rng, n, p, gap))
@@ -185,6 +197,7 @@ def _drift_design(n=300):
 
 
 def test_unit_noise_on_a_drift_design_is_far_above_both_floors():
+    """Verify unit noise on a drift design is far above both floors."""
     design = _drift_design()
     rng = np.random.default_rng(1)
     scale = np.array([1e4, 1.0, 1e-2, 1e-4] + [5.0] * 6)[:, None]
@@ -196,6 +209,7 @@ def test_unit_noise_on_a_drift_design_is_far_above_both_floors():
 
 @pytest.mark.parametrize("offset", [1e4, 1e8, 1e10])
 def test_small_residual_on_a_large_nuisance_is_above_the_floors(offset):
+    """Verify small residual on a large nuisance is above the floors."""
     rng = np.random.default_rng(3)
     design = _design(rng, 30, 2)
     signals = rng.normal(size=(30, 4)) + offset

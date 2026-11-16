@@ -13,6 +13,7 @@ from examples.bids_workflow import (
 
 
 def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
+    """Verify read only mode reports missing sessions without fitting."""
     with pytest.raises(FileNotFoundError, match="ses-nsd10"):
         multisession_workflow.ensure_session_outputs(
             dict(bids_root=str(tmp_path), output_root=str(tmp_path / "output")),
@@ -23,6 +24,7 @@ def test_read_only_mode_reports_missing_sessions_without_fitting(tmp_path):
 
 
 def test_multisession_export_preserves_input_files(saved_sessions):
+    """Verify multisession export preserves input files."""
     output, sessions, _, _ = saved_sessions
     loaded = multisession_inputs.load_sessions(
         output, "sub-07", sessions, estimators=["OLS"]
@@ -37,6 +39,7 @@ def test_multisession_export_preserves_input_files(saved_sessions):
 
 
 def test_incompatible_estimators_fail_before_fitting(saved_sessions, monkeypatch):
+    """Verify incompatible estimators fail before fitting."""
     root, sessions, _, _ = saved_sessions
     module = multisession_workflow
 
@@ -59,6 +62,7 @@ def test_complete_sessions_are_validated_before_missing_session_fits(
     saved_sessions,
     monkeypatch,
 ):
+    """Verify complete sessions are validated before missing session fits."""
     root, sessions, _, _ = saved_sessions
     module = multisession_workflow
     changed = nib.cifti2.BrainModelAxis.from_surface([2, 0, 3], 5, "CortexLeft")
@@ -98,6 +102,7 @@ def _copy_saved_session(root, source, target):
 def test_missing_sessions_run_the_package_workflow_with_overwrite(
     saved_sessions, monkeypatch
 ):
+    """Verify missing sessions run the package workflow with overwrite."""
     root, sessions, _, _ = saved_sessions
     calls = []
 
@@ -135,6 +140,7 @@ def test_missing_sessions_run_the_package_workflow_with_overwrite(
 def test_conflicting_settings_stop_before_the_workflow_runs(
     saved_sessions, monkeypatch
 ):
+    """Verify conflicting settings stop before the workflow runs."""
     root, sessions, _, _ = saved_sessions
 
     def forbidden(settings):
@@ -154,6 +160,7 @@ def test_conflicting_settings_stop_before_the_workflow_runs(
 
 
 def test_paths_resolve_from_the_configuration_and_default_the_output_root(dataset):
+    """Verify paths resolve from the configuration and default the output root."""
     root, prep, *_ = dataset
     paths = multisession_workflow.resolve_paths(
         dict(bids_root=str(root), hrf_n_samples=4), ["ses-nsd10"]

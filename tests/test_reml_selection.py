@@ -60,6 +60,7 @@ def _orthogonal_signals(rng, fixed, candidates):
 
 @pytest.mark.integration
 def test_planted_design_wins(planted):
+    """Verify planted design wins."""
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     selection = select_random_effects_design(groups, candidates)
@@ -72,6 +73,7 @@ def test_planted_design_wins(planted):
 
 
 def test_results_are_read_only(planted):
+    """Verify results are read only."""
     signals, fixed, candidates = planted
     selection = select_random_effects_design(_groups(signals, fixed), candidates)
     with pytest.raises(ValueError):
@@ -81,6 +83,7 @@ def test_results_are_read_only(planted):
 
 
 def test_ties_go_to_earlier_candidate(planted):
+    """Verify ties go to earlier candidate."""
     signals, fixed, candidates = planted
     design = candidates[2]
     selection = select_random_effects_design(_groups(signals, fixed), [design, design])
@@ -89,6 +92,7 @@ def test_ties_go_to_earlier_candidate(planted):
 
 
 def test_no_supported_candidate_gives_sentinel():
+    """Verify no supported candidate gives sentinel."""
     rng = np.random.default_rng(4)
     _, fixed, _ = simulate(rng)
     candidates = _decoys(rng, fixed, 3)
@@ -106,6 +110,7 @@ def test_no_supported_candidate_gives_sentinel():
 
 
 def test_no_residual_signal_feature_gives_sentinel(planted):
+    """Verify no residual signal feature gives sentinel."""
     signals, fixed, candidates = planted
     signals = [np.column_stack([y[:, 0], np.zeros(len(y)), y[:, 1]]) for y in signals]
     groups = _groups(signals, fixed)
@@ -124,6 +129,7 @@ def test_no_residual_signal_feature_gives_sentinel(planted):
 
 
 def test_single_ok_candidate_has_nan_gap(planted):
+    """Verify single ok candidate has NaN gap."""
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     selection = select_random_effects_design(groups, [[None, None], candidates[2]])
@@ -148,6 +154,7 @@ class _OnePass:
 
 
 def test_candidates_consumed_once(planted):
+    """Verify candidates consumed once."""
     signals, fixed, candidates = planted
     once = _OnePass(candidates)
     rho = np.array([0.0, 0.2, 0.2, 0.4])
@@ -159,6 +166,7 @@ def test_candidates_consumed_once(planted):
 
 
 def test_invalid_candidates_raise(planted):
+    """Verify invalid candidates raise."""
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     with pytest.raises(ValueError, match="candidate"):
@@ -172,6 +180,7 @@ def test_invalid_candidates_raise(planted):
 
 @pytest.mark.parametrize("value", [np.nan, np.inf])
 def test_invalid_candidate_message_names_candidate_and_group(planted, value):
+    """Verify invalid candidate message names candidate and group."""
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     corrupt = [z.copy() for z in candidates[3]]
@@ -184,6 +193,7 @@ def test_invalid_candidate_message_names_candidate_and_group(planted, value):
 
 
 def test_candidate_may_be_any_iterable_of_group_designs(planted):
+    """Verify candidate may be any iterable of group designs."""
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)
     expected = select_random_effects_design(groups, candidates)
@@ -197,6 +207,7 @@ def test_candidate_may_be_any_iterable_of_group_designs(planted):
 
 
 def test_candidates_are_fitted_as_they_are_drawn(planted, monkeypatch):
+    """Verify candidates are fitted as they are drawn."""
     signals, fixed, candidates = planted
     drawn, at_fit = [0], []
     original = reml.minimize_ratio
@@ -216,6 +227,7 @@ def test_candidates_are_fitted_as_they_are_drawn(planted, monkeypatch):
 
 
 def test_per_feature_rho_equals_separate_selections(planted):
+    """Verify per feature rho equals separate selections."""
     signals, fixed, candidates = planted
     rho = np.array([0.0, 0.3, 0.3, 0.6])
     selection = select_random_effects_design(
@@ -234,6 +246,7 @@ def test_per_feature_rho_equals_separate_selections(planted):
 
 
 def test_fixed_projection_built_once_per_rho(planted, monkeypatch):
+    """Verify fixed projection built once per rho."""
     signals, fixed, candidates = planted
     calls = []
     original = reml.project_fixed
@@ -276,6 +289,7 @@ def _brute_force(groups, candidates):
 
 
 def test_winner_and_gap_match_per_candidate_fits_in_every_order(graded):
+    """Verify winner and gap match per candidate fits in every order."""
     groups, candidates = graded
     winner, gap, ok = _brute_force(groups, candidates)
     assert (ok.sum(axis=0) >= 4).all()
@@ -311,6 +325,7 @@ def test_selection_reports_features_with_a_truncated_candidate(noise_free, exact
 
 
 def test_selection_carries_the_winning_fit_unrefined_flag(noise_free):
+    """Verify selection carries the winning fit unrefined flag."""
     signals, fixed, exact, decoy = noise_free
     selection = select_random_effects_design(_groups(signals, fixed), [decoy, exact])
     assert_array_equal(selection.fit.unrefined, selection.fit.at_upper)
@@ -318,6 +333,7 @@ def test_selection_carries_the_winning_fit_unrefined_flag(noise_free):
 
 
 def test_untruncated_selection_has_no_flag(planted):
+    """Verify untruncated selection has no flag."""
     signals, fixed, candidates = planted
     selection = select_random_effects_design(_groups(signals, fixed), candidates)
     assert not selection.any_at_upper.any()
@@ -325,6 +341,7 @@ def test_untruncated_selection_has_no_flag(planted):
 
 
 def test_losing_interior_fallback_makes_selection_provisional(monkeypatch):
+    """Verify losing interior fallback makes selection provisional."""
     import boldtailor.reml as api
     from boldtailor._reml_search import minimize_ratio
     from tests.test_reml_adversarial import _diagonal_problem

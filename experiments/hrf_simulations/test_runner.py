@@ -10,6 +10,7 @@ from experiments.hrf_estimation.sensitivity import synthetic_templates
 
 
 def test_case_grid_preserves_observed_rt_and_pairs_seeds():
+    """Verify case grid preserves observed response-time and pairs seeds."""
     from experiments.hrf_simulations.cases import simulation_cases
 
     cases = simulation_cases("pilot", replicates=2)
@@ -71,6 +72,7 @@ def tiny_case():
 
 
 def test_complete_case_resume_corruption_and_report(tmp_path, tiny_case):
+    """Verify complete case resume corruption and report."""
     from experiments.hrf_simulations.runner import run_case
     from experiments.hrf_simulations.reporting import build_report
 
@@ -109,6 +111,7 @@ def test_complete_case_resume_corruption_and_report(tmp_path, tiny_case):
 
 
 def test_noiseless_case_and_zero_signal_metrics(tmp_path, tiny_case):
+    """Verify noiseless case and zero signal metrics."""
     from experiments.hrf_simulations.runner import run_case
 
     runs, library, profile, case = tiny_case
@@ -130,6 +133,7 @@ def test_noiseless_case_and_zero_signal_metrics(tmp_path, tiny_case):
 
 
 def test_cli_plan_does_not_require_nsd(capsys):
+    """Verify CLI plan does not require NSD."""
     from experiments.hrf_simulations.cli import main
 
     main(["plan", "--stage", "pilot", "--replicates", "1"])
@@ -140,6 +144,7 @@ def test_cli_plan_does_not_require_nsd(capsys):
 
 
 def test_runner_defaults_to_fifteen_workers_with_override():
+    """Verify runner defaults to fifteen workers with override."""
     from experiments.hrf_simulations.cli import _parser
 
     args = ["run", "--calibration", "calibration", "--output", "outputs"]
@@ -148,6 +153,7 @@ def test_runner_defaults_to_fifteen_workers_with_override():
 
 
 def test_failure_rate_includes_failed_estimates():
+    """Verify failure rate includes failed estimates."""
     from experiments.hrf_simulations.reporting import summarize
 
     rows = pd.DataFrame(

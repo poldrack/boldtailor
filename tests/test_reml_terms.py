@@ -16,6 +16,7 @@ def group():
 
 
 def test_energy_decomposes(group):
+    """Verify energy decomposes."""
     y, c, z = group
     terms = reml_terms(project_fixed(y, c, 0.3), z)
     total = terms.residual_ss + terms.coordinates2.sum(0)
@@ -23,30 +24,35 @@ def test_energy_decomposes(group):
 
 
 def test_projected_signals_are_orthogonal_to_fixed(group):
+    """Verify projected signals are orthogonal to fixed."""
     y, c, _ = group
     projection = project_fixed(y, c, 0.3)
     assert_allclose(whiten(c, 0.3).T @ projection.signals, 0, atol=1e-9)
 
 
 def test_dof_counts_rank_not_columns(group):
+    """Verify degrees-of-freedom counts rank not columns."""
     y, c, _ = group
     duplicated = np.column_stack([c, c[:, 1]])
     assert project_fixed(y, duplicated).dof == project_fixed(y, c).dof
 
 
 def test_no_restricted_dof_raises():
+    """Verify no restricted degrees-of-freedom raises."""
     rng = np.random.default_rng(0)
     with pytest.raises(ValueError, match="positive restricted degrees of freedom"):
         project_fixed(rng.normal(size=(5, 2)), rng.normal(size=(5, 5)))
 
 
 def test_random_inside_fixed_span_has_no_directions(group):
+    """Verify random inside fixed span has no directions."""
     y, c, _ = group
     z = c[:, :2] @ np.random.default_rng(1).normal(size=(2, 3))
     assert len(reml_terms(project_fixed(y, c, 0.3), z).singular2) == 0
 
 
 def test_duplicated_random_column_drops_rank(group):
+    """Verify duplicated random column drops rank."""
     y, c, z = group
     duplicated = np.column_stack([z, z[:, 0]])
     terms = reml_terms(project_fixed(y, c), duplicated)
@@ -55,6 +61,7 @@ def test_duplicated_random_column_drops_rank(group):
 
 @pytest.mark.parametrize("empty", [None, np.empty((50, 0))])
 def test_missing_random_design_has_no_directions(group, empty):
+    """Verify missing random design has no directions."""
     y, c, _ = group
     terms = reml_terms(project_fixed(y, c), empty)
     assert terms.singular2.shape == (0,)
@@ -63,6 +70,7 @@ def test_missing_random_design_has_no_directions(group, empty):
 
 
 def test_whitening_applied_to_all_inputs(group):
+    """Verify whitening applied to all inputs."""
     y, c, _ = group
     direct = project_fixed(y, c, 0.4)
     manual = project_fixed(whiten(y, 0.4), whiten(c, 0.4), 0.0)
@@ -76,6 +84,7 @@ SHAPES = {"tall": (40, 3), "square": (12, 12), "wide": (6, 90)}
 
 @pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
 def test_spectral_norm_matches_svd(shape):
+    """Verify spectral norm matches SVD."""
     from boldtailor._reml_terms import _spectral_norm
 
     matrix = np.random.default_rng(0).normal(size=shape)
@@ -84,6 +93,7 @@ def test_spectral_norm_matches_svd(shape):
 
 
 def test_spectral_norm_of_rank_deficient_and_zero_matrices():
+    """Verify spectral norm of rank deficient and zero matrices."""
     from boldtailor._reml_terms import _spectral_norm
 
     column = np.random.default_rng(1).normal(size=(8, 1))
@@ -95,6 +105,7 @@ def test_spectral_norm_of_rank_deficient_and_zero_matrices():
 
 @pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
 def test_spectral_norm_decomposes_the_smaller_gram_matrix(shape, monkeypatch):
+    """Verify spectral norm decomposes the smaller gram matrix."""
     from boldtailor._reml_terms import _spectral_norm
 
     seen = []
@@ -118,6 +129,7 @@ def test_wide_random_design_keeps_fixed_span_rank_policy(group):
 
 @pytest.mark.parametrize("scale", [1e-200, 1e200])
 def test_spectral_norm_does_not_overflow_or_underflow(scale):
+    """Verify spectral norm does not overflow or underflow."""
     from boldtailor._reml_terms import _spectral_norm
 
     base = np.random.default_rng(0).normal(size=(20, 5))

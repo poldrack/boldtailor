@@ -51,6 +51,7 @@ def run_sessions(session_data, output, library, sessions_limit=3, **options):
 def test_session_selection_matches_public_api_and_reuses_without_fitting(
     session_data, library, tmp_path, monkeypatch
 ):
+    """Verify session selection matches public API and reuses without fitting."""
     from boldtailor.hrf_selection import select_hrfs
     from boldtailor.workflow.inputs import load_block
 
@@ -84,6 +85,7 @@ def test_session_selection_matches_public_api_and_reuses_without_fitting(
 def test_source_library_and_coverage_changes_require_new_estimates(
     session_data, library, tmp_path
 ):
+    """Verify source library and coverage changes require new estimates."""
     output = tmp_path / "output"
     original = run_sessions(session_data, output, library, max_grayordinates=2)
     root, _ = session_data
@@ -105,6 +107,7 @@ def test_source_library_and_coverage_changes_require_new_estimates(
 def test_damaged_cache_is_recomputed_instead_of_silently_reused(
     session_data, library, tmp_path
 ):
+    """Verify damaged cache is recomputed instead of silently reused."""
     output = tmp_path / "output"
     original = run_sessions(session_data, output, library)
     path = next(output.rglob("*ses-nsd11*stat-selection.dscalar.nii"))
@@ -121,6 +124,7 @@ def test_damaged_cache_is_recomputed_instead_of_silently_reused(
 def test_malformed_cache_manifest_is_recomputed(
     session_data, library, tmp_path, bad_metadata
 ):
+    """Verify malformed cache manifest is recomputed."""
     output = tmp_path / "output"
     original = run_sessions(session_data, output, library)
     original[0].cache_path.write_text(json.dumps(bad_metadata))
@@ -170,6 +174,7 @@ def workflow_export(session_data, library, tmp_path):
 def test_matching_full_workflow_estimates_are_reused(
     session_data, library, tmp_path, monkeypatch, workflow_export
 ):
+    """Verify matching full workflow estimates are reused."""
     root, prep = session_data
     existing = workflow_export
     before = {p: p.read_bytes() for p in existing.rglob("*") if p.is_file()}
@@ -198,6 +203,7 @@ def test_matching_full_workflow_estimates_are_reused(
 def test_partial_full_workflow_exports_are_refitted(
     session_data, library, tmp_path, workflow_export, empty
 ):
+    """Verify partial full workflow exports are refitted."""
     root, prep = session_data
     path = next(workflow_export.rglob("*desc-HRF_provenance.json"))
     records = json.loads(path.read_text())
@@ -227,6 +233,7 @@ def test_partial_full_workflow_exports_are_refitted(
 def test_damaged_full_workflow_exports_are_refitted(
     session_data, library, tmp_path, workflow_export, damage
 ):
+    """Verify damaged full workflow exports are refitted."""
     root, prep = session_data
     if damage == "image":
         path = next(workflow_export.rglob("*desc-HRFAll_stat-selection.dscalar.nii"))
@@ -251,6 +258,7 @@ def test_damaged_full_workflow_exports_are_refitted(
 def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
     session_data, library, tmp_path
 ):
+    """Verify HRF only analysis retains trials with missing reaction times."""
     root, prep = session_data
     path = next((root / "sub-07/ses-nsd10").rglob("*events.tsv"))
     events = pd.read_csv(path, sep="\t")
@@ -271,6 +279,7 @@ def test_hrf_only_analysis_retains_trials_with_missing_reaction_times(
 def test_hrf_only_analysis_requires_two_runs_without_odd_even_splits(
     dataset, library, tmp_path
 ):
+    """Verify HRF only analysis requires two runs without odd even splits."""
     root, prep, *_ = dataset
     result = session_api().estimate_sessions(
         root, prep, tmp_path / "output", library=library, sessions=["ses-nsd10"]
@@ -281,6 +290,7 @@ def test_hrf_only_analysis_requires_two_runs_without_odd_even_splits(
 def test_incompatible_axes_or_missing_sessions_fail_before_fitting(
     session_data, library, tmp_path, monkeypatch
 ):
+    """Verify incompatible axes or missing sessions fail before fitting."""
     root, prep = session_data
     path = next((prep / "sub-07/ses-nsd12").rglob("*.dtseries.nii"))
     image = nib.load(path)
@@ -312,6 +322,7 @@ def test_incompatible_axes_or_missing_sessions_fail_before_fitting(
 def test_rt_switch_changes_request_identity_and_cache_metadata(
     session_data, library, tmp_path, events
 ):
+    """Verify response-time switch changes request identity and cache metadata."""
     from boldtailor.workflow.inputs import selection_task_model
 
     with_rt = run_sessions(session_data, tmp_path / "rt", library, sessions_limit=1)
@@ -329,6 +340,9 @@ def test_rt_switch_changes_request_identity_and_cache_metadata(
 def test_full_workflow_export_with_rt_is_not_imported_when_rt_is_off(
     session_data, library, tmp_path, workflow_export
 ):
+    """Verify full workflow export with response-time is not imported when response-time
+    is off.
+    """
     root, prep = session_data
     result = session_api().estimate_sessions(
         root,
@@ -344,6 +358,7 @@ def test_full_workflow_export_with_rt_is_not_imported_when_rt_is_off(
 
 
 def test_cache_request_records_peak_hrf_normalization(session_data, library, tmp_path):
+    """Verify cache request records peak HRF normalization."""
     result = run_sessions(session_data, tmp_path / "out", library, sessions_limit=1)
     metadata = json.loads(result[0].cache_path.read_text())
     assert metadata["request"]["hrf_normalization"] == "peak_one_event_response"

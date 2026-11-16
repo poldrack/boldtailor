@@ -8,6 +8,7 @@ import pytest
 
 
 def test_vtc_mapping_uses_both_hemisphere_and_vertex_id():
+    """Verify vtc mapping uses both hemisphere and vertex id."""
     left = nib.cifti2.BrainModelAxis.from_surface([4, 1, 3], 6, "CortexLeft")
     right = nib.cifti2.BrainModelAxis.from_surface([1, 4], 6, "CortexRight")
     labels = {"L": np.array([0, 1, 0, 0, 1, 0]), "R": np.array([0, 0, 0, 0, 1, 0])}
@@ -20,6 +21,7 @@ def test_vtc_mapping_uses_both_hemisphere_and_vertex_id():
 
 
 def test_registered_sphere_mapping_is_scale_independent():
+    """Verify registered sphere mapping is scale independent."""
     fn = importlib.import_module("experiments.hrf_estimation.roi").resample_mask
     source = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0]], dtype=float) * 100
     target = np.array([[0, 0, 2], [3, 0, 0], [0, 4, 0]], dtype=float)

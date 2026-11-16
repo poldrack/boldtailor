@@ -93,6 +93,7 @@ def _nonzero_unit_columns(design):
     st.integers(-40, 40),
 )
 def test_rank_tolerance_scales_with_the_norm_and_ignores_orientation(n, p, norm, k):
+    """Verify rank tolerance scales with the norm and ignores orientation."""
     tolerance = rank_tolerance((n, p), norm)
     assert tolerance == rank_tolerance((p, n), norm) > 0
     assert rank_tolerance((n, p), norm * 2.0**k) == tolerance * 2.0**k
@@ -105,6 +106,7 @@ def test_rank_tolerance_scales_with_the_norm_and_ignores_orientation(n, p, norm,
 @PROPERTY_SETTINGS
 @given(designs())
 def test_basis_is_orthonormal_with_the_rank_of_the_span(params):
+    """Verify basis is orthonormal with the rank of the span."""
     design, _ = _build(params)
     basis, amplification = conditioned_basis(design)
     rank = _expected_rank(params)
@@ -117,6 +119,7 @@ def test_basis_is_orthonormal_with_the_rank_of_the_span(params):
 @PROPERTY_SETTINGS
 @given(designs())
 def test_amplification_starts_at_one_and_does_not_decrease(params):
+    """Verify amplification starts at one and does not decrease."""
     amplification = conditioned_basis(_build(params)[0])[1]
     assume(amplification.size > 0)
     assert amplification[0] == 1.0
@@ -127,6 +130,7 @@ def test_amplification_starts_at_one_and_does_not_decrease(params):
 @PROPERTY_SETTINGS
 @given(designs())
 def test_basis_contains_every_column_of_the_design(params):
+    """Verify basis contains every column of the design."""
     design, _ = _build(params)
     unit = _nonzero_unit_columns(design)
     residual = residualise(unit, orthonormal_basis(design))
@@ -136,6 +140,7 @@ def test_basis_contains_every_column_of_the_design(params):
 @PROPERTY_SETTINGS
 @given(designs(), st.lists(DECADES, min_size=8, max_size=8))
 def test_basis_rank_and_amplification_ignore_column_units(params, decades):
+    """Verify basis rank and amplification ignore column units."""
     design, _ = _build(params)
     rescaled = design * 10.0 ** np.array(decades[: params["p"]])
     basis, amplification = conditioned_basis(design)
@@ -149,6 +154,7 @@ def test_basis_rank_and_amplification_ignore_column_units(params, decades):
 @PROPERTY_SETTINGS
 @given(designs(), st.randoms(use_true_random=False))
 def test_basis_span_and_amplification_ignore_column_order(params, shuffler):
+    """Verify basis span and amplification ignore column order."""
     design, _ = _build(params)
     order = list(range(params["p"]))
     shuffler.shuffle(order)
@@ -162,6 +168,7 @@ def test_basis_span_and_amplification_ignore_column_order(params, shuffler):
 @PROPERTY_SETTINGS
 @given(designs(), st.integers(0, 8), st.integers(1, 3))
 def test_zero_columns_change_nothing(params, position, count):
+    """Preserve the projected subspace when zero design columns are appended."""
     design, _ = _build(params)
     at = min(position, params["p"])
     padded = np.insert(design, [at] * count, 0.0, axis=1)
@@ -174,6 +181,7 @@ def test_zero_columns_change_nothing(params, position, count):
 @PROPERTY_SETTINGS
 @given(designs(kinds=("plain", "collinear")), DECADES)
 def test_a_column_inside_the_span_leaves_the_span_unchanged(params, decade):
+    """Verify a column inside the span leaves the span unchanged."""
     design, rng = _build(params)
     unit = _nonzero_unit_columns(design)
     inside = unit @ rng.normal(size=unit.shape[1]) * 10.0**decade
@@ -187,6 +195,7 @@ def test_a_column_inside_the_span_leaves_the_span_unchanged(params, decade):
 @PROPERTY_SETTINGS
 @given(st.integers(1, 60), st.integers(0, 5))
 def test_a_design_without_nonzero_columns_has_an_empty_basis(n, p):
+    """Verify a design without nonzero columns has an empty basis."""
     basis, amplification = conditioned_basis(np.zeros((n, p)))
     assert basis.shape == (n, 0) and amplification.shape == (0,)
 
@@ -201,6 +210,7 @@ def _signals(rng, n, decade=0.0):
 @PROPERTY_SETTINGS
 @given(designs(), DECADES)
 def test_residuals_are_orthogonal_to_the_basis_and_not_longer(params, decade):
+    """Verify residuals are orthogonal to the basis and not longer."""
     design, rng = _build(params)
     basis = orthonormal_basis(design)
     signals = _signals(rng, params["n"], decade)
@@ -214,6 +224,7 @@ def test_residuals_are_orthogonal_to_the_basis_and_not_longer(params, decade):
 @PROPERTY_SETTINGS
 @given(designs(), DECADES)
 def test_residualising_twice_changes_nothing_beyond_rounding(params, decade):
+    """Verify residualising twice changes nothing beyond rounding."""
     design, rng = _build(params)
     basis = orthonormal_basis(design)
     signals = _signals(rng, params["n"], decade)
@@ -225,6 +236,7 @@ def test_residualising_twice_changes_nothing_beyond_rounding(params, decade):
 @PROPERTY_SETTINGS
 @given(designs(), st.floats(-1e3, 1e3), st.floats(-1e3, 1e3))
 def test_residualise_is_linear(params, a, b):
+    """Preserve linear combinations when residualizing signals against a fixed basis."""
     design, rng = _build(params)
     basis = orthonormal_basis(design)
     first, second = _signals(rng, params["n"]), _signals(rng, params["n"])
@@ -237,6 +249,7 @@ def test_residualise_is_linear(params, a, b):
 @PROPERTY_SETTINGS
 @given(designs())
 def test_residual_of_the_basis_itself_is_rounding(params):
+    """Verify residual of the basis itself is rounding."""
     basis = orthonormal_basis(_build(params)[0])
     assert_allclose(residualise(basis, basis), 0.0, atol=100 * params["n"] * EPS)
 
@@ -244,6 +257,7 @@ def test_residual_of_the_basis_itself_is_rounding(params):
 @PROPERTY_SETTINGS
 @given(st.integers(1, 60), st.integers(0, 2**32 - 1))
 def test_an_empty_basis_leaves_signals_unchanged(n, seed):
+    """Verify an empty basis leaves signals unchanged."""
     signals = _signals(np.random.default_rng(seed), n)
     assert_array_equal(residualise(signals, np.empty((n, 0))), signals)
 
@@ -259,6 +273,7 @@ def _projected(design, signals):
 @PROPERTY_SETTINGS
 @given(designs(), DECADES)
 def test_project_out_agrees_with_residualise_and_orders_its_floors(params, decade):
+    """Verify project out agrees with residualise and orders its floors."""
     design, rng = _build(params)
     signals = _signals(rng, params["n"], decade)
     (residual, rounding, uncertainty), basis, _ = _projected(design, signals)
@@ -271,6 +286,7 @@ def test_project_out_agrees_with_residualise_and_orders_its_floors(params, decad
 @PROPERTY_SETTINGS
 @given(designs(), DECADES)
 def test_rounding_floor_is_a_fixed_fraction_of_the_signal_energy(params, decade):
+    """Verify rounding floor is a fixed fraction of the signal energy."""
     design, rng = _build(params)
     signals = _signals(rng, params["n"], decade)
     (_, rounding, _), _, _ = _projected(design, signals)
@@ -281,6 +297,7 @@ def test_rounding_floor_is_a_fixed_fraction_of_the_signal_energy(params, decade)
 @PROPERTY_SETTINGS
 @given(designs(), st.integers(-60, 60))
 def test_project_out_is_equivariant_to_signal_scale(params, k):
+    """Verify project out is equivariant to signal scale."""
     design, rng = _build(params)
     signals = _signals(rng, params["n"])
     (residual, rounding, uncertainty), _, _ = _projected(design, signals)
@@ -295,6 +312,7 @@ def test_project_out_is_equivariant_to_signal_scale(params, k):
 @PROPERTY_SETTINGS
 @given(designs())
 def test_features_are_projected_independently(params):
+    """Match joint feature projection to separate projections of each feature."""
     design, rng = _build(params)
     signals = _signals(rng, params["n"])
     (residual, rounding, uncertainty), _, _ = _projected(design, signals)
@@ -308,6 +326,7 @@ def test_features_are_projected_independently(params):
 @PROPERTY_SETTINGS
 @given(designs(), st.floats(min_value=1.0, max_value=1e6))
 def test_uncertainty_floor_grows_with_amplification(params, factor):
+    """Verify uncertainty floor grows with amplification."""
     design, rng = _build(params)
     signals = _signals(rng, params["n"])
     basis, amplification = conditioned_basis(design)
@@ -320,6 +339,9 @@ def test_uncertainty_floor_grows_with_amplification(params, factor):
 @PROPERTY_SETTINGS
 @given(designs())
 def test_floors_coincide_without_amplification(params):
+    """Match rounding and uncertainty floors when the basis has no conditioning
+    amplification.
+    """
     design, rng = _build(params)
     basis = orthonormal_basis(design)
     signals = _signals(rng, params["n"])
@@ -355,6 +377,7 @@ def _span_signals(rng, design, heavy):
 @PROPERTY_SETTINGS
 @given(designs(), st.floats(min_value=0.0, max_value=6.0))
 def test_span_signals_stay_below_the_uncertainty_floor(params, heavy):
+    """Verify span signals stay below the uncertainty floor."""
     design, rng = _build(params)
     assume(_expected_rank(params) > 0)
     signals = _span_signals(rng, design, heavy)
@@ -366,7 +389,8 @@ def test_span_signals_stay_below_the_uncertainty_floor(params, heavy):
 @given(designs(kinds=("plain", "redundant", "zero_column")), st.floats(0.0, 6.0))
 def test_span_signals_of_well_conditioned_designs_are_below_rounding(params, heavy):
     """With unit columns that are not nearly collinear, whatever their units,
-    the plain rounding floor is enough: such signals are no_signal."""
+    the plain rounding floor is enough: such signals have no resolved residual energy.
+    """
     design, rng = _build(params)
     signals = _span_signals(rng, design, heavy)
     (residual, rounding, _), _, amplification = _projected(design, signals)

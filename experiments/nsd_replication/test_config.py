@@ -20,6 +20,7 @@ n_jobs = 2
 
 
 def test_load_config_converts_paths_and_tuples(tmp_path):
+    """Verify load config converts paths and tuples."""
     path = tmp_path / "c.toml"
     path.write_text(TOML)
     config = load_config(path)
@@ -37,6 +38,7 @@ def test_load_config_converts_paths_and_tuples(tmp_path):
     [("subjects", ()), ("subjects", ("07",)), ("sessions", ("ses-1", "ses-1"))],
 )
 def test_bad_labels_rejected(field, value):
+    """Verify bad labels rejected."""
     values = dict(
         bids_dir=Path("/b"),
         output_dir=Path("/o"),
@@ -50,6 +52,7 @@ def test_bad_labels_rejected(field, value):
 
 
 def test_unknown_key_rejected(tmp_path):
+    """Verify unknown key rejected."""
     path = tmp_path / "c.toml"
     path.write_text(TOML + 'colour = "red"\n')
     with pytest.raises(ValueError, match="colour"):
@@ -58,6 +61,7 @@ def test_unknown_key_rejected(tmp_path):
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf")])
 def test_onset_offset_must_be_finite(value):
+    """Verify onset offset must be finite."""
     with pytest.raises(ValueError, match="onset_offset"):
         ExperimentConfig(
             bids_dir=Path("/b"),
@@ -77,6 +81,7 @@ def test_onset_offset_must_be_finite(value):
     ],
 )
 def test_shipped_configs(name, subjects):
+    """Load the shipped replication configurations and validate their declared settings."""
     path = Path(__file__).parent / "configs" / f"{name}.toml"
     config = load_config(path)
     assert config.subjects == subjects
@@ -100,10 +105,12 @@ def _direct(**extra):
 
 
 def test_direct_construction_defaults_nsdpreproc_under_bids():
+    """Verify direct construction defaults nsdpreproc under BIDS."""
     assert _direct().nsdpreproc_dir == Path("/b/derivatives/nsdpreproc")
 
 
 def test_explicit_nsdpreproc_dir_is_honoured(tmp_path):
+    """Verify explicit nsdpreproc dir is honoured."""
     path = tmp_path / "c.toml"
     path.write_text(TOML + 'nsdpreproc_dir = "/elsewhere/nsdpreproc"\n')
     assert load_config(path).nsdpreproc_dir == Path("/elsewhere/nsdpreproc")
@@ -117,6 +124,7 @@ def test_explicit_nsdpreproc_dir_is_honoured(tmp_path):
     ],
 )
 def test_ppdata_dir_is_rejected_with_the_replacement_key(tmp_path, extra):
+    """Verify ppdata dir is rejected with the replacement key."""
     path = tmp_path / "c.toml"
     path.write_text(TOML + extra)
     with pytest.raises(ValueError, match="ppdata_dir.*nsdpreproc_dir"):
@@ -124,6 +132,7 @@ def test_ppdata_dir_is_rejected_with_the_replacement_key(tmp_path, extra):
 
 
 def test_label_validation_does_not_need_the_workflow():
+    """Verify label validation does not need the workflow."""
     import ast
 
     source = (Path(__file__).parent / "config.py").read_text()
@@ -149,30 +158,36 @@ def four_sessions():
 
 
 def test_configured_sessions_default_to_sessions(four_sessions):
+    """Verify configured sessions default to sessions."""
     assert four_sessions.configured_sessions == four_sessions.sessions
 
 
 def test_select_sessions_keeps_config_order(four_sessions):
+    """Verify select sessions keeps config order."""
     selected = select_sessions(four_sessions, ["ses-nsd03", "ses-nsd01"])
     assert selected.sessions == ("ses-nsd01", "ses-nsd03")
     assert selected.configured_sessions == four_sessions.sessions
 
 
 def test_select_sessions_without_selection_keeps_all(four_sessions):
+    """Verify select sessions without selection keeps all."""
     assert select_sessions(four_sessions, None) == four_sessions
 
 
 def test_select_sessions_rejects_unknown(four_sessions):
+    """Verify select sessions rejects unknown."""
     with pytest.raises(ValueError, match="ses-nsd09.*not in the config"):
         select_sessions(four_sessions, ["ses-nsd01", "ses-nsd09"])
 
 
 def test_select_sessions_rejects_duplicates(four_sessions):
+    """Verify select sessions rejects duplicates."""
     with pytest.raises(ValueError, match="sessions"):
         select_sessions(four_sessions, ["ses-nsd01", "ses-nsd01"])
 
 
 def test_selected_sessions_must_be_configured():
+    """Verify selected sessions must be configured."""
     with pytest.raises(ValueError, match="configured_sessions"):
         ExperimentConfig(
             bids_dir=Path("/b"),
@@ -185,6 +200,7 @@ def test_selected_sessions_must_be_configured():
 
 
 def test_configured_sessions_not_a_toml_key(tmp_path):
+    """Verify configured sessions not a toml key."""
     path = tmp_path / "c.toml"
     path.write_text(TOML + 'configured_sessions = ["ses-nsd10"]\n')
     with pytest.raises(ValueError, match="configured_sessions"):
@@ -192,6 +208,7 @@ def test_configured_sessions_not_a_toml_key(tmp_path):
 
 
 def test_session_summary(four_sessions):
+    """Summarize each configured subject with its requested sessions."""
     selected = select_sessions(four_sessions, ["ses-nsd01", "ses-nsd03"])
     assert (
         session_summary(selected) == "sessions: ses-nsd01, ses-nsd03 (2 of 4 in config)"

@@ -62,6 +62,7 @@ def _section_text(html, name):
 def test_report_has_a_section_per_stage_embedded_figures_and_a_manifest(
     bids_settings,
 ):
+    """Verify report has a section per stage embedded figures and a manifest."""
     fig, ax = plt.subplots()
     ax.plot([0, 1])
     png = _png(fig)
@@ -98,12 +99,14 @@ def test_report_has_a_section_per_stage_embedded_figures_and_a_manifest(
 
 
 def test_embed_png_wraps_encoded_bytes_without_rendering():
+    """Verify embed PNG wraps encoded bytes without rendering."""
     tag = report.embed_png(b"\x89PNG fake")
     encoded = base64.b64encode(b"\x89PNG fake").decode("ascii")
     assert tag == f'<img alt="figure" src="data:image/png;base64,{encoded}">'
 
 
 def test_command_line_always_names_the_dataset_and_omits_defaults(bids_settings):
+    """Verify command line always names the dataset and omits defaults."""
     words = shlex.split(report.command_line(bids_settings))
     assert words[:2] == ["boldtailor", "run"]
     assert words[words.index("--bids-dir") + 1] == str(bids_settings.bids_dir)
@@ -115,6 +118,7 @@ def test_command_line_always_names_the_dataset_and_omits_defaults(bids_settings)
 
 
 def test_command_line_reflects_non_default_settings(settings_for, dataset, tmp_path):
+    """Verify command line reflects non default settings."""
     root, *_ = dataset
     out = tmp_path / "out dir"
     mesh = tmp_path / "left.surf.gii"
@@ -165,17 +169,20 @@ def test_command_line_reflects_non_default_settings(settings_for, dataset, tmp_p
 
 
 def test_command_line_quotes_paths_with_spaces(settings_for, dataset, tmp_path):
+    """Verify command line quotes paths with spaces."""
     root, *_ = dataset
     settings = settings_for(root, output_dir=tmp_path / "out dir")
     assert shlex.quote(str(tmp_path / "out dir")) in report.command_line(settings)
 
 
 def test_settings_section_shows_the_command_line(bids_settings):
+    """Verify settings section shows the command line."""
     html = _render(bids_settings)
     assert "boldtailor run" in _section_text(html, "settings")
 
 
 def test_disabled_stage_section_is_a_one_line_note(settings_for, dataset):
+    """Verify disabled stage section is a one line note."""
     root, *_ = dataset
     settings = settings_for(root, stages=frozenset({"glms"}))
     html = _render(settings, tuning=pd.DataFrame({"alpha": [1.0]}))
@@ -186,6 +193,7 @@ def test_disabled_stage_section_is_a_one_line_note(settings_for, dataset):
 
 
 def test_skipped_stage_section_names_the_reason(bids_settings):
+    """Verify skipped stage section names the reason."""
     html = _render(bids_settings, skipped=[("betas", "no usable runs")])
     section = _section_text(html, "betas")
     assert "Skipped: no usable runs." in section
@@ -194,6 +202,7 @@ def test_skipped_stage_section_names_the_reason(bids_settings):
 
 
 def test_report_shows_inputs_hrf_reliability_and_ridge_tables(bids_settings):
+    """Verify report shows inputs HRF reliability and ridge tables."""
     html = _render(
         bids_settings,
         run_summary=pd.DataFrame({"run": ["run-01"], "retained_scans": [95]}),
@@ -214,17 +223,20 @@ def test_report_shows_inputs_hrf_reliability_and_ridge_tables(bids_settings):
 
 
 def test_report_lists_notes_in_the_inputs_section(bids_settings):
+    """Verify report lists notes in the inputs section."""
     html = _render(bids_settings, notes=["trial_type is not binary 0/1"])
     assert "trial_type is not binary 0/1" in _section_text(html, "inputs")
 
 
 def test_report_lists_categorical_levels_and_reference_escaped(bids_settings):
+    """Verify report lists categorical levels and reference escaped."""
     model = TaskModel((Modulator("cond", kind="categorical", levels=("a<b", "c")),))
     html = _render(bids_settings, task_model=model)
     assert "cond: levels a&lt;b, c (reference a&lt;b)" in _section_text(html, "inputs")
 
 
 def test_report_sections_can_render_from_explicit_inputs(bids_settings):
+    """Verify report sections can render from explicit inputs."""
     data = report.ReportInputs(
         runs=[],
         task_model=TaskModel(),

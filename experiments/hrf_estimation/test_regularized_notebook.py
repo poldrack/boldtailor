@@ -6,6 +6,7 @@ import pandas as pd
 
 
 def test_regularized_pilot_notebook_is_executed_and_quiet(executed_notebook):
+    """Verify regularized pilot notebook is executed and quiet."""
     notebook = executed_notebook("regularized_ar1_results")
     codes = [c for c in notebook.cells if c.cell_type == "code"]
     assert all(isinstance(c.execution_count,int) for c in codes)
@@ -16,6 +17,7 @@ def test_regularized_pilot_notebook_is_executed_and_quiet(executed_notebook):
 
 
 def test_regularized_summary_uses_same_vertices_and_pooled_sse():
+    """Verify regularized summary uses same vertices and pooled SSE."""
     root = Path(__file__).with_name("reports") / "regularized_ar1"
     assert (root/"summary.tsv").exists(), "pilot summary is missing"
     summary = pd.read_csv(root/"summary.tsv",sep="\t")

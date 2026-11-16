@@ -48,15 +48,18 @@ def _assert_differences_match(data, rho):
 
 
 def test_criterion_differences_match_dense_iid(iid):
+    """Verify criterion differences match dense independent-noise."""
     _assert_differences_match(iid, 0.0)
 
 
 def test_criterion_differences_match_dense_ar1(ar1):
+    """Verify criterion differences match dense AR(1)."""
     _assert_differences_match(ar1, 0.5)
 
 
 @pytest.mark.parametrize("rho", [0.0, 0.5])
 def test_profiled_variance_matches_dense_quadratic_form(rho):
+    """Verify profiled variance matches dense quadratic form."""
     signals, fixed, random, terms = _build(rho)
     for r in RATIOS:
         expected = dense_profiled_variance(signals, fixed, random, r, rho)
@@ -64,6 +67,7 @@ def test_profiled_variance_matches_dense_quadratic_form(rho):
 
 
 def test_criterion_broadcasts_over_leading_axes(iid):
+    """Verify criterion broadcasts over leading axes."""
     terms = iid[3]
     ratios = np.random.default_rng(1).uniform(0, 5, size=(7, N_FEATURES))
     stacked = criterion(ratios, terms)
@@ -73,6 +77,7 @@ def test_criterion_broadcasts_over_leading_axes(iid):
 
 
 def test_no_random_directions_is_constant_in_ratio():
+    """Verify no random directions is constant in ratio."""
     signals, fixed, _ = simulate(
         np.random.default_rng(2), scans=(40, 30), n_features=N_FEATURES
     )
@@ -103,6 +108,7 @@ def _richardson_difference(terms, ratio, step=1e-3):
 
 @pytest.mark.parametrize("rho", [0.0, 0.5])
 def test_slope_matches_finite_differences(rho):
+    """Verify slope matches finite differences."""
     terms = _build(rho)[3]
     for r in SLOPE_RATIOS:
         expected = _richardson_difference(terms, r)
@@ -110,6 +116,7 @@ def test_slope_matches_finite_differences(rho):
 
 
 def test_joint_value_and_slope_match_separate_evaluations(ar1):
+    """Verify joint value and slope match separate evaluations."""
     from boldtailor._reml_criterion import pool_terms, pooled_value_and_slope
 
     terms = ar1[3]

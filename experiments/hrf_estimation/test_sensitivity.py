@@ -9,6 +9,7 @@ from experiments.hrf_estimation.design import build_design
 
 
 def test_stationary_noise_has_requested_correlation_and_scale():
+    """Verify stationary noise has requested correlation and scale."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity")
     noise = api.ar1_noise(100000, .7, np.random.default_rng(14))
     assert np.std(noise) == pytest.approx(1, abs=.025)
@@ -19,6 +20,7 @@ def test_stationary_noise_has_requested_correlation_and_scale():
 
 @pytest.mark.parametrize("mode", ["amplitude", "duration"])
 def test_simulation_matches_true_design_and_is_reproducible(planted_runs, mode):
+    """Verify simulation matches true design and is reproducible."""
     runs, library = planted_runs
     api = importlib.import_module("experiments.hrf_estimation.sensitivity")
     truth = library.candidates[1]
@@ -37,6 +39,7 @@ def test_simulation_matches_true_design_and_is_reproducible(planted_runs, mode):
 
 
 def test_parametric_library_is_exact_full_library_subset():
+    """Verify parametric library is exact full library subset."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity")
     from boldtailor.hrf_library import default_hrf_library
     library = default_hrf_library(8)
@@ -47,6 +50,7 @@ def test_parametric_library_is_exact_full_library_subset():
 
 
 def test_synthetic_templates_include_motion_junk_and_valid_timing():
+    """Verify synthetic templates include motion junk and valid timing."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity")
     runs = api.synthetic_templates(seed=9)
     assert len(runs) == 4
@@ -61,6 +65,7 @@ def test_synthetic_templates_include_motion_junk_and_valid_timing():
 
 
 def test_full_vtc_jobs_match_scopes_and_keep_tuning_nested():
+    """Verify full vtc jobs match scopes and keep tuning nested."""
     api = importlib.import_module("experiments.hrf_estimation.full_vtc")
     jobs = api.comparison_jobs()
     assert len(jobs) == 16

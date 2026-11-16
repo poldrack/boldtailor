@@ -2,6 +2,7 @@ import importlib
 
 
 def test_package_scientific_changes_invalidate_implementation_identity(tmp_path):
+    """Verify package scientific changes invalidate implementation identity."""
     experiment = tmp_path / "experiment"
     package = tmp_path / "package"
     experiment.mkdir()

@@ -35,6 +35,7 @@ def _write(path, values, names=None):
 
 
 def test_load_released_keeps_cortex_in_order(tmp_path):
+    """Verify load released keeps cortex in order."""
     values = np.array([[1, 2, 3, np.nan], [4, 5, 6, np.nan]], dtype=np.float32)
     path = _write(tmp_path / "b.dscalar.nii", values)
     cortex = _brain()[[0, 1, 2]]
@@ -43,18 +44,21 @@ def test_load_released_keeps_cortex_in_order(tmp_path):
 
 
 def test_released_trial_count_mismatch_names_session(tmp_path):
+    """Verify released trial count mismatch names session."""
     path = _write(tmp_path / "b.dscalar.nii", np.zeros((3, 4), np.float32))
     with pytest.raises(ValueError, match="sub-07 ses-nsd10 assumehrf.*3 trials.*750"):
         load_released(path, _brain()[[0, 1, 2]], 750, "sub-07 ses-nsd10 assumehrf")
 
 
 def test_released_axis_mismatch_raises(tmp_path):
+    """Verify released axis mismatch raises."""
     path = _write(tmp_path / "b.dscalar.nii", np.zeros((2, 4), np.float32))
     with pytest.raises(ValueError, match="grayordinates"):
         load_released(path, _brain()[[0, 1]], 2, "x")
 
 
 def test_released_map_order_checked(tmp_path):
+    """Verify released map order checked."""
     path = _write(
         tmp_path / "b.dscalar.nii",
         np.zeros((2, 4), np.float32),
@@ -65,6 +69,7 @@ def test_released_map_order_checked(tmp_path):
 
 
 def test_missing_released_file_names_version(tmp_path):
+    """Verify missing released file names version."""
     with pytest.raises(FileNotFoundError, match="fithrf"):
         load_released(
             tmp_path / "missing.dscalar.nii", _brain(), 2, "sub-07 ses-nsd10 fithrf"
@@ -72,6 +77,7 @@ def test_missing_released_file_names_version(tmp_path):
 
 
 def test_alignment_check_detects_shift():
+    """Verify alignment check detects shift."""
     rng = np.random.default_rng(0)
     released = rng.normal(size=(120, 5))
     ours = released + rng.normal(scale=0.5, size=released.shape)
@@ -81,6 +87,7 @@ def test_alignment_check_detects_shift():
 
 @pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
 def test_pilot_released_matches_nsdpreproc_axis():
+    """Verify pilot released matches nsdpreproc axis."""
     from experiments.nsd_replication.config import ExperimentConfig
     from experiments.nsd_replication.inputs import nsdpreproc_brain
 
@@ -100,6 +107,7 @@ def test_pilot_released_matches_nsdpreproc_axis():
 
 
 def test_discarded_released_betas_are_not_current(tmp_path):
+    """Verify discarded released betas are not current."""
     import json
 
     import pandas as pd

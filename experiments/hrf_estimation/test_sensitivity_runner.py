@@ -10,6 +10,7 @@ from experiments.hrf_estimation.test_library_cv import planted_runs
 
 
 def test_grid_crosses_noise_rt_truth_and_replicates():
+    """Verify grid crosses noise response-time truth and replicates."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity_runner")
     cases = api.simulation_cases()
     assert len(cases) == 288
@@ -20,6 +21,7 @@ def test_grid_crosses_noise_rt_truth_and_replicates():
 
 
 def test_case_saves_held_out_scores_recovery_and_verified_restart(planted_runs, tmp_path):
+    """Verify case saves held out scores recovery and verified restart."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity_runner")
     runs, library = planted_runs
     case = dict(truth="fast", generating_rt="amplitude", fitted_rt="amplitude",
@@ -39,6 +41,7 @@ def test_case_saves_held_out_scores_recovery_and_verified_restart(planted_runs, 
 
 
 def test_powell_is_excluded_from_active_sensitivity_methods():
+    """Verify powell is excluded from active sensitivity methods."""
     api = importlib.import_module("experiments.hrf_estimation.sensitivity_runner")
     assert "continuouspowell" not in api.METHODS
     assert "continuouslbfgsb" in api.METHODS

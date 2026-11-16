@@ -29,6 +29,7 @@ def events():
 
 
 def test_detection_uses_rt_and_categorical_trial_type(events):
+    """Verify detection uses response-time and categorical trial type."""
     model = detect_task_model([events, events])
     assert model == TaskModel((Modulator("response_time", missing="indicator"), TT))
     assert model.regressor_names == ("task", "response_time", "trial_type[1]")
@@ -38,6 +39,7 @@ def test_detection_uses_rt_and_categorical_trial_type(events):
 
 
 def test_string_and_mixed_dtype_trial_types_become_one_level_set(events):
+    """Verify string and mixed dtype trial types become one level set."""
     words = events.assign(trial_type=["face", "house", "scrambled"] * 2)
     model = detect_task_model([words, words])
     assert model.regressor_names[-2:] == ("trial_type[house]", "trial_type[scrambled]")
@@ -46,12 +48,14 @@ def test_string_and_mixed_dtype_trial_types_become_one_level_set(events):
 
 
 def test_single_level_trial_type_is_left_out_with_a_note(events):
+    """Verify single level trial type is left out with a note."""
     flat = events.assign(trial_type="face")
     assert detect_task_model([flat]).regressor_names == ("task", "response_time")
     assert task_model_notes([flat]) == [TRIAL_TYPE_NOTE]
 
 
 def test_explicit_categorical_resolves_levels_and_checks_reference(events):
+    """Verify explicit categorical resolves levels and checks reference."""
     wanted = (Modulator("trial_type", kind="categorical", reference="1"),)
     assert detect_task_model([events, events], wanted).regressor_names == (
         "task",
@@ -63,6 +67,7 @@ def test_explicit_categorical_resolves_levels_and_checks_reference(events):
 
 
 def test_explicit_modulators_must_exist_in_every_run(events):
+    """Verify explicit modulators must exist in every run."""
     wanted = (Modulator("stimulus_id"),)
     with pytest.raises(ValueError, match="run 2.*stimulus_id"):
         detect_task_model([events.assign(stimulus_id=1), events], wanted)
@@ -72,6 +77,7 @@ def test_explicit_modulators_must_exist_in_every_run(events):
 
 
 def test_explicit_modulator_errors_name_the_labelled_run(events):
+    """Verify explicit modulator errors name the labelled run."""
     wanted = (Modulator("stimulus_id"),)
     with pytest.raises(ValueError, match="run-02.*stimulus_id"):
         detect_task_model(
@@ -80,6 +86,7 @@ def test_explicit_modulator_errors_name_the_labelled_run(events):
 
 
 def test_detection_takes_any_multilevel_trial_type_without_a_note(events):
+    """Verify detection takes any multilevel trial type without a note."""
     for values in (["face", "house"] * 3, [0, 1, 2, 0, 1, 2]):
         tables = [events, events.assign(trial_type=values)]
         assert detect_task_model(tables).modulators[-1].kind == "categorical"
@@ -87,22 +94,26 @@ def test_detection_takes_any_multilevel_trial_type_without_a_note(events):
 
 
 def test_detection_keeps_binary_trial_type_written_as_text(events):
+    """Verify detection keeps binary trial type written as text."""
     text = events.assign(trial_type=events.trial_type.astype(str))
     assert TT in detect_task_model([text]).modulators
     assert task_model_notes([text]) == []
 
 
 def test_notes_are_only_for_automatic_detection(events):
+    """Verify notes are only for automatic detection."""
     strings = events.assign(trial_type=["face", "house"] * 3)
     assert task_model_notes([strings], modulators=()) == []
     assert task_model_notes([strings], modulators=(Modulator("x"),)) == []
 
 
 def test_no_modulators_means_a_task_only_model(events):
+    """Verify no modulators means a task only model."""
     assert detect_task_model([events], ()) == TaskModel()
 
 
 def test_core_detection_does_not_import_the_workflow():
+    """Verify core detection does not import the workflow."""
     code = (
         "import sys, boldtailor.task_detection; "
         "sys.exit(any(m.startswith('boldtailor.workflow') for m in sys.modules))"

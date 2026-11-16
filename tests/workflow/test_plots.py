@@ -60,6 +60,7 @@ def two_models_with_rt():
 
 
 def test_design_figure_plots_each_regressor_against_time():
+    """Verify design figure plots each regressor against time."""
     frame_times = np.arange(5.0)
     design = pd.DataFrame({"a": np.arange(5.0), "b": np.ones(5)})
     fig = plots.design_figure(frame_times, design, ["a", "b"])
@@ -68,6 +69,7 @@ def test_design_figure_plots_each_regressor_against_time():
 
 
 def test_library_figure_has_one_black_canonical_curve_and_colorbar(library):
+    """Verify library figure has one black canonical curve and colorbar."""
     fig = plots.library_figure(library)
     assert len(fig.axes) == 2  # canonical plus one colored curve gets a colorbar
     assert fig.axes[0].get_title() == "HRF library: 2 candidates"
@@ -75,6 +77,7 @@ def test_library_figure_has_one_black_canonical_curve_and_colorbar(library):
 
 
 def test_glm_comparison_uses_paired_values_and_signed_difference():
+    """Verify GLM comparison uses paired values and signed difference."""
     canonical = {
         "r2": np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])
     }
@@ -96,6 +99,7 @@ def test_glm_comparison_uses_paired_values_and_signed_difference():
 
 @pytest.mark.parametrize("missing", [False, True])
 def test_parameter_agreement_excludes_unpaired_and_constant_values(library, missing):
+    """Verify parameter agreement excludes unpaired and constant values."""
     odd = np.array([0, 1, np.nan, 0.0])
     even = np.array([0, 1, 1, np.nan])
     if missing:
@@ -116,6 +120,7 @@ def test_parameter_agreement_excludes_unpaired_and_constant_values(library, miss
 
 @pytest.mark.parametrize("missing", [False, True])
 def test_curve_agreement_uses_same_grayordinates_for_every_comparison(missing):
+    """Verify curve agreement uses same grayordinates for every comparison."""
     values = np.array([[0.2, np.nan, 0.4], [0.6, 0.7, 0.8], [0.1, 0.3, 0.5]])
     if missing:
         values[:] = np.nan
@@ -132,6 +137,7 @@ def test_curve_agreement_uses_same_grayordinates_for_every_comparison(missing):
 
 
 def test_activation_histogram_draws_one_finite_histogram_per_model():
+    """Verify activation histogram draws one finite histogram per model."""
     activation = {
         "A": {"t": np.array([1.0, 2.0, np.nan, -1.0])},
         "B": {"t": np.array([0.5, np.nan, np.nan, 3.0])},
@@ -145,12 +151,14 @@ def test_activation_histogram_draws_one_finite_histogram_per_model():
 
 
 def test_rt_check_figure_is_none_without_reaction_times(two_models_without_rt):
+    """Verify response-time check figure is none without reaction times."""
     assert plots.rt_check_figure(two_models_without_rt, runs=[], brain=None) is None
 
 
 def test_rt_check_figure_plots_even_run_points_at_best_odd_vertex(
     two_models_with_rt, rt_runs
 ):
+    """Verify response-time check figure plots even run points at best odd vertex."""
     brain = SimpleNamespace(vertex=np.array([0, 1, 2]))
     fig = plots.rt_check_figure(two_models_with_rt, rt_runs, brain)
     assert len(fig.axes) == 2
@@ -160,6 +168,7 @@ def test_rt_check_figure_plots_even_run_points_at_best_odd_vertex(
 
 
 def test_rt_check_figure_reports_no_eligible_vertices(two_models_with_rt, rt_runs):
+    """Verify response-time check figure reports no eligible vertices."""
     brain = SimpleNamespace(vertex=np.array([-1, -1, -1]))
     fig = plots.rt_check_figure(two_models_with_rt, rt_runs, brain)
     assert [ax.texts[0].get_text() for ax in fig.axes] == [
@@ -168,6 +177,7 @@ def test_rt_check_figure_reports_no_eligible_vertices(two_models_with_rt, rt_run
 
 
 def test_fraction_selection_figure_has_one_bar_panel_per_model():
+    """Verify fraction selection figure has one bar panel per model."""
     rows = [
         dict(mode=mode, scope=scope, fraction=f, selected_grayordinates=n)
         for mode in ("Canonical", "Optimized")

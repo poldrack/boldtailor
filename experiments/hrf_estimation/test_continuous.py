@@ -24,6 +24,7 @@ def offgrid(planted_runs):
 
 
 def test_profiled_objective_matches_explicit_least_squares(offgrid):
+    """Verify profiled objective matches explicit least squares."""
     runs, _, truth = offgrid
     fn = importlib.import_module("experiments.hrf_estimation.continuous").profile_loss
     assert fn(runs, 0, truth.parameters) == pytest.approx(0, abs=1e-20)
@@ -41,6 +42,7 @@ def test_profiled_objective_matches_explicit_least_squares(offgrid):
 
 @pytest.mark.parametrize("optimizer", ["L-BFGS-B", "Powell"])
 def test_offgrid_optimization_improves_initial_shape(offgrid, optimizer):
+    """Verify offgrid optimization improves initial shape."""
     runs, library, truth = offgrid
     api = importlib.import_module("experiments.hrf_estimation.continuous")
     estimate = api.fit_continuous(
@@ -70,6 +72,7 @@ def test_offgrid_optimization_improves_initial_shape(offgrid, optimizer):
 
 
 def test_zero_signal_and_failed_budget_are_explicit(offgrid):
+    """Verify zero signal and failed budget are explicit."""
     runs, library, _ = offgrid
     api = importlib.import_module("experiments.hrf_estimation.continuous")
     zeros = tuple(replace(r, signals=np.ones_like(r.signals)) for r in runs)
@@ -83,6 +86,7 @@ def test_zero_signal_and_failed_budget_are_explicit(offgrid):
 
 
 def test_continuous_reports_nonidentifiable_task_effects(offgrid):
+    """Verify continuous reports nonidentifiable task effects."""
     runs, library, _ = offgrid
     changed = tuple(replace(r, events=r.events.assign(response_time=1.0)) for r in runs)
     fit = importlib.import_module(
@@ -97,6 +101,7 @@ def test_continuous_reports_nonidentifiable_task_effects(offgrid):
 
 
 def test_continuous_records_parameter_boundary_proximity(offgrid):
+    """Verify continuous records parameter boundary proximity."""
     from boldtailor.hrf_library import HrfLibrary
 
     runs, _, _ = offgrid

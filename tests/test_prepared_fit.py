@@ -96,6 +96,7 @@ def _nilearn_t_contrast(labels, regression_results, vector):
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 @pytest.mark.integration
 def test_fit_prepared_matches_nilearn(noise_model, prepared_problem):
+    """Verify fit prepared matches Nilearn."""
     prepared, contrasts, expected_for = prepared_problem
     expected = expected_for(noise_model)
 
@@ -118,6 +119,7 @@ def test_fit_prepared_matches_nilearn(noise_model, prepared_problem):
 
 
 def test_fit_prepared_masks_constant_features(prepared_problem):
+    """Verify fit prepared masks constant features."""
     prepared, contrasts, _ = prepared_problem
     signals = prepared.signals[0].copy()
     signals[:, -1] = 3.0
@@ -136,6 +138,7 @@ def test_fit_prepared_masks_constant_features(prepared_problem):
 
 
 def test_fit_prepared_combines_run_specific_designs_and_pools_r_squared():
+    """Verify fit prepared combines run specific designs and pools r squared."""
     rng = np.random.default_rng(20260812)
     designs = (
         pd.DataFrame(
@@ -242,6 +245,7 @@ def test_fit_prepared_combines_run_specific_designs_and_pools_r_squared():
 def test_fit_prepared_rejects_invalid_semantic_contrasts(
     prepared_problem, contrasts, message
 ):
+    """Verify fit prepared rejects invalid semantic contrasts."""
     prepared, _, _ = prepared_problem
 
     with pytest.raises(ValueError, match=message):
@@ -249,6 +253,7 @@ def test_fit_prepared_rejects_invalid_semantic_contrasts(
 
 
 def test_fit_prepared_rejects_nonpositive_residual_degrees_of_freedom():
+    """Verify fit prepared rejects nonpositive residual degrees of freedom."""
     design = pd.DataFrame(
         {"face": [1.0, 0.0, 0.0], "house": [0.0, 1.0, 0.0], "constant": 1.0}
     )
@@ -259,6 +264,7 @@ def test_fit_prepared_rejects_nonpositive_residual_degrees_of_freedom():
 
 
 def test_fit_prepared_rejects_unsupported_noise_model(prepared_problem):
+    """Verify fit prepared rejects unsupported noise model."""
     prepared, contrasts, _ = prepared_problem
 
     with pytest.raises(ValueError, match="noise_model must be 'ols' or 'ar1'"):
@@ -267,6 +273,7 @@ def test_fit_prepared_rejects_unsupported_noise_model(prepared_problem):
 
 @pytest.mark.parametrize("model_metadata", [{"value": object()}])
 def test_fit_prepared_rejects_unsafe_model_metadata(prepared_problem, model_metadata):
+    """Verify fit prepared rejects unsafe model metadata."""
     prepared, contrasts, _ = prepared_problem
 
     with pytest.raises(ValueError):
@@ -281,6 +288,7 @@ def test_fit_prepared_rejects_unsafe_model_metadata(prepared_problem, model_meta
 def test_fit_prepared_owns_results_and_reports_prepared_design_provenance(
     prepared_problem,
 ):
+    """Verify fit prepared owns results and reports prepared design provenance."""
     prepared, contrasts, _ = prepared_problem
     result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
     returned_design = result.design_matrices[0]
@@ -318,6 +326,7 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
     prepared_problem,
     complete_sources,
 ):
+    """Verify fit prepared records stable analysis identity and complete activity."""
     del prepared_problem
     rng = np.random.default_rng(20260815)
     design = pd.DataFrame(
@@ -383,6 +392,7 @@ def test_fit_prepared_records_stable_analysis_identity_and_complete_activity(
 def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(
     prepared_problem, complete_sources
 ):
+    """Verify fit prepared analysis fingerprint tracks all fit inputs."""
     _, contrasts, _ = prepared_problem
     rng = np.random.default_rng(20260816)
     design = pd.DataFrame(
@@ -442,6 +452,7 @@ def test_fit_prepared_analysis_fingerprint_tracks_all_fit_inputs(
 def test_fit_prepared_leaves_analysis_identity_unavailable_for_anonymous_sources(
     prepared_problem,
 ):
+    """Verify fit prepared leaves analysis identity unavailable for anonymous sources."""
     prepared, contrasts, _ = prepared_problem
 
     result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
@@ -456,6 +467,7 @@ def test_fit_prepared_leaves_analysis_identity_unavailable_for_anonymous_sources
 def test_fit_prepared_logs_lifecycle_and_resets_context(
     caplog, prepared_problem, complete_sources
 ):
+    """Verify fit prepared logs lifecycle and resets context."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     _, _, _ = prepared_problem
     design = pd.DataFrame(
@@ -503,6 +515,7 @@ def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
     monkeypatch,
     complete_sources,
 ):
+    """Verify fit prepared preserves privacy in failure logs and provenance."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     design = pd.DataFrame(
         {
@@ -556,6 +569,7 @@ def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
 def test_fit_prepared_accepts_path_like_model_keys(
     prepared_problem, contrasts, model_metadata
 ):
+    """Verify fit prepared accepts path like model keys."""
     prepared, _, _ = prepared_problem
 
     result = fit_prepared(
@@ -573,6 +587,7 @@ def test_fit_prepared_sanitizes_injected_traceback_and_object_repr(
     monkeypatch,
     prepared_problem,
 ):
+    """Verify fit prepared sanitizes injected traceback and object repr."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, _ = prepared_problem
 
@@ -672,6 +687,7 @@ def prepared_delta_problem(complete_sources):
 def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared uses nested OLS and role selected designs."""
     prepared, contrasts, metadata, full_result = prepared_delta_problem
 
     comparison = task_delta_r2_prepared(prepared, full_result)
@@ -699,6 +715,9 @@ def test_task_delta_r2_prepared_uses_nested_ols_and_role_selected_designs(
 def test_task_delta_r2_prepared_returns_owned_readonly_arrays_and_copied_designs(
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared returns owned read-only arrays and copied
+    designs.
+    """
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     comparison = task_delta_r2_prepared(prepared, full_result)
     returned_design = comparison.nuisance_design_matrices[0]
@@ -741,6 +760,7 @@ def test_task_delta_r2_prepared_returns_owned_readonly_arrays_and_copied_designs
 def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(
     roles, message, complete_sources
 ):
+    """Verify task delta R-squared prepared rejects incomplete role partitions."""
     design = pd.DataFrame(
         {"face": [0.0, 1.0] * 12, "motion": np.linspace(0, 1, 24), "constant": 1.0}
     )
@@ -769,6 +789,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     changed,
     complete_sources,
 ):
+    """Verify task delta R-squared prepared rejects changed parent identity."""
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     supplied_prepared = prepared
     supplied_contrasts = contrasts
@@ -832,6 +853,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
 def test_task_delta_r2_prepared_rejects_invalid_parent_dimensions(
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared rejects invalid parent dimensions."""
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     mismatched = replace(full_result, _r2=np.zeros(prepared.n_features + 1))
 
@@ -840,6 +862,7 @@ def test_task_delta_r2_prepared_rejects_invalid_parent_dimensions(
 
 
 def test_task_delta_r2_prepared_requires_reliable_parent_identity(prepared_problem):
+    """Verify task delta R-squared prepared requires reliable parent identity."""
     prepared, contrasts, _ = prepared_problem
     full_result = fit_prepared(prepared, contrasts=contrasts, noise_model="ols")
 
@@ -851,6 +874,9 @@ def test_task_delta_r2_prepared_rejects_materially_negative_nested_ols_differenc
     monkeypatch,
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared rejects materially negative nested OLS
+    difference.
+    """
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     calls = iter((np.array([0.1, 0.1]), np.array([0.2, 0.2])))
     monkeypatch.setattr(
@@ -866,6 +892,7 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
     caplog,
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared records lifecycle and diagnostic provenance."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, metadata, full_result = prepared_delta_problem
 
@@ -923,6 +950,7 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
     monkeypatch,
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared logs downstream failure with comparison id."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     successful = task_delta_r2_prepared(prepared, full_result)
@@ -967,6 +995,7 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
     caplog,
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared logs preidentity failure without analysis id."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, _, full_result = prepared_delta_problem
     private_key = "/private/secret/prepared-comparison.json"
@@ -1012,6 +1041,7 @@ def _same_comparison(left, right):
 def test_task_delta_r2_prepared_reads_the_model_from_provenance(
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared reads the model from provenance."""
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     derived = task_delta_r2_prepared(prepared, full_result)
     with pytest.warns(DeprecationWarning, match="task_delta_r2_prepared"):
@@ -1028,6 +1058,7 @@ def test_task_delta_r2_prepared_reads_the_model_from_provenance(
 def test_task_delta_r2_prepared_restores_expression_contrasts(
     prepared_problem, complete_sources
 ):
+    """Verify task delta R-squared prepared restores expression contrasts."""
     prepared, contrasts, _ = prepared_problem
     sourced = PreparedDesignAnalysis.from_arrays(
         signals=prepared.signals,
@@ -1056,6 +1087,9 @@ def test_task_delta_r2_prepared_restores_expression_contrasts(
 def test_task_delta_r2_prepared_rejects_keywords_that_disagree_with_provenance(
     prepared_delta_problem, supplied
 ):
+    """Verify task delta R-squared prepared rejects keywords that disagree with
+    provenance.
+    """
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     arguments = dict(contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
     arguments.update(supplied)
@@ -1069,6 +1103,7 @@ def test_task_delta_r2_prepared_rejects_keywords_that_disagree_with_provenance(
 def test_task_delta_r2_prepared_requires_a_fit_prepared_parent(
     prepared_delta_problem,
 ):
+    """Verify task delta R-squared prepared requires a fit prepared parent."""
     prepared, _, _, full_result = prepared_delta_problem
     record = full_result.provenance
     stripped = replace(

@@ -20,6 +20,7 @@ def make_bundle(bids, path):
 
 
 def test_validation_reports_all_runs_and_scan_scope(bids, tmp_path):
+    """Verify validation reports all runs and scan scope."""
     from experiments.hrf_simulations.bundle_validation import validate_bundle
 
     path = tmp_path / "bundle.h5"
@@ -33,6 +34,7 @@ def test_validation_reports_all_runs_and_scan_scope(bids, tmp_path):
 
 
 def test_validation_detects_nonfinite_signals_and_shape_mismatch(bids, tmp_path):
+    """Verify validation detects nonfinite signals and shape mismatch."""
     from experiments.hrf_simulations.bundle_validation import validate_bundle
 
     path = tmp_path / "bad.h5"
@@ -49,6 +51,7 @@ def test_validation_detects_nonfinite_signals_and_shape_mismatch(bids, tmp_path)
 
 
 def test_validation_detects_invalid_roi_membership(bids, tmp_path):
+    """Verify validation detects invalid roi membership."""
     from experiments.hrf_simulations.bundle_validation import validate_bundle
 
     path = tmp_path / "bad_roi.h5"

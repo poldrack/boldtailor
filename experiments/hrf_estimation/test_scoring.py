@@ -41,6 +41,7 @@ def estimate():
 
 
 def test_evaluation_refits_amplitudes_and_pools_sums(signal_run):
+    """Verify evaluation refits amplitudes and pools sums."""
     est = estimate()
     est.diagnostics["provisional"] = [True, False]
     parts = build_design(signal_run, est.kernels[0])
@@ -71,6 +72,7 @@ def test_evaluation_refits_amplitudes_and_pools_sums(signal_run):
 
 
 def test_constant_signals_are_invalid_not_perfect(signal_run):
+    """Verify constant signals are invalid not perfect."""
     score = importlib.import_module("experiments.hrf_estimation.scoring").score_hrfs(
         (replace(signal_run, signals=np.ones((180, 2))),), estimate()
     )
@@ -80,12 +82,14 @@ def test_constant_signals_are_invalid_not_perfect(signal_run):
 
 
 def test_feature_order_mismatch_fails(signal_run):
+    """Verify feature order mismatch fails."""
     score = importlib.import_module("experiments.hrf_estimation.scoring").score_hrfs
     with pytest.raises(ValueError, match="feature"):
         score((replace(signal_run, feature_ids=np.array([3, 8])),), estimate())
 
 
 def test_partial_and_total_r2_separate_nuisance_from_task(signal_run):
+    """Verify partial and total R-squared separate nuisance from task."""
     rng = np.random.default_rng(9)
     drift = np.linspace(-1, 1, len(signal_run.frame_times))
     nuisance = signal_run.confounds.assign(drift=drift)
@@ -117,6 +121,7 @@ def test_partial_and_total_r2_separate_nuisance_from_task(signal_run):
 
 
 def test_zero_task_denominator_has_explicit_reason(signal_run):
+    """Verify zero task denominator has explicit reason."""
     drift = np.linspace(-1, 1, len(signal_run.frame_times))
     run = replace(
         signal_run,
@@ -131,6 +136,7 @@ def test_zero_task_denominator_has_explicit_reason(signal_run):
 
 
 def test_evaluation_checks_anatomy_against_training_estimate(signal_run):
+    """Verify evaluation checks anatomy against training estimate."""
     import nibabel as nib
 
     a = nib.cifti2.BrainModelAxis.from_surface([8, 3], 10, "CortexLeft")

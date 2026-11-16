@@ -11,6 +11,7 @@ from boldtailor import _arrays, reml, trial_encoding
 
 @pytest.mark.parametrize("keep", [slice(None), np.array([True, False, True])])
 def test_copy_fit_values_into_updates_only_selected_destination_columns(keep):
+    """Verify copy fit values into updates only selected destination columns."""
     destination = {"ratio": np.full(6, -1.0), "criterion": np.full(6, -2.0)}
     values = {
         "ratio": np.array([10.0, 20.0, 30.0]),
@@ -37,6 +38,7 @@ def test_copy_fit_values_into_updates_only_selected_destination_columns(keep):
 
 
 def test_copy_fit_values_into_defaults_to_all_values():
+    """Verify copy fit values into defaults to all values."""
     destination = {"ratio": np.zeros(3)}
     reml._copy_fit_values_into(
         destination, np.array([2, 0]), {"ratio": np.array([7.0, 9.0])}
@@ -45,6 +47,7 @@ def test_copy_fit_values_into_defaults_to_all_values():
 
 
 def test_censor_response_time_in_place_changes_only_invalid_times():
+    """Verify censor response time in place changes only invalid times."""
     table = pd.DataFrame(
         {"response_time": [1.0, 0.0, -1.0, np.inf], "other": [1, 2, 3, 4]}
     )
@@ -56,6 +59,7 @@ def test_censor_response_time_in_place_changes_only_invalid_times():
 
 
 def test_field_mutators_replace_fields_without_aliasing_source_arrays():
+    """Verify field mutators replace fields without aliasing source arrays."""
     source = np.array([1.0, 2.0])
     instance = SimpleNamespace(array=source, arrays=[source], labels=["a", "b"])
     assert _arrays.copy_array_fields_in_place(instance, ["array"]) is None

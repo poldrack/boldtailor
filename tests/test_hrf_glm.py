@@ -24,6 +24,7 @@ def _selected_fit(data, model, selection):
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 @pytest.mark.integration
 def test_voxelwise_contrasts_match_independent_run_glms(hrf_glm_problem, noise_model):
+    """Verify voxelwise contrasts match independent run GLMs."""
     data, model, selection, designs = hrf_glm_problem
     model = replace(model, noise_model=noise_model)
     result = _selected_fit(data, model, selection)
@@ -75,6 +76,7 @@ def test_voxelwise_contrasts_match_independent_run_glms(hrf_glm_problem, noise_m
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model):
+    """Verify canonical assignment matches existing API."""
     data, model, _, _ = hrf_glm_problem
     selection_data = from_arrays(
         data.signals,
@@ -99,6 +101,7 @@ def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model)
 
 
 def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
+    """Verify delta R-squared uses nested OLS with selected HRFs."""
     data, model, selection, designs = hrf_glm_problem
     model = replace(model, noise_model="ar1")
     result = _selected_fit(data, model, selection)
@@ -144,6 +147,7 @@ def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
 def test_rejects_spatial_signature_mismatch(
     hrf_glm_problem, with_selection, signature, message
 ):
+    """Verify rejects spatial signature mismatch."""
     data, model, selection, _ = hrf_glm_problem
     selection = selection if with_selection else None
     with pytest.raises(ValueError, match=message):
@@ -151,6 +155,7 @@ def test_rejects_spatial_signature_mismatch(
 
 
 def test_rejects_bad_assignment_and_library_identity(hrf_glm_problem):
+    """Verify rejects bad assignment and library identity."""
     data, model, selection, _ = hrf_glm_problem
     for bad in [
         replace(selection, hrf_indices=[1, 0, 1, 99, -1]),
@@ -167,6 +172,7 @@ def test_rejects_bad_assignment_and_library_identity(hrf_glm_problem):
 
 
 def test_selection_can_transfer_to_one_new_run(hrf_glm_problem):
+    """Verify selection can transfer to one new run."""
     data, model, selection, _ = hrf_glm_problem
     single = from_arrays(
         data.signals[1],
@@ -181,6 +187,7 @@ def test_selection_can_transfer_to_one_new_run(hrf_glm_problem):
 
 
 def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
+    """Verify result owns designs and records effective model."""
     data, model, selection, _ = hrf_glm_problem
     result = _selected_fit(data, model, selection)
     for values in (
@@ -214,6 +221,7 @@ def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
 
 @pytest.mark.parametrize("change", ["model", "events", "confounds", "sources"])
 def test_delta_rejects_a_different_analysis(hrf_glm_problem, change):
+    """Verify delta rejects a different analysis."""
     data, model, selection, _ = hrf_glm_problem
     result = _selected_fit(data, model, selection)
     if change == "model":
@@ -239,6 +247,7 @@ def test_delta_rejects_a_different_analysis(hrf_glm_problem, change):
 
 
 def test_all_undefined_hrfs_return_nan_maps(hrf_glm_problem):
+    """Verify all undefined HRFs return NaN maps."""
     data, model, _, _ = hrf_glm_problem
     constant = from_arrays(
         [np.full_like(y, 100) for y in data.signals],
@@ -258,6 +267,7 @@ def test_all_undefined_hrfs_return_nan_maps(hrf_glm_problem):
 
 
 def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem):
+    """Verify custom HRF keeps condition and confound names distinct."""
     data, model, selection, _ = hrf_glm_problem
     confounds = data.confounds
     for frame in confounds:
@@ -280,6 +290,7 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
 
 
 def test_selected_delta_requires_completeglm_run_sources(hrf_glm_problem):
+    """Verify selected delta requires completeglm run sources."""
     data, model, selection, _ = hrf_glm_problem
     anonymous = from_arrays(
         data.signals,
@@ -293,6 +304,7 @@ def test_selected_delta_requires_completeglm_run_sources(hrf_glm_problem):
 
 
 def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_problem):
+    """Verify selected delta handles constant target after HRF transfer."""
     data, model, selection, _ = hrf_glm_problem
     signals = [y.copy() for y in data.signals]
     for y in signals:
@@ -314,6 +326,7 @@ def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_probl
 
 
 def test_selected_glm_masks_constant_feature_contrasts(hrf_glm_problem):
+    """Verify selected GLM masks constant feature contrasts."""
     data, model, selection, _ = hrf_glm_problem
     signals = [y.copy() for y in data.signals]
     for y in signals:
@@ -352,6 +365,7 @@ def _undefined_selection(data):
 def test_fit_rejects_invalid_contrasts_for_any_assignment(
     hrf_glm_problem, undefined_assignment, contrast, message
 ):
+    """Verify fit rejects invalid contrasts for any assignment."""
     data, model, selection, _ = hrf_glm_problem
     signature = "axis-v1"
     if undefined_assignment:
@@ -418,6 +432,7 @@ def task_model_problem(two_candidate_library):
 
 
 def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem):
+    """Verify selected GLM group designs equal scored task columns."""
     from boldtailor._hrf_cv import prepare_runs
     from boldtailor._hrf_design import hrf_model
     from boldtailor._task_design import expand_events, task_columns
@@ -458,6 +473,7 @@ def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem
 
 
 def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem):
+    """Verify selected GLM spm group also uses shared task columns."""
     from boldtailor._task_design import expand_events, task_columns
 
     data, model, selection, library = task_model_problem
@@ -487,6 +503,7 @@ _RT_INDICATOR = Modulator("response_time", missing="indicator")
 def test_selected_glm_setting_mismatch_names_the_required_values(
     task_model_problem, model_changes
 ):
+    """Verify selected GLM setting mismatch names the required values."""
     data, model, selection, _ = task_model_problem
     with pytest.raises(ValueError, match=r"-24\.0.*50|50.*-24\.0"):
         fit(
@@ -514,6 +531,7 @@ def test_selected_glm_setting_mismatch_names_the_required_values(
 def test_selected_glm_rejects_mismatched_selection_settings(
     task_model_problem, model_changes, selection_task_model, message
 ):
+    """Verify selected GLM rejects mismatched selection settings."""
     data, model, selection, library = task_model_problem
     if selection_task_model is not None:
         selection = select_hrfs(
@@ -532,6 +550,7 @@ def test_selected_glm_rejects_mismatched_selection_settings(
 
 
 def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_problem):
+    """Verify selected GLM accepts selection on a subset task model."""
     from boldtailor._hrf_design import hrf_model
     from boldtailor._task_design import expand_events, task_columns
     from boldtailor.model import Modulator, TaskModel
@@ -565,6 +584,7 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
 
 
 def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem):
+    """Verify selected GLM reports design errors with the run once."""
     from boldtailor.model import Modulator, TaskModel
 
     data, model, selection, library = task_model_problem
@@ -650,6 +670,7 @@ def _nilearn_equal_weight(signals, designs, feature, column):
 def test_task_model_selected_glm_matches_nilearn_on_known_amplitudes(
     known_amplitude_problem,
 ):
+    """Verify task model selected GLM matches Nilearn on known amplitudes."""
     data, selection, task_model = known_amplitude_problem
     np.testing.assert_array_equal(selection.hrf_indices, _TRUE_CIDS)
     model = ModelSpec(
@@ -679,6 +700,7 @@ def test_task_model_selected_glm_matches_nilearn_on_known_amplitudes(
 
 
 def test_selected_delta_analysis_id_hashes_shared_identity(hrf_glm_problem):
+    """Verify selected delta analysis id hashes shared identity."""
     from boldtailor._fit_diagnostics import delta_r2_identity
     from boldtailor.model import nuisance_model_settings
     from boldtailor.provenance import analysis_fingerprint
@@ -696,6 +718,7 @@ def test_selected_delta_analysis_id_hashes_shared_identity(hrf_glm_problem):
 
 
 def test_selected_glm_rebuilds_group_designs_on_demand(hrf_glm_problem):
+    """Verify selected GLM rebuilds group designs on demand."""
     from boldtailor._hrf_glm_design import compile_group_designs
 
     data, model, selection, _ = hrf_glm_problem
@@ -719,6 +742,7 @@ def test_selected_glm_rebuilds_group_designs_on_demand(hrf_glm_problem):
 def test_selected_glm_group_design_rejects_pairs_that_were_not_fitted(
     hrf_glm_problem, key
 ):
+    """Verify selected GLM group design rejects pairs that were not fitted."""
     data, model, selection, _ = hrf_glm_problem
     narrow = replace_indices(selection, np.where(selection.hrf_indices >= 0, 1, -1))
     result = _selected_fit(data, model, narrow)
@@ -728,6 +752,7 @@ def test_selected_glm_group_design_rejects_pairs_that_were_not_fitted(
 
 
 def test_explicit_group_design_rebuild_and_materialization(hrf_glm_problem):
+    """Verify explicit group design rebuild and materialization."""
     data, model, selection, designs = hrf_glm_problem
     result = _selected_fit(data, model, selection)
     materialized = result.materialize_group_designs()

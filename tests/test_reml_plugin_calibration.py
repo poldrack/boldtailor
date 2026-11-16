@@ -34,6 +34,7 @@ def plugin_problem(request):
 
 
 def test_estimated_rho_preserves_matched_model_recovery_and_null_tail(plugin_problem):
+    """Verify estimated rho preserves matched model recovery and null tail."""
     groups, random, rho, ratio, estimated = plugin_problem
     assert abs(estimated - rho) < 0.03
     oracle = fit_reml(groups, random, rho=rho)
@@ -53,6 +54,7 @@ def test_estimated_rho_preserves_matched_model_recovery_and_null_tail(plugin_pro
 
 
 def test_null_library_winners_are_not_a_significance_test():
+    """Verify null library winners are not a significance test."""
     rng = np.random.default_rng(621)
     n, features = 48, 2000
     groups = [
@@ -69,6 +71,7 @@ def test_null_library_winners_are_not_a_significance_test():
 
 
 def test_heterogeneous_noise_is_a_pooled_variance_not_each_runs_variance():
+    """Verify heterogeneous noise is a pooled variance not each runs variance."""
     rng = np.random.default_rng(622)
     scans, variances = (30, 60, 90), (0.25, 1.0, 4.0)
     groups = [
@@ -104,6 +107,7 @@ def test_omitted_smooth_task_signal_contaminates_noise_autocorrelation():
 
 
 def test_group_heterogeneous_rho_is_not_recovered_by_one_pooled_scalar():
+    """Verify group heterogeneous rho is not recovered by one pooled scalar."""
     rng = np.random.default_rng(624)
     truth = np.array([-0.5, 0.7])
     n = 120
@@ -117,6 +121,7 @@ def test_group_heterogeneous_rho_is_not_recovered_by_one_pooled_scalar():
 
 
 def test_correlated_random_effects_require_their_covariance_factor():
+    """Verify correlated random effects require their covariance factor."""
     rng = np.random.default_rng(625)
     rotation = np.linalg.qr(rng.normal(size=(3, 3)))[0]
     factor = rotation @ np.diag(np.sqrt([0.05, 1.0, 10.0]))

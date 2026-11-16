@@ -6,6 +6,7 @@ import pytest
 
 
 def test_summary_pools_sse_and_uses_common_valid_vertices():
+    """Verify summary pools SSE and uses common valid vertices."""
     rows = []
     for method, losses in [("a", [1, 45]), ("b", [1, 9])]:
         for vertex in [1, 2]:

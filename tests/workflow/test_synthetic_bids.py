@@ -3,6 +3,9 @@ import sys
 
 
 def test_make_six_runs_does_not_crash():
+    """Build six synthetic BIDS runs in a subprocess to catch the previous SIGBUS
+    regression.
+    """
     code = """
 from pathlib import Path
 import tempfile

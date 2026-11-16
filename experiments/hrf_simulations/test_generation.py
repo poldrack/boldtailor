@@ -41,6 +41,7 @@ def truth():
     [("ConsDurNoRT", 2), ("RTDur", 2), ("ConsDurRTMod", 3), ("ConsDurRTDur", 3)],
 )
 def test_design_models_and_preserved_events(template, truth, model, ncols):
+    """Verify design models and preserved events."""
     from experiments.hrf_simulations.design import task_design
 
     before = template.events.copy(deep=True)
@@ -51,6 +52,7 @@ def test_design_models_and_preserved_events(template, truth, model, ncols):
 
 
 def test_duration_boxcars_preserve_neural_area(template, truth):
+    """Verify duration boxcars preserve neural area."""
     from experiments.hrf_simulations.design import convolve
 
     times = np.arange(120.0)
@@ -75,6 +77,7 @@ def test_duration_boxcars_preserve_neural_area(template, truth):
 def test_independent_synthesis_matches_design(
     template, truth, mechanism, model, convention
 ):
+    """Verify independent synthesis matches design."""
     from experiments.hrf_simulations.design import task_design
     from experiments.hrf_simulations.simulation import signal_components
 
@@ -86,6 +89,7 @@ def test_independent_synthesis_matches_design(
 
 
 def test_no_cross_run_convolution_and_missing_junk(template, truth):
+    """Verify no cross run convolution and missing junk."""
     from experiments.hrf_simulations.simulation import signal_components
 
     late = replace(template, events=template.events.assign(onset=150.0))
@@ -96,6 +100,7 @@ def test_no_cross_run_convolution_and_missing_junk(template, truth):
 
 
 def test_noise_variance_acf_and_stationary_start():
+    """Verify noise variance acf and stationary start."""
     from experiments.hrf_simulations.noise import ar1
 
     rng = np.random.default_rng(5)
@@ -110,6 +115,7 @@ def test_noise_variance_acf_and_stationary_start():
 
 @pytest.mark.parametrize("n", [159, 160])
 def test_phase_surrogate_preserves_spectrum(n):
+    """Verify phase surrogate preserves spectrum."""
     from experiments.hrf_simulations.noise import phase_surrogate
 
     rng = np.random.default_rng(40)
@@ -123,6 +129,7 @@ def test_phase_surrogate_preserves_spectrum(n):
 
 
 def test_invalid_convention_and_model(template, truth):
+    """Verify invalid convention and model."""
     from experiments.hrf_simulations.design import task_design
 
     with pytest.raises(ValueError):
@@ -134,6 +141,7 @@ def test_invalid_convention_and_model(template, truth):
 @pytest.mark.parametrize("onset", [8.0, 8.03, 8.1, 8.55])
 @pytest.mark.parametrize("duration", [0.1, 0.43, 3.87])
 def test_exact_event_area_on_nsd_sampling_grid(truth, onset, duration):
+    """Verify exact event area on NSD sampling grid."""
     from experiments.hrf_simulations.design import convolve
     from experiments.hrf_simulations.simulation import synthesize
 
@@ -145,6 +153,7 @@ def test_exact_event_area_on_nsd_sampling_grid(truth, onset, duration):
 
 
 def test_reference_task_prediction_excludes_junk(template):
+    """Verify reference task prediction excludes junk."""
     from experiments.hrf_simulations.design import reference_design
 
     full = reference_design(template)

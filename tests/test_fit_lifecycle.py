@@ -20,6 +20,7 @@ def records(caplog):
 
 
 def test_normal_exit_logs_completion_without_building_provenance(caplog, parent_record):
+    """Verify normal exit logs completion without building provenance."""
     from boldtailor._fit_lifecycle import fit_operation
 
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -32,6 +33,7 @@ def test_normal_exit_logs_completion_without_building_provenance(caplog, parent_
 
 
 def test_late_constructor_failure_never_logs_completion(caplog, parent_record):
+    """Verify late constructor failure never logs completion."""
     from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -50,6 +52,7 @@ def test_late_constructor_failure_never_logs_completion(caplog, parent_record):
 
 
 def test_provenance_builder_does_not_mutate_operation_or_log(caplog, parent_record):
+    """Verify provenance builder does not mutate operation or log."""
     from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -75,6 +78,7 @@ def test_provenance_builder_does_not_mutate_operation_or_log(caplog, parent_reco
 
 @pytest.mark.parametrize("fail", [False, True])
 def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
+    """Verify anonymous child restores outer context."""
     from boldtailor._fit_lifecycle import fit_operation
     from boldtailor.logging import bind_context, emit_event
 
@@ -108,6 +112,7 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
 def test_provenance_construction_failure_logs_failure(
     caplog, parent_record, monkeypatch
 ):
+    """Verify provenance construction failure logs failure."""
     import boldtailor._fit_lifecycle as lifecycle
 
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -129,6 +134,7 @@ def test_provenance_construction_failure_logs_failure(
 def test_builder_can_run_after_scope_without_inheriting_unrelated_context(
     caplog, parent_record
 ):
+    """Verify builder can run after scope without inheriting unrelated context."""
     from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
     from boldtailor.logging import bind_context, emit_event
 
@@ -147,6 +153,7 @@ def test_builder_can_run_after_scope_without_inheriting_unrelated_context(
 
 
 def test_nested_operations_restore_context_and_bound_history(caplog, parent_record):
+    """Verify nested operations restore context and bound history."""
     from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
     from boldtailor.logging import emit_event
 

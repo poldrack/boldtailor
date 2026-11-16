@@ -34,6 +34,9 @@ def _columns(signals, index):
 
 
 def test_fit_matches_layers(data):
+    """Compare the public REML fit with explicit projection, criterion and optimization
+    steps.
+    """
     signals, fixed, random = data
     terms = [
         reml_terms(project_fixed(y, c), z)
@@ -52,6 +55,7 @@ def test_fit_matches_layers(data):
 
 
 def test_noise_free_signal_is_ok_at_upper_edge():
+    """Verify noise free signal is ok at upper edge."""
     rng = np.random.default_rng(4)
     _, fixed, random = simulate(rng, scans=(60,), n_features=2)
     signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
@@ -61,6 +65,7 @@ def test_noise_free_signal_is_ok_at_upper_edge():
 
 
 def test_results_are_read_only(data):
+    """Verify results are read only."""
     fit = _fit(*data)
     for name in ("ratio", "noise_variance", "effect_variance", "criterion"):
         with pytest.raises(ValueError):
@@ -73,6 +78,7 @@ def test_results_are_read_only(data):
 
 
 def test_group_owns_read_only_float64_arrays(data):
+    """Verify group owns read only float64 arrays."""
     signals, fixed, _ = data
     group = RemlGroup(signals[0], fixed[0])
     signals[0][0, 0] = 1e9
@@ -82,6 +88,7 @@ def test_group_owns_read_only_float64_arrays(data):
 
 
 def test_float32_input_is_converted(data):
+    """Verify float32 input is converted."""
     signals, fixed, random = data
     as32 = [[a.astype(np.float32) for a in part] for part in (signals, fixed, random)]
     group = RemlGroup(as32[0][0], as32[1][0])
@@ -94,6 +101,7 @@ def test_float32_input_is_converted(data):
 
 
 def test_per_feature_rho_equals_separate_fits():
+    """Verify per feature rho equals separate fits."""
     signals, fixed, random = simulate(
         np.random.default_rng(5), scans=(50, 65), rho=0.3, n_features=N_FEATURES
     )
@@ -119,6 +127,7 @@ def _with_dead_columns(signals):
 
 
 def test_dead_features_do_not_affect_others(data):
+    """Verify dead features do not affect others."""
     signals, fixed, random = data
     live = _columns(signals, [0, 1])
     with warnings.catch_warnings():
@@ -138,6 +147,7 @@ def test_dead_features_do_not_affect_others(data):
 
 
 def test_all_features_dead_is_no_residual_signal(data):
+    """Verify all features dead is no residual signal."""
     _, fixed, random = data
     signals = [np.zeros((len(c), 2)) for c in fixed]
     with warnings.catch_warnings():
@@ -166,6 +176,7 @@ def _ragged_data():
 
 
 def test_ragged_groups_match_dense_oracle():
+    """Verify ragged groups match dense oracle."""
     signals, fixed, random = _ragged_data()
     expected, _ = dense_fit(signals, fixed, random)
     fit = _fit(signals, fixed, random)
@@ -183,16 +194,19 @@ def _corrupt(data, part, value):
     "part,name", [(0, "signals"), (1, "fixed_design"), (2, "random_design")]
 )
 def test_non_finite_input_raises(data, part, name, value):
+    """Verify non finite input raises."""
     with pytest.raises(ValueError, match=rf"{name}.*group 1|group 1.*{name}"):
         _fit(*_corrupt(data, part, value))
 
 
 def test_no_groups_raises():
+    """Verify no groups raises."""
     with pytest.raises(ValueError):
         fit_reml([], [])
 
 
 def test_zero_features_raises(data):
+    """Verify zero features raises."""
     signals, fixed, random = data
     empty = [y[:, :0] for y in signals]
     with pytest.raises(ValueError, match="signals"):
@@ -200,6 +214,7 @@ def test_zero_features_raises(data):
 
 
 def test_invalid_shapes_raise(data):
+    """Verify invalid shapes raise."""
     signals, fixed, random = data
     groups = _groups(signals, fixed)
     with pytest.raises(ValueError, match="random_design"):
@@ -225,11 +240,13 @@ def test_invalid_shapes_raise(data):
     ],
 )
 def test_invalid_rho_raises(data, rho):
+    """Verify invalid rho raises."""
     with pytest.raises(ValueError, match="rho"):
         _fit(*data, rho=rho)
 
 
 def test_none_random_design_contributes_no_directions(data):
+    """Verify none random design contributes no directions."""
     signals, fixed, random = data
     fit = _fit(signals, fixed, [random[0], None])
     empty = _fit(signals, fixed, [random[0], np.empty((len(fixed[1]), 0))])
@@ -237,6 +254,9 @@ def test_none_random_design_contributes_no_directions(data):
 
 
 def test_variance_zero_status():
+    """Report a fitted zero random-effects variance separately from absent residual
+    signal.
+    """
     signals, fixed, random = simulate(np.random.default_rng(8), scans=(60,))
     both = np.column_stack([fixed[0], random[0]])
     residual = signals[0] - both @ np.linalg.lstsq(both, signals[0], rcond=None)[0]
@@ -248,6 +268,7 @@ def test_variance_zero_status():
 
 
 def test_no_restricted_dof_raises():
+    """Verify no restricted degrees-of-freedom raises."""
     rng = np.random.default_rng(0)
     signals, fixed = [rng.normal(size=(4, 2))], [rng.normal(size=(4, 4))]
     with pytest.raises(ValueError, match="degrees of freedom"):
@@ -269,6 +290,7 @@ def dof_differs_at_half(monkeypatch):
 
 
 def test_restricted_dof_must_agree_across_rho(data, dof_differs_at_half):
+    """Verify restricted degrees-of-freedom must agree across rho."""
     signals, fixed, random = data
     rho = np.array([0.0, 0.0, 0.5, 0.5])
     with pytest.raises(ValueError, match="restricted degrees of freedom"):
@@ -278,6 +300,7 @@ def test_restricted_dof_must_agree_across_rho(data, dof_differs_at_half):
 
 
 def test_unrefined_flag_covers_the_upper_edge_and_is_read_only(data):
+    """Verify unrefined flag covers the upper edge and is read only."""
     rng = np.random.default_rng(4)
     _, fixed, random = simulate(rng, scans=(60,), n_features=2)
     signals = [fixed[0] @ rng.normal(size=(4, 2)) + random[0] @ rng.normal(size=(3, 2))]
@@ -290,6 +313,7 @@ def test_unrefined_flag_covers_the_upper_edge_and_is_read_only(data):
 
 
 def test_features_without_a_fit_are_not_unrefined(data):
+    """Verify features without a fit are not unrefined."""
     signals, fixed, random = data
     fit = _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
     assert fit.status[1] == "no_residual_signal"
@@ -297,6 +321,7 @@ def test_features_without_a_fit_are_not_unrefined(data):
 
 
 def test_fit_values_pools_terms_once(data, monkeypatch):
+    """Verify fit values pools terms once."""
     import boldtailor._reml_criterion as crit
 
     calls = 0
@@ -319,6 +344,7 @@ def test_fit_values_pools_terms_once(data, monkeypatch):
 def test_live_subset_computes_fixed_basis_once_when_mixing_dead_features(
     data, monkeypatch
 ):
+    """Verify live subset computes fixed basis once when mixing dead features."""
     import boldtailor._reml_terms as terms_mod
 
     calls = 0
@@ -338,6 +364,7 @@ def test_live_subset_computes_fixed_basis_once_when_mixing_dead_features(
 @pytest.mark.parametrize("rho", [0.0, 0.6])
 @pytest.mark.parametrize("signal_level", [0.0, 3.5])
 def test_no_residual_signal_has_no_estimated_variance_ratio(rho, signal_level):
+    """Verify no residual signal has no estimated variance ratio."""
     fixed = np.ones((30, 1))
     signals = np.full((30, 2), signal_level)
     random = np.random.default_rng(16).normal(size=(30, 3))

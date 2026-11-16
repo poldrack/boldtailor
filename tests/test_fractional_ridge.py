@@ -33,6 +33,7 @@ def regression():
 
 
 def test_fraction_path_matches_requested_norm_and_oracle(regression):
+    """Verify fraction path matches requested norm and oracle."""
     x, n, y = regression
     outputs = list(fraction_beta_path(x, n, y, fractions=[1, 0.8, 0.2]))
     assert [row[0] for row in outputs] == [1, 0.8, 0.2]
@@ -52,6 +53,7 @@ def test_fraction_path_matches_requested_norm_and_oracle(regression):
 def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(
     regression,
 ):
+    """Verify fraction mapping preserves target scaling and unpenalized confounds."""
     x, n, y = regression
     solver = fractional()
     base = solver.fit_fraction_run(x, n, y, fractions=[0.3, 1])
@@ -79,6 +81,7 @@ def test_fraction_mapping_preserves_target_scaling_and_unpenalized_confounds(
 def test_fraction_solver_handles_ill_conditioning_and_undefined_features(
     regression, prepared
 ):
+    """Verify fraction solver handles ill conditioning and undefined features."""
     x, n, y = regression
     y = np.column_stack([y, np.ones(len(y)) * 100, n[:, 1]])
     fit = fractional().fit_fraction_run(x, n, y, fractions=[0.5, np.nan, 0.5, 0.5])
@@ -112,6 +115,7 @@ def test_fraction_solver_handles_ill_conditioning_and_undefined_features(
     "fractions", [[0], [-0.1], [1.1], [np.inf], [True], [], [0.5, 0.5]]
 )
 def test_invalid_fraction_grids_fail(regression, fractions):
+    """Verify invalid fraction grids fail."""
     x, n, y = regression
     with pytest.raises(ValueError):
         list(fraction_beta_path(x, n, y, fractions=fractions))
@@ -121,6 +125,7 @@ def test_invalid_fraction_grids_fail(regression, fractions):
 def test_public_fraction_fits_keep_trial_units_and_hrf_groups(
     selected_fixture, selected
 ):
+    """Verify public fraction fits keep trial units and HRF groups."""
     data, selection = selected_fixture
     fit = fit_selected_hrfs if selected else fit_single_trials
     kwargs = (
@@ -165,6 +170,7 @@ def test_public_fraction_fits_keep_trial_units_and_hrf_groups(
 
 
 def test_fraction_one_matches_existing_ols(selected_fixture):
+    """Verify fraction one matches existing OLS."""
     data, _ = selected_fixture
     ordinary = fit_single_trials(data)
     fractional_fit = fit_single_trials(data, ridge_fraction=1)
@@ -174,6 +180,7 @@ def test_fraction_one_matches_existing_ols(selected_fixture):
 
 
 def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatch):
+    """Verify prepared fraction betas reuse state in any order."""
     x, n, y = regression
     prepared = fractional().prepare_fraction_betas(x, n, y)
     expected = {
@@ -200,6 +207,7 @@ def test_prepared_fraction_betas_reuse_state_in_any_order(regression, monkeypatc
     "fraction", [0, -0.1, 1.1, np.inf, np.nan, True, [], [0.5, 0.5, 0.5]]
 )
 def test_prepared_fraction_rejects_invalid_values(regression, fraction):
+    """Verify prepared fraction rejects invalid values."""
     prepared = fractional().prepare_fraction_betas(*regression)
     with pytest.raises(ValueError):
         prepared.betas_at(fraction)
@@ -209,6 +217,7 @@ def test_prepared_fraction_rejects_invalid_values(regression, fraction):
 def test_fraction_results_own_arrays_without_solver_mutation(
     selected_fixture, selected
 ):
+    """Verify fraction results own arrays without solver mutation."""
     from dataclasses import replace
 
     data, selection = selected_fixture
@@ -236,6 +245,7 @@ def test_fraction_results_own_arrays_without_solver_mutation(
 
 
 def test_prepare_fraction_betas_factorizes_once(regression, monkeypatch):
+    """Verify prepare fraction betas factorizes once."""
     x, n, y = regression
     calls = []
     original = np.linalg.svd

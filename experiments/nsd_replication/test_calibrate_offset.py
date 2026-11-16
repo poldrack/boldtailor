@@ -48,12 +48,14 @@ def patched(monkeypatch, synthetic_session):
 
 
 def test_calibrate_has_one_row_per_offset(config, patched):
+    """Verify calibrate has one row per offset."""
     table = calibrate_offset.calibrate(config, "sub-07", "ses-nsd10", OFFSETS)
     assert list(table.columns) == ["onset_offset", "true_median", "null_median"]
     assert list(table["onset_offset"]) == list(OFFSETS)
 
 
 def test_best_offset_recovers_the_true_shift(config, patched):
+    """Verify best offset recovers the true shift."""
     table = calibrate_offset.calibrate(config, "sub-07", "ses-nsd10", OFFSETS)
     assert calibrate_offset.best_offset(table) == 0.0
     best = table.set_index("onset_offset").loc[0.0]
@@ -61,6 +63,7 @@ def test_best_offset_recovers_the_true_shift(config, patched):
 
 
 def test_main_writes_table(config, patched, tmp_path, monkeypatch, capsys):
+    """Verify main writes table."""
     monkeypatch.setattr(calibrate_offset, "load_config", lambda path: config)
     argv = ["--config", "c.toml", "--subject", "sub-07", "--session", "ses-nsd10"]
     calibrate_offset.main(argv)

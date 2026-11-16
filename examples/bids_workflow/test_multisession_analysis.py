@@ -16,6 +16,7 @@ def api(module):
 
 
 def test_loading_and_hrf_correlations_use_full_curves(saved_sessions):
+    """Verify loading and HRF correlations use full curves."""
     root, sessions, library, brain = saved_sessions
     loaded = api("inputs").load_sessions(root, "sub-07", sessions, estimators=["OLS"])
     assert loaded["brain"] == brain
@@ -39,6 +40,7 @@ def test_loading_and_hrf_correlations_use_full_curves(saved_sessions):
 
 
 def test_paired_summary_uses_same_sessions_for_both_models():
+    """Verify paired summary uses same sessions for both models."""
     canonical = np.array([[1.0, 2, np.nan], [3, np.nan, np.nan], [5, 8, np.nan]])
     optimized = np.array([[2.0, np.nan, np.nan], [np.nan, 4, np.nan], [8, 10, np.nan]])
     result = api("analysis").paired_summary(canonical, optimized)
@@ -51,6 +53,7 @@ def test_paired_summary_uses_same_sessions_for_both_models():
 
 
 def test_mean_peak_time_averages_session_peaks_and_exports_counts(saved_sessions):
+    """Verify mean peak time averages session peaks and exports counts."""
     root, sessions, _, brain = saved_sessions
     loaded = api("inputs").load_sessions(root, "sub-07", sessions, estimators=["OLS"])
     loaded["records"][0]["hrf_indices"][1] = -1
@@ -76,6 +79,7 @@ def test_mean_peak_time_averages_session_peaks_and_exports_counts(saved_sessions
 
 
 def test_glm_effect_means_match_sessions_and_export_units(saved_sessions):
+    """Verify GLM effect means match sessions and export units."""
     root, sessions, _, brain = saved_sessions
     path = next((root / "sub-07" / sessions[2]).rglob("*OptimizedGLM_stat-effects*"))
     image = nib.load(path)
@@ -112,6 +116,7 @@ def test_glm_effect_means_match_sessions_and_export_units(saved_sessions):
 
 
 def test_loader_rejects_misaligned_grayordinates(saved_sessions):
+    """Verify loader rejects misaligned grayordinates."""
     root, sessions, _, _ = saved_sessions
     path = next(
         (root / "sub-07" / sessions[1]).rglob("*CanonicalTrialOLS_stat-activation*")
@@ -133,6 +138,7 @@ def test_loader_rejects_misaligned_grayordinates(saved_sessions):
     "pattern", ["*CanonicalTrialOLS_stat-rsquared*", "*CanonicalGLM_stat-effects*"]
 )
 def test_loader_rejects_wrong_scalar_names(saved_sessions, pattern):
+    """Verify loader rejects wrong scalar names."""
     root, sessions, _, brain = saved_sessions
     path = next((root / "sub-07" / sessions[0]).rglob(pattern))
     image = nib.load(path)
@@ -150,6 +156,7 @@ def test_loader_rejects_wrong_scalar_names(saved_sessions, pattern):
 
 
 def test_loader_rejects_incompatible_libraries_and_missing_results(saved_sessions):
+    """Verify loader rejects incompatible libraries and missing results."""
     root, sessions, _, _ = saved_sessions
     path = next(
         (root / "sub-07" / sessions[0]).rglob("*_desc-boldtailor_metadata.json")
@@ -166,6 +173,7 @@ def test_loader_rejects_incompatible_libraries_and_missing_results(saved_session
 
 
 def test_at_least_two_distinct_sessions_are_required(saved_sessions):
+    """Verify at least two distinct sessions are required."""
     root, sessions, _, _ = saved_sessions
     for selected in ([sessions[0]], [sessions[0], sessions[0]]):
         with pytest.raises(ValueError, match="two.*unique"):
@@ -173,6 +181,7 @@ def test_at_least_two_distinct_sessions_are_required(saved_sessions):
 
 
 def test_loader_rejects_different_global_alpha_selection_percentiles(saved_sessions):
+    """Verify loader rejects different global alpha selection percentiles."""
     root, sessions, _, _ = saved_sessions
     for i, session in enumerate(sessions):
         folder = root / "sub-07" / session / "func"
@@ -189,6 +198,7 @@ def test_loader_rejects_different_global_alpha_selection_percentiles(saved_sessi
 
 
 def test_sessions_with_different_task_models_cannot_be_pooled(saved_sessions):
+    """Verify sessions with different task models cannot be pooled."""
     root, sessions, _, _ = saved_sessions
     inputs = api("inputs")
     first, other = (
@@ -201,6 +211,7 @@ def test_sessions_with_different_task_models_cannot_be_pooled(saved_sessions):
 
 
 def test_sessions_with_different_hrf_normalization_cannot_be_pooled(saved_sessions):
+    """Verify sessions with different HRF normalization cannot be pooled."""
     root, sessions, _, _ = saved_sessions
     inputs = api("inputs")
     first, other = (

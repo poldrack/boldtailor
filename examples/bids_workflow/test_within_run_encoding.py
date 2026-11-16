@@ -39,6 +39,7 @@ def _fitted_models(root, prep, library, mode, fractional):
 def test_outer_losses_and_maps_are_published_consistently(
     six_run_dataset, cv_library, tmp_path, mode, fractional
 ):
+    """Verify outer losses and maps are published consistently."""
     root, prep = six_run_dataset
     settings, runs, models = _fitted_models(root, prep, cv_library, mode, fractional)
     kind = "FractionalCV" if fractional else "RidgeCV"

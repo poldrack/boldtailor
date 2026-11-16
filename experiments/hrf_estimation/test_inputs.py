@@ -53,6 +53,7 @@ def api():
 
 
 def test_discover_and_load_preserve_run_and_vertex_identity(bids):
+    """Verify discover and load preserve run and vertex identity."""
     runs = api().discover_runs(bids, "sub-07", (11,))
     assert [r.run_id for r in runs] == [
         "sub-07_ses-nsd11_task-nsdcore_run-01",
@@ -67,17 +68,20 @@ def test_discover_and_load_preserve_run_and_vertex_identity(bids):
 
 
 def test_missing_matched_confounds_is_error(bids):
+    """Verify missing matched confounds is error."""
     next(bids.rglob("*run-01_desc-confounds_timeseries.tsv")).unlink()
     with pytest.raises(FileNotFoundError, match="confounds"):
         api().discover_runs(bids, "sub-07", (11,))
 
 
 def test_missing_requested_session_is_error(bids):
+    """Verify missing requested session is error."""
     with pytest.raises(FileNotFoundError, match="nsd12"):
         api().discover_runs(bids, "sub-07", (11, 12))
 
 
 def test_motion_row_mismatch_is_error(bids):
+    """Verify motion row mismatch is error."""
     run = api().discover_runs(bids, "sub-07", (11,))[0]
     table = pd.read_csv(run.confounds_path, sep="\t").iloc[:-1]
     table.to_csv(run.confounds_path, sep="\t", index=False)
@@ -87,6 +91,7 @@ def test_motion_row_mismatch_is_error(bids):
 
 @pytest.mark.parametrize("vertices", [[0, 0], [-1], [3], [0.5], []])
 def test_invalid_vertex_selection_is_rejected(bids, vertices):
+    """Verify invalid vertex selection is rejected."""
     run = api().discover_runs(bids, "sub-07", (11,))[0]
     with pytest.raises(ValueError, match="vert"):
         api().load_run(run, np.array(vertices))

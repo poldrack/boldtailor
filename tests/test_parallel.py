@@ -27,6 +27,7 @@ def _process_probe(block, directory):
 
 @pytest.mark.integration
 def test_process_batches_are_bounded_ordered_and_thread_limited(tmp_path):
+    """Verify process batches are bounded ordered and thread limited."""
     results = map_blocks(_process_probe, range(4), args=(tmp_path,), n_jobs=2)
     first = next(results)
     assert first[0] == 0
@@ -41,12 +42,14 @@ def test_process_batches_are_bounded_ordered_and_thread_limited(tmp_path):
 
 
 def test_serial_execution_stays_in_process_and_ordered():
+    """Verify serial execution stays in process and ordered."""
     results = list(map_blocks(lambda block, offset: block + offset, [3, 1], args=(10,)))
     assert results == [(3, 13), (1, 11)]
 
 
 @pytest.mark.parametrize("n_jobs", [0, -1, True, 1.5])
 def test_invalid_worker_count_is_rejected(n_jobs):
+    """Verify invalid worker count is rejected."""
     with pytest.raises(ValueError, match="n_jobs.*positive integer"):
         validate_n_jobs(n_jobs)
     with pytest.raises(ValueError, match="n_jobs.*positive integer"):

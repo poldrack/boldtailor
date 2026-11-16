@@ -77,12 +77,16 @@ def _check(fig, n_axes, xlabel=None, ylabel=None):
 
 
 def test_r1_curves(curves):
+    """Plot one reliability-difference curve per model version with the expected axis
+    labels.
+    """
     fig = figures.fig_r1_curves(curves)
     assert len(fig.axes[0].lines) == 3
     _check(fig, 1, "Voxel reliability threshold (r)", "difference from composite")
 
 
 def test_r1_maps_flat(synthetic_session):
+    """Split flat feature maps into labeled left and right hemisphere panels."""
     values = np.arange(30.0)
     fig = figures.fig_r1_maps(values, synthetic_session.brain)
     assert [a.get_title() for a in fig.axes] == ["Left", "Right"]
@@ -90,17 +94,22 @@ def test_r1_maps_flat(synthetic_session):
 
 
 def test_r1_maps_meshes_not_implemented(synthetic_session):
+    """Verify r1 maps meshes not implemented."""
     with pytest.raises(NotImplementedError, match="surface"):
         figures.fig_r1_maps(np.zeros(30), synthetic_session.brain, meshes={})
 
 
 def test_r3_lss(lss_curves):
+    """Plot the three least-squares-separate comparisons with labeled reliability
+    thresholds.
+    """
     fig = figures.fig_r3_lss(lss_curves)
     assert len(fig.axes[0].lines) == 3
     _check(fig, 1, "Voxel reliability threshold (r)", "difference from composite")
 
 
 def test_r4_lag(lag_tables):
+    """Convert trial lags to seconds and plot one pattern-correlation curve per version."""
     fig = figures.fig_r4_lag(lag_tables)
     assert len(fig.axes[0].lines) == 3
     assert fig.axes[0].lines[0].get_xdata()[0] == 4.0
@@ -108,18 +117,21 @@ def test_r4_lag(lag_tables):
 
 
 def test_r5_rsa(rsa):
+    """Create a separate representational-similarity panel for each model version."""
     fig = figures.fig_r5_rsa(rsa)
     assert [a.get_title() for a in fig.axes] == VERSIONS
     plt.close(fig)
 
 
 def test_r6_decoding(decoding):
+    """Plot decoding accuracy for each model version alongside chance performance."""
     fig = figures.fig_r6_decoding(decoding)
     assert len(fig.axes[0].lines) == 4  # three versions plus chance
     _check(fig, 1, "Voxel reliability threshold (r)", "accuracy")
 
 
 def test_r2_hrf():
+    """Plot estimated-HRF agreement alongside its canonical-HRF baseline."""
     table = pd.DataFrame(
         {"mean_pairwise_r": [0.4, 0.5], "mean_canonical_baseline": [0.1, 0.2]}
     )
@@ -129,6 +141,7 @@ def test_r2_hrf():
 
 
 def test_parity_with_tost(parity):
+    """Include the supplied equivalence-test decision in the comparison figure."""
     tost = {"b4": {"equivalent": True, "p": 0.01}}
     fig = figures.fig_parity(parity, tost)
     assert len(fig.axes) == 3
@@ -138,12 +151,14 @@ def test_parity_with_tost(parity):
 
 
 def test_parity_without_tost(parity):
+    """Omit equivalence-test annotations when no TOST result is supplied."""
     fig = figures.fig_parity(parity)
     assert "TOST" not in fig.axes[0].get_title()
     plt.close(fig)
 
 
 def test_gate():
+    """Render the component-count comparison for gated and ungated denoising."""
     rows = [
         dict(condition=c, gate=g, n_components=n, seed=0)
         for c, g, n in [
@@ -158,6 +173,7 @@ def test_gate():
 
 
 def test_modulators():
+    """Render response-time correlations for models with and without modulators."""
     table = pd.DataFrame(
         {
             "version": ["b4", "b4-taskonly"] * 2,

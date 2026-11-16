@@ -25,6 +25,7 @@ def required(bids, **kwargs):
 
 
 def test_defaults_derive_fmriprep_and_output_directories(bids):
+    """Verify defaults derive fmriprep and output directories."""
     settings = required(bids)
     assert settings.fmriprep_dir == bids / "derivatives" / "fmriprep-25.2.5"
     assert settings.output_name() == "boldtailor_hrf-default512s0_ridge-fractionalcv"
@@ -52,10 +53,12 @@ def test_defaults_derive_fmriprep_and_output_directories(bids):
     ],
 )
 def test_output_name_encodes_library_and_ridge_mode(bids, kwargs, name):
+    """Verify output name encodes library and ridge mode."""
     assert required(bids, **kwargs).output_name() == name
 
 
 def test_explicit_paths_are_expanded_and_kept(bids, tmp_path):
+    """Verify explicit paths are expanded and kept."""
     out = tmp_path / "elsewhere"
     settings = required(
         bids, fmriprep_dir=bids / "derivatives" / "fmriprep-25.2.5", output_dir=out
@@ -64,6 +67,7 @@ def test_explicit_paths_are_expanded_and_kept(bids, tmp_path):
 
 
 def test_fmriprep_resolution_requires_a_unique_directory(tmp_path):
+    """Verify fmriprep resolution requires a unique directory."""
     root = tmp_path / "bids"
     (root / "derivatives").mkdir(parents=True)
     with pytest.raises(ValueError, match="no derivatives/fmriprep"):
@@ -98,11 +102,13 @@ def test_fmriprep_resolution_requires_a_unique_directory(tmp_path):
     ],
 )
 def test_invalid_settings_name_the_field(bids, kwargs, message):
+    """Verify invalid settings name the field."""
     with pytest.raises(ValueError, match=message):
         required(bids, **kwargs)
 
 
 def test_missing_bids_dir_is_an_error(tmp_path):
+    """Verify missing BIDS dir is an error."""
     with pytest.raises(ValueError, match="bids_dir"):
         WorkflowSettings(
             bids_dir=tmp_path / "nope", subject="sub-01", session="ses-01", task="t"
@@ -130,6 +136,7 @@ def test_missing_bids_dir_is_an_error(tmp_path):
     ],
 )
 def test_parse_modulator_options(text, expected):
+    """Verify parse modulator options."""
     assert parse_modulator(text) == expected
 
 
@@ -147,12 +154,14 @@ def test_parse_modulator_options(text, expected):
     ],
 )
 def test_parse_modulator_rejects_bad_options(bad):
+    """Verify parse modulator rejects bad options."""
     with pytest.raises(ValueError, match="modulator"):
         parse_modulator(bad)
 
 
 @pytest.mark.parametrize("level", ["a,b", "a:b"])
 def test_modulator_text_rejects_unexpressible_reference(level):
+    """Verify modulator text rejects unexpressible reference."""
     mod = Modulator("cond", kind="categorical", reference=level)
     with pytest.raises(ValueError, match="modulator reference"):
         modulator_text(mod)
@@ -167,6 +176,7 @@ def test_modulator_text_rejects_unexpressible_reference(level):
     ],
 )
 def test_settings_reject_modulators_the_cli_cannot_express(bids, mod):
+    """Verify settings reject modulators the CLI cannot express."""
     with pytest.raises(ValueError, match="modulators"):
         required(bids, modulators=(mod,))
 
@@ -180,10 +190,12 @@ def test_settings_reject_modulators_the_cli_cannot_express(bids, mod):
     ],
 )
 def test_modulator_text_inverts_parse_modulator(mod):
+    """Verify modulator text inverts parse modulator."""
     assert parse_modulator(modulator_text(mod)) == mod
 
 
 def test_round_trip_through_dict_and_library_builder(bids):
+    """Verify round trip through dict and library builder."""
     settings = required(
         bids,
         modulators=(Modulator("response_time", missing="indicator"),),
@@ -214,12 +226,14 @@ def test_round_trip_through_dict_and_library_builder(bids):
     ids=["fmriprep", "inside-fmriprep", "contains-fmriprep", "bids"],
 )
 def test_output_dir_may_not_overlap_the_inputs(bids, where):
+    """Verify output dir may not overlap the inputs."""
     prep = bids / "derivatives" / "fmriprep-25.2.5"
     with pytest.raises(ValueError, match="output_dir"):
         required(bids, output_dir=where(bids, prep))
 
 
 def test_output_dir_overlap_is_checked_on_resolved_paths(bids):
+    """Verify output dir overlap is checked on resolved paths."""
     alias = bids.parent / "alias"
     alias.symlink_to(bids / "derivatives" / "fmriprep-25.2.5")
     with pytest.raises(ValueError, match="output_dir"):
@@ -241,11 +255,13 @@ def test_output_dir_overlap_is_checked_on_resolved_paths(bids):
     ],
 )
 def test_ridge_grids_are_validated(bids, kwargs):
+    """Verify ridge grids are validated."""
     with pytest.raises(ValueError, match=next(iter(kwargs))):
         required(bids, **kwargs)
 
 
 def test_settings_reject_resolved_categorical_modulators(bids):
+    """Verify settings reject resolved categorical modulators."""
     mod = Modulator("cond", kind="categorical", levels=("a", "b"))
     with pytest.raises(ValueError, match="modulators.*levels.*events"):
         required(bids, modulators=(mod,))

@@ -11,16 +11,19 @@ from experiments.nsd_replication.confounds import (
     "n, tr, degree", [(226, 4 / 3, 3), (226, 1.6, 3), (75, 1.6, 1), (450, 1.0, 4)]
 )
 def test_degree_rule(n, tr, degree):
+    """Choose the polynomial confound degree from run duration using the specified rule."""
     assert polynomial_degree(n, tr) == degree
 
 
 def test_degree_rounds_half_away_from_zero():
+    """Verify degree rounds half away from zero."""
     assert polynomial_degree(150, 1.0) == 1  # 1.25 -> 1
     assert polynomial_degree(180, 1.0) == 2  # 1.5 -> 2
     assert polynomial_degree(300, 1.0) == 3  # 2.5 -> 3 (Python round gives 2)
 
 
 def test_basis_is_orthonormal_and_spans_monomials():
+    """Verify basis is orthonormal and spans monomials."""
     basis = glmsingle_polynomials(226, 4 / 3).to_numpy()
     np.testing.assert_allclose(basis.T @ basis, np.eye(4), atol=1e-10)
     x = np.linspace(-1, 1, 226)

@@ -71,6 +71,9 @@ def _centered_rmse(fit, truth):
 
 
 def test_fractional_cv_prefers_shrinkage_when_trials_overlap_and_noise_is_high():
+    """Verify fractional cross-validation prefers shrinkage when trials overlap and noise
+    is high.
+    """
     rng = np.random.default_rng(11)
     data, predictors, truth = _dense_trial_problem(rng)
     scores = score_fraction_candidates(data, predictors, fractions=FRACTIONS)
@@ -82,6 +85,7 @@ def test_fractional_cv_prefers_shrinkage_when_trials_overlap_and_noise_is_high()
 
 
 def test_fractional_cv_selects_ols_when_noise_is_negligible():
+    """Verify fractional cross-validation selects OLS when noise is negligible."""
     rng = np.random.default_rng(12)
     data, predictors, _ = _dense_trial_problem(rng, isi=8.0, noise_sd=0.01)
     scores = score_fraction_candidates(data, predictors, fractions=FRACTIONS)
@@ -90,6 +94,7 @@ def test_fractional_cv_selects_ols_when_noise_is_negligible():
 
 
 def test_shared_alpha_cv_prefers_a_positive_penalty_under_high_noise():
+    """Verify shared alpha cross-validation prefers a positive penalty under high noise."""
     rng = np.random.default_rng(13)
     data, predictors, _ = _dense_trial_problem(rng)
     alphas = (0.0, 0.3, 1.0, 3.0, 10.0)
@@ -128,6 +133,7 @@ def _hrf_selection(rng, library, kernels, motion, *, motion_weight, jitter):
 
 
 def test_hrf_selection_recovers_the_generating_kernel_under_ar1_noise():
+    """Verify HRF selection recovers the generating kernel under AR(1) noise."""
     rng = np.random.default_rng(21)
     library = HrfLibrary.from_parameters(
         [
@@ -152,6 +158,7 @@ def test_hrf_selection_recovers_the_generating_kernel_under_ar1_noise():
 
 
 def test_hrf_selection_keeps_canonical_when_truth_is_canonical():
+    """Verify HRF selection keeps canonical when truth is canonical."""
     rng = np.random.default_rng(22)
     library = HrfLibrary.from_parameters(
         [

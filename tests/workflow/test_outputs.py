@@ -46,6 +46,7 @@ def _find(paths, fragment):
 
 
 def test_dataset_description_is_a_boldtailor_derivative():
+    """Verify dataset description is a boldtailor derivative."""
     artifact = artifacts.dataset_description("NSD single-trial models")
     assert artifact.path == "dataset_description.json"
     assert json.loads(artifact.payload) == {
@@ -57,6 +58,7 @@ def test_dataset_description_is_a_boldtailor_derivative():
 
 
 def test_scalar_map_names_the_space_descriptor_and_statistic():
+    """Verify scalar map names the space descriptor and statistic."""
     brain = nib.cifti2.BrainModelAxis.from_surface([0, 1], 4, name="CortexLeft")
     artifact = artifacts.scalar_map(
         "sub-01/ses-a/func/sub-01_ses-a_task-x",
@@ -76,6 +78,7 @@ def test_scalar_map_names_the_space_descriptor_and_statistic():
 def test_activation_exports_preserve_map_names_axis_and_values(
     dataset, settings_for, tmp_path
 ):
+    """Verify activation exports preserve map names axis and values."""
     root, *_ = dataset
     settings = settings_for(root)
     brain = nib.cifti2.BrainModelAxis.from_surface([2, 0, 1], 4, name="CortexLeft")
@@ -121,6 +124,7 @@ def _assert_tuning_scope(paths, selected, base):
 def test_ridge_artifacts_match_numeric_results(
     six_run_dataset, cv_library, settings_for, tmp_path
 ):
+    """Verify ridge artifacts match numeric results."""
     root, _ = six_run_dataset
     settings = settings_for(root, ridge_mode="cv", ridge_alphas=(0.0, 0.1))
     runs, task_model, brain, _, models = _beta_models(settings, cv_library)
@@ -211,6 +215,7 @@ def _assert_fraction_exports(paths, model, brain, runs):
 def test_fraction_exports_match_the_fitted_models(
     six_run_dataset, cv_library, settings_for, tmp_path
 ):
+    """Verify fraction exports match the fitted models."""
     root, _ = six_run_dataset
     settings = settings_for(
         root, ridge_mode="fractional_cv", ridge_fractions=(0.3, 0.7, 1.0)
@@ -241,6 +246,7 @@ def test_fraction_exports_match_the_fitted_models(
 def test_beta_model_writer_covers_every_estimator(
     six_run_dataset, cv_library, settings_for
 ):
+    """Verify beta model writer covers every estimator."""
     root, _ = six_run_dataset
     settings = settings_for(
         root, ridge_mode="fractional_cv", ridge_fractions=(0.4, 1.0), block_size=4
@@ -277,6 +283,7 @@ def test_beta_model_writer_covers_every_estimator(
 def test_beta_model_writer_omits_rt_correlations_without_rt(
     four_runs, small_library, settings_for
 ):
+    """Verify beta model writer omits response-time correlations without response-time."""
     root, _ = four_runs
     settings = settings_for(
         root, ridge_mode="off", modulators=(Modulator("trial_type"),)
@@ -293,6 +300,7 @@ def test_beta_model_writer_omits_rt_correlations_without_rt(
 
 
 def test_check_output_errors_only_when_files_exist(four_runs, settings_for, tmp_path):
+    """Verify check output errors only when files exist."""
     root, _ = four_runs
     settings = settings_for(root, output_dir=tmp_path / "out")
     outputs.check_output(settings)  # nothing there
@@ -309,6 +317,7 @@ def test_check_output_errors_only_when_files_exist(four_runs, settings_for, tmp_
 
 
 def test_check_output_ignores_other_tasks(four_runs, settings_for, tmp_path):
+    """Verify check output ignores other tasks."""
     root, _ = four_runs
     target = tmp_path / "out" / "sub-07" / "ses-nsd10" / "func"
     target.mkdir(parents=True)
@@ -349,15 +358,18 @@ def _metadata(selected, **extra):
 
 
 def test_metadata_records_the_task_model_fingerprint(selected):
+    """Verify metadata records the task model fingerprint."""
     model = selected[2]
     assert _metadata(selected)["task_model_fingerprint"] == model.fingerprint
 
 
 def test_metadata_records_peak_hrf_normalization(selected):
+    """Verify metadata records peak HRF normalization."""
     assert _metadata(selected)["hrf_normalization"] == "peak_one_event_response"
 
 
 def test_metadata_records_settings_runs_task_model_skips_and_report(selected):
+    """Verify metadata records settings runs task model skips and report."""
     settings, runs, model, *_ = selected
     report = "sub-07_ses-nsd10_task-nsdcore_report.html"
     published = _metadata(
@@ -374,6 +386,7 @@ def test_metadata_records_settings_runs_task_model_skips_and_report(selected):
 
 
 def test_metadata_prose_follows_the_task_model(four_runs, small_library, settings_for):
+    """Verify metadata prose follows the task model."""
     root, _ = four_runs
     settings = settings_for(
         root, modulators=(Modulator("trial_type", kind="categorical"),)
@@ -405,6 +418,7 @@ def test_metadata_prose_follows_the_task_model(four_runs, small_library, setting
 
 
 def test_metadata_rt_check_follows_the_rt_selection_switch(selected, settings_for):
+    """Verify metadata response-time check follows the response-time selection switch."""
     settings, runs, model, _, library, _, selections = selected
     assert "RT enters HRF selection" in _metadata(selected)["rt_check"]
     off = settings_for(settings.bids_dir, hrf_selection_rt=False)
@@ -423,6 +437,7 @@ def test_metadata_rt_check_follows_the_rt_selection_switch(selected, settings_fo
 
 
 def test_metadata_pools_hrf_bound_flags_over_blocks(selected):
+    """Verify metadata pools HRF bound flags over blocks."""
     selections = selected[-1]
     assert len(selections) > 1
     rows = pd.DataFrame(_metadata(selected)["hrf_boundary_summary"])
@@ -443,6 +458,7 @@ def test_metadata_pools_hrf_bound_flags_over_blocks(selected):
 
 
 def test_hrf_artifacts_write_splits_only_when_requested(selected):
+    """Verify HRF artifacts write splits only when requested."""
     settings, _, _, brain, library, _, selections = selected
     stem, space = settings.stem, settings.space_entity
     full = {a.path for a in outputs.hrf_artifacts(settings, brain, selections, library)}
@@ -465,6 +481,7 @@ def test_hrf_artifacts_write_splits_only_when_requested(selected):
 def test_save_workflow_publishes_every_stage_and_the_report(
     selected, settings_for, tmp_path
 ):
+    """Verify save workflow publishes every stage and the report."""
     _, runs, model, _, library, blocks, selections = selected
     root = selected[0].bids_dir
     settings = settings_for(root, ridge_mode="off", output_dir=tmp_path / "out")
@@ -525,6 +542,7 @@ def test_save_workflow_publishes_every_stage_and_the_report(
 def test_save_workflow_keeps_another_sessions_dataset_description(
     four_runs, small_library, settings_for, tmp_path
 ):
+    """Verify save workflow keeps another sessions dataset description."""
     root, _ = four_runs
     settings = settings_for(root, output_dir=tmp_path / "out")
     runs, model, _ = _session(settings)
@@ -550,6 +568,7 @@ def test_save_workflow_keeps_another_sessions_dataset_description(
 
 
 def test_hrf_outputs_accept_all_only_selection_bundles(selected):
+    """Verify HRF outputs accept all only selection bundles."""
     settings, _, _, brain, library, _, selections = selected
     all_only = {k: {"all": bundle["all"]} for k, bundle in selections.items()}
     written = outputs.hrf_artifacts(
@@ -600,6 +619,7 @@ def _figure():
 def test_overwrite_removes_only_stale_files_boldtailor_listed(
     four_runs, settings_for, tmp_path
 ):
+    """Verify overwrite removes only stale files boldtailor listed."""
     root, _ = four_runs
     out = tmp_path / "out"
     first = _save_inputs_only(
@@ -631,6 +651,7 @@ def test_overwrite_removes_only_stale_files_boldtailor_listed(
 def test_overwrite_without_an_earlier_artifact_list_deletes_nothing(
     four_runs, settings_for, tmp_path
 ):
+    """Verify overwrite without an earlier artifact list deletes nothing."""
     root, _ = four_runs
     out = tmp_path / "out"
     func = out / "sub-07" / "ses-nsd10" / "func"
@@ -646,6 +667,7 @@ def test_overwrite_without_an_earlier_artifact_list_deletes_nothing(
 def test_overwrite_ignores_listed_paths_outside_the_output_dir(
     four_runs, settings_for, tmp_path
 ):
+    """Verify overwrite ignores listed paths outside the output dir."""
     root, _ = four_runs
     out = tmp_path / "out"
     settings = settings_for(root, output_dir=out)
@@ -664,6 +686,7 @@ def test_overwrite_ignores_listed_paths_outside_the_output_dir(
 def test_metadata_lists_this_runs_published_artifacts(
     four_runs, settings_for, tmp_path
 ):
+    """Verify metadata lists this runs published artifacts."""
     root, _ = four_runs
     settings = settings_for(root, output_dir=tmp_path / "out")
     paths = _save_inputs_only(
@@ -678,6 +701,7 @@ def test_metadata_lists_this_runs_published_artifacts(
 
 
 def test_check_output_names_the_existing_files(four_runs, settings_for, tmp_path):
+    """Verify check output names the existing files."""
     root, _ = four_runs
     settings = settings_for(root, output_dir=tmp_path / "out")
     func = tmp_path / "out" / "sub-07" / "ses-nsd10" / "func"
@@ -692,6 +716,7 @@ def test_check_output_names_the_existing_files(four_runs, settings_for, tmp_path
 
 
 def test_hrf_boundary_table_is_the_pooled_summary_as_a_frame(selected):
+    """Verify HRF boundary table is the pooled summary as a frame."""
     selections = selected[-1]
     table = outputs.hrf_boundary_table(selections)
     expected = pd.DataFrame(outputs.hrf_boundary_summary(selections))
@@ -702,6 +727,7 @@ def test_hrf_boundary_table_is_the_pooled_summary_as_a_frame(selected):
 def test_workflow_artifacts_are_the_published_set_less_report_and_description(
     selected, settings_for, tmp_path
 ):
+    """Verify workflow artifacts are the published set less report and description."""
     _, runs, model, _, library, _, selections = selected
     settings = settings_for(selected[0].bids_dir, output_dir=tmp_path / "out")
     figure = Figure()
@@ -741,6 +767,7 @@ def test_workflow_artifacts_are_the_published_set_less_report_and_description(
 
 
 def test_metadata_records_undefined_bound_fractions_as_null(four_runs, settings_for):
+    """Verify metadata records undefined bound fractions as null."""
     root, _ = four_runs
     settings = settings_for(root, hrf_library="canonical")
     runs, model, _ = _session(settings)
@@ -768,6 +795,7 @@ def test_metadata_records_undefined_bound_fractions_as_null(four_runs, settings_
 def test_two_sessions_publish_into_one_output_dir_under_error(
     four_runs, settings_for, tmp_path
 ):
+    """Verify two sessions publish into one output dir under error."""
     from tests.workflow.synthetic_bids import copy_task
 
     root, prep = four_runs
@@ -783,6 +811,7 @@ def test_two_sessions_publish_into_one_output_dir_under_error(
 def test_publication_waits_long_for_the_writer_lock(
     four_runs, settings_for, tmp_path, monkeypatch
 ):
+    """Verify publication waits long for the writer lock."""
     seen = {}
     original = outputs.publish_artifact_set
 
@@ -798,6 +827,7 @@ def test_publication_waits_long_for_the_writer_lock(
 
 
 def test_check_output_sees_an_existing_root_report(four_runs, settings_for, tmp_path):
+    """Verify check output sees an existing root report."""
     root, _ = four_runs
     settings = settings_for(root, output_dir=tmp_path / "out")
     report = tmp_path / "out" / "sub-07_ses-nsd10_task-nsdcore_report.html"
@@ -810,6 +840,7 @@ def test_check_output_sees_an_existing_root_report(four_runs, settings_for, tmp_
 def test_check_output_message_stays_short_for_many_files(
     four_runs, settings_for, tmp_path
 ):
+    """Verify check output message stays short for many files."""
     root, _ = four_runs
     func = tmp_path / "out" / "sub-07" / "ses-nsd10" / "func"
     func.mkdir(parents=True)
@@ -825,6 +856,7 @@ def test_check_output_message_stays_short_for_many_files(
 def test_overwrite_refuses_corrupt_previous_manifest(
     four_runs, settings_for, tmp_path, contents
 ):
+    """Verify overwrite refuses corrupt previous manifest."""
     root, _ = four_runs
     settings = settings_for(
         root, output_dir=tmp_path / "out", existing_results="overwrite"

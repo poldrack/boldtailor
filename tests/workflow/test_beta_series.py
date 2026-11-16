@@ -89,6 +89,7 @@ def altered_runs(runs, parity, rt_shift):
 
 
 def test_block_size_and_parallelism_preserve_global_choice(session, cv_library):
+    """Verify block size and parallelism preserve global choice."""
     serial = fit_alpha(session, cv_library)
     parallel = fit(session, cv_library, alphas=[0.0, 0.1, 1.0], block_size=3, n_jobs=2)
     for scope in ("odd", "even", "all"):
@@ -103,6 +104,7 @@ def test_block_size_and_parallelism_preserve_global_choice(session, cv_library):
 def test_outer_data_cannot_change_training_choices(
     session, cv_library, parity, scope, evaluation
 ):
+    """Verify outer data cannot change training choices."""
     root, runs, model = session
     original = fit_alpha(session, cv_library)
     changed = altered_runs(runs, parity, 10.0)
@@ -121,6 +123,7 @@ def test_outer_data_cannot_change_training_choices(
 
 
 def test_missing_rt_keeps_beta_rows_and_requested_axis(session):
+    """Verify missing response-time keeps beta rows and requested axis."""
     root, runs, model = session
     altered = []
     for run in runs:
@@ -141,6 +144,7 @@ def test_missing_rt_keeps_beta_rows_and_requested_axis(session):
     "case", ["fewruns", "type", "axis", "block", "maximum", "jobs"]
 )
 def test_workflow_preflight_rejects_invalid_inputs(session, cv_library, case):
+    """Verify workflow preflight rejects invalid inputs."""
     root, runs, model = session
     kwargs = options(cv_library)
     if case == "fewruns":
@@ -167,6 +171,7 @@ def test_workflow_preflight_rejects_invalid_inputs(session, cv_library, case):
 
 
 def test_final_provenance_identifies_the_tuning_decision(session):
+    """Verify final provenance identifies the tuning decision."""
     root, runs, model = session
 
     def run_fit(run_set, **overrides):
@@ -212,6 +217,7 @@ def test_final_provenance_identifies_the_tuning_decision(session):
 
 
 def test_rt_switch_reaches_every_ridge_selection(session, cv_library):
+    """Verify response-time switch reaches every ridge selection."""
     root, runs, model = session
     narrow = inputs.selection_task_model(model, False)
     result = beta_series.fit_cv_beta_series(
@@ -226,6 +232,7 @@ def test_rt_switch_reaches_every_ridge_selection(session, cv_library):
 def test_selection_model_leaves_predictors_and_fits_on_the_full_model(
     session, cv_library
 ):
+    """Verify selection model leaves predictors and fits on the full model."""
     root, runs, model = session
     narrow = inputs.selection_task_model(model, False)
     result = beta_series.fit_cv_beta_series(
@@ -238,6 +245,7 @@ def test_selection_model_leaves_predictors_and_fits_on_the_full_model(
 
 
 def test_coefficient_rows_are_named_after_the_predictors(session):
+    """Verify coefficient rows are named after the predictors."""
     outer = fit_alpha(session, None)["evaluation"]["odd_to_even"]
     assert outer["coefficient_names"] == ["task", *ORDER]
     assert outer["coefficients"].shape[0] == 3
@@ -248,6 +256,7 @@ def test_coefficient_rows_are_named_after_the_predictors(session):
 
 @pytest.mark.parametrize("optimized", [False, True])
 def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
+    """Verify fraction workflow matches whole array."""
     root, runs, model = session
     library = cv_library if optimized else None
     result = fit_fractions(session, library, block_size=1)
@@ -325,6 +334,7 @@ def assert_fractional_final(result, runs, data, library, model):
 
 
 def test_fraction_blocks_workers_and_missing_rt_preserve_results(session, cv_library):
+    """Verify fraction blocks workers and missing response-time preserve results."""
     root, runs, model = session
     runs = [
         replace(
@@ -353,6 +363,7 @@ def test_fraction_blocks_workers_and_missing_rt_preserve_results(session, cv_lib
 def test_outer_fraction_choices_and_training_coefficients_are_isolated(
     session, cv_library, parity, scope
 ):
+    """Verify outer fraction choices and training coefficients are isolated."""
     root, runs, model = session
     initial = fit_fractions(session, cv_library, block_size=2)
     altered = fit_fractions(
@@ -372,6 +383,7 @@ def test_outer_fraction_choices_and_training_coefficients_are_isolated(
 
 
 def test_fraction_and_alpha_grids_are_mutually_exclusive(session):
+    """Verify fraction and alpha grids are mutually exclusive."""
     with pytest.raises(ValueError):
         fit_fractions(session, alphas=[0, 1])
 
@@ -382,6 +394,7 @@ def test_fraction_and_alpha_grids_are_mutually_exclusive(session):
 @pytest.mark.parametrize("mode", ["within_run", "absolute"])
 @pytest.mark.parametrize("fractional", [False, True])
 def test_outer_oracle_and_blocks(session, mode, fractional):
+    """Match blocked outer-fold predictions to the independent beta-series oracle."""
     root, runs, model = session
     grid = dict(fractions=[1, 0.5]) if fractional else dict(alphas=[0, 0.1])
     result = fit(session, encoding_mode=mode, block_size=2, **grid)
@@ -458,6 +471,7 @@ def assert_outer_oracle(outer, data, predictors, train, test, mode, fractional):
 
 
 def test_workflow_rejects_unknown_encoding_mode(session):
+    """Verify workflow rejects unknown encoding mode."""
     with pytest.raises(ValueError, match="encoding_mode"):
         fit(session, alphas=[0], encoding_mode="bad")
 
@@ -497,6 +511,7 @@ def _tuning(fractional):
 
 @pytest.mark.parametrize("fractional", [False, True])
 def test_tuning_identity_does_not_depend_on_software(monkeypatch, fractional):
+    """Verify tuning identity does not depend on software."""
     first = _tuning(fractional)
     assert first.analysis_fingerprint is not None
     changed = {k: f"changed-{v}" for k, v in software_environment().items()}
@@ -524,6 +539,7 @@ ESTIMATOR = {
 def test_fit_beta_models_yields_one_model_per_hrf_and_estimator(
     six_run_dataset, cv_library, settings_for, mode
 ):
+    """Verify fit beta models yields one model per HRF and estimator."""
     root, _ = six_run_dataset
     settings = settings_for(
         root,
@@ -560,6 +576,9 @@ def test_fit_beta_models_yields_one_model_per_hrf_and_estimator(
 def test_cv_models_keep_rt_in_fits_and_predictors_when_selection_excludes_it(
     six_run_dataset, cv_library, settings_for
 ):
+    """Verify cross-validation models keep response-time in fits and predictors when
+    selection excludes it.
+    """
     root, _ = six_run_dataset
     settings = settings_for(
         root,
@@ -582,6 +601,7 @@ def test_cv_models_keep_rt_in_fits_and_predictors_when_selection_excludes_it(
 def test_fixed_ridge_model_uses_the_setting_alpha(
     six_run_dataset, cv_library, settings_for
 ):
+    """Verify fixed ridge model uses the setting alpha."""
     root, _ = six_run_dataset
     settings = settings_for(root, ridge_mode="fixed", ridge_alpha=0.5, block_size=4)
     runs = inputs.load_session(settings)
@@ -595,6 +615,7 @@ def test_fixed_ridge_model_uses_the_setting_alpha(
 
 
 def test_ridge_cv_progress_goes_to_the_log_not_stdout(session, capsys, caplog):
+    """Verify ridge cross-validation progress goes to the log not stdout."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     fit_alpha(session, None)
     assert capsys.readouterr().out == ""
@@ -613,6 +634,7 @@ def unlinked_fit():
 
 
 def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fit):
+    """Verify final provenance returns new records without mutating input."""
     decision = _tuning(False)
     before = deepcopy(unlinked_fit["provenance"])
     decision_before = decision.to_dict()
@@ -638,6 +660,7 @@ def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fi
 
 
 def test_final_provenance_rejects_already_linked_fit(unlinked_fit):
+    """Verify final provenance rejects already linked fit."""
     decision = _tuning(False)
     linked = beta_series.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
@@ -649,6 +672,7 @@ def test_final_provenance_rejects_already_linked_fit(unlinked_fit):
 
 
 def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
+    """Verify encoding mode does not require last activity."""
     data, predictors = _problem()
     scores = score_ridge_candidates(data, predictors, alphas=[0.0, 1.0])
     scores = replace(

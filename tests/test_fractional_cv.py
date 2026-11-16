@@ -19,6 +19,7 @@ def module():
 
 
 def test_selector_chooses_different_fractions_and_preserves_undefined_locations():
+    """Verify selector chooses different fractions and preserves undefined locations."""
     scores = np.array(
         [
             [0.7, -0.5, 0.8, np.nan, 0.5],
@@ -43,6 +44,7 @@ def test_selector_chooses_different_fractions_and_preserves_undefined_locations(
 
 @pytest.mark.parametrize("case", ["shape", "grid", "mask"])
 def test_selector_rejects_misaligned_inputs(case):
+    """Verify selector rejects misaligned inputs."""
     scores, fractions, mask = np.ones((2, 3)), [0.5, 1], None
     if case == "shape":
         scores = scores.T
@@ -122,6 +124,7 @@ def reference(data, predictors, library, fractions, encoding_mode="within_run"):
 def test_fraction_cv_matches_nested_fixed_ols_oracle(
     ridge_problem, optimized, encoding_mode
 ):
+    """Verify fraction cross-validation matches nested fixed OLS oracle."""
     data, predictors, library = ridge_problem
     library = library if optimized else None
     result = module().score_fraction_candidates(
@@ -147,6 +150,7 @@ def test_fraction_cv_matches_nested_fixed_ols_oracle(
 
 
 def test_inner_validation_data_does_not_change_hrf_or_training_transform(ridge_problem):
+    """Verify inner validation data does not change HRF or training transform."""
     data, predictors, library = ridge_problem
     original = module().score_fraction_candidates(
         data, predictors, fractions=[1, 0.5], library=library
@@ -171,6 +175,7 @@ def test_inner_validation_data_does_not_change_hrf_or_training_transform(ridge_p
 
 
 def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
+    """Verify fixed targets do not depend on fraction grid."""
     data, predictors, _ = ridge_problem
     first = module().score_fraction_candidates(data, predictors, fractions=[0.7, 0.3])
     second = module().score_fraction_candidates(data, predictors, fractions=[1, 0.7])
@@ -189,6 +194,7 @@ def test_fixed_targets_do_not_depend_on_fraction_grid(ridge_problem):
 def test_prepared_fraction_run_betas_match_oracle_in_any_order(
     ridge_problem, optimized
 ):
+    """Verify prepared fraction run betas match oracle in any order."""
     from boldtailor import _ridge_cv as cv
 
     data, _, library = ridge_problem

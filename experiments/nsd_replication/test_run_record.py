@@ -37,12 +37,14 @@ def _read(path):
 
 
 def test_record_written_under_run_records(config, args):
+    """Verify record written under run records."""
     path = start_run_record(config, args, ("b1", "b2"), now=STARTED)
     assert path.parent == config.output_dir / "run_records"
     assert path.name == "20261007T123005123456Z_fit_ppdata.json"
 
 
 def test_record_lists_sessions_run_and_configured(config, args):
+    """Verify record lists sessions run and configured."""
     record = _read(start_run_record(config, args, ("b1", "b2"), now=STARTED))
     assert record["sessions_run"] == ["ses-a", "ses-c"]
     assert record["config_sessions"] == ["ses-a", "ses-b", "ses-c"]
@@ -50,6 +52,7 @@ def test_record_lists_sessions_run_and_configured(config, args):
 
 
 def test_record_describes_the_invocation(config, args):
+    """Verify record describes the invocation."""
     record = _read(start_run_record(config, args, ("b1", "b2"), now=STARTED))
     assert record["command"] == "fit" and record["source"] == "ppdata"
     assert record["config"] == str(args.config.resolve())
@@ -61,6 +64,7 @@ def test_record_describes_the_invocation(config, args):
 
 
 def test_full_session_set_is_not_a_subset(config, args):
+    """Verify full session set is not a subset."""
     full = ExperimentConfig(
         bids_dir=config.bids_dir,
         output_dir=config.output_dir,
@@ -73,6 +77,7 @@ def test_full_session_set_is_not_a_subset(config, args):
 
 
 def test_completion_adds_completed_at(config, args):
+    """Verify completion adds completed at."""
     path = start_run_record(config, args, ("b1",), now=STARTED)
     complete_run_record(path)
     record = _read(path)

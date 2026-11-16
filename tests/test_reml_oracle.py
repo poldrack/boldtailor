@@ -86,6 +86,9 @@ def _whitened(parts, rho):
 
 @pytest.mark.parametrize("case", [_mixedlm_param(c) for c in CASES])
 def test_matches_mixedlm(case):
+    """Compare REML variance estimates with the independent statsmodels MixedLM
+    implementation.
+    """
     rho = case.get("rho", 0.0)
     data = _case_data(case)
     fit = _fit(*data, rho)
@@ -96,6 +99,7 @@ def test_matches_mixedlm(case):
 
 @pytest.mark.parametrize("case", [pytest.param(c, id=_case_id(c)) for c in CASES])
 def test_matches_dense_fit(case):
+    """Compare REML variance estimates with the independent dense covariance oracle."""
     rho = case.get("rho", 0.0)
     data = _case_data(case)
     fit = _fit(*data, rho)

@@ -14,6 +14,7 @@ def _structured_records(caplog) -> list[dict[str, object]]:
 
 
 def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
+    """Verify bind context nests optional ids and resets after success."""
     caplog.set_level(logging.INFO, logger="boldtailor")
 
     emit_event("outside_before", stage="test")
@@ -55,6 +56,7 @@ def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
 def test_from_arrays_logs_structured_records_without_mutating_loggers(
     caplog, monkeypatch, tmp_path, complete_sources
 ):
+    """Verify from arrays logs structured records without mutating loggers."""
     sentinel_home = "/sentinel-home/boldtailor-secret"
     sentinel_cwd = tmp_path / "sentinel-cwd-boldtailor-secret"
     sentinel_cwd.mkdir()
@@ -115,6 +117,7 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(
 def test_from_arrays_logs_failure_and_resets_context_after_exception(
     caplog, complete_sources
 ):
+    """Verify from arrays logs failure and resets context after exception."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     events = pd.DataFrame({"onset": [0.0], "duration": [-1.0]})
 
@@ -160,6 +163,7 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(
     ],
 )
 def test_failure_events_export_only_fixed_categories(caplog, error, code):
+    """Verify failure events export only fixed categories."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     event = emit_event("fit_failed", stage="fit", level=logging.ERROR, error=error)
     assert event["error_code"] == code
@@ -168,6 +172,8 @@ def test_failure_events_export_only_fixed_categories(caplog, error, code):
 
 
 def test_failure_logging_does_not_stringify_exceptions(caplog):
+    """Verify failure logging does not stringify exceptions."""
+
     class UnprintableError(ValueError):
         def __str__(self):
             raise AssertionError("exception text must not be inspected")
@@ -181,6 +187,7 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
     "field", ["execution_id", "data_id", "analysis_id", "run_index"]
 )
 def test_explicit_none_clears_one_context_field_and_restores_parent(field):
+    """Verify explicit none clears one context field and restores parent."""
     parent = dict(
         execution_id="execution", data_id="data", analysis_id="analysis", run_index=2
     )
@@ -198,6 +205,7 @@ def test_explicit_none_clears_one_context_field_and_restores_parent(field):
 
 
 def test_context_clear_is_restored_after_exception():
+    """Verify context clear is restored after exception."""
     with bind_context(analysis_id="parent"):
         with pytest.raises(RuntimeError):
             with bind_context(analysis_id=None):

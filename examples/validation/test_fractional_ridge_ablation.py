@@ -89,6 +89,7 @@ def oracle(designs, signals, basis, fraction=None, alpha=None):
 @pytest.mark.parametrize("scope", ["per_run", "pooled_train"])
 @pytest.mark.parametrize("fraction", [1.0, 0.5])
 def test_split_matches_augmented_oracle(runs, basis, scope, fraction):
+    """Verify split matches augmented oracle."""
     designs, signals, predictors = runs
     exp = experiment()
     prepared = exp.prepare_runs(designs, signals, basis=basis)
@@ -123,6 +124,7 @@ def test_split_matches_augmented_oracle(runs, basis, scope, fraction):
 
 
 def test_raw_per_run_ablation_agrees_with_production(runs):
+    """Verify raw per run ablation agrees with production."""
     designs, signals, predictors = runs
     exp = experiment()
     fits = [
@@ -150,6 +152,7 @@ def test_raw_per_run_ablation_agrees_with_production(runs):
 
 @pytest.mark.parametrize("scope", ["per_run", "pooled_train"])
 def test_held_out_data_never_changes_training_state(runs, scope):
+    """Verify held out data never changes training state."""
     designs, signals, predictors = runs
     exp = experiment()
     kwargs = dict(
@@ -180,6 +183,7 @@ def test_held_out_data_never_changes_training_state(runs, scope):
 
 
 def test_fixed_targets_do_not_shrink_with_candidate(runs):
+    """Verify fixed targets do not shrink with candidate."""
     designs, signals, predictors = runs
     exp = experiment()
     prepared = exp.prepare_runs(designs, signals, basis="normalized")
@@ -192,6 +196,7 @@ def test_fixed_targets_do_not_shrink_with_candidate(runs):
 
 
 def test_training_only_calibration_and_identity_fallback():
+    """Verify training only calibration and identity fallback."""
     exp = experiment()
     raw = np.array([[1, 1, 2], [2, 1, 3], [4, 1, 6]], float)
     ols = np.column_stack([3 * raw[:, 0] + 2, np.arange(3), -raw[:, 2]])

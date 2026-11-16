@@ -30,3 +30,7 @@
 - Do not rerun the full suite after every local edit when targeted checks suffice.
 - Use [docs/testing.md](docs/testing.md) for module mappings and opt-in scientific,
   experiment, and notebook checks. State which suites actually ran.
+
+- Give every test function a short, one- or two-sentence purpose docstring.
+- Review redundant tests by the behavior and parameter cases they protect; runtime
+  alone is not a reason to delete scientific coverage.

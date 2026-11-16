@@ -45,6 +45,7 @@ def publish(root, **kwargs):
 
 @pytest.mark.integration
 def test_manifest_removal_preserves_sources_and_unlisted_files(prior_outputs):
+    """Verify manifest removal preserves sources and unlisted files."""
     root = prior_outputs
     (root / "unlisted.bin").write_bytes(b"untouched")
     paths = publish(root, source_paths=[root / "keep.bin"])
@@ -62,6 +63,7 @@ def test_manifest_removal_preserves_sources_and_unlisted_files(prior_outputs):
 def test_removal_and_promotion_failures_restore_entire_previous_set(
     prior_outputs, monkeypatch, failure_at
 ):
+    """Verify removal and promotion failures restore entire previous set."""
     root = prior_outputs
     before = snapshot(root)
     original = publication.os.replace
@@ -92,6 +94,7 @@ def test_removal_and_promotion_failures_restore_entire_previous_set(
 
 
 def test_previous_manifest_is_read_after_lock_acquisition(prior_outputs, monkeypatch):
+    """Verify previous manifest is read after lock acquisition."""
     root = prior_outputs
     original = publication.FileLock
 
@@ -115,6 +118,7 @@ def test_previous_manifest_is_read_after_lock_acquisition(prior_outputs, monkeyp
 
 
 def test_stale_files_are_removed_while_writer_lock_is_held(prior_outputs, monkeypatch):
+    """Verify stale files are removed while writer lock is held."""
     root = prior_outputs
     original = publication.os.replace
     removals = []
@@ -138,6 +142,7 @@ def test_stale_files_are_removed_while_writer_lock_is_held(prior_outputs, monkey
     "contents", ["not json", "[]", '{"artifacts": "bad"}', '{"artifacts": [12]}']
 )
 def test_corrupt_manifest_stops_before_modification(prior_outputs, contents):
+    """Verify corrupt manifest stops before modification."""
     root = prior_outputs
     (root / "manifest.json").write_text(contents)
     before = snapshot(root)
@@ -147,6 +152,7 @@ def test_corrupt_manifest_stops_before_modification(prior_outputs, contents):
 
 
 def test_unreadable_manifest_stops_before_modification(prior_outputs, monkeypatch):
+    """Verify unreadable manifest stops before modification."""
     root = prior_outputs
     before = snapshot(root)
     original = Path.read_text
@@ -166,6 +172,7 @@ def test_unreadable_manifest_stops_before_modification(prior_outputs, monkeypatc
 def test_missing_or_legacy_manifest_does_not_infer_files_to_remove(
     prior_outputs, legacy
 ):
+    """Verify missing or legacy manifest does not infer files to remove."""
     root = prior_outputs
     if legacy:
         (root / "manifest.json").write_text("{}")
@@ -176,6 +183,7 @@ def test_missing_or_legacy_manifest_does_not_infer_files_to_remove(
 
 
 def test_stale_paths_cannot_follow_parent_symlinks(prior_outputs, tmp_path):
+    """Verify stale paths cannot follow parent symlinks."""
     root = prior_outputs
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -209,6 +217,7 @@ def test_stale_paths_cannot_follow_parent_symlinks(prior_outputs, tmp_path):
 def test_manifest_cleanup_requires_an_overwritten_manifest_artifact(
     prior_outputs, options
 ):
+    """Verify manifest cleanup requires an overwritten manifest artifact."""
     before = snapshot(prior_outputs)
     with pytest.raises(ValueError, match="manifest"):
         publish_artifact_set(prior_outputs, replacement(), **options)
@@ -216,6 +225,7 @@ def test_manifest_cleanup_requires_an_overwritten_manifest_artifact(
 
 
 def test_stale_manifest_entries_cannot_delete_protected_source_ancestors(prior_outputs):
+    """Verify stale manifest entries cannot delete protected source ancestors."""
     root = prior_outputs
     folder = root / "source-data"
     folder.mkdir()
@@ -229,6 +239,7 @@ def test_stale_manifest_entries_cannot_delete_protected_source_ancestors(prior_o
 def test_invalid_relative_manifest_entries_are_never_deletion_targets(
     prior_outputs, tmp_path
 ):
+    """Verify invalid relative manifest entries are never deletion targets."""
     root = prior_outputs
     outside = tmp_path / "outside.bin"
     outside.write_bytes(b"untouched")

@@ -12,6 +12,7 @@ def module(name):
 
 
 def test_hrf_design_owns_the_design_constants():
+    """Verify HRF design owns the design constants."""
     design = module("_hrf_design")
     assert design.OVERSAMPLING == 50
     assert design.MIN_ONSET == -24.0
@@ -29,6 +30,7 @@ def test_hrf_design_owns_the_design_constants():
     ],
 )
 def test_consumers_import_the_shared_constants(consumer):
+    """Verify consumers import the shared constants."""
     design = module("_hrf_design")
     used = module(consumer)
     for name in ("OVERSAMPLING", "MIN_ONSET"):
@@ -38,6 +40,7 @@ def test_consumers_import_the_shared_constants(consumer):
 
 
 def test_defaults_come_from_the_shared_constants():
+    """Verify defaults come from the shared constants."""
     design = module("_hrf_design")
     model = module("model").ModelSpec(contrasts={"task": "task"})
     assert model.oversampling == design.OVERSAMPLING
@@ -50,6 +53,7 @@ def test_defaults_come_from_the_shared_constants():
 
 
 def test_ridge_penalty_ties_use_the_shared_tolerance(monkeypatch):
+    """Verify ridge penalty ties use the shared tolerance."""
     selection = module("ridge_selection")
     scores = [[0.25], [0.2]]
     assert selection.select_ridge_penalty(scores, [1.0, 0.0]).ridge_alpha == 1.0
@@ -58,6 +62,7 @@ def test_ridge_penalty_ties_use_the_shared_tolerance(monkeypatch):
 
 
 def test_fraction_ties_use_the_shared_tolerance(monkeypatch):
+    """Verify fraction ties use the shared tolerance."""
     fractional = module("fractional_ridge")
     scores = [[0.2], [0.25]]
     assert (
@@ -83,6 +88,7 @@ def test_fraction_ties_use_the_shared_tolerance(monkeypatch):
     ],
 )
 def test_public_scalar_predicates(value, boolean, integer, real):
+    """Distinguish boolean, integer and real values across Python and NumPy scalar types."""
     model = module("model")
     assert model.is_boolean(value) is boolean
     assert model.is_integer(value) is integer
@@ -91,6 +97,7 @@ def test_public_scalar_predicates(value, boolean, integer, real):
 
 def test_model_options_accept_numpy_integers_stored_as_builtin_ints():
     # Requirement change over the Task 4.7 pin, which demanded builtin ints.
+    """Verify model options accept NumPy integers stored as builtin ints."""
     spec = module("model").ModelSpec
     model = spec(
         contrasts={"task": "task"}, drift_order=np.int64(2), oversampling=np.int64(20)
@@ -100,6 +107,7 @@ def test_model_options_accept_numpy_integers_stored_as_builtin_ints():
 
 
 def test_model_options_still_reject_booleans_and_floats():
+    """Verify model options still reject booleans and floats."""
     spec = module("model").ModelSpec
     with pytest.raises(ValueError, match="drift_order"):
         spec(contrasts={"task": "task"}, drift_order=np.float64(1.0))

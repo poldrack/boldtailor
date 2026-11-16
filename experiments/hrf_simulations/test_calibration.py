@@ -8,6 +8,7 @@ from experiments.hrf_estimation.sensitivity import synthetic_templates
 
 
 def test_donor_selection_excludes_target_and_spans_features():
+    """Verify donor selection excludes target and spans features."""
     from experiments.hrf_simulations.calibration import select_donors
 
     table = pd.DataFrame(
@@ -27,6 +28,7 @@ def test_donor_selection_excludes_target_and_spans_features():
 
 
 def test_calibration_roundtrip_and_target_exclusion(tmp_path):
+    """Verify calibration roundtrip and target exclusion."""
     from experiments.hrf_simulations.calibration import calibrate, draw_profile
 
     rng = np.random.default_rng(2)
@@ -54,6 +56,7 @@ def test_calibration_roundtrip_and_target_exclusion(tmp_path):
 
 
 def test_generated_dataset_reproducibility_pairing_and_events():
+    """Verify generated dataset reproducibility pairing and events."""
     from experiments.hrf_simulations.dataset import generate
     from experiments.hrf_simulations.truths import truth_library
 
@@ -95,6 +98,7 @@ def test_generated_dataset_reproducibility_pairing_and_events():
 
 
 def test_spectral_generation_saves_actual_donor_diagnostics():
+    """Verify spectral generation saves actual donor diagnostics."""
     from experiments.hrf_simulations.dataset import generate
     from experiments.hrf_simulations.truths import truth_library
 
@@ -117,6 +121,7 @@ def test_spectral_generation_saves_actual_donor_diagnostics():
 
 
 def test_ar1_variance_calibration_corrects_projection_loss():
+    """Verify AR(1) variance calibration corrects projection loss."""
     from experiments.hrf_simulations.calibration import _reference_fit
     from experiments.hrf_simulations.noise import ar1
 

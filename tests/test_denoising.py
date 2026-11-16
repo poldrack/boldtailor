@@ -163,16 +163,19 @@ def digest(array, dtype="<f8"):
     ],
 )
 def test_invalid_selection_inputs_are_rejected(fixture, options, match):
+    """Verify invalid selection inputs are rejected."""
     with pytest.raises(ValueError, match=match):
         run_selection(fixture, **options)
 
 
 def test_selection_requires_analysis_data(fixture):
+    """Verify selection requires analysis data."""
     with pytest.raises(ValueError, match="AnalysisData"):
         run_selection(fixture, data=fixture.data.signals)
 
 
 def test_selection_requires_three_runs(fixture):
+    """Verify selection requires three runs."""
     with pytest.raises(ValueError, match="at least three runs"):
         run_selection(fixture, data=subset_runs(fixture.data, [0, 1]))
 
@@ -186,6 +189,7 @@ def test_selection_has_no_mask_parameter(fixture):
 
 
 def test_default_selection_settings_follow_glmsingle(fixture):
+    """Verify default selection settings follow GLMsingle."""
     signature = inspect.signature(select_denoising)
     assert signature.parameters["counts"].default == tuple(range(11))
     assert signature.parameters["pool_r2_threshold"].default == "auto"
@@ -199,6 +203,7 @@ def test_default_selection_settings_follow_glmsingle(fixture):
 
 
 def test_hrfs_pool_and_pcs_are_full_data_by_design(fixture, result, full_data):
+    """Verify HRFs pool and principal-components are full data by design."""
     selection, statistic, masks = full_data
     np.testing.assert_array_equal(result.initial_hrf_indices, selection.hrf_indices)
     np.testing.assert_array_equal(result.selection_cv_r2, selection.cv_r2)
@@ -215,6 +220,7 @@ def test_hrfs_pool_and_pcs_are_full_data_by_design(fixture, result, full_data):
 
 
 def test_count_and_tables_follow_the_cross_validated_choice(fixture, result, full_data):
+    """Verify count and tables follow the cross validated choice."""
     selection, _, masks = full_data
     expected = select_component_count(
         fixture.data,
@@ -246,10 +252,12 @@ def test_count_and_tables_follow_the_cross_validated_choice(fixture, result, ful
 
 def test_selection_finds_a_positive_count_on_the_fixture(result):
     # Shared latent noise loads on the task features, so PCs help prediction.
+    """Verify selection finds a positive count on the fixture."""
     assert result.n_components >= 1
 
 
 def test_run_components_span_the_independent_oracle_pcs(fixture, result):
+    """Verify run components span the independent oracle principal-components."""
     k = result.n_components
     assert len(result.run_components) == fixture.data.n_runs
     for run, components in enumerate(result.run_components):
@@ -262,6 +270,7 @@ def test_run_components_span_the_independent_oracle_pcs(fixture, result):
 
 
 def test_final_pca_diagnostics_report_rank_and_singular_values(fixture, result):
+    """Verify final PCA diagnostics report rank and singular values."""
     diagnostics = result.components
     assert diagnostics.run_labels == result.run_labels
     assert diagnostics.pool_size == int(result.noise_pool.sum())
@@ -280,6 +289,7 @@ def test_final_pca_diagnostics_report_rank_and_singular_values(fixture, result):
 
 
 def test_fold_diagnostics_record_runs_and_held_out_targets(fixture, result):
+    """Verify fold diagnostics record runs and held out targets."""
     assert len(result.folds) == fixture.data.n_runs
     labels = result.run_labels
     for v, fold in enumerate(result.folds):
@@ -294,6 +304,7 @@ def test_fold_diagnostics_record_runs_and_held_out_targets(fixture, result):
 
 
 def test_custom_run_labels_name_runs_in_reasons_and_tables(fixture):
+    """Verify custom run labels name runs in reasons and tables."""
     result = run_selection(fixture, counts=(0, 1, 50), run_labels=LABELS)
     assert result.run_labels == LABELS
     reasons = " ".join(result.candidate_scores["reason"])
@@ -306,6 +317,7 @@ def test_custom_run_labels_name_runs_in_reasons_and_tables(fixture):
 
 
 def test_categorical_task_model_is_supported(fixture):
+    """Verify categorical task model is supported."""
     rng = np.random.default_rng(7)
     events = []
     for run, frame in enumerate(fixture.data.events):
@@ -329,6 +341,7 @@ def test_categorical_task_model_is_supported(fixture):
 
 
 def test_zero_only_grid_returns_no_components(fixture):
+    """Verify zero only grid returns no components."""
     result = run_selection(fixture, counts=(0,))
     assert result.n_components == 0
     for run, components in enumerate(result.run_components):
@@ -337,6 +350,7 @@ def test_zero_only_grid_returns_no_components(fixture):
 
 
 def test_zero_count_augmentation_preserves_numerical_inputs(fixture):
+    """Verify zero count augmentation preserves numerical inputs."""
     saved = snapshot(fixture.data)
     result = run_selection(fixture, counts=(0,))
     augmented = with_denoising(fixture.data, result)
@@ -359,6 +373,7 @@ def test_zero_count_augmentation_preserves_numerical_inputs(fixture):
 
 
 def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
+    """Verify empty pool makes zero the only eligible count."""
     result = run_selection(fixture, pool_r2_threshold=-10.0)
     assert result.n_components == 0
     assert not result.noise_pool.any()
@@ -373,6 +388,7 @@ def test_empty_pool_makes_zero_the_only_eligible_count(fixture):
 
 
 def test_final_pool_uses_the_mixture_threshold_of_onoff_r2(result):
+    """Verify final pool uses the mixture threshold of ON-OFF R-squared."""
     finite = np.isfinite(result.onoff_r2)
     expected = mixture_threshold(result.onoff_r2[finite])
     assert result.noise_pool_threshold == expected.threshold
@@ -383,6 +399,7 @@ def test_final_pool_uses_the_mixture_threshold_of_onoff_r2(result):
 
 
 def test_provenance_records_the_glmsingle_rules(result):
+    """Verify provenance records the GLMsingle rules."""
     activity = last_activity(result.provenance)
     assert activity["pool_r2_threshold"] == "auto"
     assert activity["pool_threshold_rule"] == "gaussian_mixture_tail_threshold"
@@ -399,6 +416,7 @@ def test_provenance_records_the_glmsingle_rules(result):
 
 
 def test_fixed_threshold_keeps_the_fixed_rule(fixture, full_data):
+    """Verify fixed threshold keeps the fixed rule."""
     result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=0.01)
     assert result.pool_r2_threshold == 0.01
     assert result.noise_pool_threshold == 0.01
@@ -414,11 +432,13 @@ def test_fixed_threshold_keeps_the_fixed_rule(fixture, full_data):
 
 
 def test_integer_fixed_threshold_is_stored_as_float(fixture):
+    """Verify integer fixed threshold is stored as float."""
     result = run_selection(fixture, counts=(0,), pool_r2_threshold=0)
     assert isinstance(result.pool_r2_threshold, float)
 
 
 def test_degenerate_mixture_raises_with_labels_and_a_hint(fixture, monkeypatch):
+    """Verify degenerate mixture raises with labels and a hint."""
     import boldtailor.denoising as denoising
 
     monkeypatch.setattr(
@@ -432,6 +452,7 @@ def test_degenerate_mixture_raises_with_labels_and_a_hint(fixture, monkeypatch):
 
 
 def test_best_100_fallback_scores_the_top_features_and_is_recorded(fixture):
+    """Verify best 100 fallback scores the top features and is recorded."""
     result = run_selection(fixture, counts=(0, 1), pool_r2_threshold=10.0)
     assert result.scoring_fallback
     candidates = np.isfinite(result.onoff_r2) & (result.initial_hrf_indices >= 0)
@@ -441,6 +462,7 @@ def test_best_100_fallback_scores_the_top_features_and_is_recorded(fixture):
 
 
 def test_pcstop_one_never_chooses_fewer_than_the_best_count(fixture, result):
+    """Verify pcstop one never chooses fewer than the best count."""
     strict = run_selection(fixture, pcstop=1.0)
     scores = strict.candidate_scores
     eligible = scores[scores["eligible"]]
@@ -454,6 +476,7 @@ def test_pcstop_one_never_chooses_fewer_than_the_best_count(fixture, result):
 
 
 def test_result_arrays_are_read_only_and_tables_are_copies(result):
+    """Verify result arrays are read only and tables are copies."""
     arrays = [result.noise_pool, result.scoring_mask, result.onoff_r2, result.scored]
     arrays += [result.selection_cv_r2, result.initial_hrf_indices]
     arrays += [result.perf, result.curve]
@@ -477,6 +500,7 @@ def test_result_arrays_are_read_only_and_tables_are_copies(result):
 
 
 def test_result_does_not_alias_caller_inputs(fixture):
+    """Verify result does not alias caller inputs."""
     counts = [0, 1, 2]
     result = run_selection(fixture, counts=counts)
     counts.append(9)
@@ -484,6 +508,7 @@ def test_result_does_not_alias_caller_inputs(fixture):
 
 
 def test_result_rejects_inconsistent_components(result):
+    """Verify result rejects inconsistent components."""
     from dataclasses import replace
 
     with pytest.raises(ValueError, match="run_components"):
@@ -498,6 +523,7 @@ def test_result_rejects_inconsistent_components(result):
 
 
 def test_selection_provenance_records_the_identity_of_every_choice(fixture, result):
+    """Verify selection provenance records the identity of every choice."""
     activity = last_activity(result.provenance)
     assert activity["name"] == "denoising_selection"
     assert activity["selection_statistic"] is True
@@ -566,6 +592,7 @@ def test_augmentation_extends_provenance_and_annotates_sources(
 ):
     # Requirement change (ruling R6): sources keep file identity but record
     # the augmentation so downstream analysis ids differ.
+    """Verify augmentation extends provenance and annotates sources."""
     before = fixture.data.provenance
     after = augmented.provenance
     assert_annotated_sources(before.sources, after.sources, result)
@@ -583,6 +610,7 @@ def test_augmentation_extends_provenance_and_annotates_sources(
 def test_augmentation_appends_named_components_and_keeps_everything_else(
     fixture, result, augmented
 ):
+    """Verify augmentation appends named components and keeps everything else."""
     k = result.n_components
     names = tuple(f"denoise_pc_{i:03d}" for i in range(k))
     assert result.component_names == names
@@ -605,6 +633,7 @@ def test_augmentation_appends_named_components_and_keeps_everything_else(
 
 
 def test_applying_a_result_twice_is_rejected(fixture, result, augmented):
+    """Verify applying a result twice is rejected."""
     with pytest.raises(ValueError, match="already applied"):
         with_denoising(augmented, result)
     zero = run_selection(fixture, counts=(0,))
@@ -614,6 +643,7 @@ def test_applying_a_result_twice_is_rejected(fixture, result, augmented):
 
 
 def test_component_name_collision_is_rejected(fixture):
+    """Verify component name collision is rejected."""
     rng = np.random.default_rng(3)
     confounds = [
         c.assign(denoise_pc_000=rng.normal(size=len(c))) for c in fixture.data.confounds
@@ -681,11 +711,13 @@ MISMATCHES = [
 
 @pytest.mark.parametrize("change,match", MISMATCHES)
 def test_mismatched_analysis_is_rejected(fixture, result, change, match):
+    """Verify mismatched analysis is rejected."""
     with pytest.raises(ValueError, match=match):
         with_denoising(change(fixture.data), result)
 
 
 def test_feature_signature_must_match(fixture):
+    """Verify feature signature must match."""
     result = run_selection(fixture, feature_signature="ordered-axis")
     assert result.feature_signature == "ordered-axis"
     with pytest.raises(ValueError, match="feature_signature"):
@@ -697,6 +729,7 @@ def test_feature_signature_must_match(fixture):
 
 
 def test_augmentation_requires_a_result_and_data(fixture, result):
+    """Verify augmentation requires a result and data."""
     with pytest.raises(ValueError, match="DenoisingResult"):
         with_denoising(fixture.data, "result")
     with pytest.raises(ValueError, match="AnalysisData"):
@@ -734,6 +767,7 @@ def conventional(names=(), task_model=RT_MODEL):
 
 @pytest.mark.integration
 def test_fit_on_augmented_data_matches_explicitly_appended_pcs(fixture, typed):
+    """Verify fit on augmented data matches explicitly appended principal-components."""
     saved = snapshot(typed)
     result = run_selection(fixture, typed)
     augmented = with_denoising(typed, result)
@@ -757,6 +791,7 @@ def test_fit_on_augmented_data_matches_explicitly_appended_pcs(fixture, typed):
 
 
 def test_augmented_data_supports_reselection_of_hrfs(fixture, augmented):
+    """Verify augmented data supports reselection of HRFs."""
     selection = select_hrfs(
         augmented, library=fixture.library, task_model=fixture.task_model
     )
@@ -764,6 +799,7 @@ def test_augmented_data_supports_reselection_of_hrfs(fixture, augmented):
 
 
 def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
+    """Verify default library resolves to the package default."""
     import boldtailor.denoising as denoising
 
     # The real default library is slow to fit here; the resolver must be the
@@ -787,6 +823,7 @@ def test_default_library_resolves_to_the_package_default(fixture, monkeypatch):
 
 
 def test_augmentation_without_confounds_annotates_the_signal_source(fixture):
+    """Verify augmentation without confounds annotates the signal source."""
     data = from_arrays(list(fixture.data.signals), list(fixture.data.events), tr=TR)
     result = run_selection(fixture, data, counts=(0, 1))
     augmented = with_denoising(data, result)
@@ -798,6 +835,7 @@ def test_augmentation_without_confounds_annotates_the_signal_source(fixture):
 
 @pytest.mark.parametrize("broken", [0, 2, 3])
 def test_invalid_run_is_named_by_its_own_label(fixture, broken):
+    """Verify invalid run is named by its own label."""
     events = list(fixture.data.events)
     events[broken] = events[broken].drop(columns="response_time")
     data = rebuild(fixture.data, events=events)
@@ -811,6 +849,7 @@ def test_invalid_run_is_named_by_its_own_label(fixture, broken):
 def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
     fixture, typed, complete_sources
 ):
+    """Verify distinct augmentations of sourced data have distinct analysis ids."""
     data = from_arrays(
         list(typed.signals),
         list(typed.events),
@@ -839,6 +878,7 @@ def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
 
 
 def test_denoising_assembly_accepts_finished_provenance(fixture, result):
+    """Verify denoising assembly accepts finished provenance."""
     from boldtailor import denoising
     from boldtailor.data import run_labels_for
 

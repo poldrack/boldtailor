@@ -26,6 +26,7 @@ SEEDS = st.integers(0, 2**32 - 1)
 @PROPERTIES
 @given(SEEDS, st.integers(0, 10), st.floats(-10, 0))
 def test_known_orthogonal_energy_survives_random_projection(seed, rank, log_noise):
+    """Verify known orthogonal energy survives random projection."""
     rng = np.random.default_rng(seed)
     q, _ = np.linalg.qr(rng.normal(size=(12, 12)))
     fixed, random = q[:, :2], q[:, 2 : 2 + rank]
@@ -67,6 +68,7 @@ def _dense_value(signal, spectrum, ratio):
 def test_pooled_likelihood_and_score_match_independent_covariance(
     seed, rank, log_ratio
 ):
+    """Verify pooled likelihood and score match independent covariance."""
     terms, signal, spectrum = _diagonal_problem(seed, rank)
     ratio = 10.0**log_ratio
     actual = pooled_criterion(np.array([ratio]), terms)[0]
@@ -89,6 +91,7 @@ def test_pooled_likelihood_and_score_match_independent_covariance(
 @PROPERTIES
 @given(SEEDS, st.integers(1, 12))
 def test_searched_likelihood_beats_independent_feasible_points(seed, rank):
+    """Verify searched likelihood beats independent feasible points."""
     terms, signal, spectrum = _diagonal_problem(seed, rank)
     optimum = minimize_ratio(terms)
     feasible = [
@@ -107,6 +110,7 @@ def test_searched_likelihood_beats_independent_feasible_points(seed, rank):
 def test_confounding_requires_full_rank_and_a_common_group_scale(
     n1, n2, exponent, kind
 ):
+    """Verify confounding requires full rank and a common group scale."""
     spectrum = np.full(n1 + n2, 10.0**exponent)
     if kind == "different":
         spectrum[n1:] *= 2
@@ -119,6 +123,7 @@ def test_confounding_requires_full_rank_and_a_common_group_scale(
 @PROPERTIES
 @given(SEEDS, st.integers(4, 24), st.floats(-0.9, 0.9))
 def test_ar1_moment_polynomials_match_dense_restricted_traces(seed, n, rho):
+    """Verify AR(1) moment polynomials match dense restricted traces."""
     rng = np.random.default_rng(seed)
     rank = int(rng.integers(0, n))
     basis = np.linalg.qr(rng.normal(size=(n, n)))[0][:, :rank]
@@ -137,6 +142,7 @@ def test_ar1_moment_polynomials_match_dense_restricted_traces(seed, n, rho):
 @PROPERTIES
 @given(st.integers(4, 40), st.floats(-0.9, 0.9))
 def test_unprojected_ar1_curve_recovers_known_rho(n, rho):
+    """Verify unprojected AR(1) curve recovers known rho."""
     grid = np.linspace(-0.95, 0.95, 301)
     expected = basis_expected_lag_ratio(np.empty((n, 0)), grid)
     assert_allclose(invert_lag_ratio([rho], expected, grid), rho, atol=1e-12)
@@ -145,6 +151,7 @@ def test_unprojected_ar1_curve_recovers_known_rho(n, rho):
 @PROPERTIES
 @given(SEEDS, st.integers(1, 14), st.floats(-0.7, 0.7))
 def test_reml_is_invariant_to_ar1_time_reversal_at_high_rank(seed, rank, rho):
+    """Verify REML is invariant to AR(1) time reversal at high rank."""
     rng = np.random.default_rng(seed)
     fixed = rng.normal(size=(16, 2))
     random = rng.normal(size=(16, rank))

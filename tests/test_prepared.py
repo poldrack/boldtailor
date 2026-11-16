@@ -77,6 +77,7 @@ def _structured_records(caplog):
 
 
 def test_prepared_analysis_owns_inputs_and_returns_defensive_state(prepared_inputs):
+    """Verify prepared analysis owns inputs and returns defensive state."""
     signals, designs, roles, metadata = prepared_inputs
     original = deepcopy((signals, designs, roles, metadata))
     prepared = PreparedDesignAnalysis.from_arrays(
@@ -105,6 +106,7 @@ def test_prepared_analysis_owns_inputs_and_returns_defensive_state(prepared_inpu
 
 
 def test_prepared_analysis_accessors_return_defensive_copies(prepared_inputs):
+    """Verify prepared analysis accessors return defensive copies."""
     prepared = _make_prepared(prepared_inputs)
     designs = prepared.design_matrices
     roles = prepared.column_roles
@@ -120,6 +122,7 @@ def test_prepared_analysis_accessors_return_defensive_copies(prepared_inputs):
 
 
 def test_prepared_analysis_arrays_are_readonly(prepared_inputs):
+    """Verify prepared analysis arrays are read-only."""
     prepared = _make_prepared(prepared_inputs)
     for values in (*prepared.signals, *prepared.frame_times):
         assert values.flags.owndata
@@ -215,6 +218,7 @@ def _nested_path_metadata(kind):
     ],
 )
 def test_prepared_analysis_rejects_invalid_arguments(prepared_inputs, mutator, message):
+    """Verify prepared analysis rejects invalid arguments."""
     case = deepcopy(prepared_inputs)
     extra = mutator(case) or {}
 
@@ -234,6 +238,7 @@ def test_prepared_analysis_rejects_invalid_arguments(prepared_inputs, mutator, m
 def test_prepared_analysis_accepts_path_like_names_and_metadata(
     prepared_inputs, mutator
 ):
+    """Verify prepared analysis accepts path like names and metadata."""
     case = deepcopy(prepared_inputs)
     extra = mutator(case) or {}
 
@@ -241,6 +246,7 @@ def test_prepared_analysis_accepts_path_like_names_and_metadata(
 
 
 def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inputs):
+    """Verify prepared design fingerprint is stable and value sensitive."""
     first = _make_prepared(prepared_inputs)
     reordered_metadata = deepcopy(prepared_inputs)
     reordered_metadata[3][0] = dict(reversed(tuple(reordered_metadata[3][0].items())))
@@ -260,6 +266,7 @@ def test_prepared_design_fingerprint_is_stable_and_value_sensitive(prepared_inpu
 
 
 def test_prepared_design_fingerprint_includes_structure_and_run_order(prepared_inputs):
+    """Verify prepared design fingerprint includes structure and run order."""
     original = _make_prepared(prepared_inputs)
 
     reordered_columns = deepcopy(prepared_inputs)
@@ -294,6 +301,7 @@ def test_prepared_design_fingerprint_includes_structure_and_run_order(prepared_i
 def test_prepared_design_normalization_records_lifecycle_and_provenance(
     prepared_inputs, caplog, complete_sources
 ):
+    """Verify prepared design normalization records lifecycle and provenance."""
     caplog.set_level(logging.INFO, logger="boldtailor")
     sources = complete_sources(2)
 
@@ -353,6 +361,7 @@ def test_prepared_design_provenance_retains_canonical_metadata_and_versions(
     prepared_inputs,
     complete_sources,
 ):
+    """Verify prepared design provenance retains canonical metadata and versions."""
     inputs = deepcopy(prepared_inputs)
     provenance_metadata = {
         "adapter": {"name": "fitlins", "settings": ["fixed", "prepared"]},
@@ -396,6 +405,7 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
     prepared_inputs,
     complete_sources,
 ):
+    """Verify prepared design provenance is private and warns for anonymous sources."""
     private_inputs = deepcopy(prepared_inputs)
     private_inputs[0][0][0, 0] = 712345.5
     private_inputs[1][0].loc[0, "motion"] = 9274.25
@@ -419,6 +429,7 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
 def test_normalization_builds_one_record(
     prepared_inputs, monkeypatch, caplog, complete, complete_sources
 ):
+    """Create one provenance record while normalizing the input analysis data."""
     import hashlib
     import json
     import logging
@@ -461,6 +472,7 @@ def test_normalization_builds_one_record(
 def test_normalization_catches_final_failures_and_isolates_context(
     prepared_inputs, caplog, monkeypatch, outcome
 ):
+    """Verify normalization catches final failures and isolates context."""
     import json
     import logging
 
@@ -518,5 +530,6 @@ def test_normalization_catches_final_failures_and_isolates_context(
 def test_prepared_normalization_activity_records_the_software_environment(
     prepared_inputs,
 ):
+    """Verify prepared normalization activity records the software environment."""
     prepared = _make_prepared(prepared_inputs)
     assert prepared.provenance.activities[0]["software"] == software_environment()

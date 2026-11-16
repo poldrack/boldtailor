@@ -66,6 +66,7 @@ def surface_files(tmp_path):
 
 
 def test_discovery_uses_fslr_meshes_and_supports_explicit_paths(surface_files):
+    """Verify discovery uses fslr meshes and supports explicit paths."""
     root, paths = surface_files
     native = paths["left"].with_name("sub-07_hemi-L_inflated.surf.gii")
     native.write_bytes(paths["left"].read_bytes())
@@ -85,6 +86,7 @@ def test_discovery_uses_fslr_meshes_and_supports_explicit_paths(surface_files):
 def test_surface_figure_keeps_signed_shared_scale_and_missing_data(
     cortical_axis, surface_files, tmp_path
 ):
+    """Verify surface figure keeps signed shared scale and missing data."""
     _, meshes = surface_files
     maps = {
         "Canonical": np.array([0.1, -0.2, np.nan, 999, 0.6, 0, -0.4, 0.3]),
@@ -105,6 +107,7 @@ def test_surface_figure_keeps_signed_shared_scale_and_missing_data(
 def test_empty_cortex_renders_without_warnings_and_preserves_negative_r2(
     cortical_axis, surface_files
 ):
+    """Verify empty cortex renders without warnings and preserves negative R-squared."""
     _, meshes = surface_files
     module = surfaces()
     for values, expected in (
@@ -122,6 +125,7 @@ def test_empty_cortex_renders_without_warnings_and_preserves_negative_r2(
 
 
 def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
+    """Verify wrong surface density is rejected."""
     _, meshes = surface_files
     left = nib.cifti2.BrainModelAxis.from_surface([0, 1], 8, name="CortexLeft")
     with pytest.raises(ValueError, match="vertices|vertex"):
@@ -130,6 +134,7 @@ def test_wrong_surface_density_is_rejected(cortical_axis, surface_files):
 
 @pytest.mark.parametrize("magnitude", [5, 50])
 def test_activation_surface_uses_fixed_t_scale(cortical_axis, surface_files, magnitude):
+    """Verify activation surface uses fixed t scale."""
     _, meshes = surface_files
     values = np.array([2, -magnitude, np.nan, 999, 3, 0, -1, magnitude])
     fig = surfaces().surface_figure(

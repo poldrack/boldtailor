@@ -28,6 +28,7 @@ def _trials():
 
 
 def test_round_trip(tmp_path):
+    """Round-trip beta arrays, trial metadata and HRF indices through saved fit files."""
     path = fit_dir(tmp_path, "nsdpreproc", "sub-07", "ses-nsd10", "b1")
     betas = np.array([[1.0, 2.0], [3.0, 4.0]])
     write_fit(
@@ -46,6 +47,7 @@ def test_round_trip(tmp_path):
 
 
 def test_incomplete_fit_is_not_complete(tmp_path):
+    """Verify incomplete fit is not complete."""
     path = tmp_path / "fit"
     path.mkdir()
     np.save(path / "betas.npy", np.zeros((1, 1)))
@@ -53,17 +55,20 @@ def test_incomplete_fit_is_not_complete(tmp_path):
 
 
 def test_row_count_mismatch_raises(tmp_path):
+    """Verify row count mismatch raises."""
     with pytest.raises(ValueError, match="rows"):
         write_fit(tmp_path / "f", np.zeros((3, 1)), _trials(), {})
 
 
 def test_zscore_columns():
+    """Compare columnwise standardization with hand-computed z-scores."""
     values = np.array([[1.0, 5.0], [3.0, 5.0], [5.0, 5.0]])
     z = zscore(values)
     np.testing.assert_allclose(z[:, 0], [-1.224744871, 0, 1.224744871])
 
 
 def test_zscore_constant_feature_is_nan_without_warning():
+    """Verify z-score constant feature is NaN without warning."""
     values = np.array([[1.0, 5.0, np.nan], [3.0, 5.0, 1.0]])
     with np.errstate(all="raise"):
         z = zscore(values)
@@ -72,6 +77,7 @@ def test_zscore_constant_feature_is_nan_without_warning():
 
 def test_zscore_nonrepresentable_constant_is_nan():
     # Test both 0.1 (repeated, non-representable) and 0.3 (as float32 then upcast)
+    """Verify z-score nonrepresentable constant is NaN."""
     values = np.hstack(
         [np.full((3, 2), 0.1), np.full((3, 1), np.float32(0.3)).astype(float)]
     )
@@ -105,12 +111,14 @@ def _minimal_session(source="nsdpreproc", confound_val=0.0):
 
 
 def test_inputs_digest_same_sessions_equal():
+    """Verify inputs digest same sessions equal."""
     s1 = _minimal_session()
     s2 = _minimal_session()
     assert inputs_digest(s1) == inputs_digest(s2)
 
 
 def test_inputs_digest_different_confound_differs():
+    """Verify inputs digest different confound differs."""
     s1 = _minimal_session(confound_val=0.0)
     s2 = _minimal_session(confound_val=1.0)
     assert inputs_digest(s1) != inputs_digest(s2)
@@ -126,9 +134,13 @@ def _discarded_fit(tmp_path):
 
 
 def test_discarded_fit_is_complete(tmp_path):
+    """Treat deliberately discarded beta arrays as a completed fit when metadata records
+    their removal.
+    """
     assert is_complete(_discarded_fit(tmp_path))
 
 
 def test_read_fit_of_discarded_fit_raises(tmp_path):
+    """Verify read fit of discarded fit raises."""
     with pytest.raises(ValueError, match="betas were discarded after metrics"):
         read_fit(_discarded_fit(tmp_path))

@@ -29,6 +29,7 @@ def _labels():
 
 
 def test_roi_threshold_at_half():
+    """Verify roi threshold at half."""
     labels = _labels()
     labels["L"][[0, 3]] = [0.6, 0.4]
     labels["R"][5] = 1.0
@@ -36,11 +37,13 @@ def test_roi_threshold_at_half():
 
 
 def test_empty_roi_raises():
+    """Verify empty roi raises."""
     with pytest.raises(ValueError, match="empty"):
         roi_mask(_brain(), _labels())
 
 
 def test_wrong_label_length_raises():
+    """Verify wrong label length raises."""
     labels = _labels()
     labels["L"] = np.zeros(10)
     with pytest.raises(ValueError, match="32492"):
@@ -48,6 +51,7 @@ def test_wrong_label_length_raises():
 
 
 def test_resampling_inputs_and_command():
+    """Verify resampling inputs and command."""
     sidecar = {
         "SourceSpheres": ["/s/lh.sphere", "/s/rh.sphere"],
         "TargetSpheres": ["/t/L.sphere", "/t/R.sphere"],
@@ -81,6 +85,7 @@ def _sidecar(target_sphere):
 
 
 def test_missing_template_found_in_local_templateflow(tmp_path, monkeypatch):
+    """Verify missing template found in local templateflow."""
     monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path))
     recorded = Path("/gone/templateflow/tpl-fsLR/tpl-fsLR_hemi-L_sphere.surf.gii")
     inputs = resampling_inputs(_sidecar(recorded))
@@ -88,6 +93,7 @@ def test_missing_template_found_in_local_templateflow(tmp_path, monkeypatch):
 
 
 def test_unfetched_templateflow_stub_raises(tmp_path, monkeypatch):
+    """Verify unfetched templateflow stub raises."""
     monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path))
     recorded = Path("/gone/templateflow/tpl-fsLR/tpl-fsLR_hemi-L_sphere.surf.gii")
     stub = tmp_path / "tpl-fsLR" / recorded.name
@@ -98,6 +104,7 @@ def test_unfetched_templateflow_stub_raises(tmp_path, monkeypatch):
 
 
 def test_existing_template_path_is_kept(tmp_path, monkeypatch):
+    """Verify existing template path is kept."""
     monkeypatch.setenv("TEMPLATEFLOW_HOME", str(tmp_path / "home"))
     recorded = tmp_path / "tpl-fsLR" / "tpl-fsLR_hemi-L_sphere.surf.gii"
     recorded.parent.mkdir()
@@ -106,6 +113,7 @@ def test_existing_template_path_is_kept(tmp_path, monkeypatch):
 
 
 def test_resampling_inputs_missing_key_raises():
+    """Verify resampling inputs missing key raises."""
     with pytest.raises(ValueError, match="TargetAreaMetrics"):
         resampling_inputs(
             {
@@ -118,6 +126,7 @@ def test_resampling_inputs_missing_key_raises():
 
 @pytest.mark.skipif(not DATA.is_dir(), reason="NSD data volume not mounted")
 def test_pilot_roi_on_nsdpreproc_cortex(tmp_path):
+    """Verify pilot roi on nsdpreproc cortex."""
     import shutil
 
     if shutil.which("wb_command") is None:
@@ -155,6 +164,7 @@ def _inputs():
 
 
 def test_failed_resample_leaves_no_cache_file(tmp_path, label_source, monkeypatch):
+    """Verify failed resample leaves no cache file."""
     from experiments.nsd_replication import roi
 
     def partial(command):
@@ -172,6 +182,7 @@ def test_failed_resample_leaves_no_cache_file(tmp_path, label_source, monkeypatc
 
 
 def test_resample_moves_finished_file_into_place(tmp_path, label_source, monkeypatch):
+    """Verify resample moves finished file into place."""
     from experiments.nsd_replication import roi
 
     def finish(command):
@@ -188,6 +199,7 @@ def test_resample_moves_finished_file_into_place(tmp_path, label_source, monkeyp
 
 
 def test_load_roi_requires_released_dir(tmp_path):
+    """Verify load roi requires released dir."""
     from experiments.nsd_replication.config import ExperimentConfig
     from experiments.nsd_replication.roi import load_roi
 

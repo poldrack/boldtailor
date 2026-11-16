@@ -13,6 +13,7 @@ TT = Modulator("trial_type", kind="categorical", levels=("0", "1"))
 
 
 def test_run_missing_a_level_is_an_input_error_naming_the_run(four_runs, settings_for):
+    """Verify run missing a level is an input error naming the run."""
     root, _ = four_runs
     path = sorted((root / "sub-07" / "ses-nsd10" / "func").glob("*run-02_events.tsv"))[
         0
@@ -24,6 +25,7 @@ def test_run_missing_a_level_is_an_input_error_naming_the_run(four_runs, setting
 
 
 def test_run_summary_counts_each_level(four_runs, settings_for):
+    """Verify run summary counts each level."""
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
     model = detect_task_model([r.events for r in runs])
@@ -33,6 +35,7 @@ def test_run_summary_counts_each_level(four_runs, settings_for):
 
 
 def test_load_session_detects_the_model_and_builds_the_glm(four_runs, settings_for):
+    """Verify load session detects the model and builds the GLM."""
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
     model = detect_task_model([r.events for r in runs])
@@ -51,6 +54,7 @@ def test_load_session_detects_the_model_and_builds_the_glm(four_runs, settings_f
 
 
 def test_task_only_session_has_no_rt_columns(four_runs, settings_for):
+    """Verify task only session has no response-time columns."""
     root, _ = four_runs
     for path in (root / "sub-07" / "ses-nsd10" / "func").glob("*_events.tsv"):
         table = pd.read_csv(path, sep="\t")
@@ -66,6 +70,7 @@ def test_task_only_session_has_no_rt_columns(four_runs, settings_for):
 
 
 def test_hrf_only_loading_needs_two_runs_not_two_per_parity(dataset, settings_for):
+    """Verify HRF only loading needs two runs not two per parity."""
     root, *_ = dataset
     assert len(inputs.load_session(settings_for(root), hrf_only=True)) == 2
     with pytest.raises(ValueError, match="two odd and two even"):
@@ -74,6 +79,7 @@ def test_hrf_only_loading_needs_two_runs_not_two_per_parity(dataset, settings_fo
 
 @pytest.mark.parametrize("column,value", [("trial_type", 2), ("trial_type", np.nan)])
 def test_invalid_glm_covariates_fail_explicitly(events, column, value):
+    """Verify invalid GLM covariates fail explicitly."""
     model = detect_task_model([events])
     events.loc[0, column] = value
     with pytest.raises(ValueError, match=column):
@@ -81,6 +87,7 @@ def test_invalid_glm_covariates_fail_explicitly(events, column, value):
 
 
 def test_run_without_the_declared_levels_is_an_input_error(four_runs, settings_for):
+    """Verify run without the declared levels is an input error."""
     root, _ = four_runs
     path = next(root.rglob("*run-02_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -93,6 +100,7 @@ def test_run_without_the_declared_levels_is_an_input_error(four_runs, settings_f
 def test_nonpositive_rt_becomes_missing_with_indicator(
     four_runs, settings_for, missing
 ):
+    """Verify nonpositive response-time becomes missing with indicator."""
     root, _ = four_runs
     path = next(root.rglob("*run-01_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -113,6 +121,7 @@ def test_nonpositive_rt_becomes_missing_with_indicator(
 
 
 def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
+    """Verify GLM requires observed response-time to estimate response-time effect."""
     model = detect_task_model([events])
     events["response_time"] = np.nan
     with pytest.raises(ValueError, match="response_time.*positive.*finite"):
@@ -120,6 +129,7 @@ def test_glm_requires_observed_rt_to_estimate_rt_effect(events):
 
 
 def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
+    """Verify GLM does not treat malformed response-time text as missing."""
     model = detect_task_model([events])
     events["response_time"] = events.response_time.astype(object)
     events.loc[1, "response_time"] = "invalid"
@@ -130,6 +140,7 @@ def test_glm_does_not_treat_malformed_rt_text_as_missing(events):
 def test_trimming_keeps_acquisition_times_and_matches_confounds(
     four_runs, settings_for
 ):
+    """Verify trimming keeps acquisition times and matches confounds."""
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
     model = detect_task_model([r.events for r in runs])
@@ -151,6 +162,7 @@ def test_trimming_keeps_acquisition_times_and_matches_confounds(
 
 
 def test_interior_nonsteady_flag_is_rejected(four_runs, settings_for):
+    """Verify interior nonsteady flag is rejected."""
     root, prep = four_runs
     path = next(prep.rglob("*run-01*confounds_timeseries.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -161,6 +173,7 @@ def test_interior_nonsteady_flag_is_rejected(four_runs, settings_for):
 
 
 def test_selection_task_model_switch_drops_only_rt(events):
+    """Verify selection task model switch drops only response-time."""
     model = detect_task_model([events])
     assert inputs.selection_task_model(model, True) == model
     without_rt = inputs.selection_task_model(model, False)
@@ -173,6 +186,7 @@ def test_selection_task_model_switch_drops_only_rt(events):
 def test_missing_modulator_column_in_a_session_is_an_input_error(
     four_runs, settings_for
 ):
+    """Verify missing modulator column in a session is an input error."""
     root, _ = four_runs
     settings = settings_for(root, modulators=(Modulator("stimulus_id"),))
     with pytest.raises(inputs.InputError, match="stimulus_id"):
@@ -182,6 +196,7 @@ def test_missing_modulator_column_in_a_session_is_an_input_error(
 def test_automatic_trial_type_with_missing_values_is_an_input_error(
     four_runs, settings_for
 ):
+    """Verify automatic trial type with missing values is an input error."""
     root, _ = four_runs
     path = next(root.rglob("*run-02_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -192,6 +207,7 @@ def test_automatic_trial_type_with_missing_values_is_an_input_error(
 
 
 def test_explicit_trial_type_stays_strict_and_names_the_run(four_runs, settings_for):
+    """Verify explicit trial type stays strict and names the run."""
     root, _ = four_runs
     path = next(root.rglob("*run-02_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -202,6 +218,7 @@ def test_explicit_trial_type_stays_strict_and_names_the_run(four_runs, settings_
 
 
 def test_trimming_errors_name_the_bids_run(four_runs, settings_for):
+    """Verify trimming errors name the BIDS run."""
     root, prep = four_runs
     path = next(prep.rglob("*run-03*confounds_timeseries.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -213,6 +230,7 @@ def test_trimming_errors_name_the_bids_run(four_runs, settings_for):
 
 
 def test_no_modulators_means_a_task_only_model(four_runs, settings_for):
+    """Verify no modulators means a task only model."""
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root, modulators=()))
     assert detect_task_model([r.events for r in runs], ()) == TaskModel()
@@ -224,6 +242,7 @@ REMEDY = "--modulator trial_type:categorical,indicator"
 def test_auto_trial_type_with_missing_rows_names_run_count_and_remedy(
     four_runs, settings_for
 ):
+    """Verify auto trial type with missing rows names run count and remedy."""
     root, _ = four_runs
     path = next(root.rglob("*run-02_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -237,6 +256,7 @@ def test_auto_trial_type_with_missing_rows_names_run_count_and_remedy(
 
 
 def test_auto_trial_type_blocked_design_gets_the_remedy(four_runs, settings_for):
+    """Verify auto trial type blocked design gets the remedy."""
     root, _ = four_runs
     for number, label in ((1, "a"), (2, "b")):
         path = next(root.rglob(f"*run-0{number}_events.tsv"))
@@ -248,6 +268,7 @@ def test_auto_trial_type_blocked_design_gets_the_remedy(four_runs, settings_for)
 
 
 def test_explicit_modulators_get_no_automatic_detection_hint(four_runs, settings_for):
+    """Verify explicit modulators get no automatic detection hint."""
     root, _ = four_runs
     path = next(root.rglob("*run-02_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -262,6 +283,7 @@ def test_explicit_modulators_get_no_automatic_detection_hint(four_runs, settings
 
 
 def test_boolean_trial_type_error_names_run_and_column(four_runs, settings_for):
+    """Verify boolean trial type error names run and column."""
     root, _ = four_runs
     path = next(root.rglob("*run-03_events.tsv"))
     table = pd.read_csv(path, sep="\t")
@@ -271,6 +293,7 @@ def test_boolean_trial_type_error_names_run_and_column(four_runs, settings_for):
 
 
 def test_numeric_trial_type_on_strings_suggests_categorical(four_runs, settings_for):
+    """Verify numeric trial type on strings suggests categorical."""
     root, _ = four_runs
     from tests.workflow.synthetic_bids import face_house_events, rewrite_events
 

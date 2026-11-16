@@ -16,6 +16,7 @@ from boldtailor.hrf_library import (
 
 
 def test_glmsingle_curves_are_the_published_library_at_unit_peak():
+    """Verify GLMsingle curves are the published library at unit peak."""
     curves = glmsingle_hrf_curves()
     assert curves.shape == (GLMSINGLE_HRF_COUNT, 501) and GLMSINGLE_HRF_COUNT == 20
     np.testing.assert_allclose(curves.max(axis=1), 1.0)
@@ -27,6 +28,7 @@ def test_glmsingle_curves_are_the_published_library_at_unit_peak():
 
 
 def test_glmsingle_candidate_kernel_is_the_curve_resampled_to_the_design_grid():
+    """Verify GLMsingle candidate kernel is the curve resampled to the design grid."""
     candidate = HrfCandidate(3, "glmsingle", (7,))
     np.testing.assert_array_equal(candidate.kernel(0.1, 1), glmsingle_hrf_curves()[6])
     fine = candidate.kernel(1.6, 50)
@@ -42,11 +44,13 @@ def test_glmsingle_candidate_kernel_is_the_curve_resampled_to_the_design_grid():
 
 @pytest.mark.parametrize("parameters", [(0,), (21,), (1.5,), (1, 2), ()])
 def test_glmsingle_candidate_requires_a_valid_library_index(parameters):
+    """Verify GLMsingle candidate requires a valid library index."""
     with pytest.raises(ValueError, match="GLMsingle"):
         HrfCandidate(1, "glmsingle", parameters)
 
 
 def test_glmsingle_library_is_canonical_plus_twenty_empirical_kernels():
+    """Verify GLMsingle library is canonical plus twenty empirical kernels."""
     library = glmsingle_hrf_library()
     assert len(library.candidates) == 21
     assert [c.kind for c in library.candidates[1:]] == ["glmsingle"] * 20
@@ -62,6 +66,7 @@ def test_glmsingle_library_is_canonical_plus_twenty_empirical_kernels():
 
 
 def test_timing_table_measures_empirical_kernels_and_leaves_gammas_blank():
+    """Verify timing table measures empirical kernels and leaves gammas blank."""
     table = glmsingle_hrf_library().timing_table
     assert (
         table.loc[1:, ["response_peak", "response_sd", "response_delay"]]
@@ -77,6 +82,7 @@ def test_timing_table_measures_empirical_kernels_and_leaves_gammas_blank():
 
 
 def test_bound_diagnostics_ignore_empirical_kernels():
+    """Verify bound diagnostics ignore empirical kernels."""
     library = HrfLibrary.from_parameters(
         [[3, 10, 0.5, 0.5, 2, 0, 36], [6, 16, 1.5, 2.5, 8, 2, 36]],
         include_glmsingle=True,
@@ -89,6 +95,7 @@ def test_bound_diagnostics_ignore_empirical_kernels():
 
 
 def test_default_library_is_timing_samples_plus_glmsingle_plus_canonical():
+    """Verify default library is timing samples plus GLMsingle plus canonical."""
     library = default_hrf_library()
     timing = timing_hrf_library()
     assert len(library.candidates) == 1 + 512 + 20
@@ -105,6 +112,7 @@ def test_default_library_is_timing_samples_plus_glmsingle_plus_canonical():
 
 
 def test_library_rebuilds_exactly_from_its_parameter_table():
+    """Verify library rebuilds exactly from its parameter table."""
     for library in (default_hrf_library(n_samples=8), glmsingle_hrf_library()):
         rebuilt = HrfLibrary.from_table(library.parameter_table)
         assert rebuilt.fingerprint == library.fingerprint

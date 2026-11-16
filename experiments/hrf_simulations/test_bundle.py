@@ -12,6 +12,7 @@ from experiments.hrf_estimation.test_inputs import bids as bids  # noqa: F401
 
 
 def test_roundtrip_all_subjects_sessions_and_offline_loading(bids, tmp_path):
+    """Verify roundtrip all subjects sessions and offline loading."""
     from experiments.hrf_simulations.bundle import (
         export_bundle,
         inventory,
@@ -57,6 +58,7 @@ def test_roundtrip_all_subjects_sessions_and_offline_loading(bids, tmp_path):
 
 
 def test_failed_export_is_not_published_and_skip_is_explicit(bids, tmp_path):
+    """Verify failed export is not published and skip is explicit."""
     from experiments.hrf_simulations.bundle import export_bundle, load_session
 
     next(bids.rglob("*run-01_events.tsv")).unlink()
@@ -69,6 +71,7 @@ def test_failed_export_is_not_published_and_skip_is_explicit(bids, tmp_path):
 
 
 def test_cli_bundle_path_and_makefile(tmp_path):
+    """Verify CLI bundle path and makefile."""
     from experiments.hrf_simulations.cli import _parser
     from experiments.hrf_simulations.test_makefile import dry_run
 
@@ -90,6 +93,7 @@ def test_cli_bundle_path_and_makefile(tmp_path):
 
 
 def test_reject_donor_calibration_from_other_subject(tmp_path):
+    """Verify reject donor calibration from other subject."""
     from experiments.hrf_simulations.cli import _check_calibration_subject
 
     (tmp_path / "provenance.json").write_text(json.dumps({"subject": "sub-07"}))
@@ -99,6 +103,7 @@ def test_reject_donor_calibration_from_other_subject(tmp_path):
 
 
 def test_bundle_cli_loader_without_source_or_mask(bids, tmp_path):
+    """Verify bundle CLI loader without source or mask."""
     from experiments.hrf_simulations.bundle import export_bundle
     from experiments.hrf_simulations.cli import _session_runs, _inventory
 

@@ -11,6 +11,7 @@ def library():
 
 
 def test_session_consistency_per_feature(library):
+    """Verify session consistency per feature."""
     indices = np.array([[1, 2, 3], [1, 2, 4]])
     table = session_consistency(library, indices, ["ses-01", "ses-02"])
     assert len(table) == 3

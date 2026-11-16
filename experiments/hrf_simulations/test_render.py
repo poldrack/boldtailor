@@ -10,6 +10,7 @@ import nbformat
 def test_render_uses_current_interpreter_and_restores_environment(
     tmp_path, monkeypatch
 ):
+    """Verify render uses current interpreter and restores environment."""
     from experiments.hrf_simulations import render
 
     source = tmp_path / "source.py"

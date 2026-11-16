@@ -10,28 +10,33 @@ from experiments.nsd_replication.stats import (
 
 
 def test_tost_equivalent_when_tight():
+    """Accept equivalence when paired differences lie well inside the specified margin."""
     diff = np.array([0.01, -0.01, 0.0, 0.005, -0.005, 0.002, -0.002, 0.0])
     result = tost_paired(diff, margin=0.05)
     assert result["equivalent"] and result["p"] < 0.05
 
 
 def test_tost_not_equivalent_when_shifted():
+    """Verify TOST not equivalent when shifted."""
     diff = np.full(8, 0.1) + np.linspace(-0.01, 0.01, 8)
     assert not tost_paired(diff, margin=0.05)["equivalent"]
 
 
 def test_tost_rejects_bad_margin():
+    """Verify TOST rejects bad margin."""
     with pytest.raises(ValueError, match="margin"):
         tost_paired(np.zeros(4), margin=0)
 
 
 def test_relative_difference():
+    """Compute relative differences using the specified reference denominator."""
     np.testing.assert_allclose(
         relative_difference(np.array([1.1, 0.9]), np.array([1.0, 1.0])), [0.1, -0.1]
     )
 
 
 def test_criterion_three_of_four():
+    """Pass the group criterion when three of four subjects meet the threshold."""
     values = {
         "sub-01": (0.3, 0.2),
         "sub-02": (0.3, 0.2),
@@ -43,11 +48,13 @@ def test_criterion_three_of_four():
 
 
 def test_mean_ci_contains_mean():
+    """Return a confidence interval that contains the estimated mean."""
     mean, low, high = mean_ci(np.array([1.0, 2.0, 3.0]))
     assert low < mean == 2.0 < high
 
 
 def test_criterion_direction_less():
+    """Apply the lower-is-better direction when evaluating the threshold criterion."""
     values = {"sub-01": (0.1, 0.2), "sub-02": (0.1, 0.2), "sub-03": (0.3, 0.2)}
     result = criterion_met(values, minimum=2, direction="less")
     assert result["replicated"] and result["count"] == 2
@@ -56,5 +63,6 @@ def test_criterion_direction_less():
 
 
 def test_criterion_rejects_unknown_direction():
+    """Verify criterion rejects unknown direction."""
     with pytest.raises(ValueError, match="direction"):
         criterion_met({"sub-01": (0.1, 0.2)}, minimum=1, direction="up")

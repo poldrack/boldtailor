@@ -25,6 +25,7 @@ def wheel_names(tmp_path_factory):
 
 
 def test_build_backend_is_uv_build():
+    """Verify build backend is uv build."""
     config = tomllib.loads(Path("pyproject.toml").read_text())
     assert config["build-system"]["build-backend"] == "uv_build"
     assert config["build-system"]["requires"][0].startswith("uv_build")
@@ -32,6 +33,7 @@ def test_build_backend_is_uv_build():
 
 
 def test_wheel_ships_hrf_data_and_its_notice(wheel_names):
+    """Verify wheel ships HRF data and its notice."""
     for name in (
         "glmsingle_hrf_library.tsv",
         "glmsingle_hrf_library.md",
@@ -41,6 +43,7 @@ def test_wheel_ships_hrf_data_and_its_notice(wheel_names):
 
 
 def test_wheel_records_both_licenses(wheel_names):
+    """Verify wheel records both licenses."""
     assert LICENSES + "LICENSE" in wheel_names
     assert any(
         n.startswith(LICENSES) and n.endswith("GLMsingle-LICENSE.txt")
@@ -49,6 +52,7 @@ def test_wheel_records_both_licenses(wheel_names):
 
 
 def test_wheel_ships_every_source_module(wheel_names):
+    """Verify wheel ships every source module."""
     sources = Path("src").rglob("*.py")
     expected = {str(path.relative_to("src")) for path in sources}
     assert expected <= wheel_names

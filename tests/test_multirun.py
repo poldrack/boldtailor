@@ -81,6 +81,7 @@ def _flat_values(image):
 
 
 def test_fit_allows_run_specific_designs_and_matches_first_level_model():
+    """Verify fit allows run specific designs and matches first level model."""
     signals, events, frame_times, designs, model = _problem()
     data = from_arrays(signals, events, frame_times=frame_times)
 
@@ -127,6 +128,7 @@ def test_fit_allows_run_specific_designs_and_matches_first_level_model():
 
 
 def test_fit_aggregates_r2_from_sums_not_run_means():
+    """Verify fit aggregates R-squared from sums not run means."""
     signals, events, frame_times, _, model = _problem()
     result = fit(
         from_arrays(signals, events, frame_times=frame_times),
@@ -142,6 +144,7 @@ def test_fit_aggregates_r2_from_sums_not_run_means():
 
 
 def test_fit_ar1_r2_uses_original_signal_space_across_runs():
+    """Verify fit AR(1) R-squared uses original signal space across runs."""
     signals, events, frame_times, designs, _ = _problem()
     model = ModelSpec(
         contrasts={"face_gt_house": {"face": 1.0, "house": -1.0}},
@@ -167,6 +170,7 @@ def test_fit_ar1_r2_uses_original_signal_space_across_runs():
 
 
 def test_fit_warns_for_rank_deficient_design():
+    """Verify fit warns for rank deficient design."""
     signals, events, frame_times, _, _ = _problem()
     confound = pd.DataFrame({"duplicate": np.ones(len(signals[0]))})
     model = ModelSpec(
@@ -194,6 +198,7 @@ def test_fit_warns_for_rank_deficient_design():
 def test_fit_records_run_diagnostics_without_serializing_design_values(
     complete_sources,
 ):
+    """Verify fit records run diagnostics without serializing design values."""
     signals, events, frame_times, designs, model = _problem()
 
     result = fit(
@@ -228,6 +233,7 @@ def test_fit_records_run_diagnostics_without_serializing_design_values(
 
 
 def test_fit_records_rank_deficiency_warning_in_provenance(complete_sources):
+    """Verify fit records rank deficiency warning in provenance."""
     signals, events, frame_times, _, _ = _problem()
     confound = pd.DataFrame({"duplicate": np.ones(len(signals[0]))})
     model = ModelSpec(
@@ -373,6 +379,7 @@ _DIFFERENCE = {"difference": {"face": 1.0, "duplicate": -1.0}}
 def test_contrast_preflight_rejects_before_glm(
     fail_glm, entry_point, contrasts, message, warning
 ):
+    """Verify contrast preflight rejects before GLM."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with pytest.raises(ValueError, match=message):
@@ -402,6 +409,7 @@ def _column_vector(design, weights):
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 def test_multirun_contrasts_are_equal_weight_fixed_effects(noise_model):
+    """Verify multirun contrasts are equal weight fixed effects."""
     from scipy import stats
 
     signals, events, frame_times, designs, model = _problem()
@@ -453,12 +461,14 @@ def _duplicated_fit_and_reduced_oracle(noise_model="ols"):
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 def test_duplicated_regressor_effect_matches_reduced_design(noise_model):
+    """Verify duplicated regressor effect matches reduced design."""
     result, expected = _duplicated_fit_and_reduced_oracle(noise_model)
     np.testing.assert_allclose(result.effect("c"), expected.effect_size(), rtol=1e-8)
 
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
 def test_duplicated_regressor_variance_and_stat_match_reduced_design(noise_model):
+    """Verify duplicated regressor variance and stat match reduced design."""
     result, expected = _duplicated_fit_and_reduced_oracle(noise_model)
     np.testing.assert_allclose(
         result.variance("c"), expected.effect_variance(), rtol=1e-8
@@ -467,6 +477,7 @@ def test_duplicated_regressor_variance_and_stat_match_reduced_design(noise_model
 
 
 def test_duplicated_regressor_residual_dof_is_n_minus_rank():
+    """Verify duplicated regressor residual degrees-of-freedom is n minus rank."""
     result, _ = _duplicated_fit_and_reduced_oracle()
     run = result.provenance.activities[-1]["runs"][0]
     assert run["design_rank"] == len(run["design_columns"]) - 1

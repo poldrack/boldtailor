@@ -100,6 +100,7 @@ def _join_process_or_fail(process, timeout=10):
 
 
 def test_artifact_owns_payload_bytes_and_validates_relative_posix_path():
+    """Verify artifact owns payload bytes and validates relative posix path."""
     mutable = bytearray(b"initial")
 
     artifact = Artifact("nested/result.bin", mutable)
@@ -127,6 +128,7 @@ def test_artifact_owns_payload_bytes_and_validates_relative_posix_path():
     ),
 )
 def test_artifact_rejects_paths_that_are_not_relative_normalized_posix(path):
+    """Verify artifact rejects paths that are not relative normalized posix."""
     with pytest.raises(ValueError, match="relative POSIX path"):
         Artifact(path, b"payload")
 
@@ -149,6 +151,7 @@ def _artifacts(*paths):
 def test_preflight_rejects_invalid_requests_before_writing(
     tmp_path, artifacts, kwargs, message
 ):
+    """Verify preflight rejects invalid requests before writing."""
     destination = tmp_path / "derivatives"
 
     with pytest.raises(ValueError, match=message):
@@ -158,6 +161,7 @@ def test_preflight_rejects_invalid_requests_before_writing(
 
 
 def test_publication_does_not_parse_payloads(tmp_path):
+    """Verify publication does not parse payloads."""
     publish_artifact_set(
         tmp_path / "out",
         [Artifact("broken.json", b"{not json"), Artifact("t.tsv", b"a\tb\n1\n")],
@@ -167,6 +171,7 @@ def test_publication_does_not_parse_payloads(tmp_path):
 
 
 def test_control_data_lives_in_a_sibling_directory(tmp_path):
+    """Verify control data lives in a sibling directory."""
     destination = tmp_path / "derivatives"
 
     publish_artifact_set(destination, [Artifact(".boldtailor/note.json", b"{}")])
@@ -177,6 +182,7 @@ def test_control_data_lives_in_a_sibling_directory(tmp_path):
 
 
 def test_publication_accepts_destination_under_symlinked_tmp():
+    """Verify publication accepts destination under symlinked tmp."""
     destination = Path("/tmp") / f"boldtailor-{uuid4()}"
     try:
         publish_artifact_set(destination, [Artifact("a.json", b"{}")])
@@ -187,6 +193,7 @@ def test_publication_accepts_destination_under_symlinked_tmp():
 
 
 def test_publication_accepts_destination_under_symlinked_ancestor(tmp_path):
+    """Verify publication accepts destination under symlinked ancestor."""
     real = tmp_path / "real"
     real.mkdir()
     (tmp_path / "alias").symlink_to(real, target_is_directory=True)
@@ -197,6 +204,7 @@ def test_publication_accepts_destination_under_symlinked_ancestor(tmp_path):
 
 
 def test_publication_fsyncs_only_regular_files(tmp_path, monkeypatch):
+    """Verify publication fsyncs only regular files."""
     import boldtailor.publication as publication
 
     modes = []
@@ -223,6 +231,7 @@ def test_publication_writes_real_files_and_returns_only_artifact_paths(
     tmp_path,
     artifact_set,
 ):
+    """Verify publication writes real files and returns only artifact paths."""
     destination = tmp_path / "derivatives"
 
     published = publish_artifact_set(destination, artifact_set)
@@ -242,6 +251,7 @@ def test_publication_writes_real_files_and_returns_only_artifact_paths(
 
 
 def test_existing_collision_is_refused_before_any_artifact_is_replaced(tmp_path):
+    """Verify existing collision is refused before any artifact is replaced."""
     destination = tmp_path / "derivatives"
     destination.mkdir()
     existing = destination / "existing.bin"
@@ -260,6 +270,7 @@ def test_existing_collision_is_refused_before_any_artifact_is_replaced(tmp_path)
 
 
 def test_symlinked_destination_resolves_to_its_target(tmp_path):
+    """Verify symlinked destination resolves to its target."""
     real = tmp_path / "scratch" / "derivs"
     real.mkdir(parents=True)
     destination = tmp_path / "derivatives"
@@ -274,6 +285,7 @@ def test_symlinked_destination_resolves_to_its_target(tmp_path):
 
 @pytest.mark.parametrize("symlink_location", ("parent", "artifact"))
 def test_preflight_never_follows_destination_symlinks(tmp_path, symlink_location):
+    """Verify preflight never follows destination symlinks."""
     outside = tmp_path / "outside"
     outside.mkdir()
     destination = tmp_path / "derivatives"
@@ -296,6 +308,7 @@ def test_preflight_never_follows_destination_symlinks(tmp_path, symlink_location
 
 
 def test_preflight_rejects_source_output_overlap_without_modifying_source(tmp_path):
+    """Verify preflight rejects source output overlap without modifying source."""
     destination = tmp_path / "derivatives"
     destination.mkdir()
     source = destination / "source.tsv"
@@ -322,6 +335,7 @@ def test_failure_at_every_replace_boundary_restores_original_set(
     monkeypatch,
     failure_at,
 ):
+    """Verify failure at every replace boundary restores original set."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "derivatives"
@@ -358,6 +372,7 @@ def test_failure_at_every_replace_boundary_restores_original_set(
 
 
 def test_successful_overwrite_replaces_the_complete_set_and_cleans_debris(tmp_path):
+    """Verify successful overwrite replaces the complete set and cleans debris."""
     destination = tmp_path / "derivatives"
     (destination / "nested").mkdir(parents=True)
     (destination / "first.bin").write_bytes(b"old-first")
@@ -383,6 +398,7 @@ def test_failure_log_is_single_jsonl_stream_and_redacts_sensitive_context(
     tmp_path,
     monkeypatch,
 ):
+    """Verify failure log is single jsonl stream and redacts sensitive context."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "derivatives-secret"
@@ -424,6 +440,7 @@ def test_failure_log_is_single_jsonl_stream_and_redacts_sensitive_context(
 def test_source_files_are_read_only_inputs_on_success_and_failure(
     tmp_path, monkeypatch
 ):
+    """Verify source files are read only inputs on success and failure."""
     import boldtailor.publication as publication
 
     source = tmp_path / "raw" / "source.tsv"
@@ -460,6 +477,7 @@ def test_source_files_are_read_only_inputs_on_success_and_failure(
 
 
 def test_concurrent_writers_serialize_complete_transactions(tmp_path):
+    """Verify concurrent writers serialize complete transactions."""
     destination = tmp_path / "derivatives"
     destination.mkdir()
     (destination / "nested").mkdir()
@@ -492,6 +510,7 @@ def test_concurrent_writers_serialize_complete_transactions(tmp_path):
 
 
 def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
+    """Verify lock timeout is contextual and leaves no partial artifact."""
     destination = tmp_path / "derivatives"
     context = multiprocessing.get_context("spawn")
     acquired = context.Event()
@@ -521,6 +540,7 @@ def test_lock_timeout_is_contextual_and_leaves_no_partial_artifact(tmp_path):
 
 
 def test_source_overlap_through_destination_parent_alias_is_rejected(tmp_path):
+    """Verify source overlap through destination parent alias is rejected."""
     (tmp_path / "unused").mkdir()
     source = tmp_path / "signal.bin"
     source.write_bytes(b"original-input")
@@ -538,6 +558,7 @@ def test_source_overlap_through_destination_parent_alias_is_rejected(tmp_path):
 def test_failed_restore_retains_original_and_reports_recovery(
     tmp_path, monkeypatch, block_diagnostics
 ):
+    """Verify failed restore retains original and reports recovery."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
@@ -585,6 +606,7 @@ def test_failed_restore_retains_original_and_reports_recovery(
 
 @pytest.mark.parametrize("boundary", ["write", "stage_directory"])
 def test_staging_failure_preserves_original_and_cause(tmp_path, monkeypatch, boundary):
+    """Verify staging failure preserves original and cause."""
     destination = tmp_path / "output"
     destination.mkdir()
     original = destination / "old.bin"
@@ -612,6 +634,7 @@ def test_staging_failure_preserves_original_and_cause(tmp_path, monkeypatch, bou
 def test_cleanup_failure_does_not_change_publication_outcome(
     tmp_path, monkeypatch, fail_publication
 ):
+    """Verify cleanup failure does not change publication outcome."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
@@ -639,6 +662,7 @@ def test_cleanup_failure_does_not_change_publication_outcome(
 def test_existing_transaction_is_never_removed_on_identifier_collision(
     tmp_path, monkeypatch
 ):
+    """Verify existing transaction is never removed on identifier collision."""
     import boldtailor.publication as publication
 
     identifier = UUID("123e4567-e89b-12d3-a456-426614174000")
@@ -658,6 +682,7 @@ def test_existing_transaction_is_never_removed_on_identifier_collision(
 def test_publication_failure_ledger_omits_exception_names_and_text(
     tmp_path, monkeypatch
 ):
+    """Verify publication failure ledger omits exception names and text."""
     import boldtailor.publication as publication
 
     class PrivatePatientError(ValueError):
@@ -686,6 +711,7 @@ def test_publication_failure_ledger_omits_exception_names_and_text(
 def test_control_files_cannot_overwrite_protected_sources(
     tmp_path, monkeypatch, source_name
 ):
+    """Verify control files cannot overwrite protected sources."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
@@ -709,6 +735,7 @@ def test_control_files_cannot_overwrite_protected_sources(
 
 
 def test_recovery_directory_names_a_directory_that_exists(tmp_path, monkeypatch):
+    """Verify recovery directory names a directory that exists."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "output"
@@ -741,6 +768,7 @@ def test_control_sibling_shares_the_destination_prefix_and_is_identifiable(tmp_p
     # A "boldtailor-*" glob of the parent matches both the published directory
     # and its control sibling, in filesystem order. Consumers that locate the
     # destination by prefix must be able to tell the two apart.
+    """Verify control sibling shares the destination prefix and is identifiable."""
     destination = tmp_path / "boldtailor-abc123"
     publish_artifact_set(destination, (Artifact("a.bin", b"a"),))
 
@@ -752,6 +780,7 @@ def test_control_sibling_shares_the_destination_prefix_and_is_identifiable(tmp_p
 
 
 def test_keep_existing_paths_are_written_only_when_absent(tmp_path):
+    """Verify keep existing paths are written only when absent."""
     destination = tmp_path / "derivatives"
     first = publish_artifact_set(
         destination,
@@ -770,6 +799,7 @@ def test_keep_existing_paths_are_written_only_when_absent(tmp_path):
 
 
 def test_keep_existing_is_decided_while_holding_the_lock(tmp_path, monkeypatch):
+    """Verify keep existing is decided while holding the lock."""
     import boldtailor.publication as publication
 
     destination = tmp_path / "derivatives"

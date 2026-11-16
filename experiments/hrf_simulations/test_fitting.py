@@ -37,6 +37,7 @@ def planted(runs, library):
 
 
 def test_iid_and_ar1_paths_agree_at_zero_rho(planted, library):
+    """Verify independent-noise and AR(1) paths agree at zero rho."""
     from experiments.hrf_simulations.fitting import fit
 
     iid = fit(planted, library, "ConsDurRTMod", "stimulus", "iid")
@@ -52,6 +53,7 @@ def test_iid_and_ar1_paths_agree_at_zero_rho(planted, library):
 def test_unit_rms_scaling_leaves_selection_and_fit_variance_consistent(
     planted, library
 ):
+    """Verify unit rms scaling leaves selection and fit variance consistent."""
     from experiments.hrf_simulations.fitting import fit
 
     args = (planted, library, "ConsDurRTMod", "stimulus", "iid")
@@ -81,6 +83,7 @@ def _scaled_candidates(runs, library, model, convention):
 
 
 def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
+    """Verify unit rms scaling divides random design by pooled rms."""
     from boldtailor.reml import RemlGroup, select_random_effects_design
     from experiments.hrf_estimation.scoring import residuals
     from experiments.hrf_simulations.fitting import fit
@@ -116,6 +119,7 @@ def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
 
 @pytest.mark.parametrize("noise_mode", ["iid", "ar1"])
 def test_matched_noiseless_recovery(runs, library, noise_mode):
+    """Recover the generating HRF from noiseless data under the matched fitting model."""
     from experiments.hrf_simulations.fitting import fit
     from experiments.hrf_simulations.simulation import signal_components
 
@@ -141,6 +145,7 @@ def test_matched_noiseless_recovery(runs, library, noise_mode):
 
 
 def test_rho_reference_is_model_independent_and_diagnostic(runs, library):
+    """Verify rho reference is model independent and diagnostic."""
     from experiments.hrf_simulations.fitting import estimate_rho, fit
     from experiments.hrf_simulations.noise import ar1
 
@@ -158,6 +163,7 @@ def test_rho_reference_is_model_independent_and_diagnostic(runs, library):
 
 
 def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatch):
+    """Verify prepared rho reference is cached once per run."""
     from boldtailor import ar1 as package_ar1
     from experiments.hrf_simulations.design import reference_design
     from experiments.hrf_simulations.fitting import DesignCache, estimate_rho, fit
@@ -187,6 +193,7 @@ def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatc
 
 
 def test_curve_metrics_and_failure_accounting(library):
+    """Verify curve metrics and failure accounting."""
     from experiments.hrf_simulations.metrics import recovery, library_floor
 
     truth = library.candidates[0]
@@ -198,6 +205,7 @@ def test_curve_metrics_and_failure_accounting(library):
 
 
 def test_default_cache_holds_all_pilot_design_groups():
+    """Verify default cache holds all pilot design groups."""
     from experiments.hrf_simulations.fitting import DesignCache
 
     assert DesignCache().max_entries >= 533 * 12 * 4 * 2

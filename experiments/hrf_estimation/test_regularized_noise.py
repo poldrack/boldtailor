@@ -12,6 +12,7 @@ def api():
 
 
 def test_shrinkage_reduces_error_without_erasing_vertex_differences():
+    """Verify shrinkage reduces error without erasing vertex differences."""
     rng = np.random.default_rng(471)
     truth = np.repeat([0.25, 0.65], 400)
     z = np.arctanh(truth)
@@ -26,6 +27,7 @@ def test_shrinkage_reduces_error_without_erasing_vertex_differences():
 
 def test_surface_smoothing_uses_mesh_paths_not_euclidean_proximity():
     # Two disconnected triangles occupy the same coordinates: no cross-mesh pooling.
+    """Verify surface smoothing uses mesh paths not euclidean proximity."""
     xyz = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]] * 2, dtype=float)
     faces = np.array([[0, 1, 2], [3, 4, 5]])
     weights = api().surface_weights(xyz, faces, np.arange(6), 5.0)
@@ -37,6 +39,7 @@ def test_surface_smoothing_uses_mesh_paths_not_euclidean_proximity():
 
 
 def test_corrected_noise_matches_existing_pooled_estimator(planted_runs):
+    """Verify corrected noise matches existing pooled estimator."""
     from experiments.hrf_estimation.reml_selection import estimate_noise
 
     runs, _ = planted_runs
@@ -62,6 +65,7 @@ def _dense_vertex(runs, kernel, vertex):
 
 
 def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
+    """Verify grouped REML matches independent vertex likelihoods."""
     from tests.reml_oracles import dense_criterion, dense_fit
 
     runs, library = planted_runs
@@ -92,6 +96,7 @@ def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
 
 
 def test_whitening_diagnostics_detect_correct_ar1_filter(planted_runs):
+    """Verify whitening diagnostics detect correct AR(1) filter."""
     from experiments.hrf_estimation.sensitivity import ar1_noise
 
     runs, _ = planted_runs
@@ -111,6 +116,7 @@ def test_whitening_diagnostics_detect_correct_ar1_filter(planted_runs):
 
 
 def test_pilot_persists_paired_scores_rho_and_whitening(planted_runs, tmp_path):
+    """Verify pilot persists paired scores rho and whitening."""
     import json
     import pandas as pd
 

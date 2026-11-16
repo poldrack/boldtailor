@@ -13,6 +13,7 @@ from experiments.hrf_estimation.test_library_cv import planted_runs
 
 @pytest.mark.parametrize("mode", ["amplitude", "duration"])
 def test_prepared_design_and_loss_match_reference(planted_runs, mode):
+    """Verify prepared design and loss match reference."""
     runs, library = planted_runs
     rng = np.random.default_rng(19)
     runs = tuple(replace(r, signals=r.signals + rng.normal(size=r.signals.shape),
@@ -31,6 +32,7 @@ def test_prepared_design_and_loss_match_reference(planted_runs, mode):
 
 
 def test_prepared_zero_signal_and_invalid_shape(planted_runs):
+    """Verify prepared zero signal and invalid shape."""
     runs, _ = planted_runs
     api = importlib.import_module("experiments.hrf_estimation.prepared")
     constant = tuple(replace(r, signals=np.ones_like(r.signals)) for r in runs)
@@ -41,6 +43,7 @@ def test_prepared_zero_signal_and_invalid_shape(planted_runs):
 
 
 def test_library_losses_are_batched_without_changing_values(planted_runs):
+    """Verify library losses are batched without changing values."""
     runs, library = planted_runs
     api = importlib.import_module("experiments.hrf_estimation.prepared")
     prepared = api.prepare_profile(runs, "amplitude")
@@ -51,6 +54,7 @@ def test_library_losses_are_batched_without_changing_values(planted_runs):
 
 
 def test_fast_parallel_fit_matches_reference(offgrid):
+    """Verify fast parallel fit matches reference."""
     from experiments.hrf_estimation.continuous import fit_continuous
 
     runs, library, _ = offgrid
@@ -69,6 +73,7 @@ from experiments.hrf_estimation.test_continuous import offgrid
 
 
 def test_task_inside_nuisance_space_does_not_fit_projection_roundoff(planted_runs):
+    """Verify task inside nuisance space does not fit projection roundoff."""
     import pandas as pd
     runs, library = planted_runs
     truth = library.candidates[1]
@@ -86,6 +91,7 @@ def test_task_inside_nuisance_space_does_not_fit_projection_roundoff(planted_run
 
 
 def test_prepared_rejects_unsupported_event_onsets(planted_runs):
+    """Verify prepared rejects unsupported event onsets."""
     runs, _ = planted_runs
     run = replace(runs[0], events=runs[0].events.assign(onset=-100.))
     api = importlib.import_module("experiments.hrf_estimation.prepared")

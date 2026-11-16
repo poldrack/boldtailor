@@ -40,16 +40,19 @@ def dense_expected(design, rho):
     rho=st.floats(-0.95, 0.95, exclude_min=True, exclude_max=True),
 )
 def test_whitened_ar1_covariance_is_identity(n, rho):
+    """Verify whitened AR(1) covariance is identity."""
     w = whiten(np.eye(n), rho)
     assert_allclose(w @ ar1_correlation(n, rho) @ w.T, np.eye(n), atol=1e-10)
 
 
 def test_zero_rho_is_identity():
+    """Leave signal values unchanged when AR(1) whitening uses zero correlation."""
     values = np.random.default_rng(0).normal(size=(10, 3))
     assert_allclose(whiten(values, 0.0), values)
 
 
 def test_whiten_does_not_modify_input():
+    """Verify whiten does not modify input."""
     values = np.random.default_rng(0).normal(size=(10, 3))
     before = values.copy()
     whiten(values, 0.4)
@@ -58,28 +61,37 @@ def test_whiten_does_not_modify_input():
 
 @pytest.mark.parametrize("rho", [1.0, -1.0, np.nan, np.inf])
 def test_invalid_rho_raises(rho):
+    """Verify invalid rho raises."""
     with pytest.raises(ValueError):
         whiten(np.ones(5), rho)
 
 
 def test_whiten_accepts_one_dimensional_input():
+    """Verify whiten accepts one dimensional input."""
     out = whiten(np.array([1.0, 2.0, 3.0]), 0.5)
     assert_allclose(out, [1.0, 1.5 / np.sqrt(0.75), 2.0 / np.sqrt(0.75)])
 
 
 def test_expected_lag_ratio_matches_dense_traces(design):
+    """Verify expected lag ratio matches dense traces."""
     rhos = np.array([-0.5, 0.0, 0.3, 0.7])
     expected = np.array([dense_expected(design, r) for r in rhos])
     assert_allclose(expected_lag_ratio(design, rhos), expected, rtol=1e-10)
 
 
 def test_correction_inverts_expectation(design):
+    """Recover supplied correlations by inverting the design-adjusted lag-ratio
+    expectation.
+    """
     rhos = np.linspace(-0.8, 0.8, 9)
     recovered = correct_lag_ratio(expected_lag_ratio(design, rhos), design)
     assert_allclose(recovered, rhos, atol=1e-3)
 
 
 def test_degenerate_feature_is_nan(design):
+    """Return an undefined correlation for a feature without estimable residual
+    variation.
+    """
     rng = np.random.default_rng(5)
     signals = np.column_stack(
         [rng.normal(size=40), design @ rng.normal(size=6), rng.normal(size=40)]
@@ -92,6 +104,9 @@ def test_degenerate_feature_is_nan(design):
 
 
 def test_pooled_is_clipped_median():
+    """Pool valid feature correlations by the median and clip the result to the allowed
+    range.
+    """
     assert pool_rho(np.array([[0.1, 0.2, np.nan, 0.9]])) == pytest.approx(0.2)
     assert pool_rho(np.array([0.96, 0.99, 0.97])) == pytest.approx(0.95)
     assert pool_rho(np.array([0.96, 0.99, 0.97]), (-0.2, 0.8)) == pytest.approx(0.8)
@@ -100,6 +115,7 @@ def test_pooled_is_clipped_median():
 
 
 def test_no_valid_values_pools_to_zero():
+    """Verify no valid values pools to zero."""
     assert pool_rho(np.array([np.nan, np.nan])) == 0.0
 
 
@@ -122,6 +138,9 @@ def _assert_same_estimate(actual, expected):
 
 
 def test_prepared_reference_matches_design():
+    """Use the same reference-design correction for prepared and directly supplied
+    designs.
+    """
     signals, designs = _ar1_problem()
     expected = estimate_rho(signals, designs)
     prepared = [prepare_reference(d) for d in designs]
@@ -132,6 +151,7 @@ def test_prepared_reference_matches_design():
 
 
 def test_prepared_reference_is_reusable_across_signals():
+    """Verify prepared reference is reusable across signals."""
     signals, designs = _ar1_problem()
     other, _ = _ar1_problem(seed=8)
     prepared = [prepare_reference(d) for d in designs]
@@ -140,6 +160,7 @@ def test_prepared_reference_is_reusable_across_signals():
 
 
 def test_prepared_reference_is_frozen_and_read_only(design):
+    """Verify prepared reference is frozen and read only."""
     reference = prepare_reference(design)
     with pytest.raises(dataclasses.FrozenInstanceError):
         reference.basis = np.zeros((40, 6))
@@ -150,6 +171,7 @@ def test_prepared_reference_is_frozen_and_read_only(design):
 
 
 def test_prepared_reference_owns_its_design(design):
+    """Verify prepared reference owns its design."""
     reference = prepare_reference(design)
     before = reference.basis.copy()
     design[:] = 0.0
@@ -158,6 +180,7 @@ def test_prepared_reference_owns_its_design(design):
 
 @pytest.mark.parametrize("value", [np.nan, np.inf])
 def test_prepare_reference_rejects_invalid_design(design, value):
+    """Verify prepare reference rejects invalid design."""
     with pytest.raises(ValueError, match="design"):
         prepare_reference(design[:, 0])
     corrupt = design.copy()
@@ -173,6 +196,9 @@ def _with(parts, index, value):
 
 
 def test_estimate_rho_validates_groups():
+    """Reject inconsistent signal and reference-design groups before estimating
+    autocorrelation.
+    """
     signals, designs = _ar1_problem()
     bad_design = designs[1].copy()
     bad_design[0, 0] = np.nan
@@ -196,6 +222,7 @@ def test_estimate_rho_validates_groups():
 
 
 def test_inversion_interpolates_a_monotonic_expectation():
+    """Verify inversion interpolates a monotonic expectation."""
     grid = np.linspace(-0.9, 0.9, 7)
     expected = 0.5 * grid + 0.1
     values = np.array([[0.1, np.nan], [0.5 * 0.45 + 0.1, 0.5 * -0.9 + 0.1]])
@@ -231,6 +258,7 @@ def test_a_bend_beyond_the_pooling_range_leaves_the_curve_usable():
 
 
 def test_values_beyond_the_usable_branch_are_clipped_to_its_ends():
+    """Verify values beyond the usable branch are clipped to its ends."""
     grid, expected = _bent_curve()
     values = np.array([0.7, 5.0, -0.9])
     corrected = invert_lag_ratio(values, expected, grid, (-0.8, 0.8))
@@ -239,12 +267,14 @@ def test_values_beyond_the_usable_branch_are_clipped_to_its_ends():
 
 @pytest.mark.parametrize("turn", [0.0, 0.5, 0.75, 0.85])
 def test_a_bend_inside_the_pooling_range_identifies_nothing(turn):
+    """Verify a bend inside the pooling range identifies nothing."""
     grid, expected = _bent_curve(turn)
     values = np.array([-0.5, 0.0, 0.2])
     assert np.isnan(invert_lag_ratio(values, expected, grid)).all()
 
 
 def test_a_flat_stretch_inside_the_pooling_range_identifies_nothing():
+    """Verify a flat stretch inside the pooling range identifies nothing."""
     grid = np.linspace(-0.9, 0.9, 7)
     expected = np.array([-0.5, -0.3, 0.0, 0.0, 0.0, 0.3, 0.5])
     corrected = invert_lag_ratio(np.array([-0.4, 0.0, 0.4]), expected, grid)
@@ -252,6 +282,7 @@ def test_a_flat_stretch_inside_the_pooling_range_identifies_nothing():
 
 
 def test_default_rho_range_excludes_strong_negative_autocorrelation():
+    """Verify default rho range excludes strong negative autocorrelation."""
     from boldtailor._ar1_moments import RHO_RANGE
 
     assert RHO_RANGE == (-0.2, 0.95)
@@ -276,6 +307,7 @@ def test_a_bend_below_the_rho_range_does_not_block_inversion():
 
 
 def test_a_bend_inside_the_default_rho_range_still_identifies_nothing():
+    """Verify a bend inside the default rho range still identifies nothing."""
     grid, expected = _curve_turning_at(-0.1)
     assert np.isnan(invert_lag_ratio(np.array([0.3]), expected, grid)).all()
 
@@ -290,6 +322,7 @@ def test_values_below_the_range_are_clipped_to_the_branch_not_to_the_range():
 
 @pytest.mark.parametrize("true_rho", [-0.5, 0.4])
 def test_estimate_reports_whether_the_pooled_value_sits_on_a_bound(true_rho):
+    """Verify estimate reports whether the pooled value sits on a bound."""
     signals = [_ar1_noise(3, 150, 600, true_rho)]
     reference = [np.ones((150, 1))]
     default = estimate_rho(signals, reference)
@@ -317,6 +350,7 @@ def test_pooled_value_at_the_upper_end_of_the_grid_is_reported_at_bound():
     [(0.8, -0.2), (0.3, 0.3), (-0.99, 0.8), (-0.2, 0.96), (np.nan, 0.8), (-0.2,)],
 )
 def test_invalid_rho_range_raises(rho_range):
+    """Verify invalid rho range raises."""
     signals, reference = [_ar1_noise(3, 60, 4, 0.2)], [np.ones((60, 1))]
     with pytest.raises(ValueError, match="rho_range"):
         estimate_rho(signals, reference, rho_range=rho_range)
@@ -372,10 +406,8 @@ def _saturated_design(seed, n=100, residual_dof=10):
 
 
 def test_pooled_rho_is_not_pulled_to_the_far_end_by_a_bend_at_one_end():
-    """Ten residual degrees of freedom and a curve that turns below rho =
-    -0.83: raw ratios are noisy and many fall at the levels the bend repeats.
-    Dropping those values alone leaves an upward-biased median near the 0.8
-    limit; keeping every value keeps the pooled estimate near the truth."""
+    """Keep repeated-branch lag ratios in the pooled estimate to avoid bias
+    toward the upper correlation limit."""
     design = _saturated_design(5)
     curve = expected_lag_ratio(design, np.linspace(-0.95, 0.95, 2001))
     turning = np.flatnonzero(np.diff(curve) <= 0)
@@ -424,6 +456,7 @@ def test_no_value_is_dropped_and_order_is_kept_whatever_the_tails(
 @settings(derandomize=True, deadline=None, max_examples=200)
 @given(TAILS, st.lists(st.integers(1, 6), min_size=2, max_size=8), TAILS)
 def test_values_on_the_pooling_branch_are_inverted_exactly(left, core, right):
+    """Verify values on the pooling branch are inverted exactly."""
     grid, expected = _tailed_curve(left, core, right)
     inside = np.abs(grid) <= 0.8 + 1e-12
     rhos = np.linspace(-0.8, 0.8, 23)
@@ -439,6 +472,7 @@ def test_values_on_the_pooling_branch_are_inverted_exactly(left, core, right):
     st.booleans(),
 )
 def test_inversion_of_a_monotone_curve_is_plain_interpolation(steps, values, falling):
+    """Verify inversion of a monotone curve is plain interpolation."""
     expected = np.cumsum(np.array([0, *steps], dtype=float)) / 8.0
     grid = np.linspace(-0.9, 0.9, expected.size)
     curve = -expected if falling else expected
@@ -452,16 +486,19 @@ def test_inversion_of_a_monotone_curve_is_plain_interpolation(steps, values, fal
     [np.zeros(7), np.linspace(0, 1e-15, 7), np.full(7, np.nan), np.full(7, np.inf)],
 )
 def test_uninformative_correction_curves_do_not_estimate_rho(curve):
+    """Verify uninformative correction curves do not estimate rho."""
     corrected = invert_lag_ratio([0.0, 0.5], curve, np.linspace(-0.9, 0.9, 7))
     assert np.isnan(corrected).all()
 
 
 def test_decreasing_identifiable_curve_is_inverted():
+    """Verify decreasing identifiable curve is inverted."""
     grid = np.linspace(-0.9, 0.9, 7)
     assert_allclose(invert_lag_ratio([-0.2, 0.4], -grid, grid), [0.2, -0.4])
 
 
 def test_nonadjacent_residual_coordinates_do_not_identify_rho():
+    """Verify nonadjacent residual coordinates do not identify rho."""
     eye = np.eye(12)
     estimate = estimate_rho([eye[:, [0]]], [eye[:, 1::2]])
     assert np.isnan(estimate.values).all()
@@ -482,6 +519,7 @@ def test_estimator_moments_match_moment_polynomials_exactly(design, rho):
 
 
 def test_non_finite_signal_feature_gives_nan_not_error():
+    """Verify non finite signal feature gives NaN not error."""
     signals, designs = _ar1_problem()
     signals = [s.copy() for s in signals]
     signals[1][4, 2] = np.nan
@@ -502,6 +540,7 @@ def _lag_problem(n_fixed, n=60):
 @pytest.mark.parametrize("scale", [1e4, 1e6, 1e8, 1e10])
 @pytest.mark.parametrize("n_fixed", [1, 3])
 def test_lag_ratio_is_invariant_to_resolvable_design_span_shifts(n_fixed, scale):
+    """Verify lag ratio is invariant to resolvable design span shifts."""
     from boldtailor._ar1_moments import residual_lag_ratio
 
     signals, design = _lag_problem(n_fixed)
@@ -516,6 +555,7 @@ def test_lag_ratio_is_invariant_to_resolvable_design_span_shifts(n_fixed, scale)
 @pytest.mark.parametrize("scale", [1.0, 1e6])
 @pytest.mark.parametrize("n_fixed", [1, 3, 8])
 def test_lag_ratio_of_signals_inside_the_design_span_is_nan(n_fixed, scale):
+    """Verify lag ratio of signals inside the design span is NaN."""
     from boldtailor._ar1_moments import residual_lag_ratio
 
     _, design = _lag_problem(n_fixed, n=200)
@@ -524,6 +564,7 @@ def test_lag_ratio_of_signals_inside_the_design_span_is_nan(n_fixed, scale):
 
 
 def test_lag_ratio_of_zero_signal_is_nan():
+    """Verify lag ratio of zero signal is NaN."""
     from boldtailor._ar1_moments import residual_lag_ratio
 
     _, design = _lag_problem(2)
@@ -531,6 +572,7 @@ def test_lag_ratio_of_zero_signal_is_nan():
 
 
 def test_reference_carries_the_conditioning_of_its_basis(design):
+    """Verify reference carries the conditioning of its basis."""
     reference = prepare_reference(design * np.logspace(0, 4, design.shape[1]))
     unit = design / np.linalg.norm(design, axis=0)
     singular = np.linalg.svd(unit, compute_uv=False)
@@ -551,6 +593,7 @@ def test_exactly_removable_shift_preserves_the_lag_ratio():
 
 @pytest.mark.parametrize("scales", [(1e-20, 1.0, 1e15), (1e6, 1e-9, 1.0)])
 def test_estimate_does_not_depend_on_reference_column_units(scales):
+    """Verify estimate does not depend on reference column units."""
     signals, reference = _lag_problem(3)
     base = estimate_rho([signals], [reference])
     rescaled = estimate_rho([signals], [reference * np.array(scales)])
@@ -560,6 +603,7 @@ def test_estimate_does_not_depend_on_reference_column_units(scales):
 
 @pytest.mark.parametrize("scale", [1.0, 1e4, 1e8])
 def test_lag_ratio_is_invariant_to_shifts_in_a_span_of_unequal_units(scale):
+    """Verify lag ratio is invariant to shifts in a span of unequal units."""
     n = 300
     t = np.arange(n, dtype=float)
     rng = np.random.default_rng(2)
@@ -587,5 +631,6 @@ def _weak_column_problem(seed=0):
 
 
 def test_ill_conditioned_saturated_span_signal_is_degenerate():
+    """Verify ill conditioned saturated span signal is degenerate."""
     signals, reference = _weak_column_problem()
     assert np.isnan(estimate_rho([signals], [reference]).raw).all()

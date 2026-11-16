@@ -15,6 +15,7 @@ def library_api():
 
 
 def test_every_candidate_kernel_peaks_at_one(two_candidate_library):
+    """Verify every candidate kernel peaks at one."""
     for candidate in two_candidate_library.candidates:
         kernel = candidate.kernel(1.6, 50)
         assert kernel.max() == pytest.approx(1.0)
@@ -22,6 +23,7 @@ def test_every_candidate_kernel_peaks_at_one(two_candidate_library):
 
 
 def test_canonical_kernel_is_peak_scaled_nilearn_spm():
+    """Verify canonical kernel is peak scaled Nilearn spm."""
     from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate
 
     canonical = HrfCandidate(0, "spm", CANONICAL_PARAMETERS).kernel(1.6, 50)
@@ -30,6 +32,7 @@ def test_canonical_kernel_is_peak_scaled_nilearn_spm():
 
 
 def test_expanded_library_includes_legacy_anchor():
+    """Verify expanded library includes legacy anchor."""
     _, expanded = library_api()
     library = expanded()
     assert len(library.candidates) == 649
@@ -76,6 +79,7 @@ def test_expanded_library_includes_legacy_anchor():
     ],
 )
 def test_custom_kernel_matches_notebook_and_independent_density(parameters, reference):
+    """Verify custom kernel matches notebook and independent density."""
     cls, _ = library_api()
     kernel = cls.from_parameters([parameters]).candidates[1].kernel(0.1, 1)
     # Literal reference values from the supplied notebook's spm_hrf function,
@@ -99,6 +103,7 @@ def test_custom_kernel_matches_notebook_and_independent_density(parameters, refe
 
 
 def test_library_owns_parameters_tables_and_curves():
+    """Verify library owns parameters tables and curves."""
     cls, _ = library_api()
     parameters = [[6, 16, 1, 1, 6, 0, 36]]
     library = cls.from_parameters(parameters)
@@ -135,12 +140,14 @@ def test_library_owns_parameters_tables_and_curves():
     ],
 )
 def test_invalid_or_duplicate_parameters_are_rejected(rows):
+    """Verify invalid or duplicate parameters are rejected."""
     cls, _ = library_api()
     with pytest.raises(ValueError):
         cls.from_parameters(rows)
 
 
 def test_parameter_order_is_stable_and_empty_grid_is_canonical():
+    """Verify parameter order is stable and empty grid is canonical."""
     cls, _ = library_api()
     a, b = [6, 16, 1, 1, 6, 0, 36], [3, 10, 0.5, 0.5, 2, 0, 36]
     assert (
@@ -154,6 +161,7 @@ def test_parameter_order_is_stable_and_empty_grid_is_canonical():
     "tr,oversampling", [(0, 50), (np.nan, 50), (1.6, 0), (1.6, 1.5), (1.6, True)]
 )
 def test_invalid_sampling_rejected(tr, oversampling):
+    """Verify invalid sampling rejected."""
     cls, _ = library_api()
     with pytest.raises(ValueError):
         cls.from_parameters([]).candidates[0].kernel(tr, oversampling)
@@ -163,6 +171,7 @@ def test_invalid_sampling_rejected(tr, oversampling):
     "parameters", [(3, 16, 1, 1, 6, 0, 32), (6, 16, 1, 1, 6, 0, 36)]
 )
 def test_direct_spm_candidate_cannot_mislabel_fixed_kernel(parameters):
+    """Verify direct spm candidate cannot mislabel fixed kernel."""
     from boldtailor.hrf_library import HrfCandidate
 
     with pytest.raises(ValueError, match="canonical|SPM|spm"):
@@ -170,6 +179,7 @@ def test_direct_spm_candidate_cannot_mislabel_fixed_kernel(parameters):
 
 
 def test_parameter_bounds_cover_custom_candidates(two_candidate_library):
+    """Verify parameter bounds cover custom candidates."""
     from boldtailor.hrf_library import PARAMETER_NAMES
 
     bounds = two_candidate_library.parameter_bounds
@@ -180,6 +190,7 @@ def test_parameter_bounds_cover_custom_candidates(two_candidate_library):
 
 
 def test_informative_parameters_need_three_levels_and_nonzero_width():
+    """Verify informative parameters need three levels and nonzero width."""
     from boldtailor.hrf_library import PARAMETER_NAMES, expanded_hrf_library
 
     informative = expanded_hrf_library().informative_parameters
@@ -190,4 +201,5 @@ def test_informative_parameters_need_three_levels_and_nonzero_width():
 
 
 def test_two_level_library_has_no_informative_parameters(two_candidate_library):
+    """Verify two level library has no informative parameters."""
     assert two_candidate_library.informative_parameters == ()

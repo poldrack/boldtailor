@@ -80,6 +80,7 @@ def arms(recovery, recovery_result):
 
 
 def test_selection_never_sees_the_outer_run(recovery, recovery_result):
+    """Verify selection never sees the outer run."""
     assert recovery.training.n_runs == 4
     assert len(recovery_result.run_labels) == 4
     lengths = [c.shape[0] for c in recovery_result.run_components]
@@ -87,10 +88,12 @@ def test_selection_never_sees_the_outer_run(recovery, recovery_result):
 
 
 def test_shared_noise_yields_a_positive_component_count(recovery_result):
+    """Verify shared noise yields a positive component count."""
     assert recovery_result.n_components > 0
 
 
 def test_denoising_improves_training_coefficient_recovery(recovery, arms):
+    """Verify denoising improves training coefficient recovery."""
     errors = {
         arm: rmse(result.effect("task")[recovery.task], recovery.amplitudes)
         for arm, (_, result) in arms.items()
@@ -113,6 +116,7 @@ def predicted_task_signal(dataset, selection, effects):
 
 
 def test_frozen_training_estimates_better_predict_the_outer_task_signal(recovery, arms):
+    """Verify frozen training estimates better predict the outer task signal."""
     truth = recovery.outer_task_signal[:, recovery.task]
     errors = {
         arm: rmse(
@@ -146,6 +150,7 @@ def outer_with_pcs(outer, components, names):
 def test_frozen_pool_and_count_improve_outer_run_beta_recovery(
     recovery, recovery_result, arms
 ):
+    """Verify frozen pool and count improve outer run beta recovery."""
     names = recovery_result.component_names
     components = frozen_pool_pcs(
         recovery.outer, recovery_result.noise_pool, recovery_result.n_components
@@ -172,10 +177,12 @@ def no_benefit():
 def test_without_shared_noise_zero_components_are_chosen(no_benefit):
     # Requirement change (Task 6): score_tolerance was replaced by GLMsingle's
     # pcstop rule, so "zero wins or ties" is now "the rule chooses zero".
+    """Verify without shared noise zero components are chosen."""
     assert denoise(no_benefit).n_components == 0
 
 
 def test_without_shared_noise_the_default_library_also_chooses_zero(no_benefit):
+    """Verify without shared noise the default library also chooses zero."""
     result = select_denoising(no_benefit.training, task_model=TaskModel())
     assert result.n_components == 0
 
@@ -250,42 +257,6 @@ def test_user_guide_denoising_example_runs():
     assert namespace["result"].effect("task").shape == (data.n_features,)
 
 
-def test_docs_describe_denoising_contract_and_limits():
-    section = (
-        Path("docs/user-guide.md").read_text().split("## Task-guided denoising")[1]
-    )
-    section = section.split("\n## ", 1)[0]
-    for phrase in (
-        "anatomy-agnostic",
-        "ON-OFF",
-        "pcstop",
-        "median",
-        "polynomial",
-        "repeat",
-        "best 100",
-        "sequential",
-        "missing-value",
-        "empty",
-        "selection statistic",
-        "outer",
-        "frozen",
-        "pool_r2_threshold",
-        "denoising_augmentation",
-    ):
-        assert phrase in section, phrase
-    api = Path("docs/api.md").read_text()
-    assert "select_denoising" in api and "with_denoising" in api
-    assert "DenoisingResult" in api and "run_labels" in api
-    comparison = Path("docs/glmsingle-comparison.md").read_text()
-    assert "select_denoising" in comparison and "optional" in comparison
-    assert "task-guided" in comparison
-    for phrase in ("ON-OFF", "pcstop", "polynomial", "repeat", "anatomy-agnostic"):
-        assert phrase in comparison, phrase
-    denoising_api = api.split("## Task-guided denoising", 1)[1].split("\n## ", 1)[0]
-    assert "brain_mask" not in denoising_api
-    assert "score_tolerance" not in denoising_api
-
-
 GLMSINGLE_NOTICE = "src/boldtailor/_resources/GLMsingle-LICENSE.txt"
 
 
@@ -322,96 +293,3 @@ def test_package_is_mit_with_glmsingle_data_notice_only():
     assert not Path("LICENSES").exists()
     readme = Path("README.md").read_text()
     assert "MIT License" in readme and GLMSINGLE_NOTICE in readme
-
-
-def test_docs_describe_the_significance_gate():
-    """Task 7: the gate, its settings, OLS/binomial caveats, and the deviation."""
-    guide = Path("docs/user-guide.md").read_text().split("## Task-guided denoising")[1]
-    guide = guide.split("\n## ", 1)[0]
-    api = Path("docs/api.md").read_text().split("## Task-guided denoising", 1)[1]
-    api = api.split("\n## ", 1)[0]
-    comparison = Path("docs/glmsingle-comparison.md").read_text()
-    for text in (guide, api, comparison):
-        for phrase in (
-            "significance_gate",
-            "gate_alpha",
-            "gate_binomial_alpha",
-            "F-test",
-            "binomial",
-        ):
-            assert phrase in text, phrase
-    for text in (guide, comparison):
-        for phrase in ("autocorrelated", "anti-conservative", "independent"):
-            assert phrase in text, phrase
-        assert "not part of GLMsingle" in text
-    for phrase in ("pcstop_count", "SignificanceGate", "decision"):
-        assert phrase in api, phrase
-
-
-def test_docs_describe_the_prewhitened_gate():
-    """Task 8: AR(1) prewhitening by default and the remaining caveats."""
-    guide, comparison = denoising_doc_sections()
-    api = Path("docs/api.md").read_text().split("## Task-guided denoising", 1)[1]
-    api = api.split("\n## ", 1)[0]
-    for text in (guide, comparison, api):
-        for phrase in ("gate_noise_model", "prewhiten", "Nilearn", "ar1"):
-            assert phrase in text, phrase
-    for text in (guide, comparison):
-        for phrase in (
-            "Boldtailor addition",
-            "in-sample",
-            "under-whiten",
-            "higher-order",
-            "independent",
-            "AR(0.5)",
-        ):
-            assert phrase in text, phrase
-        assert "use OLS without prewhitening" not in text
-        assert "OLS, no prewhitening" not in text
-    for phrase in ("ar_coefficients", "noise_model"):
-        assert phrase in api, phrase
-
-
-def test_gate_module_is_described_as_a_boldtailor_addition():
-    docstring = Path("src/boldtailor/_denoising_gate.py").read_text().split('"""')[1]
-    assert "Boldtailor addition" in docstring
-    assert "not part of GLMsingle" in docstring
-    for phrase in ("prewhiten", "Nilearn", "_yule_walker"):
-        assert phrase in docstring, phrase
-
-
-def denoising_doc_sections():
-    guide = Path("docs/user-guide.md").read_text().split("## Task-guided denoising")[1]
-    guide = guide.split("\n## ", 1)[0]
-    comparison = Path("docs/glmsingle-comparison.md").read_text()
-    comparison = comparison.split("## Data-derived noise regressors", 1)[1]
-    return guide, comparison.split("\n## ", 1)[0]
-
-
-def test_docs_state_what_the_gate_measures():
-    """The F-test measures PC variance explained; AR(1) noise can pass it."""
-    for text in denoising_doc_sections():
-        for phrase in ("variance explained", "AR(1)", "illustrative", "n = 6"):
-            assert phrase in text, phrase
-
-
-def test_docs_list_the_remaining_pool_deviations():
-    for text in denoising_doc_sections():
-        for phrase in (
-            "bright",
-            "defined HRF",
-            "subsample",
-            "0.5",
-            "percent",
-            "divided by 100",
-        ):
-            assert phrase in text, phrase
-
-
-def test_denoising_docs_say_per_feature_not_voxelwise():
-    texts = list(denoising_doc_sections())
-    for module in ("denoising", "_denoising_gate"):
-        source = Path(f"src/boldtailor/{module}.py").read_text()
-        texts.append(source.split('"""', 2)[1])
-    for text in texts:
-        assert "voxelwise" not in text.lower()

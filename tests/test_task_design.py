@@ -32,6 +32,7 @@ def events():
 
 
 def test_expansion_orders_regressors_and_computes_amplitudes(events):
+    """Verify expansion orders regressors and computes amplitudes."""
     from boldtailor._task_design import expand_events
 
     original = events.copy(deep=True)
@@ -55,6 +56,7 @@ def test_expansion_orders_regressors_and_computes_amplitudes(events):
 
 
 def test_indicator_absent_when_nothing_is_missing(events):
+    """Verify indicator absent when nothing is missing."""
     from boldtailor._task_design import expand_events
 
     complete = events.assign(response_time=[1.0, 2.0, 3.0, 2.0, 4.0, 5.0])
@@ -65,6 +67,7 @@ def test_indicator_absent_when_nothing_is_missing(events):
 
 
 def test_task_only_model_expands_to_unit_task_rows(events):
+    """Verify task only model expands to unit task rows."""
     from boldtailor._task_design import expand_events
 
     result = expand_events(events[["onset", "duration"]], TaskModel())
@@ -73,6 +76,7 @@ def test_task_only_model_expands_to_unit_task_rows(events):
 
 
 def test_modulator_has_no_center_option():
+    """Verify modulator has no center option."""
     with pytest.raises(TypeError):
         Modulator("response_time", center=False)
     assert Modulator("response_time").to_dict() == {
@@ -83,6 +87,7 @@ def test_modulator_has_no_center_option():
 
 
 def test_error_policy_rejects_missing_values(events):
+    """Verify error policy rejects missing values."""
     from boldtailor._task_design import expand_events
 
     with pytest.raises(ValueError, match="run 2.*response_time.*finite"):
@@ -90,6 +95,7 @@ def test_error_policy_rejects_missing_values(events):
 
 
 def test_text_in_modulator_column_is_an_error_not_missing(events):
+    """Verify text in modulator column is an error not missing."""
     from boldtailor._task_design import expand_events
 
     events["response_time"] = events.response_time.astype(object)
@@ -99,6 +105,7 @@ def test_text_in_modulator_column_is_an_error_not_missing(events):
 
 
 def test_all_missing_indicator_modulator_is_rejected(events):
+    """Verify all missing indicator modulator is rejected."""
     from boldtailor._task_design import expand_events
 
     with pytest.raises(ValueError, match="response_time.*observed"):
@@ -106,6 +113,7 @@ def test_all_missing_indicator_modulator_is_rejected(events):
 
 
 def test_regressor_without_nonzero_amplitude_is_rejected(events):
+    """Verify regressor without nonzero amplitude is rejected."""
     from boldtailor._task_design import expand_events
 
     with pytest.raises(ValueError, match="run 1.*trial_type.*nonzero"):
@@ -115,6 +123,7 @@ def test_regressor_without_nonzero_amplitude_is_rejected(events):
 
 
 def test_missing_modulator_column_or_timing_is_rejected(events):
+    """Verify missing modulator column or timing is rejected."""
     from boldtailor._task_design import expand_events
 
     with pytest.raises(ValueError, match="trial_type"):
@@ -125,6 +134,7 @@ def test_missing_modulator_column_or_timing_is_rejected(events):
 
 @pytest.mark.parametrize("cid", [0, 1])
 def test_task_columns_match_compute_regressor_per_condition(events, cid, capsys):
+    """Verify task columns match compute regressor per condition."""
     from boldtailor._hrf_design import hrf_model
     from boldtailor._task_design import expand_events, task_columns
 
@@ -154,6 +164,7 @@ def test_task_columns_match_compute_regressor_per_condition(events, cid, capsys)
 
 
 def test_task_columns_accept_string_hrfs_and_honor_settings(events):
+    """Verify task columns accept string HRFs and honor settings."""
     from boldtailor._task_design import expand_events, task_columns
 
     times = 0.775 + 1.6 * np.arange(90)
@@ -181,6 +192,7 @@ def test_task_columns_accept_string_hrfs_and_honor_settings(events):
 
 
 def test_string_hrf_keeps_kernel_suffix_in_regressor_names(events):
+    """Verify string HRF keeps kernel suffix in regressor names."""
     from boldtailor._task_design import expand_events, task_columns
 
     model = TaskModel((Modulator("foo_kernel"),))
@@ -192,6 +204,7 @@ def test_string_hrf_keeps_kernel_suffix_in_regressor_names(events):
 
 @pytest.mark.parametrize("hrf", ["spm", "glover", 1])
 def test_task_column_peaks_do_not_depend_on_oversampling(hrf):
+    """Verify task column peaks do not depend on oversampling."""
     from boldtailor._hrf_design import hrf_model
     from boldtailor._task_design import expand_events, task_columns
 
@@ -229,6 +242,7 @@ def _by_name(expanded):
 
 
 def test_categorical_expansion_builds_reference_coded_indicators():
+    """Verify categorical expansion builds reference coded indicators."""
     events = _cat_events(
         ["house", "face", "scrambled face", "house", "face", "scrambled face"]
     )
@@ -241,6 +255,7 @@ def test_categorical_expansion_builds_reference_coded_indicators():
 
 
 def test_categorical_columns_match_nilearn_on_hand_built_conditions():
+    """Verify categorical columns match Nilearn on hand built conditions."""
     events = _cat_events(
         ["house", "face", "scrambled face", "house", "face", "scrambled face"]
     )
@@ -275,11 +290,13 @@ def test_categorical_columns_match_nilearn_on_hand_built_conditions():
     ],
 )
 def test_invalid_categorical_runs_name_the_run_and_level(levels, message):
+    """Verify invalid categorical runs name the run and level."""
     with pytest.raises(ValueError, match=f"run-03.*{message}"):
         expand_events(_cat_events(levels), TaskModel((CAT,)), run="run-03")
 
 
 def test_missing_indicator_for_categorical_values():
+    """Verify missing indicator for categorical values."""
     mod = Modulator("cond", kind="categorical", levels=("a", "b"), missing="indicator")
     expanded = expand_events(
         _cat_events(["a", "b", "n/a", "a", "b"]), TaskModel((mod,))
@@ -291,5 +308,6 @@ def test_missing_indicator_for_categorical_values():
 
 
 def test_categorical_names_normalise_mixed_dtypes():
+    """Verify categorical names normalise mixed dtypes."""
     mod = Modulator("cond", kind="categorical", levels=(0, 1))
     assert categorical_names(pd.Series([0, 1.0, "1", 0]), mod) == ["0", "1", "1", "0"]

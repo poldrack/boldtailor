@@ -11,6 +11,7 @@ def notebook(executed_notebook):
     return executed_notebook("autodiff_results")
 
 def test_notebook_executed_with_figures(notebook):
+    """Verify notebook executed with figures."""
     cells = [c for c in notebook.cells if c.cell_type == "code"]
     assert cells and all(isinstance(c.execution_count, int) for c in cells)
     outputs = [o for c in cells for o in c.outputs]
@@ -19,6 +20,7 @@ def test_notebook_executed_with_figures(notebook):
 
 
 def test_notebook_preserves_benchmark_records(notebook):
+    """Verify notebook preserves benchmark records."""
     bundles = [o.get("data", {}).get("application/json", {})
                for c in notebook.cells if c.cell_type == "code" for o in c.outputs]
     records = [b["records"] for b in bundles if b.get("kind") == "autodiff_benchmark"]

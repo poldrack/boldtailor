@@ -17,6 +17,7 @@ def select(*args, **kwargs):
 
 
 def test_percentile_uses_all_grayordinates():
+    """Verify percentile uses all grayordinates."""
     scores = [[0.0, 0.0, 0.0, 0.0, 1.0, 1.0], [0.6, 0.6, 0.6, 0.6, 0.6, 0.6]]
     result = select(scores, [0.0, 0.1])
     assert result.ridge_alpha == 0.0
@@ -24,6 +25,7 @@ def test_percentile_uses_all_grayordinates():
 
 
 def test_common_finite_mask_and_negative_scores():
+    """Verify common finite mask and negative scores."""
     result = select([[-1.0, -2.0, np.nan], [-3.0, -1.0, 20.0]], [0.0, 1.0])
     np.testing.assert_array_equal(result.scoring_mask, [True, True, False])
     np.testing.assert_allclose(result.objective_scores, [-1.1, -1.2])
@@ -31,6 +33,7 @@ def test_common_finite_mask_and_negative_scores():
 
 
 def test_anatomical_mask_and_sort_preserve_candidate_identity():
+    """Verify anatomical mask and sort preserve candidate identity."""
     result = select(
         [[0.8, 0.8, 0.8], [0.9, 0, 0]], [10.0, 0.1], feature_mask=[True, False, False]
     )
@@ -45,6 +48,7 @@ def test_anatomical_mask_and_sort_preserve_candidate_identity():
 
 
 def test_near_ties_prefer_smaller_penalty():
+    """Verify near ties prefer smaller penalty."""
     result = select([[0.2 + 1e-14], [0.2]], [1.0, 0.0])
     assert result.ridge_alpha == 0.0
 
@@ -62,12 +66,14 @@ def test_near_ties_prefer_smaller_penalty():
     ],
 )
 def test_invalid_grid_rejected(alphas):
+    """Verify invalid grid rejected."""
     with pytest.raises(ValueError, match="alpha"):
         select(np.ones((len(alphas), 3)), alphas)
 
 
 @pytest.mark.parametrize("percentile", [-1, 101, np.nan, True, "90"])
 def test_invalid_percentile_rejected(percentile):
+    """Verify invalid percentile rejected."""
     with pytest.raises(ValueError, match="percentile"):
         select([[1, 2]], [0.0], percentile=percentile)
 
@@ -82,11 +88,13 @@ def test_invalid_percentile_rejected(percentile):
     ],
 )
 def test_empty_or_malformed_population_rejected(scores, mask):
+    """Verify empty or malformed population rejected."""
     with pytest.raises(ValueError):
         select(scores, [0.0, 1.0], feature_mask=mask)
 
 
 def test_ridge_penalty_selection_flags_grid_endpoint():
+    """Verify ridge penalty selection flags grid endpoint."""
     scores = np.array([[0.9, 0.9], [0.1, 0.1]])
     assert select(scores, (0.0, 1.0)).at_boundary is True
     interior = np.array([[0.1, 0.1], [0.9, 0.9], [0.1, 0.1]])
@@ -94,6 +102,7 @@ def test_ridge_penalty_selection_flags_grid_endpoint():
 
 
 def test_fraction_selection_flags_grid_endpoints():
+    """Verify fraction selection flags grid endpoints."""
     from boldtailor.fractional_ridge import select_ridge_fractions
 
     scores = np.array([[0.1, 0.5, 0.3], [0.2, 0.4, 0.9], [0.9, 0.1, 0.1]])
@@ -124,6 +133,7 @@ def _same_choice(left, right):
 
 
 def test_select_ridge_penalty_accepts_candidate_scores(candidate_scores):
+    """Verify select ridge penalty accepts candidate scores."""
     scores = candidate_scores
     _same_choice(select(scores), select(scores.cv_r2, scores.grid))
     mask = np.array([True, False, True, True, True])
@@ -138,6 +148,7 @@ def test_select_ridge_penalty_accepts_candidate_scores(candidate_scores):
 
 
 def test_select_ridge_fractions_accepts_candidate_scores(ridge_problem):
+    """Verify select ridge fractions accepts candidate scores."""
     from boldtailor.fractional_ridge import (
         score_fraction_candidates,
         select_ridge_fractions,
@@ -153,6 +164,7 @@ def test_select_ridge_fractions_accepts_candidate_scores(ridge_problem):
 
 
 def test_selectors_reject_the_other_regularization_kind(candidate_scores):
+    """Verify selectors reject the other regularization kind."""
     from boldtailor.fractional_ridge import select_ridge_fractions
 
     with pytest.raises(ValueError, match="fractional_ridge"):

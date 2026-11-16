@@ -40,21 +40,25 @@ def _cortex_only():
 
 
 def test_cortical_indices_keep_surface_in_order():
+    """Verify cortical indices keep surface in order."""
     assert cortical_indices(_brain()).tolist() == [0, 1, 4]
 
 
 def test_missing_cortical_structure_raises():
+    """Verify missing cortical structure raises."""
     with pytest.raises(ValueError, match="CORTEX_RIGHT"):
         cortical_indices(_brain(with_cortex=False))
 
 
 def test_same_grayordinates_ignores_volume_metadata():
+    """Verify same grayordinates ignores volume metadata."""
     full = _brain()
     assert same_grayordinates(full[cortical_indices(full)], _cortex_only())
     assert not same_grayordinates(full[[0, 1]], _cortex_only())
 
 
 def test_analysis_data_selects_columns_and_keeps_runs():
+    """Verify analysis data selects columns and keeps runs."""
     signals = (np.arange(12, dtype=np.float32).reshape(4, 3),) * 2
     events = (pd.DataFrame({"onset": [0.0], "duration": [1.0]}),) * 2
     session = Session(
@@ -128,6 +132,7 @@ def nsd_tree(tmp_path):
 
 
 def test_nsdpreproc_path_is_bids_layout(nsd_tree):
+    """Verify nsdpreproc path is BIDS layout."""
     from experiments.nsd_replication.inputs import nsdpreproc_path
 
     config, pre = nsd_tree
@@ -138,6 +143,7 @@ def test_nsdpreproc_path_is_bids_layout(nsd_tree):
 
 
 def test_load_nsdpreproc_opens_only_nsdpreproc_files(nsd_tree, monkeypatch):
+    """Verify load nsdpreproc opens only nsdpreproc files."""
     from experiments.nsd_replication.inputs import load_nsdpreproc
 
     config, pre = nsd_tree
@@ -162,6 +168,7 @@ def test_load_nsdpreproc_opens_only_nsdpreproc_files(nsd_tree, monkeypatch):
 
 
 def test_missing_nsdpreproc_run_names_the_run_and_path(nsd_tree):
+    """Verify missing nsdpreproc run names the run and path."""
     from experiments.nsd_replication.inputs import load_nsdpreproc
 
     config, pre = nsd_tree
@@ -171,6 +178,7 @@ def test_missing_nsdpreproc_run_names_the_run_and_path(nsd_tree):
 
 
 def test_missing_nsdpreproc_session_names_the_run_and_path(nsd_tree):
+    """Verify missing nsdpreproc session names the run and path."""
     import shutil
 
     from experiments.nsd_replication.inputs import load_nsdpreproc

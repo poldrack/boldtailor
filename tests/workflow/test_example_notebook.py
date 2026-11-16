@@ -38,6 +38,7 @@ def execute_notebook(config):
 def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(
     notebook_config, monkeypatch
 ):
+    """Verify walkthrough reads maps and matches trials to beta rows."""
     from boldtailor.workflow import run, beta_series
 
     def opaque_workflow(*args, **kwargs):
@@ -84,6 +85,7 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(
 
 
 def test_walkthrough_reports_preflight_problems_without_writing(notebook_config):
+    """Verify walkthrough reports preflight problems without writing."""
     notebook_config["session"] = "ses-absent"
     with pytest.raises(ValueError, match="Preflight"):
         execute_notebook(notebook_config)

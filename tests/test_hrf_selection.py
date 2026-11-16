@@ -63,6 +63,7 @@ def replace_data(data, signals=None, events=None, confounds=None):
 
 @pytest.mark.parametrize("batch", [1, 2, 32])
 def test_pooled_loro_matches_stacked_training_ols(cv_fixture, batch):
+    """Verify pooled loro matches stacked training OLS."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -79,6 +80,7 @@ def test_pooled_loro_matches_stacked_training_ols(cv_fixture, batch):
 
 
 def test_noise_free_mean_response_and_rank_redundant_nuisance(cv_fixture):
+    """Verify noise free mean response and rank redundant nuisance."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -96,6 +98,7 @@ def test_noise_free_mean_response_and_rank_redundant_nuisance(cv_fixture):
 
 
 def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
+    """Verify outer test changes cannot select the HRF."""
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
@@ -128,6 +131,7 @@ def test_outer_test_changes_cannot_select_the_hrf(cv_fixture):
 
 
 def test_amplitude_shift_is_not_refitted_on_test_runs(cv_fixture):
+    """Verify amplitude shift is not refitted on test runs."""
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
@@ -164,6 +168,7 @@ def test_amplitude_shift_is_not_refitted_on_test_runs(cv_fixture):
     ],
 )
 def test_invalid_folds_rejected(cv_fixture, train, test):
+    """Verify invalid folds rejected."""
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
@@ -172,6 +177,7 @@ def test_invalid_folds_rejected(cv_fixture, train, test):
 
 
 def test_selection_requires_two_runs_and_valid_batch(cv_fixture):
+    """Verify selection requires two runs and valid batch."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -189,6 +195,7 @@ def test_selection_requires_two_runs_and_valid_batch(cv_fixture):
 
 
 def test_canonical_only_negative_scores_and_stable_ties(cv_fixture):
+    """Verify canonical only negative scores and stable ties."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, _ = cv_fixture
@@ -214,6 +221,7 @@ def test_canonical_only_negative_scores_and_stable_ties(cv_fixture):
 
 
 def test_structurally_invalid_candidate_excluded_and_canonical_nan(cv_fixture):
+    """Verify structurally invalid candidate excluded and canonical NaN."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -233,6 +241,7 @@ def test_structurally_invalid_candidate_excluded_and_canonical_nan(cv_fixture):
 
 
 def test_results_owned_metadata_independent_and_fingerprinted(cv_fixture):
+    """Verify results owned metadata independent and fingerprinted."""
     from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 
     data, library = cv_fixture
@@ -296,6 +305,7 @@ def with_trial_types(data):
 
 
 def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
+    """Verify select HRF with task model matches task model oracle."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -320,6 +330,7 @@ def test_select_hrf_with_task_model_matches_task_model_oracle(cv_fixture):
 
 
 def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
+    """Verify task model changes selection identity and response-time now matters."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -344,6 +355,7 @@ def test_task_model_changes_selection_identity_and_rt_now_matters(cv_fixture):
 
 
 def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture):
+    """Verify evaluate split with task model returns named amplitude rows."""
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
@@ -370,6 +382,7 @@ def test_evaluate_split_with_task_model_returns_named_amplitude_rows(cv_fixture)
 
 
 def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
+    """Verify default evaluation amplitudes are one row named task."""
     from boldtailor.hrf_selection import evaluate_hrf_split
 
     data, library = cv_fixture
@@ -381,6 +394,7 @@ def test_default_evaluation_amplitudes_are_one_row_named_task(cv_fixture):
 
 
 def test_task_model_argument_is_validated(cv_fixture):
+    """Verify task model argument is validated."""
     from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 
     data, library = cv_fixture
@@ -393,6 +407,7 @@ def test_task_model_argument_is_validated(cv_fixture):
 
 
 def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
+    """Verify task model selection feeds single trial fits."""
     from boldtailor.hrf_selection import select_hrfs
     from boldtailor.single_trial import fit_selected_hrfs
 
@@ -405,6 +420,7 @@ def test_task_model_selection_feeds_single_trial_fits(cv_fixture):
 
 
 def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
+    """Verify evaluation result rejects mismatched amplitude rows."""
     from dataclasses import replace
 
     from boldtailor.hrf_selection import evaluate_hrf_split
@@ -420,6 +436,7 @@ def test_evaluation_result_rejects_mismatched_amplitude_rows(cv_fixture):
 
 
 def test_selection_provenance_records_library_origin(cv_fixture):
+    """Verify selection provenance records library origin."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -446,6 +463,7 @@ def _flag_oracle(library, indices):
 
 
 def test_selection_flags_each_parameter_edge_of_the_selected_kernel(cv_fixture):
+    """Verify selection flags each parameter edge of the selected kernel."""
     from boldtailor.hrf_selection import select_hrfs
 
     data, library = cv_fixture
@@ -467,6 +485,7 @@ def _grid_id(library, parameters):
 
 
 def test_expanded_grid_does_not_flag_every_custom_pick(selected_fixture):
+    """Verify expanded grid does not flag every custom pick."""
     from boldtailor.hrf_library import expanded_hrf_library
 
     _, selection = selected_fixture
@@ -488,6 +507,7 @@ def test_expanded_grid_does_not_flag_every_custom_pick(selected_fixture):
 def test_sobol_pick_near_response_delay_low_edge_flags_only_that_edge(
     selected_fixture,
 ):
+    """Verify sobol pick near response delay low edge flags only that edge."""
     from boldtailor.hrf_library import sobol_hrf_library
 
     _, selection = selected_fixture
@@ -504,6 +524,7 @@ def test_sobol_pick_near_response_delay_low_edge_flags_only_that_edge(
 
 
 def test_parameter_bound_table_summarizes_the_flags(cv_fixture):
+    """Verify parameter bound table summarizes the flags."""
     from boldtailor.hrf_library import PARAMETER_NAMES
     from boldtailor.hrf_selection import select_hrfs
 
@@ -524,6 +545,7 @@ def test_parameter_bound_table_summarizes_the_flags(cv_fixture):
 
 
 def test_select_hrfs_is_the_name_and_select_hrf_a_deprecated_alias(selected_fixture):
+    """Verify select HRFs is the name and select HRF a deprecated alias."""
     from boldtailor import hrf_selection
 
     data, selection = selected_fixture
@@ -539,6 +561,7 @@ def test_select_hrfs_is_the_name_and_select_hrf_a_deprecated_alias(selected_fixt
 
 
 def test_evaluate_hrf_split_threads_candidate_batch_size(selected_fixture, monkeypatch):
+    """Verify evaluate HRF split threads candidate batch size."""
     from boldtailor import hrf_selection
 
     data, selection = selected_fixture
@@ -563,6 +586,7 @@ def test_evaluate_hrf_split_threads_candidate_batch_size(selected_fixture, monke
 
 
 def test_selection_defaults_to_the_default_library(cv_fixture):
+    """Verify selection defaults to the default library."""
     from boldtailor.hrf_library import default_hrf_library
     from boldtailor.hrf_selection import select_hrfs
 
@@ -578,6 +602,7 @@ def test_selection_defaults_to_the_default_library(cv_fixture):
 
 
 def test_selection_calculation_needs_no_logging_operation(cv_fixture):
+    """Verify selection calculation needs no logging operation."""
     from boldtailor import hrf_selection
     from boldtailor._hrf_cv import prepare_runs
     from boldtailor.data import run_labels_for

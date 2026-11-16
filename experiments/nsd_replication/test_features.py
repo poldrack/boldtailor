@@ -40,6 +40,7 @@ def _shift(original, shifted, duration):
 
 
 def test_circular_shift_preserves_counts_and_minimum():
+    """Verify circular shift preserves counts and minimum."""
     events, duration = _toy_events(), 128.0
     for seed in range(100):
         shifted = circular_shift(events, duration, np.random.default_rng(seed))
@@ -55,6 +56,7 @@ def test_circular_shift_preserves_counts_and_minimum():
 
 
 def test_circular_shift_does_not_modify_input():
+    """Verify circular shift does not modify input."""
     events = _toy_events()
     copy = events.copy()
     circular_shift(events, 128.0, np.random.default_rng(0))
@@ -62,6 +64,7 @@ def test_circular_shift_does_not_modify_input():
 
 
 def test_gate_experiment_structure(synthetic_session):
+    """Return the expected conditions and gate results from the denoising experiment."""
     table = gate_experiment(synthetic_session, seed=0, library=SMALL)
     assert list(table.columns[:5]) == [
         "condition",
@@ -80,6 +83,7 @@ def test_gate_experiment_structure(synthetic_session):
 
 
 def test_null_session_is_seeded_and_in_the_sampled_window(synthetic_session):
+    """Verify null session is seeded and in the sampled window."""
     a, b = null_session(synthetic_session, 0), null_session(synthetic_session, 0)
     c = null_session(synthetic_session, 1)
     for x, y in zip(a.events, b.events):
@@ -111,6 +115,7 @@ def noise_session(synthetic_session):
 
 
 def test_gate_rejects_pure_noise(noise_session):
+    """Verify gate rejects pure noise."""
     table = gate_experiment(noise_session, seed=0, library=SMALL).set_index(
         ["condition", "gate"]
     )
@@ -124,6 +129,7 @@ def modulator_fits(synthetic_session):
 
 
 def test_modulator_experiment_returns_two_fits(synthetic_session, modulator_fits):
+    """Verify modulator experiment returns two fits."""
     assert set(modulator_fits) == {"b4", "b4-taskonly"}
     for level, fit in modulator_fits.items():
         assert fit.betas.shape == (N_TRIALS, 30)
@@ -145,11 +151,13 @@ def test_modulator_experiment_returns_two_fits(synthetic_session, modulator_fits
 
 
 def test_hrf_choice_skips_without_released(synthetic_session):
+    """Verify HRF choice skips without released."""
     result = hrf_choice_experiment(synthetic_session, None)
     assert result == {"skipped": "released HRF index maps not available"}
 
 
 def test_hrf_choice_with_released_indices(synthetic_session):
+    """Verify HRF choice with released indices."""
     indices = np.ones(30)
     indices[20:25] = 7
     indices[25] = 0
@@ -166,6 +174,7 @@ def test_hrf_choice_with_released_indices(synthetic_session):
 
 
 def test_hrf_choice_glmsingle_matches_single_hrf_fit(synthetic_session):
+    """Verify HRF choice GLMsingle matches single HRF fit."""
     from boldtailor.hrf_library import glmsingle_hrf_library
     from boldtailor.single_trial import fit_single_trials
 
@@ -184,6 +193,7 @@ def test_hrf_choice_glmsingle_matches_single_hrf_fit(synthetic_session):
 
 
 def test_rt_correlation_hand_computed():
+    """Match response-time correlations to independently calculated values."""
     betas = np.array(
         [
             [1.0, 3.0, 100.0],
@@ -208,6 +218,7 @@ def test_rt_correlation_hand_computed():
 
 
 def test_rt_correlation_rejects_row_mismatch():
+    """Verify response-time correlation rejects row mismatch."""
     events = [pd.DataFrame({"onset": [0.0], "response_time": [0.5]})]
     with pytest.raises(ValueError, match="rows"):
         rt_correlation(np.zeros((2, 3)), events, np.ones(3, dtype=bool))
@@ -236,6 +247,7 @@ def patched(monkeypatch, synthetic_session):
 
 
 def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
+    """Verify main features writes tables and fits."""
     assert (
         run.main(["features", "--config", str(config), "--source", "nsdpreproc"]) == 0
     )
@@ -259,6 +271,7 @@ def test_main_features_writes_tables_and_fits(config, patched, tmp_path):
 
 
 def test_features_requires_nsdpreproc(config):
+    """Verify features requires nsdpreproc."""
     with pytest.raises(ValueError, match="nsdpreproc"):
         run.main(["features", "--config", str(config), "--source", "released"])
 
@@ -274,6 +287,7 @@ def _stale_fit(out, level="b4"):
 
 
 def test_features_check_digest_before_computing(config, patched, tmp_path, monkeypatch):
+    """Verify features check digest before computing."""
     _stale_fit(tmp_path / "out")
     called = []
     monkeypatch.setattr(run, "session_features", lambda *a, **k: called.append(1))
@@ -316,6 +330,7 @@ def _stub_features(calls, fail=()):
 def test_features_keep_finished_sessions_after_a_failure(
     patched, tmp_path, monkeypatch
 ):
+    """Verify features keep finished sessions after a failure."""
     toml, calls = _two_session_config(tmp_path), []
     monkeypatch.setattr(run, "session_features", _stub_features(calls, fail={"ses-b"}))
     with pytest.raises(RuntimeError, match="ses-b"):
@@ -329,6 +344,7 @@ def test_features_keep_finished_sessions_after_a_failure(
 def test_features_skip_finished_sessions_unless_recompute(
     patched, tmp_path, monkeypatch
 ):
+    """Verify features skip finished sessions unless recompute."""
     toml, calls = _two_session_config(tmp_path), []
     monkeypatch.setattr(run, "session_features", _stub_features(calls, fail={"ses-b"}))
     with pytest.raises(RuntimeError):
@@ -350,6 +366,7 @@ def test_features_skip_finished_sessions_unless_recompute(
 
 
 def test_features_rerun_session_missing_a_fit(patched, tmp_path, monkeypatch):
+    """Verify features rerun session missing a fit."""
     toml, calls = _two_session_config(tmp_path), []
     monkeypatch.setattr(run, "session_features", _stub_features(calls))
     run.main(["features", "--config", str(toml)])
@@ -361,6 +378,7 @@ def test_features_rerun_session_missing_a_fit(patched, tmp_path, monkeypatch):
 
 
 def test_null_session_seeds_each_run_with_the_seed_tuple(synthetic_session):
+    """Verify null session seeds each run with the seed tuple."""
     seeded = null_session(synthetic_session, (7, 2))
     for i, (events, times) in enumerate(
         zip(synthetic_session.events, synthetic_session.frame_times)
@@ -374,12 +392,14 @@ def test_null_session_seeds_each_run_with_the_seed_tuple(synthetic_session):
 
 
 def test_subject_number():
+    """Parse the numeric subject identifier used by the replication workflow."""
     assert run.subject_number("sub-07") == 7
     with pytest.raises(ValueError, match="sub-ab"):
         run.subject_number("sub-ab")
 
 
 def test_features_seed_by_subject_and_session(patched, tmp_path, monkeypatch):
+    """Verify features seed by subject and session."""
     toml, seeds = _two_session_config(tmp_path), []
     stub = _stub_features([])
     monkeypatch.setattr(

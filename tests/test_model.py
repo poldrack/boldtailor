@@ -10,6 +10,7 @@ from boldtailor.model import (
 
 
 def test_model_spec_owns_contrasts_and_confounds():
+    """Verify model spec owns contrasts and confounds."""
     weights = {"face": 1.0, "house": -1.0}
     contrasts = {"face_gt_house": weights}
     confounds = ["trans_x", "trans_y"]
@@ -29,6 +30,7 @@ def test_model_spec_owns_contrasts_and_confounds():
 
 
 def test_model_spec_accepts_symbolic_contrast():
+    """Verify model spec accepts symbolic contrast."""
     model = ModelSpec(contrasts={"face_gt_house": "face - house"})
 
     assert model.contrasts["face_gt_house"] == "face - house"
@@ -60,11 +62,13 @@ _FACE = {"contrasts": {"face": "face"}}
     ],
 )
 def test_model_spec_rejects_invalid_arguments(kwargs, message):
+    """Verify model spec rejects invalid arguments."""
     with pytest.raises(ValueError, match=message):
         ModelSpec(**kwargs)
 
 
 def test_noise_model_message_has_no_phase_reference():
+    """Verify noise model message has no phase reference."""
     with pytest.raises(ValueError, match="'ols' or 'ar1'") as error:
         ModelSpec(**_FACE, noise_model="ar2")
     assert "Phase" not in str(error.value)
@@ -74,6 +78,7 @@ _TASK_MODEL_HRF = "task_model requires hrf_model 'spm' or 'glover'"
 
 
 def test_model_spec_accepts_task_model_with_spm_or_glover():
+    """Verify model spec accepts task model with spm or glover."""
     from boldtailor.model import Modulator, TaskModel
 
     task_model = TaskModel((Modulator("response_time", missing="indicator"),))
@@ -102,11 +107,13 @@ def test_model_spec_accepts_task_model_with_spm_or_glover():
     ],
 )
 def test_model_spec_rejects_invalid_task_model(kwargs, message):
+    """Verify model spec rejects invalid task model."""
     with pytest.raises(ValueError, match=message):
         ModelSpec(contrasts={"task": {"task": 1}}, **kwargs)
 
 
 def test_model_identity_reports_selected_hrf_without_a_lazy_import():
+    """Verify model identity reports selected HRF without a lazy import."""
     import boldtailor.fit as fit_module
 
     spec = ModelSpec(contrasts={"c": "a"}, task_model=TaskModel())
@@ -119,11 +126,13 @@ def test_model_identity_reports_selected_hrf_without_a_lazy_import():
 
 
 def test_model_identity_keeps_the_models_own_hrf_by_default():
+    """Verify model identity keeps the models own HRF by default."""
     spec = ModelSpec(contrasts={"c": "a"}, hrf_model="spm")
     assert model_identity(spec).activity["hrf_model"] == "spm"
 
 
 def test_nuisance_model_settings_describe_the_nuisance_only_model():
+    """Verify nuisance model settings describe the nuisance only model."""
     spec = ModelSpec(contrasts={"c": "a"}, confounds=["motion"])
     settings = nuisance_model_settings(spec)
     assert settings["events"] is False
@@ -132,6 +141,7 @@ def test_nuisance_model_settings_describe_the_nuisance_only_model():
 
 
 def test_fit_modules_import_without_a_cycle():
+    """Verify fit modules import without a cycle."""
     import subprocess
     import sys
 
@@ -140,6 +150,7 @@ def test_fit_modules_import_without_a_cycle():
 
 
 def test_prepared_shares_the_run_count_validator_with_data():
+    """Verify prepared shares the run count validator with data."""
     import boldtailor.data as data_module
     import boldtailor.prepared as prepared_module
 

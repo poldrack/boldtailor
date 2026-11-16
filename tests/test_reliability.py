@@ -18,6 +18,7 @@ def padded_library():
 
 
 def test_curve_correlations_match_pearson_over_full_common_time_grid(padded_library):
+    """Verify curve correlations match pearson over full common time grid."""
     odd = np.array([0, 1, 2, 1, np.nan, -1, 2])
     even = np.array([1, 2, 2, np.nan, 0, -1, -1])
     result = reliability.curve_correlations(padded_library, odd, even)
@@ -49,11 +50,13 @@ def test_curve_correlations_match_pearson_over_full_common_time_grid(padded_libr
     ],
 )
 def test_invalid_selections_are_not_silently_reinterpreted(padded_library, odd, even):
+    """Verify invalid selections are not silently reinterpreted."""
     with pytest.raises(ValueError, match="HRF|indices|shape"):
         reliability.curve_correlations(padded_library, odd, even)
 
 
 def test_empty_selections_preserve_three_map_shape(padded_library):
+    """Verify empty selections preserve three map shape."""
     assert reliability.curve_correlations(padded_library, [], []).shape == (3, 0)
 
 
@@ -65,6 +68,7 @@ def library():
 
 
 def test_all_pairs_and_canonical_baselines_match_direct_curve_correlations(library):
+    """Verify all pairs and canonical baselines match direct curve correlations."""
     ids = np.array([[1, 0, np.nan, np.nan], [1, 2, 2, np.nan], [2, 2, -1, np.nan]])
     result = reliability.compare_hrfs(library, ids, ["ses-10", "ses-11", "ses-12"])
     pairs = list(combinations(range(3), 2))
@@ -100,6 +104,7 @@ def test_all_pairs_and_canonical_baselines_match_direct_curve_correlations(libra
 
 
 def test_parameter_variability_uses_values_not_categorical_ids(library):
+    """Verify parameter variability uses values not categorical ids."""
     result = reliability.compare_hrfs(library, [[1, 1], [2, 1]], ["a", "b"])
     names = [
         "response_delay",
@@ -131,17 +136,20 @@ def test_parameter_variability_uses_values_not_categorical_ids(library):
     ],
 )
 def test_invalid_session_selections_are_rejected(library, ids, sessions):
+    """Verify invalid session selections are rejected."""
     with pytest.raises(ValueError):
         reliability.compare_hrfs(library, ids, sessions)
 
 
 def test_library_indices_map_missing_selections_to_minus_one():
+    """Verify library indices map missing selections to minus one."""
     ids = reliability.library_indices([0, np.nan, -1, 2.0], 3)
     np.testing.assert_array_equal(ids, [0, -1, -1, 2])
     assert ids.dtype.kind == "i"
 
 
 def test_finite_mean_ignores_nonfinite_values_and_keeps_empty_columns_nan():
+    """Verify finite mean ignores nonfinite values and keeps empty columns NaN."""
     values = np.array([[1.0, np.nan, np.inf], [3.0, np.nan, np.nan]])
     np.testing.assert_allclose(
         reliability.finite_mean(values), [2.0, np.nan, np.nan], equal_nan=True

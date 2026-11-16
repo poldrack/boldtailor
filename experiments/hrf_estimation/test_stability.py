@@ -15,6 +15,7 @@ def fitted(onset=0):
 
 
 def test_identical_and_shifted_hrf_stability():
+    """Verify identical and shifted HRF stability."""
     compare = importlib.import_module(
         "experiments.hrf_estimation.stability"
     ).compare_hrfs

@@ -8,6 +8,7 @@ from boldtailor import _arrays
 
 @pytest.mark.parametrize("dtype", [np.float64, np.int64, np.bool_])
 def test_readonly_array_owns_values_and_keeps_dtype(dtype):
+    """Verify read-only array owns values and keeps dtype."""
     source = np.arange(24).reshape(4, 6).astype(dtype)[:, ::2]
     expected = source.copy()
     result = _arrays.readonly_array(source, dtype=dtype)
@@ -27,6 +28,8 @@ def test_readonly_array_owns_values_and_keeps_dtype(dtype):
 
 
 def test_readonly_array_removes_subclass_behavior():
+    """Verify read-only array removes subclass behavior."""
+
     class CallerArray(np.ndarray):
         pass
 

@@ -61,6 +61,7 @@ def independent_ols(runs, indices, library, ids):
 def test_both_glms_match_independent_ols_and_keep_spatial_order(
     four_runs, small_library, settings_for, n_jobs, caplog, capfd, missing_rt
 ):
+    """Verify both GLMs match independent OLS and keep spatial order."""
     root, _ = four_runs
     if missing_rt:
         path = next(root.rglob("*run-01*events.tsv"))
@@ -109,6 +110,7 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
 def test_glm_model_and_selection_share_the_detected_task_model(
     four_runs, small_library, settings_for
 ):
+    """Verify GLM model and selection share the detected task model."""
     from boldtailor.design import expand_events, task_columns
 
     root, _ = four_runs
@@ -138,6 +140,7 @@ def test_glm_model_and_selection_share_the_detected_task_model(
 def test_select_hrfs_without_rt_still_feeds_the_full_glm(
     four_runs, small_library, settings_for
 ):
+    """Verify select HRFs without response-time still feeds the full GLM."""
     root, _ = four_runs
     runs = inputs.load_session(settings_for(root))
     model_task = detect_task_model([r.events for r in runs])
@@ -168,6 +171,7 @@ def test_select_hrfs_without_rt_still_feeds_the_full_glm(
 def test_beta_series_without_response_time_has_no_rt_correlations(
     four_runs, settings_for
 ):
+    """Verify beta series without response time has no response-time correlations."""
     root, _ = four_runs
     for path in (root / "sub-07" / "ses-nsd10" / "func").glob("*_events.tsv"):
         pd.read_csv(path, sep="\t").drop(columns="response_time").to_csv(
@@ -183,6 +187,7 @@ def test_beta_series_without_response_time_has_no_rt_correlations(
 def test_select_hrfs_without_splits_selects_on_all_runs_only(
     dataset, four_runs, small_library, settings_for
 ):
+    """Verify select HRFs without splits selects on all runs only."""
     root, *_ = dataset
     runs = inputs.load_session(settings_for(root), hrf_only=True)
     model_task = detect_task_model([r.events for r in runs])

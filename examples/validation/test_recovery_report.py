@@ -7,6 +7,7 @@ import recovery_report
 
 
 def test_report_prints_every_recovery_test_with_its_quantities():
+    """Verify report prints every recovery test with its quantities."""
     buffer = io.StringIO()
     with redirect_stdout(buffer):
         statuses = recovery_report.main()

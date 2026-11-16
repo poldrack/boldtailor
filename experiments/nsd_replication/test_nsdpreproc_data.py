@@ -28,6 +28,7 @@ def _pilot_config():
 
 
 def test_pilot_session_loads_from_nsdpreproc():
+    """Verify pilot session loads from nsdpreproc."""
     config = _pilot_config()
     assert config.nsdpreproc_dir == DATA / "derivatives/nsdpreproc"
     session = load_nsdpreproc(config, "sub-07", "ses-nsd10")

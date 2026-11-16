@@ -21,6 +21,7 @@ def records(notebook, kind):
 
 
 def test_only_complete_ten_session_methods(notebook_verbose):
+    """Verify only complete ten session methods."""
     table=pd.DataFrame(records(notebook_verbose,"ten_session_comparison"))
     assert set(table.method)=={"Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"}
     assert len(table)==50
@@ -30,6 +31,7 @@ def test_only_complete_ten_session_methods(notebook_verbose):
 
 
 def test_focused_notebook_executes_with_figures(notebook):
+    """Verify focused notebook executes with figures."""
     cells=[c for c in notebook.cells if c.cell_type=='code']
     assert cells and all(isinstance(c.execution_count,int) for c in cells)
     outputs=[o for c in cells for o in c.outputs]
@@ -38,6 +40,7 @@ def test_focused_notebook_executes_with_figures(notebook):
 
 
 def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook_verbose):
+    """Verify shape comparisons cover all core methods and sessions."""
     within=pd.DataFrame(records(notebook_verbose,"core_shape_stability"))
     expected={"Canonical","Library CV","Parametric library CV","Original REML","AR(1) REML"}
     assert set(within.method)==expected and len(within)==50
@@ -51,6 +54,7 @@ def test_shape_comparisons_cover_all_core_methods_and_sessions(notebook_verbose)
 
 
 def test_empirical_selection_report_has_counts_and_session_agreement(notebook_verbose):
+    """Verify empirical selection report has counts and session agreement."""
     rates=pd.DataFrame(records(notebook_verbose,"empirical_selection_rates"))
     assert len(rates)==20
     assert set(rates.session)==set(range(10,20))
@@ -68,6 +72,7 @@ def test_empirical_selection_report_has_counts_and_session_agreement(notebook_ve
 
 
 def test_long_outputs_disabled_by_default(notebook):
+    """Verify long outputs disabled by default."""
     setup = next(c.source for c in notebook.cells if c.cell_type == "code")
     assert "no_long_text_outputs = True" in setup
     outputs = [o for c in notebook.cells if c.cell_type == "code" for o in c.outputs]
@@ -87,6 +92,7 @@ def test_long_outputs_disabled_by_default(notebook):
 
 
 def test_rt_ablation_covers_all_sessions_and_crossed_models(notebook_verbose):
+    """Verify response-time ablation covers all sessions and crossed models."""
     table=pd.DataFrame(records(notebook_verbose,"rt_ablation_comparison"))
     assert len(table)==40
     assert set(table.session)==set(range(10,20))

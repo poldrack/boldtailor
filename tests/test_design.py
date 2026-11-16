@@ -29,6 +29,7 @@ def inputs():
 
 
 def test_compile_designs_matches_nilearn(inputs):
+    """Verify compile designs matches Nilearn."""
     events, confounds = inputs
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
     model = ModelSpec(
@@ -56,6 +57,7 @@ def test_compile_designs_matches_nilearn(inputs):
 
 
 def test_compile_nuisance_designs_excludes_events_and_retains_nuisance(inputs):
+    """Verify compile nuisance designs excludes events and retains nuisance."""
     events, _ = inputs
     confounds = pd.DataFrame(
         {
@@ -85,6 +87,7 @@ def test_compile_nuisance_designs_excludes_events_and_retains_nuisance(inputs):
 
 
 def test_compile_nuisance_designs_matches_nilearn_without_events(inputs):
+    """Verify compile nuisance designs matches Nilearn without events."""
     events, _ = inputs
     confounds = pd.DataFrame(
         {
@@ -119,6 +122,7 @@ def test_compile_nuisance_designs_matches_nilearn_without_events(inputs):
 
 @pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
 def test_compile_designs_rejects_missing_selected_confound(inputs, compiler):
+    """Verify compile designs rejects missing selected confound."""
     events, confounds = inputs
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
     model = ModelSpec(contrasts={"face": "face"}, confounds=("missing",))
@@ -129,6 +133,7 @@ def test_compile_designs_rejects_missing_selected_confound(inputs, compiler):
 
 @pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
 def test_compile_designs_rejects_nonfinite_selected_confound(inputs, compiler):
+    """Verify compile designs rejects nonfinite selected confound."""
     events, confounds = inputs
     confounds.loc[3, "trans_x"] = np.nan
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
@@ -140,6 +145,7 @@ def test_compile_designs_rejects_nonfinite_selected_confound(inputs, compiler):
 
 @pytest.mark.parametrize("compiler", [compile_designs, compile_nuisance_designs])
 def test_compile_designs_names_nonnumeric_selected_confound(inputs, compiler):
+    """Verify compile designs names nonnumeric selected confound."""
     events, confounds = inputs
     confounds["trans_x"] = ["n/a"] * len(confounds)
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
@@ -150,6 +156,7 @@ def test_compile_designs_names_nonnumeric_selected_confound(inputs, compiler):
 
 
 def test_compile_designs_warns_and_records_early_event_exclusion(inputs):
+    """Verify compile designs warns and records early event exclusion."""
     events, _ = inputs
     early = pd.DataFrame(
         {
@@ -182,6 +189,7 @@ def test_compile_designs_warns_and_records_early_event_exclusion(inputs):
     [("hrf_model", "bogus"), ("drift_model", "bogus")],
 )
 def test_compile_designs_contextualizes_invalid_nilearn_options(inputs, option, value):
+    """Verify compile designs contextualizes invalid Nilearn options."""
     events, _ = inputs
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0)
     model = ModelSpec(contrasts={"face": "face"}, **{option: value})
@@ -211,6 +219,7 @@ def _task_model_data():
 
 
 def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance():
+    """Verify compile designs with task model uses Nilearn task columns and nuisance."""
     from boldtailor._task_design import expand_events
 
     data = _task_model_data()
@@ -258,6 +267,7 @@ def test_compile_designs_with_task_model_uses_nilearn_task_columns_and_nuisance(
 
 
 def test_compile_designs_with_task_model_reports_data_errors_with_run():
+    """Verify compile designs with task model reports data errors with run."""
     data = _task_model_data()
     model = ModelSpec(
         contrasts={"task": {"task": 1}},
@@ -272,6 +282,7 @@ def test_compile_designs_with_task_model_reports_data_errors_with_run():
 
 
 def test_plain_string_hrf_keeps_confound_names_ending_in_kernel(inputs):
+    """Verify plain string HRF keeps confound names ending in kernel."""
     events, confounds = inputs
     confounds = confounds.rename(columns={"trans_x": "face_kernel"})
     data = from_arrays(np.zeros((20, 2)), events, tr=2.0, confounds=confounds)
@@ -314,6 +325,7 @@ def _three_runs(inputs):
 
 
 def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
+    """Verify per run loops copy run tables once."""
     from boldtailor import _ridge_cv as cv
 
     data = _three_runs(inputs)
@@ -332,6 +344,7 @@ def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
 
 @pytest.mark.parametrize("fractional", [False, True])
 def test_ridge_cv_fold_copies_run_tables_once(ridge_problem, access_counts, fractional):
+    """Verify ridge cross-validation fold copies run tables once."""
     from boldtailor import _ridge_cv as cv
 
     data, predictors, _ = ridge_problem

@@ -7,6 +7,7 @@ from experiments.hrf_estimation.test_library_cv import planted_runs
 
 
 def test_inner_validation_prefers_unpenalized_offgrid_recovery(offgrid):
+    """Verify inner validation prefers unpenalized offgrid recovery."""
     runs, library, _ = offgrid
     choose = importlib.import_module(
         "experiments.hrf_estimation.tuning"
@@ -25,6 +26,7 @@ def test_inner_validation_prefers_unpenalized_offgrid_recovery(offgrid):
 
 
 def test_regularization_grid_must_be_nonnegative(offgrid):
+    """Verify regularization grid must be nonnegative."""
     runs, library, _ = offgrid
     choose = importlib.import_module(
         "experiments.hrf_estimation.tuning"

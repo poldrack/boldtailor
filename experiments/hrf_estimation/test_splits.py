@@ -4,6 +4,7 @@ import pytest
 
 
 def test_splits_are_reproducible_disjoint_and_complementary():
+    """Verify splits are reproducible disjoint and complementary."""
     fn = importlib.import_module("experiments.hrf_estimation.splits").make_splits
     ids = tuple(f"sub-07_ses-nsd11_task-nsdcore_run-{i:02}" for i in range(1, 13))
     splits = fn(ids, seed=20261107, n_partitions=10)
@@ -19,6 +20,7 @@ def test_splits_are_reproducible_disjoint_and_complementary():
 
 @pytest.mark.parametrize("bad", ["session", "odd", "duplicate", "too_many"])
 def test_invalid_split_requests_fail(bad):
+    """Verify invalid split requests fail."""
     fn = importlib.import_module("experiments.hrf_estimation.splits").make_splits
     ids = [f"sub-07_ses-nsd11_task-nsdcore_run-{i:02}" for i in range(1, 5)]
     count = 1

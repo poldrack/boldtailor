@@ -41,6 +41,7 @@ def _with_ar1_noise(runs, rho, scale, seed):
 
 
 def test_planted_hrf_is_selected_iid(planted_runs):
+    """Verify planted HRF is selected independent-noise."""
     runs, library = planted_runs
     result = api.fit_library_reml(_with_white_noise(runs, 0.1, 99), library, {})
     assert [k.id for k in result.kernels] == [0, 1]
@@ -54,6 +55,7 @@ def test_planted_hrf_is_selected_iid(planted_runs):
 
 
 def test_planted_hrf_is_selected_ar1(planted_runs):
+    """Verify planted HRF is selected AR(1)."""
     runs, library = planted_runs
     noisy = _with_ar1_noise(runs, 0.5, 0.1, 31)
     result = api.fit_ar1_reml(noisy, library, {})
@@ -74,6 +76,7 @@ def _package_selection(runs, library, rho):
 
 
 def test_estimate_matches_package_selection(planted_runs):
+    """Verify estimate matches package selection."""
     runs, library = planted_runs
     runs = _with_white_noise(runs, 0.5, 12)
     rho = np.array([0.1, 0.4])
@@ -115,6 +118,7 @@ def _argmin_kernels(runs, library, mode):
 
 
 def test_no_rt_mode_has_four_random_effects(planted_runs):
+    """Verify no response-time mode has four random effects."""
     runs, library = planted_runs
     runs = runs[:2]
     for mode, count in [("none", 4), ("amplitude", 5)]:
@@ -132,6 +136,7 @@ def test_no_rt_mode_has_four_random_effects(planted_runs):
 
 
 def test_noise_estimate_keys_and_bounds(planted_runs):
+    """Verify noise estimate keys and bounds."""
     runs, _ = planted_runs
     moderate = api.estimate_noise(_with_ar1_noise(runs, 0.3, 1.0, 5), "amplitude")
     assert set(moderate) == NOISE_KEYS
@@ -154,6 +159,7 @@ def test_noise_estimate_keys_and_bounds(planted_runs):
 
 @pytest.mark.parametrize("method", ["remlcomponents", "remlshared", "remlcombined"])
 def test_removed_variants_are_rejected(planted_runs, method):
+    """Verify removed variants are rejected."""
     runs, library = planted_runs
     with pytest.raises(ValueError, match="unknown method"):
         pilot._estimate(runs, library, method, {})

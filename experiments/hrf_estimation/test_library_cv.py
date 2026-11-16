@@ -52,6 +52,7 @@ def planted_runs():
 
 
 def test_cv_recovers_distinct_hrfs_with_profiled_junk(planted_runs):
+    """Verify cross-validation recovers distinct HRFs with profiled junk."""
     runs, library = planted_runs
     fit = importlib.import_module(
         "experiments.hrf_estimation.library_cv"
@@ -64,6 +65,7 @@ def test_cv_recovers_distinct_hrfs_with_profiled_junk(planted_runs):
 
 
 def test_outer_test_signals_cannot_change_selection(planted_runs):
+    """Verify outer test signals cannot change selection."""
     runs, library = planted_runs
     fit = importlib.import_module(
         "experiments.hrf_estimation.library_cv"
@@ -78,6 +80,7 @@ def test_outer_test_signals_cannot_change_selection(planted_runs):
 
 
 def test_zero_signal_gets_no_hrf(planted_runs):
+    """Verify zero signal gets no HRF."""
     runs, library = planted_runs
     fit = importlib.import_module(
         "experiments.hrf_estimation.library_cv"
@@ -90,6 +93,7 @@ def test_zero_signal_gets_no_hrf(planted_runs):
 
 
 def test_cv_agrees_with_package_for_compatible_task_model(planted_runs):
+    """Verify cross-validation agrees with package for compatible task model."""
     from boldtailor.data import from_arrays
     from boldtailor.model import TaskModel, Modulator
     from boldtailor.hrf_selection import select_hrfs
@@ -129,6 +133,7 @@ def test_cv_agrees_with_package_for_compatible_task_model(planted_runs):
 
 @pytest.mark.parametrize("problem", ["constant_rt", "missing_condition"])
 def test_rank_failure_is_not_reported_as_no_signal(planted_runs, problem):
+    """Verify rank failure is not reported as no signal."""
     runs, library = planted_runs
     changed = []
     for run in runs:
@@ -146,6 +151,7 @@ def test_rank_failure_is_not_reported_as_no_signal(planted_runs, problem):
 
 
 def test_training_rejects_mismatched_anatomy_at_same_columns(planted_runs):
+    """Verify training rejects mismatched anatomy at same columns."""
     import nibabel as nib
 
     runs, library = planted_runs

@@ -30,6 +30,7 @@ def candidates(two_candidate_library):
 
 
 def test_default_single_trial_design_is_unchanged(timing_fixture, candidates):
+    """Verify default single trial design is unchanged."""
     implicit = compile_trial_run(*timing_fixture, "run-01")
     for hrf in ("spm", candidates[0]):
         explicit = compile_trial_run(*timing_fixture, "run-01", hrf=hrf)
@@ -42,6 +43,7 @@ def test_default_single_trial_design_is_unchanged(timing_fixture, candidates):
 def test_custom_convolution_matches_independent_sampled_boxcars(
     timing_fixture, candidates, offset, duration
 ):
+    """Verify custom convolution matches independent sampled boxcars."""
     from boldtailor._hrf_design import stimulus_regressor
 
     events, _, nuisance = timing_fixture
@@ -82,6 +84,7 @@ def test_custom_convolution_matches_independent_sampled_boxcars(
 
 
 def test_custom_boundary_and_run_isolation(timing_fixture, candidates):
+    """Verify custom boundary and run isolation."""
     from boldtailor._hrf_design import stimulus_regressor
 
     events, times, nuisance = timing_fixture
@@ -99,6 +102,7 @@ def test_custom_boundary_and_run_isolation(timing_fixture, candidates):
 
 
 def test_identified_hrf_fit_and_provenance(timing_fixture, candidates):
+    """Verify identified HRF fit and provenance."""
     events, times, nuisance = timing_fixture
     data = from_arrays(
         np.random.default_rng(20).normal(size=(60, 3)),
@@ -120,6 +124,7 @@ def test_identified_hrf_fit_and_provenance(timing_fixture, candidates):
 
 
 def test_unidentified_hrfs_are_rejected(timing_fixture):
+    """Verify unidentified HRFs are rejected."""
     for hrf in ("glover", lambda tr, oversampling: np.ones(10)):
         with pytest.raises(ValueError, match="HRF|hrf"):
             compile_trial_run(*timing_fixture, "run-01", hrf=hrf)
@@ -128,6 +133,7 @@ def test_unidentified_hrfs_are_rejected(timing_fixture):
 @pytest.mark.parametrize("offset", [0.774, 0.775])
 @pytest.mark.parametrize("irregular", [False, True])
 def test_batched_trial_convolution_matches_nilearn_across_library(offset, irregular):
+    """Verify batched trial convolution matches Nilearn across library."""
     from nilearn.glm.first_level import compute_regressor
 
     from boldtailor._hrf_design import trial_regressors
@@ -160,6 +166,7 @@ def test_batched_trial_convolution_matches_nilearn_across_library(offset, irregu
 
 @pytest.mark.parametrize("name", ["spm", "glover"])
 def test_string_models_resolve_to_peak_normalized_kernels(name):
+    """Verify string models resolve to peak normalized kernels."""
     from boldtailor._hrf_design import hrf_kernel, hrf_model
 
     kernel = hrf_kernel(name, 2.0, 50)
@@ -171,6 +178,7 @@ def test_string_models_resolve_to_peak_normalized_kernels(name):
 
 
 def test_candidate_kernels_are_peak_normalized_through_hrf_kernel(candidates):
+    """Verify candidate kernels are peak normalized through HRF kernel."""
     from boldtailor._hrf_design import hrf_kernel, hrf_model
 
     for candidate in candidates:
@@ -179,6 +187,7 @@ def test_candidate_kernels_are_peak_normalized_through_hrf_kernel(candidates):
 
 
 def test_trial_regressors_match_nilearn_with_the_peak_kernel(two_candidate_library):
+    """Verify trial regressors match Nilearn with the peak kernel."""
     from nilearn.glm.first_level import compute_regressor
 
     from boldtailor._hrf_design import trial_regressors
@@ -194,6 +203,7 @@ def test_trial_regressors_match_nilearn_with_the_peak_kernel(two_candidate_libra
 
 
 def test_canonical_metadata_records_peak_normalization():
+    """Verify canonical metadata records peak normalization."""
     from boldtailor._hrf_design import hrf_metadata
     from boldtailor.hrf_library import CANONICAL_PARAMETERS
 
@@ -206,6 +216,7 @@ def test_canonical_metadata_records_peak_normalization():
 
 
 def test_custom_metadata_records_peak_normalization(candidates):
+    """Verify custom metadata records peak normalization."""
     from boldtailor._hrf_design import hrf_metadata
 
     assert hrf_metadata(candidates[1])["normalization"] == "peak_one_event_response"
@@ -213,6 +224,7 @@ def test_custom_metadata_records_peak_normalization(candidates):
 
 
 def test_single_trial_provenance_records_peak_normalization(timing_fixture):
+    """Verify single trial provenance records peak normalization."""
     events, times, nuisance = timing_fixture
     data = from_arrays(
         np.random.default_rng(21).normal(size=(60, 2)),
@@ -226,6 +238,7 @@ def test_single_trial_provenance_records_peak_normalization(timing_fixture):
 
 @pytest.mark.parametrize("count", [1, 2, 3, 94, 1200])
 def test_boxcar_response_peak_matches_brute_force_convolution(candidates, count):
+    """Verify boxcar response peak matches brute force convolution."""
     from boldtailor._hrf_design import boxcar_response_peak
 
     for candidate in candidates:
@@ -250,6 +263,7 @@ def _realized(kernel, onset, duration, times, oversampling):
 def test_scaled_realized_event_responses_peak_at_exactly_one(
     candidates, onset, duration, oversampling
 ):
+    """Verify scaled realized event responses peak at exactly one."""
     from boldtailor._hrf_design import event_response_scales, hrf_model
 
     times = np.arange(0, 60, 2.0)
@@ -264,6 +278,7 @@ def test_scaled_realized_event_responses_peak_at_exactly_one(
 
 
 def test_short_trial_columns_follow_their_own_unit_peak_responses(candidates):
+    """Verify short trial columns follow their own unit peak responses."""
     from boldtailor._hrf_design import trial_regressors
 
     times = np.arange(0, 60, 2.0)
@@ -282,6 +297,7 @@ def _peak_models(library):
 
 
 def test_single_event_responses_peak_at_one(two_candidate_library):
+    """Verify single event responses peak at one."""
     from boldtailor._hrf_design import trial_regressors
 
     times = np.arange(0, 40, 0.1)
@@ -299,6 +315,7 @@ def test_single_event_responses_peak_at_one(two_candidate_library):
 
 
 def test_stimulus_regressor_scales_each_event_to_unit_peak(candidates):
+    """Verify stimulus regressor scales each event to unit peak."""
     from boldtailor._hrf_design import stimulus_regressor
 
     times = np.arange(0, 80, 0.1)

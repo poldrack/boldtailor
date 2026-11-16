@@ -8,6 +8,7 @@ from boldtailor import diagnostics
 
 
 def test_trial_weighted_t_test_matches_scipy_and_preserves_inputs():
+    """Verify trial weighted t test matches SciPy and preserves inputs."""
     runs = [
         np.array([[1, -2, 0], [2, -5, 2]], dtype=np.float32),
         np.array([[4, -6, -1], [7, -1, 3], [8, -3, 1]], dtype=np.float32),
@@ -26,6 +27,7 @@ def test_trial_weighted_t_test_matches_scipy_and_preserves_inputs():
 
 
 def test_missing_values_and_degenerate_columns_are_explicit():
+    """Verify missing values and degenerate columns are explicit."""
     runs = [
         np.array(
             [
@@ -46,6 +48,7 @@ def test_missing_values_and_degenerate_columns_are_explicit():
 
 
 def test_large_offsets_use_centered_sample_variance():
+    """Verify large offsets use centered sample variance."""
     values = 1e10 + np.array([[1, -2], [2, 0], [3, 2]], dtype=float)
     result = diagnostics.one_sample_t([values[:1], values[1:]])
     expected = ttest_1samp(values, 0, axis=0)
@@ -54,11 +57,13 @@ def test_large_offsets_use_centered_sample_variance():
 
 @pytest.mark.parametrize("runs", [[], [np.ones(3)], [np.ones((2, 3)), np.ones((2, 4))]])
 def test_invalid_beta_dimensions_are_rejected(runs):
+    """Verify invalid beta dimensions are rejected."""
     with pytest.raises(ValueError, match="trial.*grayordinate|at least one"):
         diagnostics.one_sample_t(runs)
 
 
 def test_correlation_removes_run_mean_confounding():
+    """Verify correlation removes run mean confounding."""
     beta = [np.array([[3.0], [2.0], [1.0]]), np.array([[13.0], [12.0], [11.0]])]
     rt = [np.array([1.0, 2.0, 3.0]), np.array([11.0, 12.0, 13.0])]
     result = diagnostics.correlate_rt(beta, rt, run_numbers=[1, 2])
@@ -69,6 +74,7 @@ def test_correlation_removes_run_mean_confounding():
 
 
 def test_matched_feature_masks_exclude_only_invalid_rt_or_beta():
+    """Verify matched feature masks exclude only invalid response-time or beta."""
     beta = np.array(
         [
             [1.0, 1.0],
@@ -88,6 +94,7 @@ def test_matched_feature_masks_exclude_only_invalid_rt_or_beta():
 
 
 def test_constant_rt_and_constant_beta_are_undefined():
+    """Verify constant response-time and constant beta are undefined."""
     beta = np.column_stack([np.ones(4), np.arange(4)])
     result = diagnostics.correlate_rt([beta], [np.ones(4)], run_numbers=[2])
     assert np.isnan(result["all"]).all()
@@ -96,6 +103,7 @@ def test_constant_rt_and_constant_beta_are_undefined():
 
 
 def test_even_run_points_are_even_only_and_centered_with_matching_mask():
+    """Verify even run points are even only and centered with matching mask."""
     beta = [
         np.array([[100.0], [200.0], [300.0]]),
         np.array([[20.0], [np.nan], [40.0], [50.0]]),
@@ -107,6 +115,7 @@ def test_even_run_points_are_even_only_and_centered_with_matching_mask():
 
 
 def test_mismatched_trials_and_ambiguous_run_numbers_fail():
+    """Verify mismatched trials and ambiguous run numbers fail."""
     for beta, rt, numbers in [
         ([np.ones((4, 2))], [np.ones(3)], [1]),
         ([np.ones((4, 2))] * 2, [np.ones(4)] * 2, [1, 1]),
@@ -117,11 +126,13 @@ def test_mismatched_trials_and_ambiguous_run_numbers_fail():
 
 
 def test_map_names_follow_the_returned_statistics():
+    """Verify map names follow the returned statistics."""
     result = diagnostics.one_sample_t([np.ones((3, 2))])
     assert tuple(result) == diagnostics.ONE_SAMPLE_T_NAMES
 
 
 def test_pearson_correlation_needs_three_observations_and_variance():
+    """Verify pearson correlation needs three observations and variance."""
     r = diagnostics.pearson_correlation(
         np.array([2.0, 2.0, 0.0, 5.0]),
         np.array([4.0, 4.0, 0.0, 1.0]),

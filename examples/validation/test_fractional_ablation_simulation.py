@@ -30,6 +30,7 @@ def problem():
 
 
 def test_generator_is_paired_and_stresses_the_design(problem):
+    """Verify generator is paired and stresses the design."""
     other = simulation().make_problem(
         0,
         isi=4.0,
@@ -61,6 +62,7 @@ def test_generator_is_paired_and_stresses_the_design(problem):
 
 
 def test_noiseless_ols_recovers_truth():
+    """Verify noiseless OLS recovers truth."""
     sim = simulation()
     p = sim.make_problem(
         3,
@@ -82,6 +84,7 @@ def test_noiseless_ols_recovers_truth():
 
 
 def test_outer_outcomes_and_latent_truth_do_not_select_candidates(problem):
+    """Verify outer outcomes and latent truth do not select candidates."""
     sim = simulation()
     first, curve = sim.evaluate_problem(problem, fractions=(1.0, 0.5))
     altered = dict(problem)
@@ -110,6 +113,7 @@ def test_outer_outcomes_and_latent_truth_do_not_select_candidates(problem):
 
 
 def test_metrics_keep_offsets_and_shape_errors_distinct():
+    """Verify metrics keep offsets and shape errors distinct."""
     sim = simulation()
     truth = [np.array([1.0, 3.0, 5.0])[:, None], np.array([11.0, 13.0, 15.0])[:, None]]
     estimated = [2 * x + 10 for x in truth]

@@ -8,6 +8,7 @@ from boldtailor.hrf_library import default_hrf_library
 
 
 def test_badness_scores_each_trial_against_other_runs():
+    """Verify badness scores each trial against other runs."""
     trials = pd.DataFrame(
         dict(run=["r1", "r1", "r2", "r2"], image=[1, 2, 1, 3])
     )  # images 2 and 3 appear in one run only and are skipped
@@ -17,6 +18,7 @@ def test_badness_scores_each_trial_against_other_runs():
 
 
 def test_full_task_r2_nests_onoff(synthetic_session):
+    """Verify full task R-squared nests ON-OFF."""
     library = default_hrf_library()
     data = analysis_data(synthetic_session, np.arange(30))
     labels = _labels(synthetic_session)
@@ -29,6 +31,7 @@ def test_full_task_r2_nests_onoff(synthetic_session):
 
 
 def test_check_scores_every_pool_rule_and_count(synthetic_session):
+    """Verify check scores every pool rule and count."""
     table = dc.check(synthetic_session)
     assert set(table["pool"]) == set(dc.POOLS) and set(table["rule"]) == set(dc.RULES)
     assert len(table) == len(dc.POOLS) * len(dc.RULES) * len(dc.COUNTS)

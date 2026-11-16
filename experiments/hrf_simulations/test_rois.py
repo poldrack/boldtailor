@@ -6,6 +6,7 @@ from experiments.hrf_estimation.test_inputs import bids as bids  # noqa: F401
 
 
 def test_three_anatomical_labels_map_by_surface_identity():
+    """Verify three anatomical labels map by surface identity."""
     from experiments.hrf_simulations.rois import map_regions
 
     left = nib.cifti2.BrainModelAxis.from_surface([2, 0, 1], 3, "CortexLeft")
@@ -23,6 +24,7 @@ def test_three_anatomical_labels_map_by_surface_identity():
 
 
 def test_roi_bundle_selects_without_duplicate_data(bids, tmp_path):
+    """Verify roi bundle selects without duplicate data."""
     from experiments.hrf_simulations.bundle import (
         export_bundle,
         load_session,
@@ -46,6 +48,7 @@ def test_roi_bundle_selects_without_duplicate_data(bids, tmp_path):
 
 
 def test_calibration_roi_cannot_be_reused_for_another(tmp_path):
+    """Verify calibration roi cannot be reused for another."""
     import json
     from argparse import Namespace
     from experiments.hrf_simulations.cli import _check_calibration_subject

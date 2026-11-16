@@ -26,6 +26,7 @@ def build(motion, times, cutoff=80):
 
 
 def test_motion_expansion_keeps_all_scans(motion):
+    """Verify motion expansion keeps all scans."""
     result = build(motion, np.arange(4) * 1.3333334)
     assert result.shape == (4, 25)
     np.testing.assert_array_equal(result.trans_x, [1, 3, 2, 5])
@@ -37,6 +38,7 @@ def test_motion_expansion_keeps_all_scans(motion):
 
 
 def test_eighty_second_drift_basis_removes_slow_not_fast_modes():
+    """Verify eighty second drift basis removes slow not fast modes."""
     n = 240
     motion = pd.DataFrame(
         np.zeros((n, 6)),
@@ -55,6 +57,7 @@ def test_eighty_second_drift_basis_removes_slow_not_fast_modes():
 
 @pytest.mark.parametrize("problem", ["rows", "nan", "missing", "irregular", "cutoff"])
 def test_invalid_nuisance_inputs_fail_without_imputation(motion, problem):
+    """Verify invalid nuisance inputs fail without imputation."""
     times, cutoff = np.arange(4, dtype=float), 80
     if problem == "rows":
         motion = motion.iloc[:-1]

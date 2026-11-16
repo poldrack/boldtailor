@@ -40,6 +40,7 @@ def api():
 
 
 def test_exclusive_trial_partition(event_run):
+    """Assign every trial to exactly one task or junk design partition."""
     table = api().partition_events(event_run.events)
     assert table.category.tolist() == [
         "valid",
@@ -57,6 +58,7 @@ def test_exclusive_trial_partition(event_run):
     [("is_correct", 3), ("trial_type", 2), ("missing_data", 5), ("duration", -1)],
 )
 def test_unknown_event_codes_fail(event_run, column, value):
+    """Verify unknown event codes fail."""
     table = event_run.events.copy()
     table.loc[0, column] = value
     with pytest.raises(ValueError):
@@ -64,6 +66,7 @@ def test_unknown_event_codes_fail(event_run, column, value):
 
 
 def test_design_has_one_rt_effect_and_separate_junk(event_run):
+    """Verify design has one response-time effect and separate junk."""
     kernel = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
     parts = api().build_design(event_run, kernel, "amplitude")
     assert parts.task_names == ("trial_type_0", "trial_type_1", "response_time")
@@ -90,6 +93,7 @@ def test_design_has_one_rt_effect_and_separate_junk(event_run):
 
 
 def test_absent_junk_categories_are_zero_columns(event_run):
+    """Verify absent junk categories are zero columns."""
     events = event_run.events.iloc[[0, 1, 4, 5]].copy()
     parts = api().build_design(
         replace(event_run, events=events),
@@ -100,6 +104,7 @@ def test_absent_junk_categories_are_zero_columns(event_run):
 
 
 def test_rt_duration_uses_unit_height_not_per_event_peak_scaling(event_run):
+    """Verify response-time duration uses unit height not per event peak scaling."""
     events = event_run.events.iloc[[0, 1]].copy()
     kernel = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
     run = replace(event_run, events=events)

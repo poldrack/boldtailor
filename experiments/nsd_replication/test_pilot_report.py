@@ -33,6 +33,7 @@ def fitted(config, monkeypatch, synthetic_session):
 
 
 def test_variability_columns_and_finite(config, fitted):
+    """Verify variability columns and finite."""
     table = pilot_report.variability(config, "nsdpreproc", LEVELS)
     assert list(table.columns) == ["version", "loso_sd", "split_sd", "median"]
     assert list(table["version"]) == list(LEVELS)
@@ -41,11 +42,13 @@ def test_variability_columns_and_finite(config, fitted):
 
 def test_identical_sessions_have_negligible_spread(config, fitted):
     # every synthetic session is identical, so subsets give the same median
+    """Verify identical sessions have negligible spread."""
     table = pilot_report.variability(config, "nsdpreproc", LEVELS)
     assert (table[["loso_sd", "split_sd"]] < 0.05).all().all()
 
 
 def test_cli_writes_variability_table(config, fitted, capsys):
+    """Verify CLI writes variability table."""
     import pandas as pd
 
     toml = config.bids_dir / "config.toml"

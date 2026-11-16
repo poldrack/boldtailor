@@ -6,6 +6,7 @@ import pytest
 
 
 def test_centering_removes_only_held_out_offset():
+    """Verify centering removes only held out offset."""
     from ridge_objective_simulation import evaluate_candidate
 
     x = np.array([-1.0, 0.0, 1.0, 2.0])
@@ -23,6 +24,7 @@ def test_centering_removes_only_held_out_offset():
 
 
 def test_pool_sums_before_division_and_exclude_missing_predictions():
+    """Verify pool sums before division and exclude missing predictions."""
     from ridge_objective_simulation import score_prediction_runs
 
     y = [np.array([0.0, 2.0, 100.0])[:, None], np.array([0.0, 10.0])[:, None]]
@@ -33,6 +35,7 @@ def test_pool_sums_before_division_and_exclude_missing_predictions():
 
 
 def test_fixed_ols_targets_are_candidate_independent():
+    """Verify fixed OLS targets are candidate independent."""
     from ridge_objective_simulation import evaluate_candidate
 
     x = np.arange(5.0)
@@ -46,6 +49,7 @@ def test_fixed_ols_targets_are_candidate_independent():
 
 
 def test_historical_objectives_keep_shared_intercept_fit():
+    """Verify historical objectives keep shared intercept fit."""
     from ridge_objective_simulation import evaluate_candidate
 
     x = [np.arange(5.0) + 10 * r for r in range(3)]
@@ -69,6 +73,7 @@ def test_historical_objectives_keep_shared_intercept_fit():
 
 
 def test_recovery_metrics_center_each_run_before_pooling():
+    """Verify recovery metrics center each run before pooling."""
     from ridge_objective_simulation import _recovery_metrics
 
     true = [np.array([r + 1.0, r + 3.0, r + 5.0])[:, None] for r in range(6)]
@@ -83,6 +88,7 @@ def test_recovery_metrics_center_each_run_before_pooling():
 
 
 def test_confounding_stress_experiment_recovers_known_slopes():
+    """Verify confounding stress experiment recovers known slopes."""
     from ridge_objective_simulation import confounding_stress
 
     rows = confounding_stress()

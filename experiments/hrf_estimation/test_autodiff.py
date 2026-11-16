@@ -16,6 +16,7 @@ from boldtailor.hrf_library import HrfCandidate
 
 @pytest.mark.parametrize("mode", ["amplitude", "duration"])
 def test_autodiff_design_value_and_gradient_match_reference(planted_runs, mode):
+    """Verify autodiff design value and gradient match reference."""
     pytest.importorskip("jax")
     api = importlib.import_module("experiments.hrf_estimation.autodiff")
     runs, _ = planted_runs
@@ -35,6 +36,7 @@ def test_autodiff_design_value_and_gradient_match_reference(planted_runs, mode):
 
 
 def test_autodiff_handles_missing_junk_and_nuisance_overlap(planted_runs):
+    """Verify autodiff handles missing junk and nuisance overlap."""
     pytest.importorskip("jax")
     import pandas as pd
     api = importlib.import_module("experiments.hrf_estimation.autodiff")
@@ -52,6 +54,7 @@ def test_autodiff_handles_missing_junk_and_nuisance_overlap(planted_runs):
 
 
 def test_autodiff_compilation_is_reused_across_vertices(planted_runs):
+    """Verify autodiff compilation is reused across vertices."""
     pytest.importorskip("jax")
     api=importlib.import_module("experiments.hrf_estimation.autodiff")
     runs,_=planted_runs
@@ -63,6 +66,7 @@ def test_autodiff_compilation_is_reused_across_vertices(planted_runs):
 
 
 def test_autodiff_matches_when_event_design_loses_rank(planted_runs):
+    """Verify autodiff matches when event design loses rank."""
     pytest.importorskip("jax")
     import pandas as pd
     from experiments.hrf_estimation.design import build_design
@@ -85,6 +89,7 @@ def test_autodiff_matches_when_event_design_loses_rank(planted_runs):
 
 
 def test_lbfgsb_uses_autodiff_and_reduces_function_evaluations(offgrid):
+    """Verify lbfgsb uses autodiff and reduces function evaluations."""
     pytest.importorskip("jax")
     from experiments.hrf_estimation.continuous import fit_continuous
     runs,library,truth=offgrid
@@ -99,6 +104,7 @@ def test_lbfgsb_uses_autodiff_and_reduces_function_evaluations(offgrid):
 
 
 def test_autodiff_rejects_incompatible_settings(planted_runs):
+    """Verify autodiff rejects incompatible settings."""
     from experiments.hrf_estimation.continuous import fit_continuous
     runs,library=planted_runs
     with pytest.raises(ValueError,match="prepared"):

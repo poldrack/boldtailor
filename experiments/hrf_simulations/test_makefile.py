@@ -19,6 +19,7 @@ def dry_run(*args):
 
 
 def test_workflow_runs_components_in_order_with_fifteen_workers(tmp_path):
+    """Verify workflow runs components in order with fifteen workers."""
     commands = dry_run("workflow", f"CALIBRATION={tmp_path / 'new-calibration'}")
     assert commands.index("cli calibrate") < commands.index("cli run")
     assert commands.index("cli run") < commands.index("cli report")
@@ -30,6 +31,7 @@ def test_workflow_runs_components_in_order_with_fifteen_workers(tmp_path):
 
 
 def test_workflow_overrides_and_all_component_targets():
+    """Verify workflow overrides and all component targets."""
     commands = dry_run(
         "run", "N_JOBS=2", "STAGE=sensitivity", "LIMIT=3", "REPLICATES=1"
     )
@@ -55,6 +57,7 @@ def test_workflow_overrides_and_all_component_targets():
 
 
 def test_completed_calibration_is_verified_without_recomputing(tmp_path):
+    """Verify completed calibration is verified without recomputing."""
     (tmp_path / "COMPLETE.json").write_text("{}")
     commands = dry_run("calibrate", f"CALIBRATION={tmp_path}")
     assert "cli calibrate" not in commands

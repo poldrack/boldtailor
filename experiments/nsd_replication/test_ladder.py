@@ -18,6 +18,7 @@ from experiments.nsd_replication.trials import trial_table
 
 
 def test_ladder_levels_shapes_and_order(synthetic_session):
+    """Verify ladder levels shapes and order."""
     fits = fit_ladder(synthetic_session, levels=LEVELS + LSS_LEVELS, block_size=16)
     trials = trial_table(
         synthetic_session.events, synthetic_session.labels, "s", "73k_id"
@@ -36,6 +37,7 @@ def test_ladder_levels_shapes_and_order(synthetic_session):
 
 
 def test_trial_order_matches_trial_table(synthetic_session):
+    """Verify trial order matches trial table."""
     fits = fit_ladder(synthetic_session, levels=("b1",), block_size=16)
     trials = trial_table(
         synthetic_session.events, synthetic_session.labels, "s", "73k_id"
@@ -44,6 +46,7 @@ def test_trial_order_matches_trial_table(synthetic_session):
 
 
 def test_blocks_do_not_change_results(synthetic_session):
+    """Verify blocks do not change results."""
     a = fit_ladder(synthetic_session, levels=("b1", "b2"), block_size=7)
     b = fit_ladder(synthetic_session, levels=("b1", "b2"), block_size=30)
     for level in ("b1", "b2"):
@@ -51,6 +54,7 @@ def test_blocks_do_not_change_results(synthetic_session):
 
 
 def test_denoised_confounds_match_with_denoising(synthetic_session):
+    """Verify denoised confounds match with denoising."""
     library = default_hrf_library(32, seed=0)
     result = select_session_denoising(
         synthetic_session, synthetic_session.task_model, library
@@ -65,6 +69,7 @@ def test_denoised_confounds_match_with_denoising(synthetic_session):
 
 
 def test_fitted_hrf_improves_reliability_on_delayed_hrf(synthetic_session):
+    """Verify fitted HRF improves reliability on delayed HRF."""
     from experiments.nsd_replication.metrics import voxel_reliability
     from experiments.nsd_replication.betas import zscore
     from experiments.nsd_replication.trials import images_with, repetition_array
@@ -86,6 +91,7 @@ def test_fitted_hrf_improves_reliability_on_delayed_hrf(synthetic_session):
 
 
 def test_unsorted_onsets_raise_with_run_label(synthetic_session):
+    """Verify unsorted onsets raise with run label."""
     events = list(synthetic_session.events)
     events[2] = events[2].iloc[::-1].reset_index(drop=True)
     session = dataclasses.replace(synthetic_session, events=tuple(events))
@@ -94,6 +100,7 @@ def test_unsorted_onsets_raise_with_run_label(synthetic_session):
 
 
 def test_on_fit_called_after_each_level_in_order(synthetic_session):
+    """Verify on fit called after each level in order."""
     seen = []
     fits = fit_ladder(
         synthetic_session,

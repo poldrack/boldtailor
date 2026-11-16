@@ -27,6 +27,7 @@ def _argv(root, *extra):
 
 
 def test_parser_builds_settings_with_defaults_and_overrides(four_runs):
+    """Verify parser builds settings with defaults and overrides."""
     root, _ = four_runs
     args = cli.build_parser().parse_args(
         _argv(
@@ -65,6 +66,7 @@ def test_parser_builds_settings_with_defaults_and_overrides(four_runs):
 
 
 def test_dry_run_prints_the_plan_and_exits_zero(four_runs, capsys):
+    """Verify dry run prints the plan and exits zero."""
     root, _ = four_runs
     argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
     assert cli.main(argv) == 0
@@ -77,6 +79,7 @@ def test_dry_run_prints_the_plan_and_exits_zero(four_runs, capsys):
 
 
 def test_dry_run_exits_with_the_code_the_run_would(four_runs, tmp_path, capsys):
+    """Verify dry run exits with the code the run would."""
     root, _ = four_runs
     # four runs: two odd and two even, too few for the default ridge CV
     assert cli.main(_argv(root, "--dry-run", "--hrf-library", "canonical")) == 2
@@ -93,6 +96,7 @@ def test_dry_run_exits_with_the_code_the_run_would(four_runs, tmp_path, capsys):
 
 
 def test_settings_errors_exit_one_with_one_line(four_runs, capsys):
+    """Verify settings errors exit one with one line."""
     root, _ = four_runs
     assert cli.main(_argv(root, "--ridge-mode", "lasso")) == 1
     err = capsys.readouterr().err.strip().splitlines()
@@ -101,6 +105,7 @@ def test_settings_errors_exit_one_with_one_line(four_runs, capsys):
 
 
 def test_input_errors_exit_two_and_name_what_is_missing(four_runs, capsys):
+    """Verify input errors exit two and name what is missing."""
     root, _ = four_runs
     assert cli.main(_argv(root, "--task", "other", "--dry-run")) == 2
     assert "task-other" in capsys.readouterr().err
@@ -111,6 +116,7 @@ def test_input_errors_exit_two_and_name_what_is_missing(four_runs, capsys):
 def test_run_writes_the_derivative_and_a_second_run_exits_one(
     four_runs, tmp_path, capsys
 ):
+    """Verify run writes the derivative and a second run exits one."""
     root, _ = four_runs
     argv = _argv(
         root,
@@ -140,17 +146,20 @@ def test_run_writes_the_derivative_and_a_second_run_exits_one(
 
 
 def test_skip_stage_cannot_remove_glms(four_runs):
+    """Verify skip stage cannot remove GLMs."""
     root, _ = four_runs
     with pytest.raises(SystemExit):
         cli.build_parser().parse_args(_argv(root, "--skip-stage", "glms"))
 
 
 def test_help_exits_zero(capsys):
+    """Print CLI usage and exit successfully when help is requested."""
     assert cli.main(["run", "--help"]) == 0
     assert "--bids-dir" in capsys.readouterr().out
 
 
 def test_usage_error_exits_one_with_one_stderr_line(four_runs, capsys):
+    """Verify usage error exits one with one stderr line."""
     root, _ = four_runs
     argv = [
         "run",
@@ -166,6 +175,7 @@ def test_usage_error_exits_one_with_one_stderr_line(four_runs, capsys):
 
 
 def test_report_command_line_round_trips_through_the_parser(four_runs, tmp_path):
+    """Verify report command line round trips through the parser."""
     root, _ = four_runs
     args = cli.build_parser().parse_args(
         _argv(
@@ -191,6 +201,7 @@ def test_report_command_line_round_trips_through_the_parser(four_runs, tmp_path)
 
 
 def test_categorical_modulator_flag_round_trips(four_runs):
+    """Verify categorical modulator flag round trips."""
     root, _ = four_runs
     args = cli.build_parser().parse_args(
         _argv(root, "--modulator", "trial_type:categorical,reference=1,indicator")
@@ -206,12 +217,14 @@ def test_categorical_modulator_flag_round_trips(four_runs):
 
 
 def test_skipping_a_stage_also_skips_the_stages_that_require_it(four_runs):
+    """Verify skipping a stage also skips the stages that require it."""
     root, _ = four_runs
     args = cli.build_parser().parse_args(_argv(root, "--skip-stage", "betas"))
     assert cli.settings_from_args(args).stages == frozenset({"glms", "reliability"})
 
 
 def test_settings_stay_strict_about_stage_requirements(four_runs):
+    """Verify settings stay strict about stage requirements."""
     from boldtailor.workflow.settings import WorkflowSettings
 
     root, _ = four_runs
@@ -226,6 +239,7 @@ def test_settings_stay_strict_about_stage_requirements(four_runs):
 
 
 def test_overwrite_into_the_fmriprep_directory_is_refused(four_runs, capsys):
+    """Verify overwrite into the fmriprep directory is refused."""
     root, prep = four_runs
     bold = sorted(prep.rglob("*_bold.dtseries.nii"))
     argv = _argv(root, "--output-dir", str(prep), "--existing-results", "overwrite")
@@ -235,6 +249,7 @@ def test_overwrite_into_the_fmriprep_directory_is_refused(four_runs, capsys):
 
 
 def test_dry_run_with_string_trial_type_expands_indicators(four_runs, capsys):
+    """Verify dry run with string trial type expands indicators."""
     from tests.workflow.synthetic_bids import face_house_events, rewrite_events
 
     root, _ = four_runs
@@ -248,6 +263,7 @@ def test_dry_run_with_string_trial_type_expands_indicators(four_runs, capsys):
 
 
 def test_no_modulators_fits_a_task_only_model(four_runs, capsys):
+    """Verify no modulators fits a task only model."""
     root, _ = four_runs
     argv = _argv(root, "--dry-run", "--hrf-library", "canonical", "--ridge-mode", "off")
     assert cli.main([*argv, "--no-modulators"]) == 0
@@ -261,6 +277,7 @@ def test_no_modulators_fits_a_task_only_model(four_runs, capsys):
 
 
 def test_no_modulators_excludes_modulator(four_runs, capsys):
+    """Verify no modulators excludes modulator."""
     root, _ = four_runs
     argv = _argv(root, "--no-modulators", "--modulator", "trial_type", "--dry-run")
     assert cli.main(argv) == 1
@@ -278,6 +295,7 @@ def _quick(root, tmp_path, *extra):
 
 
 def test_malformed_confounds_exit_two(four_runs, tmp_path, capsys):
+    """Verify malformed confounds exit two."""
     import pandas as pd
 
     root, prep = four_runs
@@ -294,6 +312,7 @@ def test_malformed_confounds_exit_two(four_runs, tmp_path, capsys):
 def test_errors_during_fitting_propagate_with_a_traceback(
     four_runs, tmp_path, monkeypatch
 ):
+    """Verify errors during fitting propagate with a traceback."""
     from boldtailor.workflow import run as workflow_run
 
     def fail(*args, **kwargs):
@@ -313,6 +332,7 @@ def _boldtailor_info(caplog):
 
 
 def test_run_logs_progress_unless_quiet(four_runs, tmp_path, caplog):
+    """Verify run logs progress unless quiet."""
     root, _ = four_runs
     assert cli.main(_quick(root, tmp_path, "--skip-stage", "betas")) == 0
     assert _boldtailor_info(caplog)
@@ -323,6 +343,7 @@ def test_run_logs_progress_unless_quiet(four_runs, tmp_path, caplog):
 
 
 def test_missing_surface_mesh_exits_two(four_runs, tmp_path, capsys):
+    """Verify missing surface mesh exits two."""
     root, _ = four_runs
     argv = [a for a in _quick(root, tmp_path) if a != "--no-surface-maps"]
     mesh = ("--surface-mesh", f"left={tmp_path / 'l.gii'}")
@@ -350,6 +371,7 @@ def _report(tmp_path, session):
 
 
 def test_session_flag_takes_several_sessions_in_sorted_order(two_sessions, tmp_path):
+    """Verify session flag takes several sessions in sorted order."""
     root, _ = two_sessions
     argv = _sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"])
     args = cli.build_parser().parse_args(argv)
@@ -358,6 +380,7 @@ def test_session_flag_takes_several_sessions_in_sorted_order(two_sessions, tmp_p
 
 
 def test_one_session_still_builds_its_settings(four_runs):
+    """Verify one session still builds its settings."""
     root, _ = four_runs
     args = cli.build_parser().parse_args(_argv(root))
     assert cli.sessions_from_args(args) == ("ses-nsd10",)
@@ -365,6 +388,7 @@ def test_one_session_still_builds_its_settings(four_runs):
 
 
 def test_repeated_session_exits_one(two_sessions, tmp_path, capsys):
+    """Verify repeated session exits one."""
     root, _ = two_sessions
     argv = _sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd10"])
     assert cli.main(argv) == 1
@@ -373,6 +397,7 @@ def test_repeated_session_exits_one(two_sessions, tmp_path, capsys):
 
 
 def test_each_session_runs_separately(two_sessions, tmp_path, capsys):
+    """Verify each session runs separately."""
     root, _ = two_sessions
     assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"])) == 0
     for session in ("ses-nsd10", "ses-nsd11"):
@@ -386,6 +411,7 @@ def test_each_session_runs_separately(two_sessions, tmp_path, capsys):
 
 
 def test_each_report_names_only_its_own_session(two_sessions, tmp_path):
+    """Verify each report names only its own session."""
     root, _ = two_sessions
     assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd11"])) == 0
     page = _report(tmp_path, "ses-nsd11").read_text()
@@ -396,6 +422,7 @@ def test_each_report_names_only_its_own_session(two_sessions, tmp_path):
 def test_input_problem_in_any_session_stops_before_fitting(
     two_sessions, tmp_path, capsys
 ):
+    """Verify input problem in any session stops before fitting."""
     import pandas as pd
 
     root, prep = two_sessions
@@ -410,6 +437,7 @@ def test_input_problem_in_any_session_stops_before_fitting(
 
 
 def test_unknown_session_exits_two_before_fitting(two_sessions, tmp_path, capsys):
+    """Verify unknown session exits two before fitting."""
     root, _ = two_sessions
     assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd10", "ses-nsd99"])) == 2
     assert "ses-nsd99" in capsys.readouterr().err
@@ -419,6 +447,7 @@ def test_unknown_session_exits_two_before_fitting(two_sessions, tmp_path, capsys
 def test_existing_outputs_in_any_session_stop_before_fitting(
     two_sessions, tmp_path, capsys
 ):
+    """Verify existing outputs in any session stop before fitting."""
     root, _ = two_sessions
     assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11"])) == 0
     capsys.readouterr()
@@ -429,6 +458,7 @@ def test_existing_outputs_in_any_session_stop_before_fitting(
 
 
 def test_dry_run_prints_a_plan_per_session(two_sessions, tmp_path, capsys):
+    """Verify dry run prints a plan per session."""
     root, _ = two_sessions
     argv = _sessions_argv(root, tmp_path, ["ses-nsd11", "ses-nsd10"], "--dry-run")
     assert cli.main(argv) == 0
@@ -439,6 +469,7 @@ def test_dry_run_prints_a_plan_per_session(two_sessions, tmp_path, capsys):
 
 
 def test_dry_run_reports_a_later_sessions_problem(two_sessions, tmp_path, capsys):
+    """Verify dry run reports a later sessions problem."""
     root, _ = two_sessions
     assert cli.main(_sessions_argv(root, tmp_path, ["ses-nsd11"])) == 0
     capsys.readouterr()

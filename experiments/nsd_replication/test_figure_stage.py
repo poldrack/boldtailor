@@ -64,6 +64,7 @@ def _write_gate(config, sessions):
 
 
 def test_footer_names_the_sessions_drawn(config, saved):
+    """Verify footer names the sessions drawn."""
     _write_r1(config, config.sessions)
     figure_stage.make_figures(config)
     footer = "sessions: ses-a, ses-b, ses-c (3 of 3 in config)"
@@ -71,6 +72,7 @@ def test_footer_names_the_sessions_drawn(config, saved):
 
 
 def test_footer_names_a_selected_subset(config, saved):
+    """Verify footer names a selected subset."""
     selected = select_sessions(config, ["ses-c", "ses-a"])
     _write_r1(selected, selected.sessions)
     figure_stage.make_figures(selected)
@@ -78,6 +80,7 @@ def test_footer_names_a_selected_subset(config, saved):
 
 
 def test_metric_table_from_another_window_raises(config, saved):
+    """Verify metric table from another window raises."""
     _write_r1(config, config.sessions)
     selected = select_sessions(config, ["ses-b"])
     with pytest.raises(ValueError, match=r"r1\.tsv.*ses-a\|ses-b\|ses-c.*--sessions"):
@@ -86,12 +89,14 @@ def test_metric_table_from_another_window_raises(config, saved):
 
 
 def test_metric_table_without_a_window_raises(config, saved):
+    """Verify metric table without a window raises."""
     _write_r1(config, None)
     with pytest.raises(ValueError, match=r"r1\.tsv.*no session"):
         figure_stage.make_figures(config)
 
 
 def test_group_table_from_another_window_raises(config, saved):
+    """Verify group table from another window raises."""
     rsa = pd.DataFrame(
         {"threshold": [0.0], "subject_a": ["a"], "subject_b": ["b"], "r": [0.3]}
     )
@@ -102,6 +107,7 @@ def test_group_table_from_another_window_raises(config, saved):
 
 
 def test_feature_rows_limited_to_selected_sessions(config, saved, monkeypatch):
+    """Verify feature rows limited to selected sessions."""
     drawn = {}
 
     def fig_gate(table):
@@ -116,6 +122,7 @@ def test_feature_rows_limited_to_selected_sessions(config, saved, monkeypatch):
 
 
 def test_selected_session_missing_from_features_raises(config, saved):
+    """Verify selected session missing from features raises."""
     _write_gate(config, ("ses-a", "ses-b"))
     with pytest.raises(ValueError, match=r"features_gate\.tsv.*ses-c.*features"):
         figure_stage.make_figures(config)
