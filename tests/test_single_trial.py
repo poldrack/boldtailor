@@ -419,3 +419,15 @@ def test_fit_selected_hrfs_names_its_input_hrf_selection(selected_fixture):
         function(data, selection=selection, hrf_selection=selection, **signature)
     with pytest.raises(TypeError, match="hrf_selection"):
         function(data, **signature)
+
+
+@pytest.mark.parametrize("new_value", ["spm", "".join(["s", "p", "m"])])
+def test_renamed_hrf_rejects_both_names_even_when_new_value_is_default(selected_fixture, new_value):
+    data, selection = selected_fixture
+    with pytest.raises(TypeError, match="both"):
+        entry()(data, hrf=selection.library.candidates[1], hrf_model=new_value)
+
+
+def test_omitted_hrf_still_uses_canonical_default(selected_fixture):
+    data, _ = selected_fixture
+    _same_trials(entry()(data), entry()(data, hrf_model="spm"))
