@@ -11,6 +11,7 @@ from their named modules; package initializers are empty.
 | [API reference](api.md) | Signatures, defaults, result fields, and source records |
 | [Human code-review guide](code-review.md) | Reading routes, runnable examples, review questions and a complete module/function inventory |
 | [Developer guide](development.md) | Implementation, testing, ownership, logging, and publication |
+| [Pyright remediation](pyright-remediation.md) | Type-checking baseline, likely causes, and proposed cleanup sequence |
 | [Publication migration](publication-migration.md) | Local writer guarantees and retained rollback backups |
 | [Lifecycle migration](lifecycle-migration.md) | Shared fit events and categorical errors |
 | [Result migration](result-migration.md) | Unified candidate scores and composed trial results |
