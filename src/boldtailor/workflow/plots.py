@@ -117,7 +117,8 @@ def parameter_agreement(library, odd_ids, even_ids):
     return pd.DataFrame(agreement), fig
 
 
-def _curve_scatter(fig, axis, x, y, label, reference):
+def _draw_curve_scatter(fig, axis, x, y, label, reference):
+    """Draw on the supplied axis and add its colorbar to fig."""
     if len(x):
         counts = axis.hexbin(x, y, gridsize=35, mincnt=1, cmap="Blues")
         lower = max(-1.02, min(x.min(), y.min()) - 0.03)
@@ -162,7 +163,7 @@ def curve_agreement(curve_r):
     for axis, row, reference in zip(
         axes[1:], (1, 2), ("Odd-run reference", "Even-run reference")
     ):
-        _curve_scatter(
+        _draw_curve_scatter(
             fig, axis, curve_r[row, paired], curve_r[0, paired], labels[row], reference
         )
     return pd.DataFrame(summary), fig

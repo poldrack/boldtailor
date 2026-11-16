@@ -16,7 +16,7 @@ Blockwise public-API calls: HRF selection, GLMs, and beta series.
 - [`_glm_block`](#definition-6)
 - [`_jobs`](#definition-7)
 - [`fit_glms`](#definition-8)
-- [`_collect_metadata`](#definition-9)
+- [`_update_result_metadata`](#definition-9)
 - [`_fitted_pairs`](#definition-10)
 - [`_trial_designs`](#definition-11)
 - [`_beta_block`](#definition-12)
@@ -144,12 +144,12 @@ Fit one contrast per task regressor using SPM or the selected HRF per feature.
 
 <a id="definition-9"></a>
 
-## `_collect_metadata`
+## `_update_result_metadata`
 
 [Source, line 148](../../src/boldtailor/workflow/analysis.py#L148)
 
 ```python
-_collect_metadata(result, block, indices)
+_update_result_metadata(result, block, indices)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

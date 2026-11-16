@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._arrays import own_fields, readonly_array
+from boldtailor._arrays import copy_array_fields_in_place, readonly_array
 from boldtailor._ar1_moments import (
     GRID,
     RHO_RANGE,
@@ -48,7 +48,7 @@ class RhoEstimate:
     pooled_at_bound: bool
 
     def __post_init__(self):
-        own_fields(self, ("values", "raw"))
+        copy_array_fields_in_place(self, ("values", "raw"))
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class RhoReference:
     expected: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("basis", "amplification", "expected"))
+        copy_array_fields_in_place(self, ("basis", "amplification", "expected"))
 
 
 def _check_2d(values, name, where):

@@ -15,7 +15,7 @@ Run the enabled stages in order and publish one BIDS derivative with a report.
 - [`_input_errors`](#definition-5)
 - [`_session`](#definition-6)
 - [`describe_inputs`](#definition-7)
-- [`_describe_session`](#definition-8)
+- [`_update_plan_with_session`](#definition-8)
 - [`_load`](#definition-9)
 - [`_find_meshes`](#definition-10)
 - [`_splits_possible`](#definition-11)
@@ -24,12 +24,12 @@ Run the enabled stages in order and publish one BIDS derivative with a report.
 - [`_hrf_selection`](#definition-14)
 - [`_library_figure`](#definition-15)
 - [`_glm_stage`](#definition-16)
-- [`_glm_figures`](#definition-17)
+- [`_add_glm_figures`](#definition-17)
 - [`_reliability_stage`](#definition-18)
 - [`_beta_stage`](#definition-19)
-- [`_tuning_figures`](#definition-20)
+- [`_add_tuning_figures`](#definition-20)
 - [`_summaries_stage`](#definition-21)
-- [`_surface_figures`](#definition-22)
+- [`_add_surface_figures`](#definition-22)
 - [`_surface_maps`](#definition-23)
 - [`_provenance`](#definition-24)
 - [`_manifest`](#definition-25)
@@ -183,12 +183,12 @@ What a run would use (for ``--dry-run``), without fitting anything.
 
 <a id="definition-8"></a>
 
-## `_describe_session`
+## `_update_plan_with_session`
 
 [Source, line 130](../../src/boldtailor/workflow/run.py#L130)
 
 ```python
-_describe_session(settings, plan)
+_update_plan_with_session(settings, plan)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -321,12 +321,12 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-17"></a>
 
-## `_glm_figures`
+## `_add_glm_figures`
 
 [Source, line 245](../../src/boldtailor/workflow/run.py#L245)
 
 ```python
-_glm_figures(state)
+_add_glm_figures(state)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -361,12 +361,12 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-20"></a>
 
-## `_tuning_figures`
+## `_add_tuning_figures`
 
 [Source, line 289](../../src/boldtailor/workflow/run.py#L289)
 
 ```python
-_tuning_figures(state)
+_add_tuning_figures(state)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -389,12 +389,12 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-22"></a>
 
-## `_surface_figures`
+## `_add_surface_figures`
 
 [Source, line 310](../../src/boldtailor/workflow/run.py#L310)
 
 ```python
-_surface_figures(state)
+_add_surface_figures(state)
 ```
 
 Cortical maps, only when requested and the subject's meshes are found.

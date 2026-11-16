@@ -20,18 +20,18 @@ Scalar restricted maximum likelihood for one random-effect variance.
 - [`_status`](#definition-10)
 - [`_fit_values`](#definition-11)
 - [`_empty_result`](#definition-12)
-- [`_write`](#definition-13)
+- [`_copy_fit_values_into`](#definition-13)
 - [`_assemble`](#definition-14)
 - [`_single_dof`](#definition-15)
-- [`_mark_unresolved`](#definition-16)
+- [`_mark_unresolved_in_place`](#definition-16)
 - [`_start`](#definition-17)
-- [`_fill`](#definition-18)
+- [`_fit_into`](#definition-18)
 - [`fit_reml`](#definition-19)
 - [`RemlSelection`](#definition-20)
 - [`RemlSelection.__post_init__`](#definition-21)
 - [`_empty_race`](#definition-22)
-- [`_compete`](#definition-23)
-- [`_run_candidate`](#definition-24)
+- [`_update_selection_from_fit`](#definition-23)
+- [`_fit_and_update_selection`](#definition-24)
 - [`_gap`](#definition-25)
 - [`_run_race`](#definition-26)
 - [`select_random_effects_design`](#definition-27)
@@ -266,12 +266,12 @@ Usage in package/tests:
 
 <a id="definition-13"></a>
 
-## `_write`
+## `_copy_fit_values_into`
 
 [Source, line 133](../../src/boldtailor/reml.py#L133)
 
 ```python
-_write(result, columns, values, keep=slice(None))
+_copy_fit_values_into(result, columns, values, keep=slice(None))
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -316,12 +316,12 @@ Usage in package/tests:
 
 <a id="definition-16"></a>
 
-## `_mark_unresolved`
+## `_mark_unresolved_in_place`
 
 [Source, line 161](../../src/boldtailor/reml.py#L161)
 
 ```python
-_mark_unresolved(result, subsets)
+_mark_unresolved_in_place(result, subsets)
 ```
 
 Unresolved features claim neither a zero ratio nor an absent signal.
@@ -349,12 +349,12 @@ Usage in package/tests:
 
 <a id="definition-18"></a>
 
-## `_fill`
+## `_fit_into`
 
 [Source, line 177](../../src/boldtailor/reml.py#L177)
 
 ```python
-_fill(result, subsets, random_design)
+_fit_into(result, subsets, random_design)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -446,12 +446,12 @@ Usage in package/tests:
 
 <a id="definition-23"></a>
 
-## `_compete`
+## `_update_selection_from_fit`
 
 [Source, line 233](../../src/boldtailor/reml.py#L233)
 
 ```python
-_compete(race, result, columns, values, candidate)
+_update_selection_from_fit(race, result, columns, values, candidate)
 ```
 
 Update the running best and runner-up with one candidate's ok features.
@@ -462,12 +462,12 @@ Usage in package/tests:
 
 <a id="definition-24"></a>
 
-## `_run_candidate`
+## `_fit_and_update_selection`
 
 [Source, line 248](../../src/boldtailor/reml.py#L248)
 
 ```python
-_run_candidate(race, result, subsets, random_design, candidate)
+_fit_and_update_selection(race, result, subsets, random_design, candidate)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

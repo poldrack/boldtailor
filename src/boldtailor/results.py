@@ -10,10 +10,10 @@ import pandas as pd
 from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from boldtailor._arrays import (
-    own_array_tuples,
-    own_fields,
+    copy_array_tuple_fields_in_place,
+    copy_array_fields_in_place,
     readonly_array,
-    rebind,
+    set_fields_in_place,
 )
 from boldtailor._fit_diagnostics import validate_nested_ols_delta
 from boldtailor.provenance import ProvenanceRecord
@@ -42,7 +42,7 @@ class _ContrastResult:
     one_sided_p_value: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, [item.name for item in fields(self)])
+        copy_array_fields_in_place(self, [item.name for item in fields(self)])
 
 
 def owned_contrasts(
@@ -108,7 +108,7 @@ class AnalysisResult(_AnalysisAccessors):
     _provenance: ProvenanceRecord
 
     def __post_init__(self):
-        rebind(
+        set_fields_in_place(
             self,
             _contrasts=owned_contrasts(self._contrasts),
             _design_matrices=tuple(f.copy(deep=True) for f in self._design_matrices),
@@ -116,8 +116,8 @@ class AnalysisResult(_AnalysisAccessors):
                 MappingProxyType(dict(values)) for values in self._design_provenance
             ),
         )
-        own_array_tuples(self, ("_run_r2",))
-        own_fields(self, ("_r2",))
+        copy_array_tuple_fields_in_place(self, ("_run_r2",))
+        copy_array_fields_in_place(self, ("_r2",))
 
     @property
     def design_matrices(self) -> tuple[pd.DataFrame, ...]:
@@ -140,10 +140,10 @@ class TaskDeltaR2Result:
     _provenance: ProvenanceRecord
 
     def __post_init__(self):
-        own_fields(self, _DELTA_ARRAYS)
+        copy_array_fields_in_place(self, _DELTA_ARRAYS)
         if len({getattr(self, name).shape for name in _DELTA_ARRAYS}) != 1:
             raise ValueError("delta r-squared arrays must have equal shapes")
-        rebind(
+        set_fields_in_place(
             self,
             _negative_voxel_count=int(self._negative_voxel_count),
             _raw_min=float(self._raw_min),

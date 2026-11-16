@@ -12,7 +12,7 @@ Offline cortical views of existing grayordinate statistics.
 - [`_load_meshes`](#definition-2)
 - [`_color_scale`](#definition-3)
 - [`_label`](#definition-4)
-- [`_panel`](#definition-5)
+- [`_draw_surface_panel`](#definition-5)
 - [`surface_figure`](#definition-6)
 
 <a id="definition-1"></a>
@@ -81,12 +81,12 @@ Usage in package/tests:
 
 <a id="definition-5"></a>
 
-## `_panel`
+## `_draw_surface_panel`
 
 [Source, line 116](../../src/boldtailor/workflow/surfaces.py#L116)
 
 ```python
-_panel(axis, mesh, values, hemi, view, limits, cmap)
+_draw_surface_panel(axis, mesh, values, hemi, view, limits, cmap)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

@@ -25,7 +25,7 @@ Own externally compiled designs and explicit column roles.
 - [`_normalization_activity`](#definition-15)
 - [`_run_design_fingerprint`](#definition-16)
 - [`_aggregate_design_fingerprint`](#definition-17)
-- [`_hash_chunk`](#definition-18)
+- [`_update_hash_with_chunk`](#definition-18)
 - [`_canonical_json`](#definition-19)
 - [`_prepare_designs`](#definition-20)
 - [`_as_design_runs`](#definition-21)
@@ -292,12 +292,12 @@ Usage in package/tests:
 
 <a id="definition-18"></a>
 
-## `_hash_chunk`
+## `_update_hash_with_chunk`
 
 [Source, line 292](../../src/boldtailor/prepared.py#L292)
 
 ```python
-_hash_chunk(hasher: Any, payload: bytes) -> None
+_update_hash_with_chunk(hasher: Any, payload: bytes) -> None
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

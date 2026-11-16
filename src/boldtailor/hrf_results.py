@@ -4,7 +4,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_fields, own_tuples, readonly_array, rebind
+from boldtailor._arrays import (
+    copy_array_fields_in_place,
+    freeze_sequence_fields_in_place,
+    readonly_array,
+    set_fields_in_place,
+)
 from boldtailor.data import _owned_table
 from boldtailor.hrf_library import PARAMETER_NAMES, HrfLibrary
 from boldtailor.model import TaskModel
@@ -27,10 +32,10 @@ class HrfSelectionResult:
     def __post_init__(self):
         if not isinstance(self.task_model, TaskModel):
             raise ValueError("task_model must be a TaskModel")
-        own_fields(self, ("hrf_indices",), dtype=np.int64)
-        own_fields(self, ("cv_r2", "canonical_cv_r2", "delta_cv_r2"))
-        own_tuples(self, ("run_labels",))
-        rebind(self, _eligibility=_owned_table(self._eligibility))
+        copy_array_fields_in_place(self, ("hrf_indices",), dtype=np.int64)
+        copy_array_fields_in_place(self, ("cv_r2", "canonical_cv_r2", "delta_cv_r2"))
+        freeze_sequence_fields_in_place(self, ("run_labels",))
+        set_fields_in_place(self, _eligibility=_owned_table(self._eligibility))
 
     @property
     def eligibility(self):
@@ -83,11 +88,13 @@ class HrfEvaluationResult:
     amplitude_names: tuple[str, ...] = ("task",)
 
     def __post_init__(self):
-        own_fields(
+        copy_array_fields_in_place(
             self,
             ("training_amplitudes", "test_r2", "canonical_test_r2", "delta_test_r2"),
         )
-        own_tuples(self, ("train_runs", "test_runs", "amplitude_names"))
+        freeze_sequence_fields_in_place(
+            self, ("train_runs", "test_runs", "amplitude_names")
+        )
         amplitudes = self.training_amplitudes
         if amplitudes.ndim != 2 or amplitudes.shape[0] != len(self.amplitude_names):
             raise ValueError("training_amplitudes needs one row per amplitude name")

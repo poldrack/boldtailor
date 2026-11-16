@@ -12,11 +12,11 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import (
-    own_array_tuples,
-    own_fields,
-    own_tuples,
+    copy_array_tuple_fields_in_place,
+    copy_array_fields_in_place,
+    freeze_sequence_fields_in_place,
     readonly_array,
-    rebind,
+    set_fields_in_place,
 )
 from boldtailor._denoising_identity import RunIdentity
 from boldtailor._mixture_threshold import MixtureThreshold
@@ -43,8 +43,10 @@ class PcaDiagnostics:
     retained_columns: tuple[int, ...]
 
     def __post_init__(self):
-        own_tuples(self, ("run_labels", "ranks", "rank_tolerances", "retained_columns"))
-        own_array_tuples(self, ("singular_values",))
+        freeze_sequence_fields_in_place(
+            self, ("run_labels", "ranks", "rank_tolerances", "retained_columns")
+        )
+        copy_array_tuple_fields_in_place(self, ("singular_values",))
 
     def table(self) -> pd.DataFrame:
         return pd.DataFrame(
@@ -96,9 +98,11 @@ class SignificanceGate:
     binomial_p: float
 
     def __post_init__(self):
-        own_fields(self, ("tested", "excluded"), dtype=bool)
-        own_fields(self, ("f_statistic", "p_value", "df1", "df2", "ar_coefficients"))
-        rebind(self, exclusions=tuple(tuple(e) for e in self.exclusions))
+        copy_array_fields_in_place(self, ("tested", "excluded"), dtype=bool)
+        copy_array_fields_in_place(
+            self, ("f_statistic", "p_value", "df1", "df2", "ar_coefficients")
+        )
+        set_fields_in_place(self, exclusions=tuple(tuple(e) for e in self.exclusions))
 
     @property
     def n_excluded(self) -> int:
@@ -121,9 +125,9 @@ class DenoisingFold:
     target_energy: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("zero_target",), dtype=bool)
-        own_fields(self, ("target_energy",))
-        own_tuples(self, ("training_runs",))
+        copy_array_fields_in_place(self, ("zero_target",), dtype=bool)
+        copy_array_fields_in_place(self, ("target_energy",))
+        freeze_sequence_fields_in_place(self, ("training_runs",))
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
@@ -167,11 +171,15 @@ class DenoisingResult:
     provenance: ProvenanceRecord
 
     def __post_init__(self):
-        own_fields(self, ("noise_pool", "scoring_mask", "scored"), dtype=bool)
-        own_fields(self, ("onoff_r2",))
-        own_array_tuples(self, ("run_components",))
-        own_tuples(self, ("counts", "folds", "run_labels", "source_identity"))
-        rebind(
+        copy_array_fields_in_place(
+            self, ("noise_pool", "scoring_mask", "scored"), dtype=bool
+        )
+        copy_array_fields_in_place(self, ("onoff_r2",))
+        copy_array_tuple_fields_in_place(self, ("run_components",))
+        freeze_sequence_fields_in_place(
+            self, ("counts", "folds", "run_labels", "source_identity")
+        )
+        set_fields_in_place(
             self,
             _candidate_scores=_owned_table(self._candidate_scores),
             _fold_scores=_owned_table(self._fold_scores),

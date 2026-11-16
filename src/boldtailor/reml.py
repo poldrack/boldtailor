@@ -30,7 +30,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._arrays import own_fields, own_tuples
+from boldtailor._arrays import (
+    copy_array_fields_in_place,
+    freeze_sequence_fields_in_place,
+)
 from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
 from boldtailor._reml_criterion import pool_terms, pooled_quadratic
 from boldtailor._reml_search import minimize_ratio
@@ -45,7 +48,7 @@ class RemlGroup:
     fixed_design: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("signals", "fixed_design"))
+        copy_array_fields_in_place(self, ("signals", "fixed_design"))
 
 
 @dataclass(frozen=True)
@@ -67,10 +70,10 @@ class RemlFit:
     restricted_dof: int
 
     def __post_init__(self):
-        own_fields(self, ("ratio", "noise_variance", "effect_variance"))
-        own_fields(self, ("criterion", "rho"))
-        own_fields(self, ("at_upper", "unrefined"), dtype=bool)
-        own_tuples(self, ("status",))
+        copy_array_fields_in_place(self, ("ratio", "noise_variance", "effect_variance"))
+        copy_array_fields_in_place(self, ("criterion", "rho"))
+        copy_array_fields_in_place(self, ("at_upper", "unrefined"), dtype=bool)
+        freeze_sequence_fields_in_place(self, ("status",))
 
 
 # ---------------------------------------------------------------- fitting
@@ -155,9 +158,11 @@ def _empty_result(n_features):
     }
 
 
-def _write(result, columns, values, keep=slice(None)):
+def _copy_fit_values_into(destination, columns, values, keep=slice(None)):
+    """Mutate destination buffers at selected columns; leave source values intact."""
+    destination_columns = columns[keep]
     for name, array in values.items():
-        result[name][columns[keep]] = array[keep]
+        destination[name][destination_columns] = array[keep]
 
 
 def _assemble(result, rho, restricted_dof) -> RemlFit:
@@ -183,8 +188,8 @@ def _single_dof(subsets) -> int:
     return dofs.pop()
 
 
-def _mark_unresolved(result, subsets):
-    """Unresolved features claim neither a zero ratio nor an absent signal."""
+def _mark_unresolved_in_place(result, subsets):
+    """Set unresolved status and NaN ratios in the supplied result buffers."""
     for subset in subsets:
         result["status"][subset.unresolved] = "unresolved"
         result["ratio"][subset.unresolved] = np.nan
@@ -195,14 +200,17 @@ def _start(groups, rho):
     rho = feature_rho(rho, groups[0].signals.shape[1])
     subsets = _subsets(groups, rho)
     result = _empty_result(rho.size)
-    _mark_unresolved(result, subsets)
+    _mark_unresolved_in_place(result, subsets)
     return rho, subsets, _single_dof(subsets), result
 
 
-def _fill(result, subsets, random_design):
+def _fit_into(result, subsets, random_design):
+    """Fit live features and write their estimates into result in place."""
     for subset in subsets:
         if subset.columns.size:
-            _write(result, subset.columns, _fit_values(subset, random_design))
+            _copy_fit_values_into(
+                result, subset.columns, _fit_values(subset, random_design)
+            )
 
 
 def fit_reml(
@@ -215,7 +223,7 @@ def fit_reml(
     validate_groups(groups)
     random_design = checked_random(groups, random_design, "random_design")
     rho, subsets, dof, result = _start(groups, rho)
-    _fill(result, subsets, random_design)
+    _fit_into(result, subsets, random_design)
     return _assemble(result, rho, dof)
 
 
@@ -240,9 +248,9 @@ class RemlSelection:
     any_unrefined: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("winner",), dtype=np.int64)
-        own_fields(self, ("gap",))
-        own_fields(self, ("any_at_upper", "any_unrefined"), dtype=bool)
+        copy_array_fields_in_place(self, ("winner",), dtype=np.int64)
+        copy_array_fields_in_place(self, ("gap",))
+        copy_array_fields_in_place(self, ("any_at_upper", "any_unrefined"), dtype=bool)
 
 
 def _empty_race(n_features):
@@ -255,8 +263,8 @@ def _empty_race(n_features):
     }
 
 
-def _compete(race, result, columns, values, candidate):
-    """Update the running best and runner-up with one candidate's ok features."""
+def _update_selection_from_fit(race, result, columns, values, candidate):
+    """Mutate race counters and result buffers using one candidate's ok fits."""
     ok = values["status"] == "ok"
     value = values["criterion"]
     best, second = race["best"][columns], race["second"][columns]
@@ -267,14 +275,15 @@ def _compete(race, result, columns, values, candidate):
     race["winner"][columns[better]] = candidate
     race["any_at_upper"][columns] |= values["at_upper"]
     race["any_unrefined"][columns] |= values["unrefined"]
-    _write(result, columns, values, better)
+    _copy_fit_values_into(result, columns, values, better)
 
 
-def _run_candidate(race, result, subsets, random_design, candidate):
+def _fit_and_update_selection(race, result, subsets, random_design, candidate):
+    """Fit one candidate, updating race and result buffers in place."""
     for subset in subsets:
         if subset.columns.size:
             values = _fit_values(subset, random_design)
-            _compete(race, result, subset.columns, values, candidate)
+            _update_selection_from_fit(race, result, subset.columns, values, candidate)
 
 
 def _gap(race):
@@ -290,7 +299,7 @@ def _run_race(groups, candidates, subsets, result):
     for index, candidate in enumerate(candidates):
         label = f"candidate {index} random_design"
         random_design = checked_random(groups, candidate, label)
-        _run_candidate(race, result, subsets, random_design, index)
+        _fit_and_update_selection(race, result, subsets, random_design, index)
         n_candidates = index + 1
     if n_candidates == 0:
         raise ValueError("at least one candidate is required")
@@ -330,7 +339,7 @@ def select_random_effects_design(
     """
     validate_groups(groups)
     rho, subsets, dof, result = _start(groups, rho)
-    _fill(result, subsets, [None] * len(groups))
+    _fit_into(result, subsets, [None] * len(groups))
     race, count = _run_race(groups, candidates, subsets, result)
     return RemlSelection(
         winner=race["winner"],

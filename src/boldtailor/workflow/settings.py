@@ -196,21 +196,22 @@ class WorkflowSettings:
     existing_results: str = "error"
 
     def __post_init__(self):
-        self._validate_paths()
-        self._validate_labels()
-        self._validate_modulators()
+        self._validate_and_set_paths()
+        self._validate_and_set_labels()
+        self._validate_and_set_modulators()
         self._validate_hrf()
-        self._validate_ridge()
-        self._validate_stages()
-        self._validate_surfaces()
-        self._validate_execution()
-        self._resolve_output_dir()
+        self._validate_and_set_ridge()
+        self._validate_and_set_stages()
+        self._validate_and_set_surfaces()
+        self._validate_and_set_execution()
+        self._set_resolved_output_dir()
         self._check_output_overlap()
 
     def _set(self, name, value):
         object.__setattr__(self, name, value)
 
-    def _validate_paths(self):
+    def _validate_and_set_paths(self):
+        """Validate and assign normalized fields on this settings instance."""
         root = Path(self.bids_dir).expanduser()
         if not root.is_dir():
             raise ValueError(f"bids_dir {root} is not a directory")
@@ -222,12 +223,14 @@ class WorkflowSettings:
         )
         self._set("space", _check_choice(self.space, "space", SUPPORTED_SPACES))
 
-    def _validate_labels(self):
+    def _validate_and_set_labels(self):
+        """Validate and assign normalized fields on this settings instance."""
         self._set("subject", _check_label(self.subject, "subject", "sub"))
         self._set("session", _check_label(self.session, "session", "ses"))
         self._set("task", _check_label(self.task, "task", ""))
 
-    def _validate_modulators(self):
+    def _validate_and_set_modulators(self):
+        """Validate and assign normalized fields on this settings instance."""
         if self.modulators is None:
             return
         mods = tuple(self.modulators)
@@ -247,7 +250,8 @@ class WorkflowSettings:
             raise ValueError("hrf_seed must be a nonnegative integer")
         _check_bool(self.hrf_selection_rt, "hrf_selection_rt")
 
-    def _validate_ridge(self):
+    def _validate_and_set_ridge(self):
+        """Validate and assign normalized fields on this settings instance."""
         _check_choice(self.ridge_mode, "ridge_mode", RIDGE_MODES)
         self._set(
             "ridge_fractions",
@@ -266,7 +270,8 @@ class WorkflowSettings:
             raise ValueError("ridge_alpha must be positive in fixed mode")
         _check_choice(self.encoding_mode, "encoding_mode", ENCODING_MODES)
 
-    def _validate_stages(self):
+    def _validate_and_set_stages(self):
+        """Validate and assign normalized fields on this settings instance."""
         stages = frozenset(self.stages)
         unknown = stages - set(STAGES)
         if unknown:
@@ -279,7 +284,8 @@ class WorkflowSettings:
                 raise ValueError(f"stage {stage} requires stage {needed}")
         self._set("stages", stages)
 
-    def _validate_surfaces(self):
+    def _validate_and_set_surfaces(self):
+        """Validate and assign normalized fields on this settings instance."""
         _check_bool(self.surface_maps, "surface_maps")
         if self.surface_meshes is None:
             return
@@ -288,7 +294,8 @@ class WorkflowSettings:
             raise ValueError("surface_meshes must map exactly 'left' and 'right'")
         self._set("surface_meshes", meshes)
 
-    def _validate_execution(self):
+    def _validate_and_set_execution(self):
+        """Validate and assign normalized fields on this settings instance."""
         self._set("n_jobs", _check_positive_int(self.n_jobs, "n_jobs"))
         self._set("block_size", _check_positive_int(self.block_size, "block_size"))
         self._set(
@@ -299,7 +306,8 @@ class WorkflowSettings:
         )
         _check_choice(self.existing_results, "existing_results", EXISTING_RESULTS)
 
-    def _resolve_output_dir(self):
+    def _set_resolved_output_dir(self):
+        """Validate and assign normalized fields on this settings instance."""
         out = self.output_dir
         if out is None:
             out = self.bids_dir / "derivatives" / self.output_name()

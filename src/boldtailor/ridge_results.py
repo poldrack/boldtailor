@@ -5,7 +5,12 @@ from typing import Literal
 
 import numpy as np
 
-from boldtailor._arrays import own_array_tuples, own_fields, own_tuples, rebind
+from boldtailor._arrays import (
+    copy_array_tuple_fields_in_place,
+    copy_array_fields_in_place,
+    freeze_sequence_fields_in_place,
+    set_fields_in_place,
+)
 from boldtailor.provenance import ProvenanceRecord
 
 
@@ -27,10 +32,12 @@ class TrialEncodingResult:
     scoring_offsets: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, _ENCODING_ARRAYS)
-        own_array_tuples(self, ("predictions",))
-        own_array_tuples(self, ("trial_masks",), dtype=bool)
-        own_tuples(self, ("predictor_names", "train_runs", "test_runs"))
+        copy_array_fields_in_place(self, _ENCODING_ARRAYS)
+        copy_array_tuple_fields_in_place(self, ("predictions",))
+        copy_array_tuple_fields_in_place(self, ("trial_masks",), dtype=bool)
+        freeze_sequence_fields_in_place(
+            self, ("predictor_names", "train_runs", "test_runs")
+        )
 
 
 _ENCODING_ARRAYS = (
@@ -55,10 +62,10 @@ class RidgeSelection:
     at_boundary: bool = False
 
     def __post_init__(self):
-        rebind(self, at_boundary=bool(self.at_boundary))
-        own_tuples(self, ("alphas",))
-        own_fields(self, ("objective_scores",))
-        own_fields(self, ("scoring_mask",), dtype=bool)
+        set_fields_in_place(self, at_boundary=bool(self.at_boundary))
+        freeze_sequence_fields_in_place(self, ("alphas",))
+        copy_array_fields_in_place(self, ("objective_scores",))
+        copy_array_fields_in_place(self, ("scoring_mask",), dtype=bool)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,10 +83,10 @@ class CandidateScores:
     def __post_init__(self):
         if self.regularization not in ("normalized_ridge", "fractional_ridge"):
             raise ValueError("unknown regularization kind")
-        own_tuples(self, ("grid", "run_labels"))
-        own_fields(self, ("cv_r2", "fold_sse", "fold_sst"))
-        own_fields(self, ("fold_hrf_indices",), dtype=np.int64)
-        own_array_tuples(self, ("trial_masks",), dtype=bool)
+        freeze_sequence_fields_in_place(self, ("grid", "run_labels"))
+        copy_array_fields_in_place(self, ("cv_r2", "fold_sse", "fold_sst"))
+        copy_array_fields_in_place(self, ("fold_hrf_indices",), dtype=np.int64)
+        copy_array_tuple_fields_in_place(self, ("trial_masks",), dtype=bool)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -92,12 +99,12 @@ class FractionSelection:
     at_boundary: np.ndarray | None = None
 
     def __post_init__(self):
-        own_tuples(self, ("fractions",))
+        freeze_sequence_fields_in_place(self, ("fractions",))
         if self.at_boundary is None:
-            rebind(self, at_boundary=np.zeros_like(self.scoring_mask))
-        own_fields(self, ("at_boundary", "scoring_mask"), dtype=bool)
-        own_fields(self, ("ridge_fraction", "selected_r2"))
-        own_fields(self, ("fraction_indices",), dtype=np.int64)
+            set_fields_in_place(self, at_boundary=np.zeros_like(self.scoring_mask))
+        copy_array_fields_in_place(self, ("at_boundary", "scoring_mask"), dtype=bool)
+        copy_array_fields_in_place(self, ("ridge_fraction", "selected_r2"))
+        copy_array_fields_in_place(self, ("fraction_indices",), dtype=np.int64)
 
 
 def paired_scores(scores, grid, *, kind, grid_name):

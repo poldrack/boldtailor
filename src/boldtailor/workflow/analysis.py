@@ -140,12 +140,13 @@ def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
     ):
         for key in ("effects", "variances", "t", "z", "r2"):
             result[key][:, indices] = block[key]
-        _collect_metadata(result, block, indices)
+        _update_result_metadata(result, block, indices)
         log.info("GLM: %s–%s", indices[0], indices[-1])
     return result
 
 
-def _collect_metadata(result, block, indices):
+def _update_result_metadata(result, block, indices):
+    """Update result designs and append the block provenance in place."""
     result["designs"].update(block["designs"])
     result["provenance"].append(
         dict(
@@ -248,7 +249,7 @@ def fit_beta_series(
                 block["run_ridge_alphas"]
             )
         result["trial_table"] = block["trial_table"]
-        _collect_metadata(result, block, indices)
+        _update_result_metadata(result, block, indices)
     result["rt"] = _rt_correlations(result, runs, task_model)
     log.info("%s: complete", label)
     return result

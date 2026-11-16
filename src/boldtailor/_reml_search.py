@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._arrays import own_fields
+from boldtailor._arrays import copy_array_fields_in_place
 from boldtailor._reml_criterion import (
     PooledTerms,
     pool_terms,
@@ -71,8 +71,8 @@ class RatioOptimum:
     unidentifiable: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("ratio", "criterion"))
-        own_fields(self, _FLAGS, dtype=bool)
+        copy_array_fields_in_place(self, ("ratio", "criterion"))
+        copy_array_fields_in_place(self, _FLAGS, dtype=bool)
 
 
 def _search_grid(singular2, size):

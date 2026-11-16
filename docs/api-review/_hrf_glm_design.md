@@ -15,7 +15,7 @@ Compile conventional designs without changing semantic regressor names.
 - [`_task_model_design`](#definition-5)
 - [`_custom_design`](#definition-6)
 - [`design_identity`](#definition-7)
-- [`_hash_design`](#definition-8)
+- [`_update_design_hash`](#definition-8)
 - [`group_diagnostics`](#definition-9)
 
 <a id="definition-1"></a>
@@ -129,12 +129,12 @@ Usage in package/tests:
 
 <a id="definition-8"></a>
 
-## `_hash_design`
+## `_update_design_hash`
 
 [Source, line 105](../../src/boldtailor/_hrf_glm_design.py#L105)
 
 ```python
-_hash_design(digest, matrix)
+_update_design_hash(digest, matrix)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

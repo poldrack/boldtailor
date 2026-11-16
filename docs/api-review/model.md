@@ -16,7 +16,7 @@ Specify contrasts, nuisance settings and shared task regressors.
 - [`Modulator.__post_init__`](#definition-6)
 - [`Modulator._reference_name`](#definition-7)
 - [`Modulator._set_reference`](#definition-8)
-- [`Modulator._resolve_levels`](#definition-9)
+- [`Modulator._set_resolved_levels`](#definition-9)
 - [`Modulator.resolved`](#definition-10)
 - [`Modulator.with_levels`](#definition-11)
 - [`Modulator.regressor_names`](#definition-12)
@@ -196,12 +196,12 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-9"></a>
 
-## `Modulator._resolve_levels`
+## `Modulator._set_resolved_levels`
 
 [Source, line 119](../../src/boldtailor/model.py#L119)
 
 ```python
-Modulator._resolve_levels(self)
+Modulator._set_resolved_levels(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

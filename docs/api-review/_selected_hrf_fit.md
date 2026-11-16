@@ -9,7 +9,7 @@ Apply an identified HRF assignment, fitting only its feature groups.
 ## Definitions
 
 - [`_tables`](#definition-1)
-- [`_hash_design`](#definition-2)
+- [`_update_design_hash`](#definition-2)
 - [`_fit_group`](#definition-3)
 - [`GroupRunFit`](#definition-4)
 - [`_fit_run`](#definition-5)
@@ -37,12 +37,12 @@ Usage in package/tests:
 
 <a id="definition-2"></a>
 
-## `_hash_design`
+## `_update_design_hash`
 
 [Source, line 40](../../src/boldtailor/_selected_hrf_fit.py#L40)
 
 ```python
-_hash_design(digest, run_index, cid, x, nuisance)
+_update_design_hash(digest, run_index, cid, x, nuisance)
 ```
 
 Feed one (run, HRF) design into the digest without retaining it.

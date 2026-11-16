@@ -113,7 +113,8 @@ def _label(name):
     return name
 
 
-def _panel(axis, mesh, values, hemi, view, limits, cmap):
+def _draw_surface_panel(axis, mesh, values, hemi, view, limits, cmap):
+    """Draw one surface panel on the supplied axis."""
     # A triangle touching an undefined vertex is gray; no zero-filling or
     # averaging across missing vertices at the medial wall or a subset boundary.
     plot_surf(
@@ -164,7 +165,7 @@ def surface_figure(maps, brain, meshes, *, statistic, title=None):
         for col, (hemi, view) in enumerate(VIEWS):
             mesh = loaded[hemi]
             data = values.get(hemi, np.full(len(mesh.coordinates), np.nan))
-            _panel(axes[row, col], mesh, data, hemi, view, limits, cmap)
+            _draw_surface_panel(axes[row, col], mesh, data, hemi, view, limits, cmap)
             if row == 0:
                 axes[row, col].set_title(f"{hemi.title()} {view}", fontsize=10)
         axes[row, 0].text2D(

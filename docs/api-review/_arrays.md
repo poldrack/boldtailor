@@ -9,10 +9,10 @@ Owned NumPy arrays with protection against accidental writes.
 ## Definitions
 
 - [`readonly_array`](#definition-1)
-- [`rebind`](#definition-2)
-- [`own_fields`](#definition-3)
-- [`own_array_tuples`](#definition-4)
-- [`own_tuples`](#definition-5)
+- [`set_fields_in_place`](#definition-2)
+- [`copy_array_fields_in_place`](#definition-3)
+- [`copy_array_tuple_fields_in_place`](#definition-4)
+- [`freeze_sequence_fields_in_place`](#definition-5)
 
 <a id="definition-1"></a>
 
@@ -35,12 +35,12 @@ Usage in package/tests:
 
 <a id="definition-2"></a>
 
-## `rebind`
+## `set_fields_in_place`
 
 [Source, line 13](../../src/boldtailor/_arrays.py#L13)
 
 ```python
-rebind(instance, **values)
+set_fields_in_place(instance, **values)
 ```
 
 Set fields of a frozen dataclass from its own ``__post_init__``.
@@ -54,12 +54,12 @@ Usage in package/tests:
 
 <a id="definition-3"></a>
 
-## `own_fields`
+## `copy_array_fields_in_place`
 
 [Source, line 19](../../src/boldtailor/_arrays.py#L19)
 
 ```python
-own_fields(instance, names, *, dtype=np.float64)
+copy_array_fields_in_place(instance, names, *, dtype=np.float64)
 ```
 
 Replace each named field with a read-only owned array.
@@ -73,12 +73,12 @@ Usage in package/tests:
 
 <a id="definition-4"></a>
 
-## `own_array_tuples`
+## `copy_array_tuple_fields_in_place`
 
 [Source, line 29](../../src/boldtailor/_arrays.py#L29)
 
 ```python
-own_array_tuples(instance, names, *, dtype=np.float64)
+copy_array_tuple_fields_in_place(instance, names, *, dtype=np.float64)
 ```
 
 Replace each named field with a tuple of read-only owned arrays.
@@ -92,12 +92,12 @@ Usage in package/tests:
 
 <a id="definition-5"></a>
 
-## `own_tuples`
+## `freeze_sequence_fields_in_place`
 
 [Source, line 40](../../src/boldtailor/_arrays.py#L40)
 
 ```python
-own_tuples(instance, names)
+freeze_sequence_fields_in_place(instance, names)
 ```
 
 Replace each named sequence field with an immutable tuple.

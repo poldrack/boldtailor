@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_array_tuples, own_fields, readonly_array, rebind
+from boldtailor._arrays import (
+    copy_array_tuple_fields_in_place,
+    copy_array_fields_in_place,
+    readonly_array,
+    set_fields_in_place,
+)
 from boldtailor.data import _owned_table
 from boldtailor.provenance import ProvenanceRecord
 
@@ -17,7 +22,9 @@ class SharedTrialDesign:
     _matrices: tuple[pd.DataFrame, ...]
 
     def __post_init__(self):
-        rebind(self, _matrices=tuple(d.copy(deep=True) for d in self._matrices))
+        set_fields_in_place(
+            self, _matrices=tuple(d.copy(deep=True) for d in self._matrices)
+        )
 
     @property
     def matrices(self):
@@ -34,7 +41,7 @@ class SelectedTrialDesign:
     _rebuild: Callable[[int, int], np.ndarray] = field(compare=False, repr=False)
 
     def __post_init__(self):
-        own_fields(self, ("hrf_indices",), dtype=np.int64)
+        copy_array_fields_in_place(self, ("hrf_indices",), dtype=np.int64)
 
     def rebuild_matrix(self, run: int, hrf_id: int) -> np.ndarray:
         """Trial columns then nuisance columns; KeyError for unfitted pairs."""
@@ -81,11 +88,13 @@ class SingleTrialResult:
 
     def __post_init__(self):
         if self.ridge_fraction is not None:
-            own_fields(self, ("ridge_fraction",))
-            own_array_tuples(self, ("run_ridge_alphas",))
-        own_array_tuples(self, ("run_betas", "run_full_r2", "run_nuisance_r2"))
-        own_fields(self, ("full_r2", "nuisance_r2", "delta_r2"))
-        rebind(
+            copy_array_fields_in_place(self, ("ridge_fraction",))
+            copy_array_tuple_fields_in_place(self, ("run_ridge_alphas",))
+        copy_array_tuple_fields_in_place(
+            self, ("run_betas", "run_full_r2", "run_nuisance_r2")
+        )
+        copy_array_fields_in_place(self, ("full_r2", "nuisance_r2", "delta_r2"))
+        set_fields_in_place(
             self,
             _trial_table=_owned_table(self._trial_table),
             _diagnostics=deepcopy(self._diagnostics),

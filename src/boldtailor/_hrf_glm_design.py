@@ -116,14 +116,15 @@ def design_identity(groups, nuisance, frame_times):
     digest = sha256()
     for key, compiled in sorted(groups.items()):
         digest.update(json.dumps(key).encode())
-        _hash_design(digest, compiled.matrix)
+        _update_design_hash(digest, compiled.matrix)
     for compiled, times in zip(nuisance, frame_times, strict=True):
-        _hash_design(digest, compiled.matrix)
+        _update_design_hash(digest, compiled.matrix)
         digest.update(np.asarray(times, dtype="<f8").tobytes())
     return digest.hexdigest()
 
 
-def _hash_design(digest, matrix):
+def _update_design_hash(digest, matrix):
+    """Update digest with matrix columns and values; leave matrix unchanged."""
     digest.update(json.dumps([matrix.shape, list(matrix.columns)]).encode())
     digest.update(np.asarray(matrix, dtype="<f8").tobytes())
 

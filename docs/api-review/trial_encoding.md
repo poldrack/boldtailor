@@ -21,7 +21,7 @@ Predict trial betas with shared slopes and explicit run-baseline semantics.
 - [`evaluate_trial_encoding`](#definition-11)
 - [`_indicator_frame`](#definition-12)
 - [`_predictor_frame`](#definition-13)
-- [`_censor_response_time`](#definition-14)
+- [`_censor_response_time_in_place`](#definition-14)
 - [`_run_predictors`](#definition-15)
 - [`trial_predictors`](#definition-16)
 
@@ -254,12 +254,12 @@ Usage in package/tests:
 
 <a id="definition-14"></a>
 
-## `_censor_response_time`
+## `_censor_response_time_in_place`
 
 [Source, line 275](../../src/boldtailor/trial_encoding.py#L275)
 
 ```python
-_censor_response_time(table)
+_censor_response_time_in_place(table)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

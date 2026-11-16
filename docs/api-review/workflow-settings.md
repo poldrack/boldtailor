@@ -25,15 +25,15 @@ Resolved, validated settings for one workflow run; the CLI, stages, writer and m
 - [`WorkflowSettings`](#definition-15)
 - [`WorkflowSettings.__post_init__`](#definition-16)
 - [`WorkflowSettings._set`](#definition-17)
-- [`WorkflowSettings._validate_paths`](#definition-18)
-- [`WorkflowSettings._validate_labels`](#definition-19)
-- [`WorkflowSettings._validate_modulators`](#definition-20)
+- [`WorkflowSettings._validate_and_set_paths`](#definition-18)
+- [`WorkflowSettings._validate_and_set_labels`](#definition-19)
+- [`WorkflowSettings._validate_and_set_modulators`](#definition-20)
 - [`WorkflowSettings._validate_hrf`](#definition-21)
-- [`WorkflowSettings._validate_ridge`](#definition-22)
-- [`WorkflowSettings._validate_stages`](#definition-23)
-- [`WorkflowSettings._validate_surfaces`](#definition-24)
-- [`WorkflowSettings._validate_execution`](#definition-25)
-- [`WorkflowSettings._resolve_output_dir`](#definition-26)
+- [`WorkflowSettings._validate_and_set_ridge`](#definition-22)
+- [`WorkflowSettings._validate_and_set_stages`](#definition-23)
+- [`WorkflowSettings._validate_and_set_surfaces`](#definition-24)
+- [`WorkflowSettings._validate_and_set_execution`](#definition-25)
+- [`WorkflowSettings._set_resolved_output_dir`](#definition-26)
 - [`WorkflowSettings._check_output_overlap`](#definition-27)
 - [`WorkflowSettings.output_name`](#definition-28)
 - [`WorkflowSettings.stem`](#definition-29)
@@ -350,36 +350,36 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-18"></a>
 
-## `WorkflowSettings._validate_paths`
+## `WorkflowSettings._validate_and_set_paths`
 
 [Source, line 213](../../src/boldtailor/workflow/settings.py#L213)
 
 ```python
-WorkflowSettings._validate_paths(self)
+WorkflowSettings._validate_and_set_paths(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-19"></a>
 
-## `WorkflowSettings._validate_labels`
+## `WorkflowSettings._validate_and_set_labels`
 
 [Source, line 225](../../src/boldtailor/workflow/settings.py#L225)
 
 ```python
-WorkflowSettings._validate_labels(self)
+WorkflowSettings._validate_and_set_labels(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-20"></a>
 
-## `WorkflowSettings._validate_modulators`
+## `WorkflowSettings._validate_and_set_modulators`
 
 [Source, line 230](../../src/boldtailor/workflow/settings.py#L230)
 
 ```python
-WorkflowSettings._validate_modulators(self)
+WorkflowSettings._validate_and_set_modulators(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
@@ -398,60 +398,60 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-22"></a>
 
-## `WorkflowSettings._validate_ridge`
+## `WorkflowSettings._validate_and_set_ridge`
 
 [Source, line 250](../../src/boldtailor/workflow/settings.py#L250)
 
 ```python
-WorkflowSettings._validate_ridge(self)
+WorkflowSettings._validate_and_set_ridge(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-23"></a>
 
-## `WorkflowSettings._validate_stages`
+## `WorkflowSettings._validate_and_set_stages`
 
 [Source, line 269](../../src/boldtailor/workflow/settings.py#L269)
 
 ```python
-WorkflowSettings._validate_stages(self)
+WorkflowSettings._validate_and_set_stages(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-24"></a>
 
-## `WorkflowSettings._validate_surfaces`
+## `WorkflowSettings._validate_and_set_surfaces`
 
 [Source, line 282](../../src/boldtailor/workflow/settings.py#L282)
 
 ```python
-WorkflowSettings._validate_surfaces(self)
+WorkflowSettings._validate_and_set_surfaces(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-25"></a>
 
-## `WorkflowSettings._validate_execution`
+## `WorkflowSettings._validate_and_set_execution`
 
 [Source, line 291](../../src/boldtailor/workflow/settings.py#L291)
 
 ```python
-WorkflowSettings._validate_execution(self)
+WorkflowSettings._validate_and_set_execution(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
 <a id="definition-26"></a>
 
-## `WorkflowSettings._resolve_output_dir`
+## `WorkflowSettings._set_resolved_output_dir`
 
 [Source, line 302](../../src/boldtailor/workflow/settings.py#L302)
 
 ```python
-WorkflowSettings._resolve_output_dir(self)
+WorkflowSettings._set_resolved_output_dir(self)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

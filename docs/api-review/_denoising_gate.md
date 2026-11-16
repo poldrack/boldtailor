@@ -71,7 +71,7 @@ attribution applies to that module).
 - [`_nested_sse`](#definition-13)
 - [`_group_test`](#definition-14)
 - [`_arrays`](#definition-15)
-- [`_record`](#definition-16)
+- [`_record_test_results_in_place`](#definition-16)
 - [`_feature_tests`](#definition-17)
 - [`_gate`](#definition-18)
 - [`apply_gate`](#definition-19)
@@ -361,12 +361,12 @@ Usage in package/tests:
 
 <a id="definition-16"></a>
 
-## `_record`
+## `_record_test_results_in_place`
 
 [Source, line 261](../../src/boldtailor/_denoising_gate.py#L261)
 
 ```python
-_record(values, exclusions, hrf_id, test, zero)
+_record_test_results_in_place(values, exclusions, hrf_id, test, zero)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

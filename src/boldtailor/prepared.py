@@ -262,19 +262,19 @@ def _run_design_fingerprint(
     roles: Mapping[str, ColumnRole],
 ) -> str:
     hasher = hashlib.sha256()
-    _hash_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
+    _update_hash_with_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
     header = {
         "shape": list(design.shape),
         "columns": list(design.columns),
         "roles": [roles[name] for name in design.columns],
         "dtype": "<f8",
     }
-    _hash_chunk(hasher, _canonical_json(header).encode("utf-8"))
-    _hash_chunk(
+    _update_hash_with_chunk(hasher, _canonical_json(header).encode("utf-8"))
+    _update_hash_with_chunk(
         hasher,
         np.asarray(frame_times, dtype="<f8", order="C").tobytes(),
     )
-    _hash_chunk(
+    _update_hash_with_chunk(
         hasher,
         np.asarray(design, dtype="<f8", order="C").tobytes(),
     )
@@ -283,13 +283,14 @@ def _run_design_fingerprint(
 
 def _aggregate_design_fingerprint(run_fingerprints: Sequence[str]) -> str:
     hasher = hashlib.sha256()
-    _hash_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
+    _update_hash_with_chunk(hasher, _DESIGN_ID_SCHEMA.encode("utf-8"))
     payload = {"run_design_fingerprints": list(run_fingerprints)}
-    _hash_chunk(hasher, _canonical_json(payload).encode("utf-8"))
+    _update_hash_with_chunk(hasher, _canonical_json(payload).encode("utf-8"))
     return hasher.hexdigest()
 
 
-def _hash_chunk(hasher: Any, payload: bytes) -> None:
+def _update_hash_with_chunk(hasher: Any, payload: bytes) -> None:
+    """Update hasher with the length-prefixed payload."""
     hasher.update(len(payload).to_bytes(8, "big"))
     hasher.update(payload)
 

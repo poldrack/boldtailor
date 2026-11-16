@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_array_tuples, own_fields, rebind
+from boldtailor._arrays import (
+    copy_array_tuple_fields_in_place,
+    copy_array_fields_in_place,
+    set_fields_in_place,
+)
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
 from boldtailor.results import _AnalysisAccessors, _ContrastResult, owned_contrasts
@@ -28,13 +32,13 @@ class HrfAnalysisResult(_AnalysisAccessors):
     )
 
     def __post_init__(self):
-        rebind(
+        set_fields_in_place(
             self,
             _contrasts=owned_contrasts(self._contrasts),
             _group_design_provenance=self.group_design_provenance,
         )
-        own_fields(self, ("_r2",))
-        own_array_tuples(self, ("_run_r2",))
+        copy_array_fields_in_place(self, ("_r2",))
+        copy_array_tuple_fields_in_place(self, ("_run_r2",))
 
     @property
     def hrf_selection(self) -> HrfSelectionResult:

@@ -126,13 +126,14 @@ def describe_inputs(settings):
     except FileExistsError as error:
         plan["problems"].append(dict(kind="existing_results", message=str(error)))
     try:
-        _describe_session(settings, plan)
+        _update_plan_with_session(settings, plan)
     except (inputs.InputError, FileNotFoundError) as error:
         plan["problems"].append(dict(kind="input", message=str(error)))
     return plan
 
 
-def _describe_session(settings, plan):
+def _update_plan_with_session(settings, plan):
+    """Update plan in place with session details, notes and validation results."""
     runs, task_model, notes = _session(settings)
     plan.update(runs=[r.label for r in runs], task_model=task_model.to_dict())
     plan["notes"] += notes
@@ -246,7 +247,8 @@ def _fit_glms(session, *, selections):
     }
 
 
-def _glm_figures(session, glms, figures):
+def _add_glm_figures(session, glms, figures):
+    """Insert GLM figures into figures and return the comparison table."""
     figures["Design"] = plots.design_figure(
         session.runs[0].frame_times,
         glms["CanonicalGLM"]["designs"][0, 0],
@@ -256,7 +258,8 @@ def _glm_figures(session, glms, figures):
     return summary
 
 
-def _reliability_figures(session, *, selections, figures):
+def _add_reliability_figures(session, *, selections, figures):
+    """Insert reliability figures into figures and return the summary tables."""
     if not selections:
         raise ValueError("reliability requires split HRF selections")
     maps = analysis.selection_maps(selections, len(session.brain))
@@ -284,7 +287,8 @@ def _fit_betas(session, *, selections):
     )
 
 
-def _tuning_figures(beta_models, figures):
+def _add_tuning_figures(beta_models, figures):
+    """Insert tuning figures into figures and return the tuning table."""
     tuning = outputs.tuning_table(beta_models)
     figures["RidgeTuning"] = outputs.tuning_figure(beta_models)
     if "selected_grayordinates" in tuning:
@@ -300,15 +304,16 @@ def _summarize_betas(*, beta_models):
     }
 
 
-def _summary_figures(session, beta_models, activation, figures):
+def _add_summary_figures(session, beta_models, activation, figures):
+    """Insert summary figures into the caller-owned cleanup registry."""
     figures["BetaActivation"] = plots.activation_histogram(activation)
     rt_figure = plots.rt_check_figure(beta_models, session.runs, session.brain)
     if rt_figure is not None:
         figures["RTCheck"] = rt_figure
 
 
-def _surface_figures(session, glms, beta_models, activation, figures):
-    """Create requested cortical figures from explicitly supplied result maps."""
+def _add_surface_figures(session, glms, beta_models, activation, figures):
+    """Insert requested cortical figures into the supplied figures registry."""
     if session.meshes is None:
         return
     for name, maps, statistic in _surface_maps(glms, beta_models, activation):
@@ -336,9 +341,9 @@ def _analyze(session, figures):
     """Wire stage dependencies explicitly; figures is the cleanup registry."""
     selections = _select_hrfs(session)
     glms = _fit_glms(session, selections=selections) if session.enabled("glms") else {}
-    glm_summary = _glm_figures(session, glms, figures) if glms else None
+    glm_summary = _add_glm_figures(session, glms, figures) if glms else None
     reliability, curves = (
-        _reliability_figures(session, selections=selections, figures=figures)
+        _add_reliability_figures(session, selections=selections, figures=figures)
         if _reliability_runs(session)
         else (None, None)
     )
@@ -350,7 +355,7 @@ def _analyze(session, figures):
         _fit_betas(session, selections=selections) if session.enabled("betas") else {}
     )
     tuning = (
-        _tuning_figures(models, figures)
+        _add_tuning_figures(models, figures)
         if any(m.tuning for m in models.values())
         else None
     )
@@ -358,8 +363,8 @@ def _analyze(session, figures):
         _summarize_betas(beta_models=models) if session.enabled("summaries") else None
     )
     if activation is not None:
-        _summary_figures(session, models, activation, figures)
-    _surface_figures(session, glms, models, activation, figures)
+        _add_summary_figures(session, models, activation, figures)
+    _add_surface_figures(session, glms, models, activation, figures)
     return _Analysis(
         selections=selections,
         glms=glms,

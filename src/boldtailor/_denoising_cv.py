@@ -41,7 +41,11 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from boldtailor._arrays import own_fields, own_tuples, rebind
+from boldtailor._arrays import (
+    copy_array_fields_in_place,
+    freeze_sequence_fields_in_place,
+    set_fields_in_place,
+)
 from boldtailor._denoising_pool import RunComponents, validate_feature_mask
 from boldtailor._hrf_cv import _check_task_rank, pooled_amplitude, prepare_runs
 from boldtailor._scalars import is_integer, is_real
@@ -139,10 +143,12 @@ class ScoringSetup:
     groups: tuple[_HrfGroup, ...] = field(repr=False)
 
     def __post_init__(self):
-        own_fields(self, ("scoring", "scored", "zero_target"), dtype=bool)
-        own_fields(self, ("hrf_indices",), dtype=np.int64)
-        own_fields(self, ("target_energy",))
-        own_tuples(self, ("run_labels", "components", "groups"))
+        copy_array_fields_in_place(
+            self, ("scoring", "scored", "zero_target"), dtype=bool
+        )
+        copy_array_fields_in_place(self, ("hrf_indices",), dtype=np.int64)
+        copy_array_fields_in_place(self, ("target_energy",))
+        freeze_sequence_fields_in_place(self, ("run_labels", "components", "groups"))
 
     @property
     def n_runs(self) -> int:
@@ -330,8 +336,10 @@ class CountScore:
     perf: float
 
     def __post_init__(self):
-        own_tuples(self, ("fold_reasons",))
-        own_fields(self, ("coefficients", "fold_sse", "fold_sst", "feature_r2"))
+        freeze_sequence_fields_in_place(self, ("fold_reasons",))
+        copy_array_fields_in_place(
+            self, ("coefficients", "fold_sse", "fold_sst", "feature_r2")
+        )
 
     def fold_median(self, scored, held_out) -> float:
         """Median held-out R² of one fold over ``scored`` (diagnostic)."""
@@ -474,8 +482,8 @@ class CountSelection:
     scores: pd.DataFrame
 
     def __post_init__(self):
-        own_tuples(self, ("counts", "count_scores"))
-        rebind(
+        freeze_sequence_fields_in_place(self, ("counts", "count_scores"))
+        set_fields_in_place(
             self,
             fold_scores=_owned_table(self.fold_scores),
             scores=_owned_table(self.scores),

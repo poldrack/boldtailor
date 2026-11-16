@@ -35,7 +35,7 @@ from dataclasses import dataclass
 import numpy as np
 import scipy.linalg
 
-from boldtailor._arrays import own_fields, readonly_array
+from boldtailor._arrays import copy_array_fields_in_place, readonly_array
 from boldtailor._hrf_cv import pooled_amplitude, prepare_runs
 from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
 from boldtailor._scalars import is_integer, is_real
@@ -104,7 +104,7 @@ class PoolMasks:
     fallback: bool = False
 
     def __post_init__(self):
-        own_fields(self, ("pool", "scoring"), dtype=bool)
+        copy_array_fields_in_place(self, ("pool", "scoring"), dtype=bool)
         if self.pool.shape != self.scoring.shape:
             raise ValueError("pool and scoring masks must be aligned")
         if not self.fallback and (self.pool & self.scoring).any():
@@ -210,7 +210,7 @@ class RunComponents:
     retained_columns: int
 
     def __post_init__(self):
-        own_fields(self, ("components", "singular_values"))
+        copy_array_fields_in_place(self, ("components", "singular_values"))
 
     @property
     def rank(self) -> int:

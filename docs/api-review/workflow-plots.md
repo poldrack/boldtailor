@@ -20,7 +20,7 @@ model or change the inputs.
 - [`glm_comparison`](#definition-3)
 - [`_selected_parameters`](#definition-4)
 - [`parameter_agreement`](#definition-5)
-- [`_curve_scatter`](#definition-6)
+- [`_draw_curve_scatter`](#definition-6)
 - [`curve_agreement`](#definition-7)
 - [`activation_histogram`](#definition-8)
 - [`_best_odd_vertex`](#definition-9)
@@ -95,12 +95,12 @@ Compare selected parameters at grayordinates defined in both halves.
 
 <a id="definition-6"></a>
 
-## `_curve_scatter`
+## `_draw_curve_scatter`
 
 [Source, line 120](../../src/boldtailor/workflow/plots.py#L120)
 
 ```python
-_curve_scatter(fig, axis, x, y, label, reference)
+_draw_curve_scatter(fig, axis, x, y, label, reference)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.

@@ -37,7 +37,7 @@ def _tables(data, labels):
     return trials
 
 
-def _hash_design(digest, run_index, cid, x, nuisance):
+def _update_design_hash(digest, run_index, cid, x, nuisance):
     """Feed one (run, HRF) design into the digest without retaining it."""
     values = np.column_stack([x, nuisance])
     digest.update(json.dumps([run_index, cid]).encode())
@@ -80,7 +80,7 @@ def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunF
         full[features] = fit.full_sse
         null[features] = fit.nuisance_sse
         total[features] = fit.total_ss
-        _hash_design(digest, run_index, int(cid), x, run.nuisance)
+        _update_design_hash(digest, run_index, int(cid), x, run.nuisance)
         diagnostics.append(
             dict(
                 run_index=run_index,

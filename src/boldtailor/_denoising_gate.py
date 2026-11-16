@@ -258,7 +258,8 @@ def _arrays(n_runs, n_features):
     return values
 
 
-def _record(values, exclusions, hrf_id, test, zero):
+def _record_test_results_in_place(values, exclusions, hrf_id, test, zero):
+    """Update values arrays and append exclusion records; do not modify test."""
     if test.reason:
         values["excluded"][test.features] = True
         exclusions.append((hrf_id, len(test.features), test.reason))
@@ -281,7 +282,7 @@ def _feature_tests(setup, count, noise_model):
         # The gate tests exactly the features pcstop scored.
         zero = ~setup.scored[group.features]
         test = _group_test(setup, group, count, noise_model)
-        _record(values, exclusions, group.hrf_id, test, zero)
+        _record_test_results_in_place(values, exclusions, group.hrf_id, test, zero)
     return values, exclusions
 
 

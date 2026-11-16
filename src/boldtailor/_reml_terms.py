@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boldtailor._arrays import own_fields
+from boldtailor._arrays import copy_array_fields_in_place
 from boldtailor._numerics import (
     conditioned_basis,
     project_out,
@@ -32,8 +32,8 @@ class FixedProjection:
     rho: float
 
     def __post_init__(self):
-        own_fields(self, ("basis", "signals", "energy"))
-        own_fields(self, ("rounding_floor", "uncertainty_floor"))
+        copy_array_fields_in_place(self, ("basis", "signals", "energy"))
+        copy_array_fields_in_place(self, ("rounding_floor", "uncertainty_floor"))
 
 
 def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
@@ -81,7 +81,9 @@ class RemlTerms:
     energy: np.ndarray
 
     def __post_init__(self):
-        own_fields(self, ("singular2", "coordinates2", "residual_ss", "energy"))
+        copy_array_fields_in_place(
+            self, ("singular2", "coordinates2", "residual_ss", "energy")
+        )
 
 
 def _smaller_gram(matrix):

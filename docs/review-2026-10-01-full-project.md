@@ -358,7 +358,7 @@ per-run read-only accessor.
 
 **L4 (medium, NEW). Three ownership idioms for frozen results.** `results.py`
 uses private fields plus validating factories; five other result modules
-rebind public fields through 40 `object.__setattr__` calls in `__post_init__`;
+set_fields_in_place public fields through 40 `object.__setattr__` calls in `__post_init__`;
 `hrf_glm_results._masked_delta_result` and `hrf_selection._select` construct
 results positionally with 8–10 arguments, bypassing the validating factory.
 Pick one idiom and set `kw_only=True` on every result dataclass.

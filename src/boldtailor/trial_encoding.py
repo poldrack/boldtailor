@@ -272,7 +272,8 @@ def _predictor_frame(events, modulator, label):
     return pd.to_numeric(values, errors="raise").rename(modulator.column).to_frame()
 
 
-def _censor_response_time(table):
+def _censor_response_time_in_place(table):
+    """Replace invalid response times with NaN in the supplied table."""
     if "response_time" in table:
         rt = table.response_time
         table.loc[~np.isfinite(rt) | (rt <= 0), "response_time"] = np.nan
@@ -281,7 +282,7 @@ def _censor_response_time(table):
 def _run_predictors(events, task_model, label):
     frames = [_predictor_frame(events, m, label) for m in task_model.modulators]
     table = pd.concat(frames, axis=1) if frames else pd.DataFrame(index=events.index)
-    _censor_response_time(table)
+    _censor_response_time_in_place(table)
     return table
 
 
