@@ -29,6 +29,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
 from boldtailor._arrays import (
     copy_array_fields_in_place,
@@ -37,7 +38,12 @@ from boldtailor._arrays import (
 from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
 from boldtailor._reml_criterion import pool_terms, pooled_quadratic
 from boldtailor._reml_search import minimize_ratio
-from boldtailor._reml_terms import project_fixed, reml_terms, reproject_signals
+from boldtailor._reml_terms import (
+    FixedProjection,
+    project_fixed,
+    reml_terms,
+    reproject_signals,
+)
 
 
 @dataclass(frozen=True)
@@ -107,10 +113,12 @@ def _project_out_fixed_effects_by_group(groups, feature_indices, rho):
     ]
 
 
-def _pooled_energy_exceeds_floor(projections, floor):
+def _pooled_energy_exceeds_floor(
+    projections: Sequence[FixedProjection], floor: str
+) -> NDArray[np.bool_]:
     """Features whose pooled projected energy exceeds the pooled named floor."""
     energy = sum(p.energy for p in projections)
-    return energy > sum(getattr(p, floor) for p in projections)
+    return np.greater(energy, sum(getattr(p, floor) for p in projections))
 
 
 def _prepare_estimable_features_for_rho(groups, feature_indices, rho):
@@ -120,7 +128,7 @@ def _prepare_estimable_features_for_rho(groups, feature_indices, rho):
         projections, "uncertainty_floor"
     )
     unresolved_feature_indices = feature_indices[
-        ~has_resolved_residual_signal
+        np.logical_not(has_resolved_residual_signal)
         & _pooled_energy_exceeds_floor(projections, "rounding_floor")
     ]
     if has_resolved_residual_signal.any() and not has_resolved_residual_signal.all():
