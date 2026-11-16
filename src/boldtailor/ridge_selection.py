@@ -10,6 +10,8 @@ from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_options import RemlHrfOptions
+from boldtailor.model import TaskModel
 from boldtailor.ridge_results import (
     CandidateScores,
     RidgeSelection,
@@ -86,6 +88,9 @@ def score_ridge_candidates(
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     encoding_mode: str = "within_run",
+    hrf_method: str = "cv",
+    reml_options: RemlHrfOptions | None = None,
+    task_model: TaskModel = TaskModel(),
 ) -> CandidateScores:
     """Score candidate-regularized trial betas with leave-one-run-out encoding.
 
@@ -105,4 +110,7 @@ def score_ridge_candidates(
         run_labels,
         feature_signature,
         encoding_mode=encoding_mode,
+        hrf_method=hrf_method,
+        reml_options=reml_options,
+        task_model=task_model,
     )

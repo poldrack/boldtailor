@@ -14,6 +14,8 @@ from boldtailor._fractional_ridge import (  # public re-exports
 )
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_options import RemlHrfOptions
+from boldtailor.model import TaskModel
 from boldtailor.ridge_results import (
     CandidateScores,
     FractionSelection,
@@ -83,6 +85,9 @@ def score_fraction_candidates(
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     encoding_mode: str = "within_run",
+    hrf_method: str = "cv",
+    reml_options: RemlHrfOptions | None = None,
+    task_model: TaskModel = TaskModel(),
 ) -> CandidateScores:
     """Score fixed OLS beta targets in held-out runs; no image repeats needed.
 
@@ -104,4 +109,7 @@ def score_fraction_candidates(
         feature_signature,
         fractional=True,
         encoding_mode=encoding_mode,
+        hrf_method=hrf_method,
+        reml_options=reml_options,
+        task_model=task_model,
     )

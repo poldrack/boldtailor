@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor.hrf_selection import select_hrfs, subset_runs
+from boldtailor.hrf_options import resolve_reml_options
 from boldtailor.provenance import (
     ProvenanceRecord,
     analysis_fingerprint,
@@ -47,7 +48,9 @@ from boldtailor.workflow.inputs import _trimmed_sources, load_block
 log = logging.getLogger("boldtailor.workflow")
 
 
-def _settings(runs, library, alphas, percentile, block_size, maximum, n_jobs):
+def _settings(
+    runs, library, alphas, percentile, block_size, maximum, n_jobs, hrf_method="cv"
+):
     validate_n_jobs(n_jobs)
     grid = tuple(sorted(_alpha_grid(alphas)))
     if (
@@ -76,7 +79,7 @@ def _settings(runs, library, alphas, percentile, block_size, maximum, n_jobs):
     if any(r.image.header.get_axis(1) != brain for r in runs):
         raise ValueError("runs must have identical CIFTI BrainModel axes")
     halves = odd_even_parity(runs)
-    minimum = 2 if library is None else 3
+    minimum = 2 if library is None or hrf_method == "reml" else 3
     if any(len(indices) < minimum for indices in halves.values()):
         raise ValueError(f"Ridge CV needs at least {minimum} odd and even runs")
     limit = len(brain) if maximum is None else min(maximum, len(brain))
@@ -91,6 +94,16 @@ def _signature(runs, indices):
     return spatial_signature(runs[0].image.header.get_axis(1), indices)
 
 
+def _block_selection_options(options, indices, *, include_model=True):
+    """Subset supplied feature correlations without changing the selection model."""
+    result = dict(options or {})
+    if result.get("reml_options") is not None:
+        result["reml_options"] = result["reml_options"].subset(indices)
+    if not include_model:
+        result.pop("task_model", None)
+    return result
+
+
 def _score_block(
     indices,
     runs,
@@ -101,7 +114,10 @@ def _score_block(
     fractional,
     encoding_mode,
     task_model,
+    selection_options=None,
 ):
+    options = _block_selection_options(selection_options, indices)
+    options["hrf_method"] = options.pop("method", "cv")
     scorer = score_fraction_candidates if fractional else score_ridge_candidates
     return scorer(
         load_block(runs, root, indices, task_model),
@@ -111,6 +127,7 @@ def _score_block(
         run_labels=[r.label for r in runs],
         feature_signature=_signature(runs, indices),
         encoding_mode=encoding_mode,
+        **options,
     )
 
 
@@ -125,6 +142,7 @@ def _global_scores(
     fractional,
     encoding_mode,
     task_model,
+    selection_options=None,
 ):
     n_features = runs[0].image.shape[1]
     shape = (len(runs), len(alphas), n_features)
@@ -144,6 +162,7 @@ def _global_scores(
             fractional,
             encoding_mode,
             task_model,
+            selection_options,
         ),
         n_jobs=n_jobs,
     ):
@@ -201,6 +220,7 @@ def _tune(
     fractional,
     encoding_mode,
     task_model,
+    selection_options=None,
 ):
     scores = _global_scores(
         runs,
@@ -213,6 +233,7 @@ def _tune(
         fractional,
         encoding_mode,
         task_model,
+        selection_options,
     )
     selection = (
         select_ridge_fractions(scores)
@@ -253,6 +274,7 @@ def _outer_block(
     encoding_mode,
     task_model,
     selection_model,
+    selection_options=None,
 ):
     data = load_block(runs, root, indices, task_model)
     labels, signature = [r.label for r in runs], _signature(runs, indices)
@@ -265,6 +287,7 @@ def _outer_block(
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
             task_model=selection_model,
+            **_block_selection_options(selection_options, indices, include_model=False),
         )
     )
     options = (
@@ -329,6 +352,7 @@ def _evaluate(
     encoding_mode,
     task_model,
     selection_model,
+    selection_options=None,
 ):
     n = runs[0].image.shape[1]
     result = dict(
@@ -368,6 +392,7 @@ def _evaluate(
         encoding_mode,
         task_model,
         selection_model,
+        selection_options,
     )
     for indices, block in map_blocks(_outer_block, blocks, args=args, n_jobs=n_jobs):
         for key in (
@@ -402,7 +427,9 @@ def _evaluate(
     return result
 
 
-def _final_selection(indices, runs, root, library, task_model, selection_model):
+def _final_selection(
+    indices, runs, root, library, task_model, selection_model, selection_options=None
+):
     return dict(
         all=select_hrfs(
             load_block(runs, root, indices, task_model),
@@ -410,6 +437,7 @@ def _final_selection(indices, runs, root, library, task_model, selection_model):
             run_labels=[r.label for r in runs],
             feature_signature=_signature(runs, indices),
             task_model=selection_model,
+            **_block_selection_options(selection_options, indices, include_model=False),
         )
     )
 
@@ -424,6 +452,7 @@ def _final_fit(
     fractional,
     task_model,
     selection_model,
+    selection_options=None,
 ):
     selections = None
     if library is not None:
@@ -432,7 +461,14 @@ def _final_fit(
             for indices, selected in map_blocks(
                 _final_selection,
                 blocks,
-                args=(runs, root, library, task_model, selection_model),
+                args=(
+                    runs,
+                    root,
+                    library,
+                    task_model,
+                    selection_model,
+                    selection_options,
+                ),
                 n_jobs=n_jobs,
             )
         }
@@ -464,6 +500,8 @@ def fit_cv_beta_series(
     n_jobs=1,
     encoding_mode="within_run",
     selection_model=None,
+    hrf_method="cv",
+    reml_options=None,
 ):
     """Tune per-feature fractions or one shared alpha, then evaluate and refit.
 
@@ -483,10 +521,23 @@ def fit_cv_beta_series(
         raise ValueError("selection_model must be a TaskModel")
     if (alphas is None) == (fractions is None):
         raise ValueError("provide exactly one of alphas or fractions")
+    reml_options = resolve_reml_options(hrf_method, reml_options)
+    if library is None and hrf_method != "cv":
+        raise ValueError("HRF method requires a library")
+    selection_options = dict(method=hrf_method, reml_options=reml_options)
+    if hrf_method == "reml":
+        selection_options["task_model"] = selection_model
     fractional = fractions is not None
     candidates = fraction_grid(fractions) if fractional else alphas
     alphas, halves, blocks = _settings(
-        runs, library, candidates, percentile, block_size, max_grayordinates, n_jobs
+        runs,
+        library,
+        candidates,
+        percentile,
+        block_size,
+        max_grayordinates,
+        n_jobs,
+        hrf_method,
     )
     if fractional:
         alphas = tuple(reversed(alphas))
@@ -514,6 +565,7 @@ def fit_cv_beta_series(
             fractional,
             encoding_mode,
             task_model,
+            selection_options,
         )
         result["tuning"][scope] = selected
         alpha = (
@@ -537,6 +589,7 @@ def fit_cv_beta_series(
                 encoding_mode,
                 task_model,
                 selection_model,
+                selection_options,
             )
             result["evaluation"][f"{scope}_to_{target}"][
                 "tuning_analysis_fingerprint"
@@ -561,6 +614,7 @@ def fit_cv_beta_series(
         fractional,
         task_model,
         selection_model,
+        selection_options,
     )
     result["final"] = link_final_provenance(
         final_fit, result["tuning"]["all"]["provenance"], encoding_mode=encoding_mode

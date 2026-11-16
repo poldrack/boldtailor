@@ -12,6 +12,8 @@ from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
 from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
 from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_options import resolve_reml_options
+from boldtailor.model import TaskModel
 from boldtailor.data import run_labels_for
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.provenance import (
@@ -29,11 +31,11 @@ from boldtailor.trial_encoding import (
 )
 
 
-def _validate(data, predictors, library, signature, *, encoding_mode):
+def _validate(data, predictors, library, signature, *, encoding_mode, hrf_method="cv"):
     validate_encoding_mode(encoding_mode)
     if library is not None and not isinstance(library, HrfLibrary):
         raise ValueError("library must be an HrfLibrary or None for canonical SPM")
-    minimum = 2 if library is None else 3
+    minimum = 2 if library is None or hrf_method == "reml" else 3
     if data.n_runs < minimum:
         raise ValueError(f"Ridge CV requires at least {minimum} runs")
     if signature is not None and (not isinstance(signature, str) or not signature):
@@ -93,7 +95,7 @@ def _beta_path(tables, r, prepared, ids, label, fractional):
     return RunBetaPath((len(events), y.shape[1]), tuple(groups))
 
 
-def _fold_selection(data, library, labels, signature, train):
+def _fold_selection(data, library, labels, signature, train, selection_options):
     if library is None:
         return np.zeros(data.n_features, dtype=int), None
     selected = select_hrfs(
@@ -101,6 +103,7 @@ def _fold_selection(data, library, labels, signature, train):
         library=library,
         run_labels=[labels[r] for r in train],
         feature_signature=signature,
+        **selection_options,
     )
     return selected.hrf_indices, identity_activity(selected.provenance)
 
@@ -117,9 +120,12 @@ def _score_fold(
     *,
     fractional=False,
     encoding_mode="within_run",
+    selection_options=None,
 ):
     train = [r for r in range(data.n_runs) if r != test]
-    ids, selection_record = _fold_selection(data, library, labels, signature, train)
+    ids, selection_record = _fold_selection(
+        data, library, labels, signature, train, selection_options or {}
+    )
     paths = []
     for r, tables in enumerate(run_tables(data)):
         try:
@@ -246,9 +252,25 @@ def score_candidates(
     *,
     fractional=False,
     encoding_mode="within_run",
+    hrf_method="cv",
+    reml_options=None,
+    task_model=TaskModel(),
 ):
+    options = resolve_reml_options(hrf_method, reml_options)
+    if library is None and hrf_method != "cv":
+        raise ValueError("HRF method requires a library")
+    if not isinstance(task_model, TaskModel):
+        raise ValueError("task_model must be a TaskModel")
+    selection_options = dict(
+        method=hrf_method, reml_options=options, task_model=task_model
+    )
     arrays, columns, masks = _validate(
-        data, predictors, library, feature_signature, encoding_mode=encoding_mode
+        data,
+        predictors,
+        library,
+        feature_signature,
+        encoding_mode=encoding_mode,
+        hrf_method=hrf_method,
     )
     labels = run_labels_for(data, run_labels)
     prepared = None if library is None else prepare_runs(data, library)
@@ -264,6 +286,7 @@ def score_candidates(
             test,
             fractional=fractional,
             encoding_mode=encoding_mode,
+            selection_options=selection_options,
         )
         for test in range(data.n_runs)
     ]
