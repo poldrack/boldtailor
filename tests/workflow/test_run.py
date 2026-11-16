@@ -504,3 +504,41 @@ def test_cv_ridge_with_categorical_indicator_missing_row(
     assert "trial_type[house]" in table.columns
     assert table["trial_type[house]"].isna().sum() >= 1
     assert not table.usable.all()
+
+
+@pytest.fixture
+def loaded_session(four_runs, settings_for, tmp_path):
+    root, _ = four_runs
+    settings = settings_for(
+        root, output_dir=tmp_path / "out", hrf_library="canonical", ridge_mode="off"
+    )
+    return workflow_run._load(settings)
+
+
+def test_glm_stage_requires_selected_hrfs(loaded_session):
+    with pytest.raises(ValueError, match="selections"):
+        workflow_run._fit_glms(loaded_session, selections=None)
+
+
+def test_summary_stage_requires_fitted_beta_models():
+    with pytest.raises(ValueError, match="beta models"):
+        workflow_run._summarize_betas(beta_models={})
+
+
+def test_glm_stage_returns_results_without_populating_session(loaded_session):
+    session = loaded_session
+    before = set(vars(session))
+    selections = workflow_run.analysis.select_hrfs(
+        session.runs,
+        session.settings.bids_dir,
+        session.blocks,
+        session.library,
+        task_model=session.task_model,
+        splits=False,
+    )
+    fitted = workflow_run._fit_glms(session, selections=selections)
+    assert set(fitted) == {"CanonicalGLM", "OptimizedGLM"}
+    assert fitted["OptimizedGLM"]["provenance"]
+    assert set(vars(session)) == before
+    assert "glms" not in vars(session)
+    assert "selections" not in vars(session)

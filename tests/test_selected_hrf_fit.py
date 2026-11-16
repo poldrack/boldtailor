@@ -292,3 +292,20 @@ def test_selected_trial_operation_takes_keywords_only():
     ]
     assert parameters
     assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in parameters)
+
+
+def test_explicit_trial_design_rebuild_and_materialization(selected_fixture):
+    from boldtailor.single_trial import fit_selected_hrfs
+
+    data, selection = selected_fixture
+    result = fit_selected_hrfs(
+        data, hrf_selection=selection, feature_signature="ordered-axis"
+    )
+    matrices = result.materialize_designs()
+    ids = set(int(cid) for cid in selection.hrf_indices if cid >= 0)
+    assert set(matrices) == {(r, cid) for r in range(data.n_runs) for cid in ids}
+    for key, matrix in matrices.items():
+        np.testing.assert_array_equal(matrix, result.design.rebuild_matrix(*key))
+        assert not matrix.flags.writeable
+    matrices.clear()
+    assert result.materialize_designs()

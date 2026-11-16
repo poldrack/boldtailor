@@ -724,3 +724,17 @@ def test_selected_glm_group_design_rejects_pairs_that_were_not_fitted(
     assert set(result.group_design_provenance) == {(r, 1) for r in range(3)}
     with pytest.raises(KeyError):
         result.group_design(*key)
+
+
+def test_explicit_group_design_rebuild_and_materialization(hrf_glm_problem):
+    data, model, selection, designs = hrf_glm_problem
+    result = _selected_fit(data, model, selection)
+    materialized = result.materialize_group_designs()
+    assert set(materialized) == set(result.group_design_provenance)
+    for key, matrix in materialized.items():
+        pd.testing.assert_frame_equal(matrix, result.rebuild_group_design(*key))
+        pd.testing.assert_frame_equal(matrix, designs[key])
+    key = next(iter(materialized))
+    expected = materialized[key].copy()
+    materialized[key].iloc[:, :] = 999
+    pd.testing.assert_frame_equal(result.rebuild_group_design(*key), expected)
