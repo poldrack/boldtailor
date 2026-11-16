@@ -802,6 +802,12 @@ def _cv_model(runs, root, settings, library, task_model, hrf):
             task_model, settings.hrf_selection_rt
         ),
         library=library,
+        hrf_method=settings.hrf_method if library is not None else "cv",
+        reml_options=(
+            settings.selection_options()["reml_options"]
+            if library is not None
+            else None
+        ),
         **grid,
         encoding_mode=settings.encoding_mode,
         percentile=settings.ridge_percentile,

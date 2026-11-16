@@ -48,6 +48,9 @@ _STYLE = (
 _VALUE_FLAGS = (
     ("space", "--space"),
     ("hrf_library", "--hrf-library"),
+    ("hrf_method", "--hrf-method"),
+    ("reml_rho", "--reml-rho"),
+    ("reml_reference_hrf_id", "--reml-reference-hrf-id"),
     ("hrf_n_samples", "--hrf-n-samples"),
     ("hrf_seed", "--hrf-seed"),
     ("ridge_mode", "--ridge-mode"),
@@ -285,6 +288,7 @@ class ReportInputs:
     curve_reliability: pd.DataFrame | None = None
     encoding: pd.DataFrame | None = None
     ridge_boundary: pd.DataFrame | None = None
+    reml_diagnostics: pd.DataFrame | None = None
 
 
 def _input_tables(data):
@@ -304,6 +308,7 @@ def _bodies(settings, data, figures):
         "glms": _table(data.glm_summary)
         + _table(data.hrf_summary)
         + _optional("Most often selected HRFs", data.selected_hrfs)
+        + _optional("REML selection diagnostics", data.reml_diagnostics)
         + _figures(figures, ("GLMComparison", "GLMR2Surface")),
         "reliability": _table(data.reliability)
         + _optional("Full-curve correlations", data.curve_reliability)
@@ -345,6 +350,7 @@ def render_report(
     curve_reliability=None,
     encoding=None,
     ridge_boundary=None,
+    reml_diagnostics=None,
 ):
     """The report; ``figures`` maps names to PNG bytes, optional tables may be None."""
     data = ReportInputs(
@@ -367,6 +373,7 @@ def render_report(
         curve_reliability=curve_reliability,
         encoding=encoding,
         ridge_boundary=ridge_boundary,
+        reml_diagnostics=reml_diagnostics,
     )
     bodies = _bodies(settings, data, dict(figures))
     sections = "".join(

@@ -31,7 +31,13 @@ from boldtailor.workflow.inputs import run_summary, selection_task_model
 
 LOCK_TIMEOUT = 24 * 3600.0  # another session may hold the writer lock for long
 R2_NAMES = ["full_r2", "confounds_r2", "task_delta_r2"]
-SELECTION_NAMES = ["hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2"]
+from boldtailor.workflow.hrf_maps import (
+    CV_SELECTION_NAMES as SELECTION_NAMES,
+    all_selection_maps,
+    selection_names,
+    reml_record,
+)
+
 PREDICTION_NAMES = ["selected_test_r2", "canonical_test_r2", "delta_test_r2"]
 
 
@@ -150,7 +156,14 @@ def _library_artifacts(settings, library):
 def _selection_artifacts(settings, brain, library, maps, name):
     descriptor = "HRF" + name.title()
     return [
-        _map(settings, brain, descriptor, "selection", maps[name], SELECTION_NAMES),
+        _map(
+            settings,
+            brain,
+            descriptor,
+            "selection",
+            maps[name],
+            selection_names(settings.hrf_method),
+        ),
         parameter_artifact(
             brain,
             library,
@@ -189,15 +202,8 @@ def _split_artifacts(settings, brain, library, maps):
 
 
 def _all_selection_maps(selections, n_features):
-    """The ``all`` selection maps alone; bundles need not hold odd/even splits."""
-    maps = np.full((len(SELECTION_NAMES), n_features), np.nan)
-    for indices, bundle in selections.items():
-        result = bundle["all"]
-        ids = np.where(result.hrf_indices >= 0, result.hrf_indices, np.nan)
-        maps[:, list(indices)] = np.stack(
-            [ids, result.cv_r2, result.canonical_cv_r2, result.delta_cv_r2]
-        )
-    return {"all": maps}
+    """All-run maps use the same estimator-specific schema as split maps."""
+    return all_selection_maps(selections, n_features)
 
 
 def hrf_artifacts(settings, brain, selections, library, *, include_splits=True):
@@ -236,11 +242,15 @@ def _selection_records(selections, scopes):
 def _scope_record(bundle, name):
     result = bundle[name]
     selected = _scope_selection(bundle, name)
-    return dict(
+    record = dict(
         provenance=result.provenance.to_dict(),
         selection_provenance=selected.provenance.to_dict(),
         hrf_indices=selected.hrf_indices.tolist(),
     )
+
+    if selected.method == "reml":
+        record["reml"] = reml_record(selected)
+    return record
 
 
 def _beta_maps(settings, brain, descriptor, result, runs):

@@ -14,6 +14,7 @@ from boldtailor.hrf_library import (
     sobol_hrf_library,
 )
 from boldtailor.model import Modulator
+from boldtailor.hrf_options import RemlHrfOptions
 
 SUPPORTED_SPACES = ("fsLR-91k",)
 SPACE_ENTITIES = {"fsLR-91k": "space-fsLR_den-91k"}
@@ -166,6 +167,9 @@ class WorkflowSettings:
     output_dir: Path | None = None
     space: str = "fsLR-91k"
     modulators: tuple[Modulator, ...] | None = None
+    hrf_method: str = "cv"
+    reml_rho: float | None = None
+    reml_reference_hrf_id: int | None = None
     hrf_library: str = "default"
     hrf_n_samples: int = 512
     hrf_seed: int = 0
@@ -249,6 +253,36 @@ class WorkflowSettings:
         if not is_integer(self.hrf_seed) or self.hrf_seed < 0:
             raise ValueError("hrf_seed must be a nonnegative integer")
         _check_bool(self.hrf_selection_rt, "hrf_selection_rt")
+        self._validate_reml()
+
+    def _validate_reml(self):
+        _check_choice(self.hrf_method, "hrf_method", ("cv", "reml"))
+        if self.hrf_method == "cv":
+            if self.reml_rho is not None or self.reml_reference_hrf_id is not None:
+                raise ValueError("REML settings require hrf_method='reml'")
+            return
+        rho = 0.0 if self.reml_rho is None else self.reml_rho
+        reference = (
+            0 if self.reml_reference_hrf_id is None else self.reml_reference_hrf_id
+        )
+        if not is_real(rho):
+            raise ValueError("reml_rho must be a scalar correlation")
+        options = RemlHrfOptions(rho=rho, reference_hrf_id=reference)
+        if reference:
+            options.validate(1, self.build_library())
+        self._set("reml_rho", float(rho))
+        self._set("reml_reference_hrf_id", int(reference))
+
+    def selection_options(self):
+        """Resolved public HRF selection options used by every workflow stage."""
+        options = (
+            None
+            if self.hrf_method == "cv"
+            else RemlHrfOptions(
+                rho=self.reml_rho, reference_hrf_id=self.reml_reference_hrf_id
+            )
+        )
+        return dict(method=self.hrf_method, reml_options=options)
 
     def _validate_and_set_ridge(self):
         """Validate and assign normalized fields on this settings instance."""
@@ -330,7 +364,12 @@ class WorkflowSettings:
         ridge = self.ridge_mode.replace("_", "")
         if self.ridge_mode == "fixed":
             ridge = f"fixed{self.ridge_alpha:g}"
-        return f"boldtailor_hrf-{library}_ridge-{ridge}"
+        name = f"boldtailor_hrf-{library}_ridge-{ridge}"
+        if self.hrf_method == "reml":
+            name += (
+                f"_method-reml_rho-{self.reml_rho!r}_ref-{self.reml_reference_hrf_id}"
+            )
+        return name
 
     @property
     def stem(self):

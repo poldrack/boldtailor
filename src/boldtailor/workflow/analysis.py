@@ -16,6 +16,11 @@ from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
 from boldtailor.workflow.files import odd_even_parity, reaction_times
 from boldtailor.workflow.inputs import load_block
+from boldtailor.workflow.hrf_maps import (
+    selection_method,
+    selection_names,
+    selection_values,
+)
 
 log = logging.getLogger("boldtailor.workflow")
 
@@ -32,10 +37,14 @@ def _split_selections(data, runs, options):
     )
 
 
-def _select_block(indices, runs, root, library, task_model, splits):
+def _select_block(
+    indices, runs, root, library, task_model, splits, method, reml_options
+):
     data = load_block(runs, root, indices, task_model)
     options = dict(
         library=library,
+        method=method,
+        reml_options=None if reml_options is None else reml_options.subset(indices),
         run_labels=[r.label for r in runs],
         feature_signature=_signature(runs, indices),
         task_model=task_model,
@@ -46,7 +55,18 @@ def _select_block(indices, runs, root, library, task_model, splits):
     return bundle
 
 
-def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1, splits=True):
+def select_hrfs(
+    runs,
+    root,
+    blocks,
+    library,
+    *,
+    task_model,
+    n_jobs=1,
+    splits=True,
+    method="cv",
+    reml_options=None,
+):
     """Select on all runs and, with ``splits``, on each half; retain the objects.
 
     The GLM keeps the full task model; pass a subset (for example
@@ -57,7 +77,7 @@ def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1, splits=Tru
     for indices, result in map_blocks(
         _select_block,
         blocks,
-        args=(runs, root, library, task_model, splits),
+        args=(runs, root, library, task_model, splits, method, reml_options),
         n_jobs=n_jobs,
     ):
         selections[tuple(indices)] = result
@@ -66,17 +86,17 @@ def select_hrfs(runs, root, blocks, library, *, task_model, n_jobs=1, splits=Tru
 
 
 def selection_maps(selections, n_features):
+    rows = len(selection_names(selection_method(selections)))
     maps = {
-        name: np.full((4 if name in ("all", "odd", "even") else 3, n_features), np.nan)
+        name: np.full(
+            (rows if name in ("all", "odd", "even") else 3, n_features), np.nan
+        )
         for name in ("all", "odd", "even", "odd_to_even", "even_to_odd")
     }
     for indices, bundle in selections.items():
         for name in ("all", "odd", "even"):
             result = bundle[name] if name == "all" else bundle[name].training_selection
-            ids = np.where(result.hrf_indices >= 0, result.hrf_indices, np.nan)
-            maps[name][:, list(indices)] = np.stack(
-                [ids, result.cv_r2, result.canonical_cv_r2, result.delta_cv_r2]
-            )
+            maps[name][:, list(indices)] = selection_values(result)
         for name in ("odd", "even"):
             result = bundle[name]
             target = "odd_to_even" if name == "odd" else "even_to_odd"

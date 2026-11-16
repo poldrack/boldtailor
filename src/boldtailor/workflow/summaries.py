@@ -90,3 +90,38 @@ def input_tables(runs, task_model, library):
         confounds=list(runs[0].confounds.columns),
         library_table=library_head(library),
     )
+
+
+def reml_diagnostics(selections):
+    """Report unsupported and provisional assignments separately for every scope."""
+    if not selections:
+        return None
+    rows = []
+    for scope in ("all", "odd", "even"):
+        selected = [
+            b[scope] if scope == "all" else b[scope].training_selection
+            for b in selections.values()
+            if scope in b
+        ]
+        selected = [s for s in selected if s.method == "reml"]
+        if selected:
+            rows.append(
+                dict(
+                    scope=scope,
+                    supported=sum(
+                        int(np.count_nonzero(s.hrf_indices >= 0)) for s in selected
+                    ),
+                    unsupported=sum(
+                        int(np.count_nonzero(s.hrf_indices < 0)) for s in selected
+                    ),
+                    provisional=sum(
+                        int(np.count_nonzero(s.reml.selection.any_unrefined))
+                        for s in selected
+                    ),
+                    at_search_bound=sum(
+                        int(np.count_nonzero(s.reml.selection.any_at_upper))
+                        for s in selected
+                    ),
+                )
+            )
+    return pd.DataFrame(rows) if rows else None

@@ -166,10 +166,16 @@ def load_session(settings, *, hrf_only=False):
     runs = [_trim(run, task_model, automatic) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise InputError("Retained confound names must match across runs")
-    if len(runs) < 2:
+    minimum = 1 if settings.hrf_method == "reml" else 2
+    if len(runs) < minimum:
         raise InputError("HRF selection needs at least two runs")
-    if not hrf_only and any(len(half) < 2 for half in odd_even_parity(runs).values()):
-        raise InputError("The full workflow needs at least two odd and two even runs")
+    if not hrf_only and any(
+        len(half) < minimum for half in odd_even_parity(runs).values()
+    ):
+        required = "one" if minimum == 1 else "two"
+        raise InputError(
+            f"The full workflow needs at least {required} odd and {required} even runs"
+        )
     return tuple(runs)
 
 

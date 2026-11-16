@@ -114,6 +114,9 @@ def describe_inputs(settings):
     (``existing_results`` or ``input``) and a ``message``, in run order.
     """
     plan = dict(
+        hrf_method=settings.hrf_method,
+        reml_rho=settings.reml_rho,
+        reml_reference_hrf_id=settings.reml_reference_hrf_id,
         output_dir=str(settings.output_dir),
         fmriprep_dir=str(settings.fmriprep_dir),
         library_candidates=len(settings.build_library().candidates),
@@ -194,14 +197,19 @@ def _check_ridge_cv(settings, runs, task_model):
     cv = settings.ridge_mode in ("cv", "fractional_cv")
     if "betas" not in settings.stages or not cv:
         return
-    if not _splits_possible(runs, 3):
-        raise inputs.InputError(RIDGE_CV_PARITY)
+    minimum = 2 if settings.hrf_method == "reml" else 3
+    if not _splits_possible(runs, minimum):
+        message = (
+            RIDGE_CV_PARITY if minimum == 3 else RIDGE_CV_PARITY.replace("three", "two")
+        )
+        raise inputs.InputError(message)
     if not task_model.modulators:
         raise inputs.InputError(RIDGE_CV_MODULATORS)
 
 
 def _reliability_runs(session):
-    return session.enabled("reliability") and _splits_possible(session.runs)
+    minimum = 1 if session.settings.hrf_method == "reml" else 2
+    return session.enabled("reliability") and _splits_possible(session.runs, minimum)
 
 
 def _select_hrfs(session):
@@ -219,6 +227,7 @@ def _select_hrfs(session):
         ),
         n_jobs=settings.n_jobs,
         splits=_reliability_runs(session),
+        **settings.selection_options(),
     )
 
 
@@ -349,8 +358,13 @@ def _analyze(session, figures):
     )
     skipped = ()
     if session.enabled("reliability") and not _reliability_runs(session):
-        skipped = (("reliability", SHORT_PARITY),)
-        log.info("Skipping reliability: %s", SHORT_PARITY)
+        reason = (
+            SHORT_PARITY
+            if session.settings.hrf_method == "cv"
+            else "an empty odd or even run set"
+        )
+        skipped = (("reliability", reason),)
+        log.info("Skipping reliability: %s", reason)
     models = (
         _fit_betas(session, selections=selections) if session.enabled("betas") else {}
     )
@@ -420,6 +434,7 @@ def _render(session, results, figures, artifacts):
         library=session.library,
         glm_summary=results.glm_summary,
         hrf_summary=outputs.hrf_boundary_table(results.selections),
+        reml_diagnostics=summaries.reml_diagnostics(results.selections),
         reliability=results.reliability,
         tuning=results.tuning,
         figures={

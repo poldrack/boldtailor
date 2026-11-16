@@ -81,6 +81,9 @@ def _add_inputs(run):
 
 def _add_hrf(run):
     group = run.add_argument_group("HRF selection")
+    _choice(group, "--hrf-method", ("cv", "reml"), "cv")
+    group.add_argument("--reml-rho", type=float)
+    group.add_argument("--reml-reference-hrf-id", type=int)
     _choice(group, "--hrf-library", HRF_LIBRARIES, "default")
     group.add_argument("--hrf-n-samples", type=int, default=512)
     group.add_argument("--hrf-seed", type=int, default=0)
@@ -176,6 +179,9 @@ def settings_from_args(args, session=None):
         output_dir=args.output_dir,
         space=args.space,
         modulators=_modulators(args),
+        hrf_method=args.hrf_method,
+        reml_rho=args.reml_rho,
+        reml_reference_hrf_id=args.reml_reference_hrf_id,
         hrf_library=args.hrf_library,
         hrf_n_samples=args.hrf_n_samples,
         hrf_seed=args.hrf_seed,
