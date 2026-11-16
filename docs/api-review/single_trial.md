@@ -6,6 +6,8 @@
 
 Single-trial shared or selected HRF models without repeated-stimulus tuning.
 
+> Organization update (2026-11-16): The current public functions are parallel wrappers. Shared-HRF implementation helpers now live in [`_shared_hrf_fit.py`](../../src/boldtailor/_shared_hrf_fit.py); selected-HRF fitting lives in `_selected_hrf_fit.fit_selected_hrf_trials`.
+
 ## Definitions
 
 - [`fit_single_trials`](#definition-1)

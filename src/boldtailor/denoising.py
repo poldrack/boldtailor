@@ -376,24 +376,12 @@ def _selection_activity(context, pool, selected, prefixes):
 # ---- public selection ------------------------------------------------------------------------
 
 
-def _select(operation, data, labels, settings):
-    pool = _pool(data, labels, settings)
-    selected = _count_selection(data, labels, settings, pool)
-    return _assemble(operation, (data, labels, settings), pool, selected)
-
-
-def _assemble(operation, context, pool, selected):
+def _assemble(context, pool, selected, *, prefixes, provenance):
+    """Construct a denoising result from completed calculations and provenance."""
     data, labels, settings = context
     selection, statistic, masks, components = pool
     count, gate = selected
-    # An eligible count is supported by every run (each run trains some fold).
-    prefixes = tuple(c.prefix(gate.n_components) for c in components)
     scores, fold_scores = _public_tables(count)
-    activity = _selection_activity(context, pool, selected, prefixes)
-    operation.analysis_id = analysis_fingerprint(
-        data.provenance.metadata_fingerprint, activity
-    )
-    provenance = build_fit_provenance(operation, activity)
     return DenoisingResult(
         n_components=gate.n_components,
         pcstop_count=count.n_components,
@@ -466,7 +454,21 @@ def select_denoising(
     labels = run_labels_for(data, run_labels)
     _check_runs(data, labels, settings)
     with fit_operation("denoising_selection", data.provenance) as operation:
-        return _select(operation, data, labels, settings)
+        pool = _pool(data, labels, settings)
+        selected = _count_selection(data, labels, settings, pool)
+        _, gate = selected
+        # Every run supports the chosen count because each trains some fold.
+        _, _, _, components = pool
+        prefixes = tuple(c.prefix(gate.n_components) for c in components)
+        context = (data, labels, settings)
+        activity = _selection_activity(context, pool, selected, prefixes)
+        operation.analysis_id = analysis_fingerprint(
+            data.provenance.metadata_fingerprint, activity
+        )
+        provenance = build_fit_provenance(operation, activity)
+        return _assemble(
+            context, pool, selected, prefixes=prefixes, provenance=provenance
+        )
 
 
 # ---- augmentation -------------------------------------------------------------------------------

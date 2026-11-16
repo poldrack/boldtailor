@@ -140,7 +140,7 @@ def _rebuilder(runs, ids):
     return rebuild
 
 
-def fit_groups(
+def fit_selected_hrf_trials(
     data: AnalysisData,
     *,
     selection: HrfSelectionResult,
@@ -149,6 +149,7 @@ def fit_groups(
     feature_signature: str | None,
     ridge_fraction: float | np.ndarray | None = None,
 ) -> SingleTrialResult:
+    """Validate, fit and record trial betas using the selected HRF per feature."""
     with fit_operation("selected_hrf_single_trial", data.provenance) as operation:
         alpha, fractions = regularization(ridge_alpha, ridge_fraction, data.n_features)
         assignment = validate_selection(data, selection, feature_signature)

@@ -6,6 +6,8 @@
 
 Dispatch conventional fits and nested-OLS task variance comparisons.
 
+> Organization update (2026-11-16): The current `fit` module contains dispatch only. Shared-HRF implementations and the private helpers shown in this snapshot now live in [`_standard_glm.py`](../../src/boldtailor/_standard_glm.py). Selected-HRF implementations remain in `_hrf_glm.py`.
+
 ## Definitions
 
 - [`fit`](#definition-1)

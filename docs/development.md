@@ -60,12 +60,12 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Area | Modules |
 | --- | --- |
 | Owned arrays, event tables, timing, and source records | `data`, `_arrays`, `_scalars`, `provenance` |
-| Event-based conventional GLMs | `model`, `design`, `_task_design`, `fit`, `_conventional`, `results` |
+| Event-based conventional GLMs | `model`, `design`, `_task_design`, `fit`, `_standard_glm`, `_conventional`, `results` |
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
 | Task-model detection from event tables | `task_detection` |
 | Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
-| Trial design construction and OLS/ridge estimation | `single_trial`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
+| Trial design construction and OLS/ridge estimation | `single_trial`, `_shared_hrf_fit`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
 | Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_reml_terms`, `_reml_criterion`, `_reml_search`, `_ar1_moments`, `_numerics` |
@@ -75,6 +75,28 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
 | Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
 | Notebook-only BIDS workflow helpers | `examples/bids_workflow` |
+
+Public fitting entry points delegate to complete operations at the same level:
+
+| Public entry point | Complete implementations |
+| --- | --- |
+| `fit.fit` | `_standard_glm.fit_standard_glm`, `_hrf_glm.fit_selected_glm` |
+| `fit.task_delta_r2` | `_standard_glm.standard_task_delta_r2`, `_hrf_glm.selected_task_delta_r2` |
+| `single_trial.fit_single_trials` | `_shared_hrf_fit.fit_shared_hrf_trials` |
+| `single_trial.fit_selected_hrfs` | `_selected_hrf_fit.fit_selected_hrf_trials` |
+
+These implementations own validation, numerical fitting, the logging scope,
+provenance construction, and result assembly. Public wrappers choose the
+implementation and resolve deprecated keyword aliases. Numerical helpers do
+not own logging scopes.
+
+HRF selection and evaluation likewise keep operation identity and provenance
+construction in their orchestration functions. Their calculation helpers return
+result fields and activity metadata without accepting a logging operation.
+Denoising selection explicitly computes the pool, selects a component count,
+builds provenance, and passes that completed provenance to result assembly.
+The nested training selection during HRF evaluation remains a separate logged
+operation, with its own execution identity.
 
 The core numerical functions accept arrays and tables and return results in
 memory. Example workflows own dataset discovery, image loading, spatial axes,

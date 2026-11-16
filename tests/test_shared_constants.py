@@ -20,7 +20,13 @@ def test_hrf_design_owns_the_design_constants():
 
 @pytest.mark.parametrize(
     "consumer",
-    ["_hrf_cv", "hrf_selection", "_task_design", "_shared_hrf_fit", "_selected_hrf_fit"],
+    [
+        "_hrf_cv",
+        "hrf_selection",
+        "_task_design",
+        "_shared_hrf_fit",
+        "_selected_hrf_fit",
+    ],
 )
 def test_consumers_import_the_shared_constants(consumer):
     design = module("_hrf_design")
