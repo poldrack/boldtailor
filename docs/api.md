@@ -116,12 +116,14 @@ For several runs, contrasts are combined as equal-weight fixed effects. This is 
 
 `boldtailor.hrf_glm_results.HrfAnalysisResult` has the same contrast methods,
 `contrast_names`, `run_r2`, `r2`, and `provenance`. Instead of `design_matrices`
-and `design_provenance`, it exposes `group_design(run, hrf_id)`, which
+and `design_provenance`, it exposes `rebuild_group_design(run, hrf_id)`, which
 recompiles one fitted design on request (`KeyError` for an unfitted pair), and
 `group_design_provenance`, keyed by `(zero_based_run_index, hrf_id)`.
 The latter records excluded-event counts, onset cutoffs, design ranks, and
 residual degrees of freedom. Additional members are `hrf_indices`,
-`hrf_selection`, and `selection_provenance`. Designs are returned as copies.
+`hrf_selection`, and `selection_provenance`. Designs are returned as copies. `materialize_group_designs()` returns all
+fitted designs as a mapping from `(run, hrf_id)` to independent DataFrames.
+`group_design()` remains a compatibility alias that also reconstructs designs.
 Undefined HRF assignments produce NaN contrast/R² values.
 
 `TaskDeltaR2Result` provides `full_r2`, `nuisance_r2`, `raw_delta_r2`,
@@ -198,12 +200,15 @@ Both fitting functions return `SingleTrialResult`, which exposes:
 The `design` field contains a `SharedTrialDesign` for a fixed HRF (SPM or a
 custom candidate), or a `SelectedTrialDesign` for feature-specific HRFs.
 `design.matrices` returns a tuple of DataFrames for a shared design. A selected
-design does not retain its matrices: `design.matrix(run_index, hrf_id)` rebuilds
+design does not retain its matrices: `design.rebuild_matrix(run_index, hrf_id)` rebuilds
 one fitted design on request (`KeyError` for an unfitted pair). The selected
 container also exposes `design.hrf_indices`, `design.design_fingerprint`, and
-`design.selection_provenance`.
+`design.selection_provenance`. `result.materialize_designs()` returns all fitted
+designs as owned read-only arrays keyed by `(run, hrf_id)`; shared designs use
+HRF ID 0. This explicitly allocates memory for every design. `design.matrix()`
+remains a compatibility alias for `design.rebuild_matrix()`.
 Matrices include trial columns followed by nuisance columns; a selected design's
-`matrix()` returns an unlabelled read-only NumPy array rather than a DataFrame. See the
+`rebuild_matrix()` returns an unlabelled read-only NumPy array rather than a DataFrame. See the
 [result migration guide](result-migration.md) for the previous access paths.
 
 ## Per-grayordinate fractional ridge
@@ -847,8 +852,8 @@ and [developer guide](development.md) for event names and identity rules.
 
 | Function | Use |
 | --- | --- |
-| `bind_context(*, execution_id=None, data_id=None, analysis_id=None, run_index=None, inherit=True)` | Context manager adding the given identity fields to every event emitted inside it; `inherit=False` starts from an empty context |
-| `emit_event(event, *, stage, level=logging.INFO, error=None, execution_id=None, data_id=None, analysis_id=None, run_index=None)` | Log one compact sorted-key JSON record (`timestamp`, `sequence`, `level`, `event`, `stage`, bound and explicit identity fields, and `error_code` when `error` is given) and return it as a read-only mapping |
+| `bind_context(*, execution_id=<inherit>, data_id=<inherit>, analysis_id=<inherit>, run_index=<inherit>, inherit=True)` | Omitted fields inherit; explicit `None` clears a field for the scope; `inherit=False` starts from an empty context |
+| `emit_event(event, *, stage, level=logging.INFO, error=None, execution_id=<inherit>, data_id=<inherit>, analysis_id=<inherit>, run_index=<inherit>)` | Omitted identity fields inherit; explicit `None` clears a field for this event only. Log one compact sorted-key JSON record (`timestamp`, `sequence`, `level`, `event`, `stage`, bound and explicit identity fields, and `error_code` when `error` is given) and return it as a read-only mapping |
 | `append_event_history(history, event)` | Return `history` plus the event's standard fields (those listed for `emit_event`), keeping the last 8 entries |
 
 ## Imaging, diagnostics, and parallel helpers

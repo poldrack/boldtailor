@@ -126,18 +126,25 @@ def _fit_activity(data, selection, labels, alpha, assignment, digest, fractions=
     return activity
 
 
-def _rebuilder(runs, ids):
-    """Rebuild fitted designs from the prepared runs' cached trial matrices."""
-    fitted = frozenset(int(cid) for cid in np.unique(ids[ids >= 0]))
+@dataclass(frozen=True)
+class TrialDesignRecipe:
+    """Retained prepared designs and fitted HRFs, without a captured closure."""
 
-    def rebuild(run, hrf_id):
-        valid_run = isinstance(run, (int, np.integer)) and 0 <= run < len(runs)
-        if not valid_run or hrf_id not in fitted:
+    runs: tuple
+    fitted: frozenset
+
+    def __call__(self, run, hrf_id):
+        valid_run = isinstance(run, (int, np.integer)) and 0 <= run < len(self.runs)
+        if not valid_run or hrf_id not in self.fitted:
             raise KeyError(f"no fitted design for run {run!r}, HRF {hrf_id!r}")
-        design = runs[run]
+        design = self.runs[run]
         return np.column_stack([design.trial_matrix(int(hrf_id)), design.nuisance])
 
-    return rebuild
+
+def _rebuilder(runs, ids):
+    return TrialDesignRecipe(
+        tuple(runs), frozenset(int(cid) for cid in np.unique(ids[ids >= 0]))
+    )
 
 
 def fit_selected_hrf_trials(

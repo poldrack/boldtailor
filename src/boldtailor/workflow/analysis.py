@@ -104,7 +104,7 @@ def _glm_block(job, runs, root, model):
         {(i, 0): x for i, x in enumerate(result.design_matrices)}
         if selection is None
         else {
-            (i, hrf): result.group_design(i, hrf)
+            (i, hrf): result.rebuild_group_design(i, hrf)
             for i, hrf in _fitted_pairs(result.hrf_indices, len(runs))
         }
     )
@@ -166,7 +166,7 @@ def _trial_designs(result, runs, selection):
         return {(i, 0): x for i, x in enumerate(result.design.matrices)}
     designs = {}
     for i, hrf in _fitted_pairs(result.design.hrf_indices, len(runs)):
-        values = result.design.matrix(i, hrf)
+        values = result.design.rebuild_matrix(i, hrf)
         trials = result.trial_table.query("run_index == @i").trial_id.tolist()
         columns = trials + list(runs[i].confounds.columns) + ["constant"]
         designs[i, hrf] = pd.DataFrame(

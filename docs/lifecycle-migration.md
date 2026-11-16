@@ -53,3 +53,12 @@ whole-event equality. A later result-construction error still emits failure,
 never completion, and no result is returned. Snapshot construction may leave
 sequence gaps; sequences need not be contiguous. Publication behavior and
 previously saved provenance records are unchanged.
+
+
+## Explicit context clearing
+
+Logging context fields now distinguish omission from `None`. Omit a field to
+inherit it, or pass `None` to remove it for the current `bind_context()` scope.
+An `emit_event(..., analysis_id=None)` override removes that ID from only that
+event. Context restoration on scope exit is unchanged. Callers that previously
+passed `None` to inherit must now omit that keyword.

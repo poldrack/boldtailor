@@ -98,6 +98,14 @@ builds provenance, and passes that completed provenance to result assembly.
 The nested training selection during HRF evaluation remains a separate logged
 operation, with its own execution identity.
 
+The session workflow separates loaded `_Session` inputs from completed
+`_Analysis` outputs. `_analyze()` passes selections into GLM and beta fits,
+and beta models into summaries; stage functions return their results without
+populating a shared state object. Missing prerequisites are rejected explicitly.
+The figure registry is passed separately and owned by `run_workflow()` for
+cleanup on success or failure. Report sections consume a named `ReportInputs`
+record assembled explicitly, rather than the local Python namespace.
+
 The core numerical functions accept arrays and tables and return results in
 memory. Example workflows own dataset discovery, image loading, spatial axes,
 and image reconstruction. The prepared-design API is the entry point for
@@ -158,7 +166,7 @@ and penalty metadata. Its `design` is a `SharedTrialDesign` for one HRF across
 features or a `SelectedTrialDesign` for grouped HRF assignments. Each design
 container owns its matrices (a selected design rebuilds them on request
 instead of retaining one per `(run, hrf_id)`), so the result does not duplicate
-that copying logic. Result objects that hold rebuild closures (`SingleTrialResult` with a `SelectedTrialDesign`, `HrfAnalysisResult`) cannot be serialized with the standard `pickle` module; loky's cloudpickle can move them between processes, but workers should prefer returning arrays or dicts to keep transfers small. The NSD examples return arrays and dicts. Common numerical
+that copying logic. Selected designs retain named reconstruction recipes, without BOLD signals, instead of closures. Use `rebuild_group_design()` or `design.rebuild_matrix()` to make reconstruction explicit. `materialize_group_designs()` and `materialize_designs()` allocate all fitted designs on request. Immutable mappings elsewhere in results still limit standard `pickle` support; loky's cloudpickle can move results between processes, while arrays or dicts keep transfers smaller. The NSD examples return arrays and dicts. Common numerical
 fields stay directly on the result. See
 [result migration](result-migration.md) for API changes.
 
@@ -512,8 +520,10 @@ timestamps and sequence numbers: the log is generated only on successful exit.
 Start records omit `analysis_id`; completion includes it when metadata identity
 is available.
 Each nested fit or normalization starts a fresh ID scope and restores its
-caller’s context on exit. Ordinary `bind_context()` remains additive unless
-called with `inherit=False`.
+caller’s context on exit. Omitted `bind_context()` fields inherit the parent value; explicitly passing
+`None` removes that field for the scope. `inherit=False` starts with no parent
+fields. `emit_event()` uses the same omission/None distinction for that event
+only; it does not modify the enclosing context.
 
 Failure records export an `error_code`: `invalid_input`, `numerical_failure`,
 `io_failure`, or `operation_failed`. Exceptions are re-raised unchanged for

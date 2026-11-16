@@ -36,9 +36,13 @@ class SelectedTrialDesign:
     def __post_init__(self):
         own_fields(self, ("hrf_indices",), dtype=np.int64)
 
-    def matrix(self, run: int, hrf_id: int) -> np.ndarray:
+    def rebuild_matrix(self, run: int, hrf_id: int) -> np.ndarray:
         """Trial columns then nuisance columns; KeyError for unfitted pairs."""
         return readonly_array(self._rebuild(run, hrf_id))
+
+    def matrix(self, run: int, hrf_id: int) -> np.ndarray:
+        """Compatibility alias for rebuild_matrix; performs reconstruction."""
+        return self.rebuild_matrix(run, hrf_id)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,6 +60,24 @@ class SingleTrialResult:
     provenance: ProvenanceRecord
     ridge_fraction: np.ndarray | None = None
     run_ridge_alphas: tuple[np.ndarray, ...] | None = None
+
+    def materialize_designs(self) -> dict[tuple[int, int], np.ndarray]:
+        """Return owned read-only design arrays for all fitted (run, HRF) pairs.
+
+        Shared-HRF designs use HRF ID 0. Selected-HRF designs are reconstructed
+        now; this can allocate substantial memory for many fitted HRFs.
+        """
+        if isinstance(self.design, SharedTrialDesign):
+            return {
+                (run, 0): readonly_array(frame.to_numpy())
+                for run, frame in enumerate(self.design.matrices)
+            }
+        ids = np.unique(self.design.hrf_indices[self.design.hrf_indices >= 0])
+        return {
+            (run, int(cid)): self.design.rebuild_matrix(run, int(cid))
+            for run in range(len(self.run_betas))
+            for cid in ids
+        }
 
     def __post_init__(self):
         if self.ridge_fraction is not None:

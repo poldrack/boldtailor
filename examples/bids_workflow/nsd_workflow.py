@@ -326,8 +326,8 @@ for model_name in ("CanonicalGLM", "OptimizedGLM"):
         else:
             for run_index in range(len(runs)):
                 for hrf_id in np.unique(fitted.hrf_indices[fitted.hrf_indices >= 0]):
-                    maps["designs"][run_index, int(hrf_id)] = fitted.group_design(
-                        run_index, int(hrf_id)
+                    maps["designs"][run_index, int(hrf_id)] = (
+                        fitted.rebuild_group_design(run_index, int(hrf_id))
                     )
         maps["provenance"].append(
             dict(

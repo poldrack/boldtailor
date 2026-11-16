@@ -48,9 +48,23 @@ class HrfAnalysisResult(_AnalysisAccessors):
     def selection_provenance(self) -> ProvenanceRecord:
         return self._selection.provenance
 
-    def group_design(self, run: int, hrf_id: int) -> pd.DataFrame:
+    def rebuild_group_design(self, run: int, hrf_id: int) -> pd.DataFrame:
         """Recompiled design for a fitted (run, HRF ID); KeyError otherwise."""
         return self._group_builder(run, hrf_id).copy(deep=True)
+
+    def materialize_group_designs(self) -> dict[tuple[int, int], pd.DataFrame]:
+        """Rebuild all fitted designs now, returning independent tables.
+
+        This explicitly trades memory for avoiding future reconstruction.
+        """
+        return {
+            key: self.rebuild_group_design(*key)
+            for key in self._group_design_provenance
+        }
+
+    def group_design(self, run: int, hrf_id: int) -> pd.DataFrame:
+        """Compatibility alias for rebuild_group_design; performs reconstruction."""
+        return self.rebuild_group_design(run, hrf_id)
 
     @property
     def group_design_provenance(self) -> dict:

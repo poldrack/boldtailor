@@ -1,7 +1,7 @@
 """Run the enabled stages in order and publish one BIDS derivative with a report."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 from pathlib import Path
 import re
@@ -49,27 +49,17 @@ class WorkflowResult:
     library_fingerprint: str
 
 
-@dataclass(kw_only=True)
-class _State:
-    """The session inputs and every stage's results, filled in stage order."""
+@dataclass(frozen=True, kw_only=True)
+class _Session:
+    """Loaded inputs only; scientific stages never populate this object."""
 
     settings: WorkflowSettings
     runs: tuple
     task_model: TaskModel
     library: object
     blocks: list
-    selections: dict | None = None
-    glms: dict = field(default_factory=dict)
-    glm_summary: pd.DataFrame | None = None
-    reliability: pd.DataFrame | None = None
-    tuning: pd.DataFrame | None = None
-    beta_models: dict = field(default_factory=dict)
-    activation: dict | None = None
-    curve_reliability: pd.DataFrame | None = None
-    figures: dict = field(default_factory=dict)
-    skipped: list = field(default_factory=list)
-    notes: list = field(default_factory=list)
-    meshes: dict | None = None
+    notes: tuple
+    meshes: dict | None
 
     @property
     def brain(self):
@@ -77,6 +67,21 @@ class _State:
 
     def enabled(self, stage):
         return stage in self.settings.stages
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Analysis:
+    """Completed stage outputs, assembled once for reporting and publication."""
+
+    selections: dict | None
+    glms: dict
+    glm_summary: pd.DataFrame | None
+    reliability: pd.DataFrame | None
+    tuning: pd.DataFrame | None
+    beta_models: dict
+    activation: dict | None
+    curve_reliability: pd.DataFrame | None
+    skipped: tuple
 
 
 @contextmanager
@@ -148,13 +153,13 @@ def _load(settings):
     meshes = _find_meshes(settings, notes)
     library = settings.build_library()
     log.info("Loaded %d runs; %d HRF candidates", len(runs), len(library.candidates))
-    return _State(
+    return _Session(
         settings=settings,
         runs=runs,
         task_model=task_model,
         library=library,
         blocks=blocks,
-        notes=notes,
+        notes=tuple(notes),
         meshes=meshes,
     )
 
@@ -194,139 +199,178 @@ def _check_ridge_cv(settings, runs, task_model):
         raise inputs.InputError(RIDGE_CV_MODULATORS)
 
 
-def _reliability_runs(state):
-    return state.enabled("reliability") and _splits_possible(state.runs)
+def _reliability_runs(session):
+    return session.enabled("reliability") and _splits_possible(session.runs)
 
 
-def _hrf_selection(state):
-    """All-run selections, with odd/even splits only for the reliability stage."""
-    if not (state.enabled("glms") or _reliability_runs(state)):
-        return
-    settings = state.settings
-    state.selections = analysis.select_hrfs(
-        state.runs,
+def _select_hrfs(session):
+    """Return selections required by GLMs and optional split reliability."""
+    if not (session.enabled("glms") or _reliability_runs(session)):
+        return None
+    settings = session.settings
+    return analysis.select_hrfs(
+        session.runs,
         settings.bids_dir,
-        state.blocks,
-        state.library,
+        session.blocks,
+        session.library,
         task_model=inputs.selection_task_model(
-            state.task_model, settings.hrf_selection_rt
+            session.task_model, settings.hrf_selection_rt
         ),
         n_jobs=settings.n_jobs,
-        splits=_reliability_runs(state),
+        splits=_reliability_runs(session),
     )
 
 
-def _library_figure(state):
-    state.figures["Library"] = plots.library_figure(state.library)
-
-
-def _glm_stage(state):
-    if not state.enabled("glms"):
-        return
-    settings, runs = state.settings, state.runs
-    model = inputs.glm_model(runs, state.task_model)
-    fit = dict(n_jobs=settings.n_jobs)
-    state.glms = {
+def _fit_glms(session, *, selections):
+    """Fit both GLMs using explicitly supplied optimized-HRF selections."""
+    if not selections:
+        raise ValueError("GLM fitting requires HRF selections")
+    settings, runs = session.settings, session.runs
+    model = inputs.glm_model(runs, session.task_model)
+    return {
         "CanonicalGLM": analysis.fit_glms(
-            runs, settings.bids_dir, state.blocks, model, **fit
+            runs,
+            settings.bids_dir,
+            session.blocks,
+            model,
+            n_jobs=settings.n_jobs,
         ),
         "OptimizedGLM": analysis.fit_glms(
             runs,
             settings.bids_dir,
-            state.blocks,
+            session.blocks,
             model,
-            selections=state.selections,
-            **fit,
+            selections=selections,
+            n_jobs=settings.n_jobs,
         ),
     }
-    _glm_figures(state)
 
 
-def _glm_figures(state):
-    state.figures["Design"] = plots.design_figure(
-        state.runs[0].frame_times,
-        state.glms["CanonicalGLM"]["designs"][0, 0],
-        state.task_model.regressor_names,
+def _glm_figures(session, glms, figures):
+    figures["Design"] = plots.design_figure(
+        session.runs[0].frame_times,
+        glms["CanonicalGLM"]["designs"][0, 0],
+        session.task_model.regressor_names,
     )
-    state.glm_summary, state.figures["GLMComparison"] = plots.glm_comparison(state.glms)
+    summary, figures["GLMComparison"] = plots.glm_comparison(glms)
+    return summary
 
 
-def _reliability_stage(state):
-    if not state.enabled("reliability"):
-        return
-    if not _splits_possible(state.runs):
-        state.skipped.append(("reliability", SHORT_PARITY))
-        log.info("Skipping reliability: %s", SHORT_PARITY)
-        return
-    maps = analysis.selection_maps(state.selections, len(state.brain))
+def _reliability_figures(session, *, selections, figures):
+    if not selections:
+        raise ValueError("reliability requires split HRF selections")
+    maps = analysis.selection_maps(selections, len(session.brain))
     odd, even = maps["odd"][0], maps["even"][0]
-    state.reliability, state.figures["HRFReliability"] = plots.parameter_agreement(
-        state.library, odd, even
+    reliability, figures["HRFReliability"] = plots.parameter_agreement(
+        session.library, odd, even
     )
-    curve_r = curve_correlations(state.library, odd, even)
-    state.curve_reliability, state.figures["HRFCurveReliability"] = (
-        plots.curve_agreement(curve_r)
-    )
+    curve_r = curve_correlations(session.library, odd, even)
+    curves, figures["HRFCurveReliability"] = plots.curve_agreement(curve_r)
+    return reliability, curves
 
 
-def _beta_stage(state):
-    if not state.enabled("betas"):
-        return
-    settings = state.settings
-    state.beta_models = beta_series.fit_beta_models(
-        state.runs,
+def _fit_betas(session, *, selections):
+    if not selections:
+        raise ValueError("beta fitting requires HRF selections")
+    settings = session.settings
+    return beta_series.fit_beta_models(
+        session.runs,
         settings.bids_dir,
-        state.blocks,
+        session.blocks,
         settings,
-        state.library,
-        state.selections,
-        state.task_model,
+        session.library,
+        selections,
+        session.task_model,
     )
-    if any(m.tuning for m in state.beta_models.values()):
-        _tuning_figures(state)
 
 
-def _tuning_figures(state):
-    state.tuning = outputs.tuning_table(state.beta_models)
-    state.figures["RidgeTuning"] = outputs.tuning_figure(state.beta_models)
-    if "selected_grayordinates" in state.tuning:
-        state.figures["FractionSelection"] = plots.fraction_selection_figure(
-            state.tuning
-        )
+def _tuning_figures(beta_models, figures):
+    tuning = outputs.tuning_table(beta_models)
+    figures["RidgeTuning"] = outputs.tuning_figure(beta_models)
+    if "selected_grayordinates" in tuning:
+        figures["FractionSelection"] = plots.fraction_selection_figure(tuning)
+    return tuning
 
 
-def _summaries_stage(state):
-    if not state.enabled("summaries"):
-        return
-    state.activation = {
-        name: one_sample_t(m.fit["betas"]) for name, m in state.beta_models.items()
+def _summarize_betas(*, beta_models):
+    if not beta_models:
+        raise ValueError("summaries require fitted beta models")
+    return {
+        name: one_sample_t(model.fit["betas"]) for name, model in beta_models.items()
     }
-    state.figures["BetaActivation"] = plots.activation_histogram(state.activation)
-    rt_figure = plots.rt_check_figure(state.beta_models, state.runs, state.brain)
+
+
+def _summary_figures(session, beta_models, activation, figures):
+    figures["BetaActivation"] = plots.activation_histogram(activation)
+    rt_figure = plots.rt_check_figure(beta_models, session.runs, session.brain)
     if rt_figure is not None:
-        state.figures["RTCheck"] = rt_figure
+        figures["RTCheck"] = rt_figure
 
 
-def _surface_figures(state):
-    """Cortical maps, only when requested and the subject's meshes are found."""
-    if state.meshes is None:
+def _surface_figures(session, glms, beta_models, activation, figures):
+    """Create requested cortical figures from explicitly supplied result maps."""
+    if session.meshes is None:
         return
-    for name, maps, statistic in _surface_maps(state):
+    for name, maps, statistic in _surface_maps(glms, beta_models, activation):
         if maps:
-            state.figures[name] = surfaces.surface_figure(
-                maps, state.brain, state.meshes, statistic=statistic
+            figures[name] = surfaces.surface_figure(
+                maps,
+                session.brain,
+                session.meshes,
+                statistic=statistic,
             )
 
 
-def _surface_maps(state):
-    models, activation = state.beta_models, state.activation or {}
+def _surface_maps(glms, models, activation):
+    activation = activation or {}
     rt = {k: m.fit["rt"]["all"] for k, m in models.items() if m.fit["rt"] is not None}
     return [
-        ("GLMR2Surface", {k: v["r2"][0] for k, v in state.glms.items()}, "r2"),
+        ("GLMR2Surface", {k: v["r2"][0] for k, v in glms.items()}, "r2"),
         ("BetaR2Surface", {k: m.fit["r2"][2] for k, m in models.items()}, "delta_r2"),
         ("BetaActivationSurface", {k: a["t"] for k, a in activation.items()}, "t"),
         ("RTSurface", rt if activation else {}, "rt"),
     ]
+
+
+def _analyze(session, figures):
+    """Wire stage dependencies explicitly; figures is the cleanup registry."""
+    selections = _select_hrfs(session)
+    glms = _fit_glms(session, selections=selections) if session.enabled("glms") else {}
+    glm_summary = _glm_figures(session, glms, figures) if glms else None
+    reliability, curves = (
+        _reliability_figures(session, selections=selections, figures=figures)
+        if _reliability_runs(session)
+        else (None, None)
+    )
+    skipped = ()
+    if session.enabled("reliability") and not _reliability_runs(session):
+        skipped = (("reliability", SHORT_PARITY),)
+        log.info("Skipping reliability: %s", SHORT_PARITY)
+    models = (
+        _fit_betas(session, selections=selections) if session.enabled("betas") else {}
+    )
+    tuning = (
+        _tuning_figures(models, figures)
+        if any(m.tuning for m in models.values())
+        else None
+    )
+    activation = (
+        _summarize_betas(beta_models=models) if session.enabled("summaries") else None
+    )
+    if activation is not None:
+        _summary_figures(session, models, activation, figures)
+    _surface_figures(session, glms, models, activation, figures)
+    return _Analysis(
+        selections=selections,
+        glms=glms,
+        glm_summary=glm_summary,
+        reliability=reliability,
+        curve_reliability=curves,
+        beta_models=models,
+        tuning=tuning,
+        activation=activation,
+        skipped=skipped,
+    )
 
 
 def _provenance(path, stem, listed):
@@ -347,75 +391,63 @@ def _manifest(paths, stem):
     return [(p, _provenance(p, stem, listed)) for p in paths]
 
 
-def _stage_tables(state):
+def _stage_tables(session, results):
     return dict(
         selected_hrfs=summaries.selected_hrfs(
-            state.selections, state.library, len(state.brain)
+            results.selections, session.library, len(session.brain)
         ),
-        curve_reliability=state.curve_reliability,
-        encoding=summaries.encoding_scores(state.beta_models),
-        ridge_boundary=summaries.ridge_boundary(state.beta_models),
-        activation_summary=summaries.activation_summary(state.activation),
-        rt_summary=summaries.rt_summary(state.activation, state.beta_models),
+        curve_reliability=results.curve_reliability,
+        encoding=summaries.encoding_scores(results.beta_models),
+        ridge_boundary=summaries.ridge_boundary(results.beta_models),
+        activation_summary=summaries.activation_summary(results.activation),
+        rt_summary=summaries.rt_summary(results.activation, results.beta_models),
     )
 
 
-def _render(state, artifacts):
+def _render(session, results, figures, artifacts):
     """The report, embedding the figure PNGs exactly as published."""
     payloads = {a.path: a.payload for a in artifacts}
-    settings = state.settings
+    settings = session.settings
     return report.render_report(
         settings,
-        runs=state.runs,
-        task_model=state.task_model,
-        library=state.library,
-        glm_summary=state.glm_summary,
-        hrf_summary=outputs.hrf_boundary_table(state.selections),
-        reliability=state.reliability,
-        tuning=state.tuning,
+        runs=session.runs,
+        task_model=session.task_model,
+        library=session.library,
+        glm_summary=results.glm_summary,
+        hrf_summary=outputs.hrf_boundary_table(results.selections),
+        reliability=results.reliability,
+        tuning=results.tuning,
         figures={
-            name: payloads[outputs.figure_name(settings, name)]
-            for name in state.figures
+            name: payloads[outputs.figure_name(settings, name)] for name in figures
         },
-        skipped=state.skipped,
-        notes=state.notes,
+        skipped=results.skipped,
+        notes=session.notes,
         manifest=_manifest([a.path for a in artifacts], settings.stem),
-        **summaries.input_tables(state.runs, state.task_model, state.library),
-        **_stage_tables(state),
+        **summaries.input_tables(session.runs, session.task_model, session.library),
+        **_stage_tables(session, results),
     )
 
 
-def _publish(state):
+def _publish(session, results, figures):
     """Write every artifact and, last in the same publication, the report."""
-    settings = state.settings
+    settings = session.settings
     artifacts = outputs.workflow_artifacts(
         settings,
-        state.runs,
-        state.task_model,
-        state.library,
-        state.selections,
-        state.glms,
-        state.beta_models,
-        figures=state.figures,
-        activation=state.activation,
-        skipped=state.skipped,
-        notes=state.notes,
+        session.runs,
+        session.task_model,
+        session.library,
+        results.selections,
+        results.glms,
+        results.beta_models,
+        figures=figures,
+        activation=results.activation,
+        skipped=results.skipped,
+        notes=session.notes,
         report=outputs.report_name(settings),
-        include_hrf_splits=_reliability_runs(state),
+        include_hrf_splits=_reliability_runs(session),
     )
-    html = _render(state, artifacts)
-    return outputs.publish_workflow(settings, state.runs, artifacts, html.encode())
-
-
-_STAGES = (
-    _library_figure,
-    _hrf_selection,
-    _glm_stage,
-    _reliability_stage,
-    _beta_stage,
-    _summaries_stage,
-    _surface_figures,
-)
+    html = _render(session, results, figures, artifacts)
+    return outputs.publish_workflow(settings, session.runs, artifacts, html.encode())
 
 
 def _close(figures):
@@ -424,20 +456,21 @@ def _close(figures):
 
 
 def run_workflow(settings):
-    """Run the enabled stages and publish the derivative; refuse existing outputs."""
+    """Run enabled stages with explicit dependencies, then publish their results."""
     outputs.check_output(settings)
-    state = _load(settings)
+    session = _load(settings)
+    figures = {}
     try:
-        for stage in _STAGES:
-            stage(state)
-        paths = _publish(state)
+        figures["Library"] = plots.library_figure(session.library)
+        results = _analyze(session, figures)
+        paths = _publish(session, results, figures)
     finally:
-        _close(state.figures)
+        _close(figures)
     return WorkflowResult(
         settings=settings,
         paths=tuple(paths),
         report_path=settings.output_dir / outputs.report_name(settings),
-        skipped=tuple(state.skipped),
-        task_model=state.task_model,
-        library_fingerprint=state.library.fingerprint,
+        skipped=results.skipped,
+        task_model=session.task_model,
+        library_fingerprint=session.library.fingerprint,
     )

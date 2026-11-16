@@ -3,7 +3,13 @@
 import base64
 import html
 import shlex
-from dataclasses import fields
+from collections.abc import Sequence
+from dataclasses import dataclass, fields
+
+import pandas as pd
+
+from boldtailor.model import TaskModel
+from boldtailor.hrf_library import HrfLibrary
 
 from boldtailor.workflow.settings import (
     check_modulator_expressible,
@@ -256,40 +262,63 @@ def _confounds(names):
     return _note(f"Confounds ({len(names)}): {', '.join(names)}")
 
 
+@dataclass(frozen=True, kw_only=True)
+class ReportInputs:
+    """Named content consumed by report sections, excluding settings and figures."""
+
+    runs: Sequence[object]
+    task_model: TaskModel
+    library: HrfLibrary | None
+    glm_summary: pd.DataFrame | None
+    hrf_summary: pd.DataFrame | None
+    reliability: pd.DataFrame | None
+    tuning: pd.DataFrame | None
+    activation_summary: pd.DataFrame | None
+    rt_summary: pd.DataFrame | None
+    skipped: Sequence[tuple[str, str]]
+    manifest: Sequence[tuple[str, str | None]]
+    notes: Sequence[str] = ()
+    run_summary: pd.DataFrame | None = None
+    confounds: Sequence[str] = ()
+    library_table: pd.DataFrame | None = None
+    selected_hrfs: pd.DataFrame | None = None
+    curve_reliability: pd.DataFrame | None = None
+    encoding: pd.DataFrame | None = None
+    ridge_boundary: pd.DataFrame | None = None
+
+
 def _input_tables(data):
     return (
-        _optional("Runs", data["run_summary"])
-        + _confounds(data["confounds"])
-        + _optional("HRF library (first rows)", data["library_table"])
+        _optional("Runs", data.run_summary)
+        + _confounds(data.confounds)
+        + _optional("HRF library (first rows)", data.library_table)
     )
 
 
 def _bodies(settings, data, figures):
     return {
         "settings": _settings_body(settings),
-        "inputs": _inputs_body(
-            data["runs"], data["task_model"], data["library"], data["notes"]
-        )
+        "inputs": _inputs_body(data.runs, data.task_model, data.library, data.notes)
         + _input_tables(data)
         + _figures(figures, ("Design", "Library")),
-        "glms": _table(data["glm_summary"])
-        + _table(data["hrf_summary"])
-        + _optional("Most often selected HRFs", data["selected_hrfs"])
+        "glms": _table(data.glm_summary)
+        + _table(data.hrf_summary)
+        + _optional("Most often selected HRFs", data.selected_hrfs)
         + _figures(figures, ("GLMComparison", "GLMR2Surface")),
-        "reliability": _table(data["reliability"])
-        + _optional("Full-curve correlations", data["curve_reliability"])
+        "reliability": _table(data.reliability)
+        + _optional("Full-curve correlations", data.curve_reliability)
         + _figures(figures, ("HRFReliability", "HRFCurveReliability")),
-        "betas": _table(data["tuning"])
-        + _optional("Outer encoding scores", data["encoding"])
-        + _optional("Ridge choices at a grid endpoint", data["ridge_boundary"])
+        "betas": _table(data.tuning)
+        + _optional("Outer encoding scores", data.encoding)
+        + _optional("Ridge choices at a grid endpoint", data.ridge_boundary)
         + _figures(figures, ("FractionSelection", "RidgeTuning", "BetaR2Surface")),
-        "summaries": _table(data["activation_summary"])
-        + _table(data["rt_summary"])
+        "summaries": _table(data.activation_summary)
+        + _table(data.rt_summary)
         + _figures(
             figures, ("BetaActivation", "BetaActivationSurface", "RTCheck", "RTSurface")
         ),
-        "skipped": _skipped_body(data["skipped"]),
-        "files": _files_body(data["manifest"]),
+        "skipped": _skipped_body(data.skipped),
+        "files": _files_body(data.manifest),
     }
 
 
@@ -318,7 +347,27 @@ def render_report(
     ridge_boundary=None,
 ):
     """The report; ``figures`` maps names to PNG bytes, optional tables may be None."""
-    data = dict(locals())
+    data = ReportInputs(
+        runs=runs,
+        task_model=task_model,
+        library=library,
+        glm_summary=glm_summary,
+        hrf_summary=hrf_summary,
+        reliability=reliability,
+        tuning=tuning,
+        activation_summary=activation_summary,
+        rt_summary=rt_summary,
+        skipped=skipped,
+        manifest=manifest,
+        notes=notes,
+        run_summary=run_summary,
+        confounds=confounds,
+        library_table=library_table,
+        selected_hrfs=selected_hrfs,
+        curve_reliability=curve_reliability,
+        encoding=encoding,
+        ridge_boundary=ridge_boundary,
+    )
     bodies = _bodies(settings, data, dict(figures))
     sections = "".join(
         _section(n, TITLES[n], _stage_note(n, settings, skipped) or bodies[n])

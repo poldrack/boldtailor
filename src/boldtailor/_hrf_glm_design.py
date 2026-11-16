@@ -1,6 +1,6 @@
 """Compile conventional designs without changing semantic regressor names."""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from hashlib import sha256
 import json
 
@@ -47,20 +47,41 @@ def compile_group_design(events, times, nuisance, candidate, model, run):
     return _custom_design(events, times, nuisance, candidate, model, run)
 
 
-def group_design_builder(data, model, selection, nuisance, keys):
-    """Recompile any fitted (run, HRF) design on request; KeyError otherwise."""
-    events, times = data.events, data.frame_times
-    candidates, fitted = selection.library.candidates, frozenset(keys)
+@dataclass(frozen=True)
+class GroupDesignRecipe:
+    """Retained design inputs; contains no BOLD signals or precompiled group map."""
 
-    def build(run, hrf_id):
-        if (run, hrf_id) not in fitted:
+    events: tuple
+    times: tuple
+    nuisance: tuple
+    candidates: tuple
+    model: object
+    fitted: frozenset
+
+    def __call__(self, run, hrf_id):
+        if (run, hrf_id) not in self.fitted:
             raise KeyError(f"no fitted design for run {run!r}, HRF {hrf_id!r}")
         compiled = compile_group_design(
-            events[run], times[run], nuisance[run], candidates[hrf_id], model, run
+            self.events[run],
+            self.times[run],
+            self.nuisance[run],
+            self.candidates[hrf_id],
+            self.model,
+            run,
         )
         return compiled.matrix
 
-    return build
+
+def group_design_builder(data, model, selection, nuisance, keys):
+    """Create an explicit recipe for rebuilding fitted (run, HRF) designs."""
+    return GroupDesignRecipe(
+        data.events,
+        data.frame_times,
+        nuisance,
+        selection.library.candidates,
+        model,
+        frozenset(keys),
+    )
 
 
 def _task_model_design(events, times, nuisance, candidate, model, run):
