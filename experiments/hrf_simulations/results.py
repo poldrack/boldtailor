@@ -21,8 +21,9 @@
 # Four task models follow Mumford et al. (2024): fixed-duration conditions
 # without RT, RT-duration conditions, fixed-duration conditions plus common
 # RT-amplitude modulation, and fixed-duration conditions plus common RT duration.
-# Each is fitted with iid REML and pooled AR(1) REML. Known-rho AR(1) is a
-# diagnostic available only when AR(1) noise generated the data.
+# The first three models identify HRFs with package CV, iid REML, and pooled
+# AR(1) REML. The fourth remains an evaluation model only. Known-rho AR(1)
+# is a diagnostic available only when AR(1) noise generated the data.
 #
 # The primary endpoint is recovery of a known HRF, not goodness of fit.
 # Shape-error summaries condition on successful fits; failure rates include
@@ -71,7 +72,8 @@ display(summary.groupby(["model", "estimator"])[["n", "n_failed"]].sum())
 
 # %% [markdown]
 # ## Paired estimator differences
-# Negative AR(1)-minus-iid RMSE favors AR(1). Each pair uses identical signal,
+# Negative REML-minus-CV RMSE favors REML; negative AR(1)-minus-iid favors AR(1).
+# Each pair uses identical signal,
 # noise, and trial timing. Missing differences indicate that at least one fit
 # failed, not a zero difference. Replicates are Monte Carlo draws for one
 # participant's timing; they are not a group of independent participants.

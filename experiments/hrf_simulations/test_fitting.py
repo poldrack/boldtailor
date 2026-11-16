@@ -280,3 +280,28 @@ def test_reused_cache_does_not_reuse_training_signals(planted, library, method):
     np.testing.assert_allclose(cached.diagnostics[score], fresh.diagnostics[score])
     if method == "reml":
         assert not np.allclose(base.diagnostics[score], cached.diagnostics[score])
+
+
+def test_cached_inputs_track_confound_column_names(planted, library):
+    """Renaming nuisance columns must not return a previous run-input schema."""
+    from experiments.hrf_simulations.fitting import DesignCache
+    from experiments.hrf_simulations.selection_inputs import selection_data
+
+    cache = DesignCache()
+    selection_data(planted, library, "RTDur", "brief", cache)
+    changed = [
+        replace(r, confounds=r.confounds.rename(columns={"intercept": "baseline"}))
+        for r in planted
+    ]
+    prepared, _ = selection_data(changed, library, "RTDur", "brief", cache)
+    assert "baseline" in prepared.confounds[0]
+    np.testing.assert_array_equal(prepared.confounds[0]["baseline"], 1.0)
+
+
+@pytest.mark.parametrize("method", ["cv", "reml"])
+def test_rtdur_rejects_unknown_duration_convention(planted, library, method):
+    """An invalid convention must not be silently accepted for an RT-duration model."""
+    from experiments.hrf_simulations.fitting import fit
+
+    with pytest.raises(ValueError, match="convention"):
+        fit(planted, library, "RTDur", "unknown", "iid", method=method)
