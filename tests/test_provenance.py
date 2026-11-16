@@ -477,3 +477,18 @@ def test_validate_relative_path_returns_valid_text():
     assert validate_relative_path("sub-01/func/a+b_c.d-e.tsv") == (
         "sub-01/func/a+b_c.d-e.tsv"
     )
+
+
+def test_activity_records_are_owned_json_mappings():
+    """Activity serialization returns editable JSON copies without exposing internal state."""
+    from boldtailor.provenance import ProvenanceRecord
+
+    record = ProvenanceRecord(
+        execution_id="12345678-1234-4234-8234-123456789012",
+        activities=({"name": "test", "values": [1, 2]},),
+    )
+    activities = record.activity_records()
+    assert activities == [{"name": "test", "values": [1, 2]}]
+    activities[0]["values"].append(3)
+    assert record.activity_records() == [{"name": "test", "values": [1, 2]}]
+    assert record.to_dict()["activities"] == record.activity_records()
