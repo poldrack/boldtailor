@@ -35,7 +35,14 @@ def execute_notebook(config):
     return namespace
 
 
-def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config):
+def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config, monkeypatch):
+    from boldtailor.workflow import run, beta_series
+
+    def opaque_workflow(*args, **kwargs):
+        pytest.fail("The teaching notebook must expose the stages, not call an orchestrator")
+
+    monkeypatch.setattr(run, "run_workflow", opaque_workflow)
+    monkeypatch.setattr(beta_series, "fit_beta_models", opaque_workflow)
     ns = execute_notebook(notebook_config)
     assert "preflight" in ns, "show input validation before fitting"
     assert ns["preflight"]["problems"] == []
@@ -52,6 +59,18 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(notebook_config)
         ns["beta_image"].header.get_axis(0).name
     )
     assert ns["metadata"]["settings"]["ridge_mode"] == "fractional_cv"
+    assert set(ns["glms"]) == {"CanonicalGLM", "OptimizedGLM"}
+    assert set(ns["ols_fits"]) == {"canonical", "optimized"}
+    assert set(ns["cv_results"]) == {"canonical", "optimized"}
+    for bundle in ns["selections"].values():
+        assert set(bundle) == {"all", "odd", "even"}
+    for tuned in ns["cv_results"].values():
+        assert set(tuned["tuning"]) == {"all", "odd", "even"}
+        assert set(tuned["evaluation"]) == {"odd_to_even", "even_to_odd"}
+    assert set(ns["activation"]) == set(ns["beta_models"])
+    # The example's visible fit agrees with the saved optimized-GLM maps.
+    np.testing.assert_allclose(ns["glms"]["OptimizedGLM"]["r2"], ns["glm_values"],
+                               rtol=1e-6, atol=1e-7, equal_nan=True)
 
 
 def test_walkthrough_reports_preflight_problems_without_writing(notebook_config):
