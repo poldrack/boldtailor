@@ -164,6 +164,7 @@ def mixture_threshold(values) -> MixtureThreshold:
     finite = _finite_values(values)
     fitted = _subsample(finite)
     model = _fit(fitted)
+    assert model.means_ is not None  # _fit returns a fitted model.
     means = model.means_.ravel()
     threshold, tail = _threshold(model, _grid(finite, means))
     order = np.argsort(means)

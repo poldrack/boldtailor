@@ -7,6 +7,19 @@ import os
 import numpy as np
 import pandas as pd
 
+from boldtailor.results import AnalysisResult
+from boldtailor.single_trial_results import SharedTrialDesign
+from boldtailor.workflow._records import (
+    BetaFit,
+    GlmFit,
+    FitMetadata,
+    BetaBlock,
+    GlmBlock,
+    SelectionBundle,
+    SelectionOptions,
+    TrialOptions,
+)
+
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor import hrf_selection as selection_api
 from boldtailor.hrf_selection import evaluate_hrf_split
@@ -41,7 +54,7 @@ def _select_block(
     indices, runs, root, library, task_model, splits, method, reml_options
 ):
     data = load_block(runs, root, indices, task_model)
-    options = dict(
+    options = SelectionOptions(
         library=library,
         method=method,
         reml_options=None if reml_options is None else reml_options.subset(indices),
@@ -49,9 +62,10 @@ def _select_block(
         feature_signature=_signature(runs, indices),
         task_model=task_model,
     )
-    bundle = dict(all=selection_api.select_hrfs(data, **options))
+    bundle = SelectionBundle(all=selection_api.select_hrfs(data, **options))
     if splits:
-        bundle.update(_split_selections(data, runs, options))
+        halves = _split_selections(data, runs, options)
+        bundle["odd"], bundle["even"] = halves["odd"], halves["even"]
     return bundle
 
 
@@ -110,25 +124,25 @@ def _glm_block(job, runs, root, model):
     indices, selection = job
     data = load_block(runs, root, indices, model.task_model)
     names = model.task_model.regressor_names
-    options = (
-        {}
-        if selection is None
-        else dict(hrf_selection=selection, feature_signature=_signature(runs, indices))
-    )
     # Nilearn prints modulation notices without a verbosity option. Suppress
     # stdout within each worker; warnings/stderr and parent progress stay visible.
     with open(os.devnull, "w") as sink, redirect_stdout(sink):
-        result = fit(data, model, **options)
+        result = fit(
+            data,
+            model,
+            hrf_selection=selection,
+            feature_signature=None if selection is None else _signature(runs, indices),
+        )
         comparison = task_delta_r2(data, model, result)
     designs = (
         {(i, 0): x for i, x in enumerate(result.design_matrices)}
-        if selection is None
+        if isinstance(result, AnalysisResult)
         else {
             (i, hrf): result.rebuild_group_design(i, hrf)
             for i, hrf in _fitted_pairs(result.hrf_indices, len(runs))
         }
     )
-    return dict(
+    return GlmBlock(
         effects=np.stack([result.effect(c) for c in names]),
         variances=np.stack([result.variance(c) for c in names]),
         t=np.stack([result.stat(c) for c in names]),
@@ -146,15 +160,19 @@ def _jobs(blocks, selections):
     ]
 
 
-def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
+def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1) -> GlmFit:
     """Fit one contrast per task regressor using SPM or the selected HRF per feature."""
     n = runs[0].image.shape[1]
     rows = len(model.task_model.regressor_names)
-    result = {
-        key: np.full((rows, n), np.nan) for key in ("effects", "variances", "t", "z")
-    }
-    result["r2"] = np.full((3, n), np.nan)
-    result.update(designs={}, provenance=[])
+    result = GlmFit(
+        effects=np.full((rows, n), np.nan),
+        variances=np.full((rows, n), np.nan),
+        t=np.full((rows, n), np.nan),
+        z=np.full((rows, n), np.nan),
+        r2=np.full((3, n), np.nan),
+        designs={},
+        provenance=[],
+    )
     for (indices, _), block in map_blocks(
         _glm_block, _jobs(blocks, selections), args=(runs, root, model), n_jobs=n_jobs
     ):
@@ -165,7 +183,7 @@ def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1):
     return result
 
 
-def _update_result_metadata(result, block, indices):
+def _update_result_metadata(result: FitMetadata, block, indices):
     """Update result designs and append the block provenance in place."""
     result["designs"].update(block["designs"])
     result["provenance"].append(
@@ -183,7 +201,7 @@ def _fitted_pairs(hrf_indices, n_runs):
 
 
 def _trial_designs(result, runs, selection):
-    if selection is None:
+    if isinstance(result.design, SharedTrialDesign):
         return {(i, 0): x for i, x in enumerate(result.design.matrices)}
     designs = {}
     for i, hrf in _fitted_pairs(result.design.hrf_indices, len(runs)):
@@ -199,7 +217,7 @@ def _trial_designs(result, runs, selection):
 def _beta_block(job, runs, root, alpha, task_model, fractions=None):
     indices, selection = job
     data = load_block(runs, root, indices, task_model)
-    options = dict(ridge_alpha=alpha, run_labels=[r.label for r in runs])
+    options = TrialOptions(ridge_alpha=alpha, run_labels=[r.label for r in runs])
     if fractions is not None:
         options["ridge_fraction"] = fractions[indices]
     if selection is None:
@@ -211,7 +229,7 @@ def _beta_block(job, runs, root, alpha, task_model, fractions=None):
             feature_signature=_signature(runs, indices),
             **options,
         )
-    return dict(
+    return BetaBlock(
         betas=result.run_betas,
         trial_table=result.trial_table,
         r2=np.stack([result.full_r2, result.nuisance_r2, result.delta_r2]),
@@ -231,7 +249,7 @@ def fit_beta_series(
     ridge_alpha=0.0,
     ridge_fraction=None,
     n_jobs=1,
-):
+) -> BetaFit:
     """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
     from boldtailor.fractional_ridge import regularization
@@ -244,7 +262,7 @@ def fit_beta_series(
     )
     log.info("%s: fitting %d runs in %d blocks", label, len(runs), len(blocks))
     n = runs[0].image.shape[1]
-    result = dict(
+    result = BetaFit(
         betas=[np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs],
         r2=np.full((3, n), np.nan),
         designs={},
@@ -264,7 +282,7 @@ def fit_beta_series(
         for target, values in zip(result["betas"], block["betas"], strict=True):
             target[:, indices] = values
         result["r2"][:, indices] = block["r2"]
-        if fractions is not None:
+        if "run_ridge_alphas" in result:
             result["run_ridge_alphas"][:, indices] = np.asarray(
                 block["run_ridge_alphas"]
             )

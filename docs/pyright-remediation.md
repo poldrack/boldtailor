@@ -177,3 +177,58 @@ requires them. It does not mean suppressing errors, making every value
 
 The amount of work should be reassessed after the shared helpers and result
 states are typed. Diagnostic counts alone are not a reliable time estimate.
+
+
+## Completed first pass: shared contracts and result states
+
+The first pass reduced the same Python 3.13/basic-mode package scan from
+317 errors to **157 errors**, with the same two deprecation warnings. It now
+covers 86 files, including the added static regressions and workflow records.
+Comparison by file, diagnostic rule, and message found no new diagnostics.
+All 35 optional-value diagnostics were removed. These counts do not imply
+that 160 runtime bugs were fixed.
+
+Changes include:
+
+- Dtype-aware array helpers and generic block-worker results.
+- Array reductions that preserve Python's sequential summation order and
+  return arrays, including zero-dimensional arrays; empty input is rejected.
+- Explicit omitted-argument types and typed keyword-alias resolution.
+- Narrowing of normalized REML correlations, fitted GLM/trial-design variants,
+  CV/REML map fields, and fractional/shared-alpha tuning selections.
+- Typed workflow mappings for selection, fitted blocks, tuning, and evaluation.
+- Owned activity dictionaries and validated provenance deserialization.
+- Explicit encoding metadata fields and normalized settings invariants.
+
+The public numerical methods and serialized field names are unchanged.
+The two narrow joblib argument suppressions in `parallel.py` document accepted
+integer options that its inferred annotations incorrectly describe as strings.
+The casts in keyword-alias resolution follow identity checks against the
+omitted-value singleton.
+
+### Repeat the clean regression check
+
+From the repository root, with the project environment already installed:
+
+```sh
+uv run --no-project --with pyright==1.1.414 pyright   --project tests/typing --pythonpath .venv/bin/python
+```
+
+The committed configuration targets Python 3.12 and checks the static fixtures
+plus ten corrected core/workflow modules. This check passes with zero errors
+and warnings. Pytest does not collect the `tests/typing` fixtures; run this
+command separately. Pyright remains an ephemeral tool dependency, and no
+repository-wide typing gate has been enabled.
+
+The remaining package findings include third-party pandas, NumPy, Nilearn,
+and nibabel interfaces; other serialization boundaries; and the two
+context-manager annotations. Those require a separate pass. The full package
+is not yet type-clean.
+
+
+Validation for this pass: the full default suite passed 2,570 tests (9 skipped,
+2 expected failures). After the final review fixes, the affected array,
+denoising, settings, REML workflow, beta-series, and encoding checks passed
+360 tests; alias-consumer checks passed 144; and the final integration suite
+passed 23. The earlier complete workflow run passed 309 tests. The full suite
+was not repeated after those final targeted fixes.

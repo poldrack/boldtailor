@@ -26,7 +26,7 @@ def fit_single_trials(
     run_labels: Sequence[str] | None = None,
     hrf_model: str | HrfCandidate | _Unset = UNSET,
     ridge_fraction: float | np.ndarray | None = None,
-    hrf: object = UNSET,
+    hrf: str | HrfCandidate | _Unset = UNSET,
 ) -> SingleTrialResult:
     """Estimate one native-unit beta per event row, independently in each run.
 
@@ -44,14 +44,14 @@ def fit_single_trials(
     ``hrf_model`` defaults to 'spm', or can be one identified ``HrfCandidate`` used everywhere;
     the old keyword ``hrf`` is a deprecated alias.
     """
-    hrf_model = renamed_keyword(
+    resolved_hrf = renamed_keyword(
         "fit_single_trials", "hrf", "hrf_model", hrf, hrf_model, default="spm"
     )
     return fit_shared_hrf_trials(
         data,
         ridge_alpha=ridge_alpha,
         run_labels=run_labels,
-        hrf_model=hrf_model,
+        hrf_model=resolved_hrf,
         ridge_fraction=ridge_fraction,
     )
 
@@ -75,12 +75,12 @@ def fit_selected_hrfs(
     its implied alpha is computed separately for each run and feature.
     The old keyword ``selection`` is a deprecated alias of ``hrf_selection``.
     """
-    hrf_selection = renamed_keyword(
+    resolved_selection = renamed_keyword(
         "fit_selected_hrfs", "selection", "hrf_selection", selection, hrf_selection
     )
     return fit_selected_hrf_trials(
         data,
-        selection=hrf_selection,
+        selection=resolved_selection,
         ridge_alpha=ridge_alpha,
         run_labels=run_labels,
         feature_signature=feature_signature,

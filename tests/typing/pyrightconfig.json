@@ -1,0 +1,21 @@
+{
+  "include": [
+    ".",
+    "../../src/boldtailor/_arrays.py",
+    "../../src/boldtailor/_deprecation.py",
+    "../../src/boldtailor/parallel.py",
+    "../../src/boldtailor/provenance.py",
+    "../../src/boldtailor/hrf_options.py",
+    "../../src/boldtailor/single_trial.py",
+    "../../src/boldtailor/workflow/_records.py",
+    "../../src/boldtailor/workflow/analysis.py",
+    "../../src/boldtailor/workflow/settings.py",
+    "../../src/boldtailor/workflow/hrf_maps.py"
+  ],
+  "extraPaths": [
+    "../../src"
+  ],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportDeprecated": "warning"
+}

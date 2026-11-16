@@ -1,5 +1,15 @@
 """Fraction or shared-alpha tuning with independent odd/even evaluation."""
 
+from boldtailor.workflow._records import (
+    OuterEvaluation,
+    OuterBlock,
+    TuningResult,
+    CvBetaResult,
+    HrfOptions,
+    SelectionBundle,
+    BetaFit,
+)
+
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -240,7 +250,7 @@ def _tune(
         if fractional
         else select_ridge_penalty(scores, percentile=percentile)
     )
-    return dict(
+    return TuningResult(
         scores=scores,
         selection=selection,
         run_labels=[r.label for r in runs],
@@ -315,7 +325,7 @@ def _outer_block(
         test_runs=test,
         encoding_mode=encoding_mode,
     )
-    return dict(
+    return OuterBlock(
         encoding_mode=encoding_mode,
         train_run_intercepts=encoded.train_run_intercepts,
         train_run_predictor_means=encoded.train_run_predictor_means,
@@ -355,7 +365,7 @@ def _evaluate(
     selection_options=None,
 ):
     n = runs[0].image.shape[1]
-    result = dict(
+    result = OuterEvaluation(
         encoding_mode=encoding_mode,
         selection_task_model=selection_model.to_dict(),
         coefficient_names=["task", *predictors[0].columns],
@@ -370,6 +380,9 @@ def _evaluate(
         provenance=[],
         train_run_labels=[runs[r].label for r in train],
         test_run_labels=[runs[r].label for r in test],
+        betas=[],
+        predictions=[],
+        targets=[],
     )
     if fractional:
         result.update(
@@ -405,7 +418,7 @@ def _evaluate(
             "scoring_offsets",
         ):
             result[key][..., indices] = block[key]
-        if fractional:
+        if "run_ridge_alphas" in result:
             result["run_ridge_alphas"][:, indices] = np.asarray(
                 block["run_ridge_alphas"]
             )
@@ -430,7 +443,7 @@ def _evaluate(
 def _final_selection(
     indices, runs, root, library, task_model, selection_model, selection_options=None
 ):
-    return dict(
+    return SelectionBundle(
         all=select_hrfs(
             load_block(runs, root, indices, task_model),
             library=library,
@@ -524,7 +537,7 @@ def fit_cv_beta_series(
     reml_options = resolve_reml_options(hrf_method, reml_options)
     if library is None and hrf_method != "cv":
         raise ValueError("HRF method requires a library")
-    selection_options = dict(method=hrf_method, reml_options=reml_options)
+    selection_options = HrfOptions(method=hrf_method, reml_options=reml_options)
     if hrf_method == "reml":
         selection_options["task_model"] = selection_model
     fractional = fractions is not None
@@ -544,7 +557,7 @@ def fit_cv_beta_series(
     predictors = trial_predictors(
         [r.events for r in runs], task_model, [r.label for r in runs]
     )
-    result = dict(
+    result = CvBetaResult(
         tuning={},
         evaluation={},
         predictors=predictors,
@@ -570,7 +583,7 @@ def fit_cv_beta_series(
         result["tuning"][scope] = selected
         alpha = (
             selected["selection"].ridge_fraction
-            if fractional
+            if isinstance(selected["selection"], FractionSelection)
             else selected["selection"].ridge_alpha
         )
         if scope != "all":
@@ -602,7 +615,9 @@ def fit_cv_beta_series(
         log.info("Ridge CV (%s, %s): %s", mode, scope, description)
     final_selection = result["tuning"]["all"]["selection"]
     final_penalty = (
-        final_selection.ridge_fraction if fractional else final_selection.ridge_alpha
+        final_selection.ridge_fraction
+        if isinstance(final_selection, FractionSelection)
+        else final_selection.ridge_alpha
     )
     final_fit = _final_fit(
         runs,
@@ -644,7 +659,7 @@ def fit_cv_beta_series(
 def tuning_provenance(scores, selection, *, encoding_mode):
     """Record a tuning decision with the explicitly supplied scoring mode."""
     if isinstance(selection, FractionSelection):
-        activity = dict(
+        activity: dict[str, object] = dict(
             name="voxelwise_encoding_fraction_selection",
             fractions=list(selection.fractions),
             objective="maximum_encoding_r2_per_grayordinate",
@@ -659,7 +674,9 @@ def tuning_provenance(scores, selection, *, encoding_mode):
         activity = _alpha_activity(selection)
     activity.update(encoding_metadata(encoding_mode))
     if not isinstance(selection, FractionSelection):
-        activity["objective"] = "percentile_of_" + activity["score"]
+        activity["objective"] = (
+            "percentile_of_" + encoding_metadata(encoding_mode)["score"]
+        )
     activity.update(
         run_labels=list(scores.run_labels),
         scoring_mask_fingerprint=sha256(selection.scoring_mask.tobytes()).hexdigest(),
@@ -687,7 +704,7 @@ def _identity_activities(record):
     ]
 
 
-def _alpha_activity(selection):
+def _alpha_activity(selection) -> dict[str, object]:
     return dict(
         name="global_encoding_ridge_selection",
         alphas=list(selection.alphas),
@@ -700,7 +717,7 @@ def _alpha_activity(selection):
     )
 
 
-def link_final_provenance(result, decision, *, encoding_mode):
+def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
     """Return a fit with new block records referencing the all-run decision.
 
     Provenance is copied; numerical arrays are shared and are not modified.
@@ -738,7 +755,9 @@ def link_final_provenance(result, decision, *, encoding_mode):
             warnings=(),
             analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
         ).to_dict()
-    return {**result, "provenance": blocks}
+    linked: BetaFit = result.copy()
+    linked["provenance"] = blocks
+    return linked
 
 
 @dataclass(frozen=True, kw_only=True)

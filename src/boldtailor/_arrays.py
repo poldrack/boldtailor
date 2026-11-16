@@ -1,6 +1,7 @@
 """Owned NumPy arrays with protection against accidental writes."""
 
 from collections.abc import Iterable
+from itertools import chain
 from typing import Any, TypeVar, overload
 
 import numpy as np
@@ -72,7 +73,8 @@ def freeze_sequence_fields_in_place(instance, names):
 
 def sum_arrays(values: Iterable[NDArray[Any]]) -> NDArray[Any]:
     """Sum nonempty arrays in Python's existing left-to-right order."""
-    result = sum(values)
-    if not isinstance(result, np.ndarray):
+    arrays = iter(values)
+    first = next(arrays, None)
+    if first is None:
         raise ValueError("sum_arrays requires at least one array")
-    return result
+    return np.asarray(sum(chain((first,), arrays)))

@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from boldtailor.hrf_results import HrfSelectionResult
+
 CV_SELECTION_NAMES = ["hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2"]
 REML_SELECTION_NAMES = [
     "hrf_id",
@@ -52,11 +54,16 @@ def _status_values(fit):
     return np.array([STATUS_CODES[s] for s in fit.status], dtype=float)
 
 
-def selection_values(result):
+def selection_values(result: HrfSelectionResult):
     ids = np.where(result.hrf_indices >= 0, result.hrf_indices, np.nan)
     if result.method == "cv":
+        # HrfSelectionResult validates the method-specific fields on construction.
+        assert result.cv_r2 is not None
+        assert result.canonical_cv_r2 is not None
+        assert result.delta_cv_r2 is not None
         return np.stack([ids, result.cv_r2, result.canonical_cv_r2, result.delta_cv_r2])
     diagnostics = result.reml
+    assert diagnostics is not None
     selected, canonical = diagnostics.selection, diagnostics.canonical_fit
     fit = selected.fit
     missing = np.full(ids.shape, np.nan)

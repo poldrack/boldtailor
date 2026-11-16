@@ -1,5 +1,7 @@
 """Predict trial betas with shared slopes and explicit run-baseline semantics."""
 
+from typing import TypedDict
+
 from dataclasses import replace
 
 import numpy as np
@@ -62,10 +64,20 @@ def validate_encoding_mode(encoding_mode):
     return encoding_mode
 
 
+class EncodingMetadata(TypedDict):
+    encoding_mode: str
+    encoding_objective_version: int
+    score: str
+    encoding_model: str
+    predictor_transform: str
+    validation_intercept: str
+    prediction_reference: str
+
+
 def encoding_metadata(encoding_mode):
     """Describe the objective consistently in CV and exported artifacts."""
     within = validate_encoding_mode(encoding_mode) == "within_run"
-    return dict(
+    return EncodingMetadata(
         encoding_mode=encoding_mode,
         encoding_objective_version=2,
         score=(

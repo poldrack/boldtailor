@@ -3,6 +3,8 @@
 import math
 import re
 from collections.abc import Mapping
+from typing import Literal, overload
+
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -121,6 +123,14 @@ def _check_choice(value, name, choices):
     if value not in choices:
         raise ValueError(f"{name} must be one of {', '.join(choices)}, not {value!r}")
     return value
+
+
+@overload
+def _check_positive_int(value, name, *, optional: Literal[False] = False) -> int: ...
+
+
+@overload
+def _check_positive_int(value, name, *, optional: Literal[True]) -> int | None: ...
 
 
 def _check_positive_int(value, name, *, optional=False):
@@ -275,13 +285,13 @@ class WorkflowSettings:
 
     def selection_options(self):
         """Resolved public HRF selection options used by every workflow stage."""
-        options = (
-            None
-            if self.hrf_method == "cv"
-            else RemlHrfOptions(
+        options = None
+        if self.hrf_method != "cv":
+            assert self.reml_rho is not None
+            assert self.reml_reference_hrf_id is not None
+            options = RemlHrfOptions(
                 rho=self.reml_rho, reference_hrf_id=self.reml_reference_hrf_id
             )
-        )
         return dict(method=self.hrf_method, reml_options=options)
 
     def _validate_and_set_ridge(self):
@@ -349,6 +359,7 @@ class WorkflowSettings:
 
     def _check_output_overlap(self):
         """Outputs may never share a directory tree with the inputs."""
+        assert self.output_dir is not None and self.fmriprep_dir is not None
         out = self.output_dir.resolve()
         prep = self.fmriprep_dir.resolve()
         if out == self.bids_dir.resolve() or _nested(out, prep):
@@ -415,6 +426,7 @@ def _to_plain(name, value):
     if name == "modulators" and value is not None:
         return [m.to_dict() for m in value]
     if name == "stages":
+        assert value is not None  # Settings resolves stages during construction.
         return [s for s in STAGES if s in value]
     if name == "surface_meshes" and value is not None:
         return {k: str(v) for k, v in value.items()}
