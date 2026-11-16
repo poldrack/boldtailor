@@ -433,3 +433,38 @@ def test_renamed_hrf_rejects_both_names_even_when_new_value_is_default(
 def test_omitted_hrf_still_uses_canonical_default(selected_fixture):
     data, _ = selected_fixture
     _same_trials(entry()(data), entry()(data, hrf_model="spm"))
+
+
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize("penalty", [{"ridge_alpha": 0.4}, {"ridge_fraction": 0.7}])
+def test_trial_operations_can_run_without_public_wrappers(
+    selected_fixture, selected, penalty
+):
+    from boldtailor._shared_hrf_fit import fit_shared_hrf_trials
+    from boldtailor._selected_hrf_fit import fit_selected_hrf_trials
+    from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
+
+    data, selection = selected_fixture
+    if selected:
+        options = dict(
+            selection=selection,
+            run_labels=None,
+            feature_signature="ordered-axis",
+            **penalty,
+        )
+        actual = fit_selected_hrf_trials(
+            data, ridge_alpha=options.pop("ridge_alpha", 0.0), **options
+        )
+        expected = fit_selected_hrfs(
+            data, hrf_selection=selection, feature_signature="ordered-axis", **penalty
+        )
+    else:
+        actual = fit_shared_hrf_trials(data, **penalty)
+        expected = fit_single_trials(data, **penalty)
+    for one, two in zip(actual.run_betas, expected.run_betas, strict=True):
+        np.testing.assert_allclose(one, two)
+    np.testing.assert_allclose(actual.full_r2, expected.full_r2)
+    assert (
+        actual.provenance.analysis_fingerprint
+        == expected.provenance.analysis_fingerprint
+    )

@@ -835,3 +835,34 @@ def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
     # so only the cross-paired parent check is exercised.
     with pytest.raises(ValueError, match="identity"):
         task_delta_r2(two, model, fit_one)
+
+
+def test_denoising_assembly_accepts_finished_provenance(fixture, result):
+    from boldtailor import denoising
+    from boldtailor.data import run_labels_for
+
+    data = fixture.data
+    grid = (COUNTS, "auto", 1.05, (True, 0.05, 0.05, "ar1"))
+    settings = denoising._settings(
+        data, fixture.task_model, fixture.library, grid, None
+    )
+    labels = run_labels_for(data, None)
+    pool = denoising._pool(data, labels, settings)
+    selected = denoising._count_selection(data, labels, settings, pool)
+    prefixes = tuple(c.prefix(selected[1].n_components) for c in pool[3])
+    before = result.provenance.to_dict()
+    actual = denoising._assemble(
+        (data, labels, settings),
+        pool,
+        selected,
+        prefixes=prefixes,
+        provenance=result.provenance,
+    )
+    assert actual.provenance.to_dict() == before
+    assert actual.n_components == result.n_components
+    np.testing.assert_array_equal(actual.noise_pool, result.noise_pool)
+    for actual_pc, expected_pc in zip(
+        actual.run_components, result.run_components, strict=True
+    ):
+        np.testing.assert_allclose(actual_pc, expected_pc)
+    assert result.provenance.to_dict() == before

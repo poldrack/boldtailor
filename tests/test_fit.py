@@ -822,3 +822,26 @@ def test_fir_and_user_kernels_record_no_normalization(single_run_problem, hrf_mo
     _, _, _, model = single_run_problem
     identity = model_identity(replace(model, hrf_model=hrf_model))
     assert identity.activity.get("hrf_normalization") is None
+
+
+def test_standard_glm_operation_can_run_without_public_dispatch(delta_r2_problem):
+    from boldtailor._standard_glm import fit_standard_glm, standard_task_delta_r2
+
+    data, model, expected = delta_r2_problem
+    actual = fit_standard_glm(data, model)
+    np.testing.assert_allclose(
+        actual.effect("face_gt_house"), expected.effect("face_gt_house")
+    )
+    assert (
+        actual.provenance.analysis_fingerprint
+        == expected.provenance.analysis_fingerprint
+    )
+    actual_delta = standard_task_delta_r2(data, model, actual)
+    expected_delta = task_delta_r2(data, model, expected)
+    np.testing.assert_allclose(actual_delta.delta_r2, expected_delta.delta_r2)
+    assert (
+        actual_delta.provenance.analysis_fingerprint
+        == expected_delta.provenance.analysis_fingerprint
+    )
+    with pytest.raises(ValueError, match="feature_signature requires"):
+        fit_standard_glm(data, model, feature_signature="unexpected")

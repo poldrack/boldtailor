@@ -575,3 +575,27 @@ def test_selection_defaults_to_the_default_library(cv_fixture):
     assert with_default.library.fingerprint == default_hrf_library().fingerprint
     activity = with_default.provenance.to_dict()["activities"][-1]
     assert activity["library"]["kind"] == "default"
+
+
+def test_selection_calculation_needs_no_logging_operation(cv_fixture):
+    from boldtailor import hrf_selection
+    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor.data import run_labels_for
+    from boldtailor.hrf_results import HrfSelectionResult
+    from boldtailor.model import TaskModel
+
+    data, library = cv_fixture
+    model = TaskModel()
+    labels = run_labels_for(data, None)
+    runs = prepare_runs(data, library, model)
+    before = data.provenance.to_dict()
+    values, activity = hrf_selection._selection_values(
+        data, runs, data.signals, library, labels, None, 32, runs, model
+    )
+    actual = HrfSelectionResult(**values, provenance=data.provenance)
+    expected = hrf_selection.select_hrfs(data, library=library)
+    np.testing.assert_array_equal(actual.hrf_indices, expected.hrf_indices)
+    np.testing.assert_allclose(actual.cv_r2, expected.cv_r2)
+    assert activity["name"] == "hrf_selection"
+    assert "provenance" not in values
+    assert data.provenance.to_dict() == before

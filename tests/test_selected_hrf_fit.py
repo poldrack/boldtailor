@@ -282,11 +282,13 @@ def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
     assert {d["run_index"] for d in fit.diagnostics} == {0}
 
 
-def test_fit_groups_takes_keywords_only():
+def test_selected_trial_operation_takes_keywords_only():
     import inspect
 
-    from boldtailor._selected_hrf_fit import fit_groups
+    from boldtailor._selected_hrf_fit import fit_selected_hrf_trials
 
-    parameters = list(inspect.signature(fit_groups).parameters.values())[1:]
+    parameters = list(inspect.signature(fit_selected_hrf_trials).parameters.values())[
+        1:
+    ]
     assert parameters
     assert all(p.kind is inspect.Parameter.KEYWORD_ONLY for p in parameters)
