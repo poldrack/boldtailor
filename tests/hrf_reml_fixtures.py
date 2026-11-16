@@ -68,3 +68,32 @@ def planted_reml_hrfs(reml_hrf_problem):
         ),
         library,
     )
+
+
+def small_reml_problem(seed=23, n_features=3, effect=3.0, mean_id=0, rho=0.2):
+    """Generate independent trial effects with a known fixed mean and AR noise."""
+    from boldtailor._hrf_design import trial_regressors
+    from tests.reml_oracles import ar1_correlation
+
+    rng = np.random.default_rng(seed)
+    library = HrfLibrary.from_parameters([(3.5, 12, 1, 1, 6, 0, 32)])
+    events = pd.DataFrame(
+        {
+            "onset": [1.2, 9.4, 18.1, 27.3],
+            "duration": [0.5, 1, 0.5, 1],
+            "trial_type": "task",
+        }
+    )
+    times = np.arange(48.0)
+    designs = [trial_regressors(events, times, h) for h in library.candidates]
+    mean = designs[mean_id].sum(axis=1, keepdims=True)
+    factor = np.linalg.cholesky(ar1_correlation(len(times), rho))
+    signals = [
+        100
+        + 4 * mean
+        + effect * designs[1] @ rng.normal(size=(4, n_features))
+        + factor @ rng.normal(size=(48, n_features))
+        for _ in range(2)
+    ]
+    data = from_arrays(signals, [events] * 2, frame_times=[times] * 2)
+    return data, library, designs
