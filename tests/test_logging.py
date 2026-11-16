@@ -175,3 +175,32 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
     event = emit_event("fit_failed", stage="fit", error=UnprintableError())
     assert event["error_code"] == "invalid_input"
     assert "UnprintableError" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "field", ["execution_id", "data_id", "analysis_id", "run_index"]
+)
+def test_explicit_none_clears_one_context_field_and_restores_parent(field):
+    parent = dict(
+        execution_id="execution", data_id="data", analysis_id="analysis", run_index=2
+    )
+    with bind_context(**parent):
+        with bind_context(**{field: None}):
+            cleared = emit_event("cleared", stage="test")
+            assert field not in cleared
+            for key, value in parent.items():
+                if key != field:
+                    assert cleared[key] == value
+        assert emit_event("restored", stage="test")[field] == parent[field]
+        override = emit_event("override", stage="test", **{field: None})
+        assert field not in override
+        assert emit_event("unchanged", stage="test")[field] == parent[field]
+
+
+def test_context_clear_is_restored_after_exception():
+    with bind_context(analysis_id="parent"):
+        with pytest.raises(RuntimeError):
+            with bind_context(analysis_id=None):
+                assert "analysis_id" not in emit_event("inner", stage="test")
+                raise RuntimeError("failure")
+        assert emit_event("outer", stage="test")["analysis_id"] == "parent"

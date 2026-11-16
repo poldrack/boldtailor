@@ -222,3 +222,23 @@ def test_report_lists_categorical_levels_and_reference_escaped(bids_settings):
     model = TaskModel((Modulator("cond", kind="categorical", levels=("a<b", "c")),))
     html = _render(bids_settings, task_model=model)
     assert "cond: levels a&lt;b, c (reference a&lt;b)" in _section_text(html, "inputs")
+
+
+def test_report_sections_can_render_from_explicit_inputs(bids_settings):
+    data = report.ReportInputs(
+        runs=[],
+        task_model=TaskModel(),
+        library=None,
+        glm_summary=pd.DataFrame({"model": ["explicit-glm"]}),
+        hrf_summary=None,
+        reliability=None,
+        tuning=None,
+        activation_summary=None,
+        rt_summary=None,
+        skipped=[("betas", "explicit-skip")],
+        manifest=[("explicit-file.tsv", None)],
+    )
+    bodies = report._bodies(bids_settings, data, {})
+    assert "explicit-glm" in bodies["glms"]
+    assert "explicit-skip" in bodies["skipped"]
+    assert "explicit-file.tsv" in bodies["files"]
