@@ -38,3 +38,22 @@ def reml_hrf_problem():
         )
     )
     return data, library, model
+
+
+@pytest.fixture
+def planted_reml_hrfs(reml_hrf_problem):
+    """Strong trial deviations with a fixed canonical mean and a dead feature."""
+    from boldtailor._hrf_design import trial_regressors
+
+    data, library, _ = reml_hrf_problem
+    rng = np.random.default_rng(40)
+    events = [e.assign(duration=np.maximum(e.duration, 0.5)) for e in data.events]
+    signals = []
+    for e, times, confounds in zip(events, data.frame_times, data.confounds, strict=True):
+        reference = trial_regressors(e, times, library.candidates[0])
+        random = trial_regressors(e, times, library.candidates[1])
+        y = 100 + 3 * reference.sum(axis=1, keepdims=True)
+        y = y + random @ rng.normal(scale=4, size=(len(e), 3)) + rng.normal(scale=0.1, size=(len(times), 3))
+        y[:, -1] = 100
+        signals.append(y)
+    return from_arrays(signals, events, frame_times=data.frame_times, confounds=data.confounds), library
