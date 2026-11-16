@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from boldtailor._deprecation import UNSET, renamed_keyword
+from boldtailor._deprecation import UNSET, _Unset, renamed_keyword
 from boldtailor._single_trial_design import compile_trial_run  # public re-export
 from boldtailor._single_trial_fit import (  # public re-exports
     project_trial_design,
@@ -24,7 +24,7 @@ def fit_single_trials(
     *,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
-    hrf_model: str | HrfCandidate = UNSET,
+    hrf_model: str | HrfCandidate | _Unset = UNSET,
     ridge_fraction: float | np.ndarray | None = None,
     hrf: object = UNSET,
 ) -> SingleTrialResult:
@@ -59,12 +59,12 @@ def fit_single_trials(
 def fit_selected_hrfs(
     data: AnalysisData,
     *,
-    hrf_selection: HrfSelectionResult = UNSET,
+    hrf_selection: HrfSelectionResult | _Unset = UNSET,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     ridge_fraction: float | np.ndarray | None = None,
-    selection: HrfSelectionResult = UNSET,
+    selection: HrfSelectionResult | _Unset = UNSET,
 ) -> SingleTrialResult:
     """Fit unrestricted trial betas using each feature's previously selected HRF.
 

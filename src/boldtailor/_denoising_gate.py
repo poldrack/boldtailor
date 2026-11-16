@@ -48,6 +48,7 @@ attribution applies to that module).
 from dataclasses import dataclass
 
 import numpy as np
+from boldtailor._arrays import sum_arrays
 from nilearn.glm import ARModel
 from nilearn.glm.first_level.first_level import _yule_walker
 from scipy import stats
@@ -127,7 +128,7 @@ def _stacked_fit(group, bases) -> tuple[_Fit | None, str]:
     reason = _rank_reason(x, raw, len(x) - nuisance)
     if reason:
         return None, reason
-    a, b = x.T @ x, sum(p[0].T @ p[1] for p in parts)
+    a, b = x.T @ x, sum_arrays(p[0].T @ p[1] for p in parts)
     amplitude, ok = pooled_amplitude(a[None], b[None])
     if not ok[0]:
         return None, "pooled task design is singular"
@@ -231,7 +232,7 @@ def _group_test(setup, group, count, noise_model) -> _GroupTest:
         _stacked_fit(group, empty),
         _stacked_fit(group, bases),
     )
-    if reason or full_reason:
+    if reduced is None or full is None:
         return _GroupTest(group.features, reason=reason or full_reason)
     df1 = full.rank - reduced.rank
     if df1 <= 0:

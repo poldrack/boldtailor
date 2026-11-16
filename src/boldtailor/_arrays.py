@@ -68,3 +68,11 @@ def freeze_sequence_fields_in_place(instance, names):
     set_fields_in_place(
         instance, **{name: tuple(getattr(instance, name)) for name in names}
     )
+
+
+def sum_arrays(values: Iterable[NDArray[Any]]) -> NDArray[Any]:
+    """Sum nonempty arrays in Python's existing left-to-right order."""
+    result = sum(values)
+    if not isinstance(result, np.ndarray):
+        raise ValueError("sum_arrays requires at least one array")
+    return result

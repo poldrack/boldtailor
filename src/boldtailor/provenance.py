@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from types import MappingProxyType
 from uuid import UUID
+from typing import overload
 
 SCHEMA_ID = "boldtailor.provenance/1"
 _PATH_COMPONENT = re.compile(r"[A-Za-z0-9+_.-]+")
@@ -57,13 +58,13 @@ class SourceRef:
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> SourceRef:
         return cls(
-            role=data["role"],
-            uri=data.get("uri"),
-            media_type=data.get("media_type"),
-            byte_size=data.get("byte_size"),
-            modified_at=data.get("modified_at"),
-            sha256=data.get("sha256"),
-            annotations=data.get("annotations", {}),
+            role=_validate_role(data["role"]),
+            uri=_validate_uri(data.get("uri")),
+            media_type=_validate_optional_text(data.get("media_type")),
+            byte_size=_validate_byte_size(data.get("byte_size")),
+            modified_at=_validate_modified_at(data.get("modified_at")),
+            sha256=_validate_sha256(data.get("sha256")),
+            annotations=_freeze_mapping(data.get("annotations", {})),
         )
 
 
@@ -84,7 +85,7 @@ class RunSources:
             )
 
     def to_dict(self) -> dict[str, object]:
-        data = {
+        data: dict[str, object] = {
             "signal": self.signal.to_dict(),
             "events": self.events.to_dict(),
         }
@@ -157,13 +158,17 @@ class ProvenanceRecord:
             "schema": self.schema,
             "execution_id": self.execution_id,
             "sources": [source.to_dict() for source in self.sources],
-            "activities": [_thaw(activity) for activity in self.activities],
+            "activities": self.activity_records(),
             "events": [_thaw(event) for event in self.events],
             "warnings": [_thaw(warning) for warning in self.warnings],
             "metadata_fingerprint": self.metadata_fingerprint,
         }
         data.update(_thaw(self._extra))
         return data
+
+    def activity_records(self) -> list[dict[str, object]]:
+        """Return owned JSON-compatible activity dictionaries."""
+        return [_thaw(activity) for activity in self.activities]
 
     def canonical_json(self) -> str:
         return json.dumps(
@@ -185,8 +190,8 @@ class ProvenanceRecord:
             "metadata_fingerprint",
         }
         return cls(
-            schema=data.get("schema", SCHEMA_ID),
-            execution_id=data["execution_id"],
+            schema=_validate_schema(data.get("schema", SCHEMA_ID)),
+            execution_id=_validate_uuid(data["execution_id"]),
             sources=tuple(
                 RunSources.from_dict(_require_mapping(item, "sources item"))
                 for item in _require_sequence(data.get("sources", ()), "sources")
@@ -214,7 +219,7 @@ def analysis_fingerprint(
 
 def identity_activity(record: ProvenanceRecord) -> dict[str, object]:
     """The record's last activity without environment-only keys, for embedding in identities."""
-    activity = dict(record.to_dict()["activities"][-1])
+    activity = dict(record.activity_records()[-1])
     activity.pop("software", None)
     return activity
 
@@ -421,6 +426,14 @@ def _freeze_json(value: object) -> object:
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         return tuple(_freeze_json(item) for item in value)
     raise ValueError("values must be JSON-safe")
+
+
+@overload
+def _thaw(value: Mapping[str, object]) -> dict[str, object]: ...
+
+
+@overload
+def _thaw(value: object) -> object: ...
 
 
 def _thaw(value: object) -> object:

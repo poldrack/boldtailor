@@ -32,6 +32,8 @@ https://doi.org/10.7554/eLife.77599
 
 from dataclasses import dataclass
 
+from boldtailor._arrays import sum_arrays
+
 import numpy as np
 import scipy.linalg
 
@@ -73,13 +75,13 @@ def onoff_r2(data, library, *, run_labels=None) -> np.ndarray:
     labels = run_labels_for(data, run_labels)
     runs = prepare_runs(data, library, TaskModel(), labels=labels)
     terms = [_onoff_terms(*args) for args in zip(runs, data.signals, labels)]
-    a = sum(x.T @ x for x, _ in terms)
-    b = sum(x.T @ yr for x, yr in terms)
+    a = sum_arrays(x.T @ x for x, _ in terms)
+    b = sum_arrays(x.T @ yr for x, yr in terms)
     amplitude, ok = pooled_amplitude(a[None], b[None])
     if not ok[0]:
         raise ValueError("ON-OFF task design is singular across runs")
-    sse = sum(np.sum((yr - x @ amplitude[0]) ** 2, axis=0) for x, yr in terms)
-    sst = sum(np.sum(yr**2, axis=0) for _, yr in terms)
+    sse = sum_arrays(np.sum((yr - x @ amplitude[0]) ** 2, axis=0) for x, yr in terms)
+    sst = sum_arrays(np.sum(yr**2, axis=0) for _, yr in terms)
     ratio = np.full(data.n_features, np.nan)
     np.divide(sse, sst, out=ratio, where=sst > 0)
     return readonly_array(1 - ratio)

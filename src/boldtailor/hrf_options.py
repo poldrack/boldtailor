@@ -30,14 +30,14 @@ class RemlHrfOptions:
 
     def validate(self, n_features: int, library: HrfLibrary) -> None:
         """Check settings against the data and candidate library."""
-        if np.ndim(self.rho) and self.rho.shape != (n_features,):
+        if isinstance(self.rho, np.ndarray) and self.rho.shape != (n_features,):
             raise ValueError("rho must have one value per feature")
         if self.reference_hrf_id >= len(library.candidates):
             raise ValueError("reference_hrf_id is absent from the library")
 
     def subset(self, indices) -> "RemlHrfOptions":
         """Preserve supplied noise correlations when partitioning features."""
-        rho = self.rho[indices] if np.ndim(self.rho) else self.rho
+        rho = self.rho[indices] if isinstance(self.rho, np.ndarray) else self.rho
         return RemlHrfOptions(rho=rho, reference_hrf_id=self.reference_hrf_id)
 
 

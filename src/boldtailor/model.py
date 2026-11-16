@@ -101,7 +101,7 @@ class Modulator:
             return
         self._set_reference(self._reference_name())
         if self.levels is not None:
-            self._set_resolved_levels()
+            self._set_resolved_levels(self.levels)
 
     def _reference_name(self):
         if self.reference is None:
@@ -116,9 +116,9 @@ class Modulator:
     def _set_reference(self, name):
         object.__setattr__(self, "reference", name)
 
-    def _set_resolved_levels(self):
+    def _set_resolved_levels(self, values):
         """Validate and assign normalized levels and reference on this modulator."""
-        names = [level_name(v) for v in self.levels]
+        names = [level_name(v) for v in values]
         if any(n is None for n in names):
             raise ValueError(f"modulator {self.column!r} levels must be nonmissing")
         if len(set(names)) != len(names):
@@ -158,7 +158,7 @@ class Modulator:
         return f"missing_{self.column}"
 
     def to_dict(self) -> dict[str, object]:
-        values = {"column": self.column, "missing": self.missing, "kind": self.kind}
+        values: dict[str, object] = {"column": self.column, "missing": self.missing, "kind": self.kind}
         if self.kind == "categorical":
             values["levels"] = None if self.levels is None else list(self.levels)
             values["reference"] = self.reference

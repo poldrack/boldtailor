@@ -38,6 +38,8 @@ https://doi.org/10.7554/eLife.77599
 
 from dataclasses import dataclass, field
 
+from boldtailor._arrays import sum_arrays
+
 import numpy as np
 import pandas as pd
 
@@ -299,8 +301,8 @@ def _fold_coefficients(setup, per_run, held_out):
     beta = np.full((setup.n_regressors, len(setup.scored)), np.nan)
     for g, group in enumerate(setup.groups):
         # Explicit sums avoid cancellation when one run has much larger energy.
-        a_sum = sum(stats[g][0] for stats in train)
-        b_sum = sum(stats[g][1] for stats in train)
+        a_sum = sum_arrays(stats[g][0] for stats in train)
+        b_sum = sum_arrays(stats[g][1] for stats in train)
         amplitude, ok = pooled_amplitude(a_sum[None], b_sum[None])
         if not ok[0]:
             return None, f"HRF {group.hrf_id}: pooled task design is singular"

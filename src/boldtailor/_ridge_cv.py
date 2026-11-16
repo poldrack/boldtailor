@@ -164,6 +164,7 @@ def _score_fold(
         first = fit if first is None else first
         losses.append(fit.run_sse[0])
         totals.append(fit.run_sst[0])
+    assert first is not None  # Candidate grids are validated as nonempty.
     record = dict(
         train=[labels[r] for r in train],
         validation=labels[test],

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs
-from boldtailor._deprecation import UNSET, deprecated
+from boldtailor._deprecation import UNSET, _Unset, deprecated
 from boldtailor._fit_diagnostics import (
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
@@ -78,9 +78,9 @@ def task_delta_r2_prepared(
     prepared: PreparedDesignAnalysis,
     full_result: AnalysisResult,
     *,
-    contrasts: Mapping[str, ContrastValue] = UNSET,
-    noise_model: str = UNSET,
-    model_metadata: Mapping[str, object] | None = UNSET,
+    contrasts: Mapping[str, ContrastValue] | _Unset = UNSET,
+    noise_model: str | _Unset = UNSET,
+    model_metadata: Mapping[str, object] | None | _Unset = UNSET,
 ) -> TaskDeltaR2Result:
     """Nested-OLS task delta r-squared for a :func:`fit_prepared` result.
 
@@ -147,7 +147,7 @@ def _parent_fit_spec(
 
 
 def _stored_fit_spec(full_result: AnalysisResult) -> _PreparedFitSpec:
-    activities = full_result.provenance.to_dict()["activities"]
+    activities = full_result.provenance.activity_records()
     model = activities[-1].get("model") if activities else None
     if not isinstance(model, Mapping) or model.get("kind") != "prepared_design":
         raise ValueError("full_result must be an AnalysisResult from fit_prepared")
@@ -230,7 +230,7 @@ def _prepared_delta_activity(
     fit_spec: _PreparedFitSpec,
     nuisance_designs: tuple[pd.DataFrame, ...],
     comparison: TaskDeltaR2Result,
-    parent_id: str,
+    parent_id: str | None,
 ) -> dict[str, object]:
     return {
         **delta_r2_activity(
@@ -266,13 +266,15 @@ def _prepared_delta_run_diagnostic(
 
 
 def _prepare_fit_spec(
-    contrasts: Mapping[str, ContrastValue],
-    noise_model: str,
-    model_metadata: Mapping[str, object] | None,
+    contrasts: object,
+    noise_model: object,
+    model_metadata: object,
 ) -> _PreparedFitSpec:
     if not isinstance(contrasts, Mapping):
         raise ValueError("contrasts must be a mapping")
     normalized = _prepare_contrasts(contrasts)
+    if not isinstance(noise_model, str):
+        raise ValueError("noise_model must be ols or ar1")
     _validate_noise_model(noise_model)
     metadata = _freeze_mapping(model_metadata)
     return _PreparedFitSpec(

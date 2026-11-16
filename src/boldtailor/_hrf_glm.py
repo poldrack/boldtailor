@@ -58,7 +58,7 @@ def _check_task_model(model, selection):
             "the selection's task_model must equal ModelSpec.task_model or be a "
             "subset of it with identical modulator settings"
         )
-    activity = selection.provenance.to_dict()["activities"][-1]
+    activity = selection.provenance.activity_records()[-1]
     recorded = (activity.get("oversampling"), activity.get("min_onset"))
     if (model.oversampling, model.min_onset) != recorded:
         raise ValueError(

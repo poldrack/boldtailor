@@ -174,7 +174,7 @@ def _global_scores(
         records.append(
             dict(
                 grayordinate_indices=indices.tolist(),
-                activities=result.provenance.to_dict()["activities"],
+                activities=result.provenance.activity_records(),
             )
         )
     indices = np.concatenate(blocks)
@@ -683,7 +683,7 @@ def _identity_activities(record):
     """Embedded scoring activities without environment-only software keys."""
     return [
         {key: value for key, value in activity.items() if key != "software"}
-        for activity in record.to_dict()["activities"]
+        for activity in record.activity_records()
     ]
 
 
@@ -711,7 +711,7 @@ def link_final_provenance(result, decision, *, encoding_mode):
         record = ProvenanceRecord.from_dict(block["record"])
         if any(
             activity.get("name") == "encoding_guided_ridge_refit"
-            for activity in record.to_dict()["activities"]
+            for activity in record.activity_records()
         ):
             raise ValueError("final fit provenance is already linked")
         identity = dict(
