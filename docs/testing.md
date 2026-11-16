@@ -99,9 +99,9 @@ uv run pytest examples/bids_workflow examples/validation --run-notebooks -q -W e
 
 Run the relevant scientific checks when changing the statistical method or
 numerical tolerances. Run notebook checks when their workflow or dependencies
-change. The scheduled/manual examples CI job executes notebooks; the default
-package job keeps running all default package tests and reports the 20 slowest
-phases. Neither suite is reduced by the integration marker.
+change. GitHub Actions runs only the default package test suite and reports the 20
+slowest phases. Run example and experiment notebook tests locally when needed.
+The package suite is not reduced by the integration marker.
 
 ## Test purpose and maintenance
 
