@@ -365,7 +365,7 @@ From `boldtailor.reml`:
 ```text
 RemlGroup(signals, fixed_design)
 fit_reml(groups, random_design, *, rho=0.0)
-select_random_design(groups, candidates, *, rho=0.0)
+select_random_effects_design(groups, candidates, *, rho=0.0)
 ```
 
 `RemlGroup` holds one group's `signals` `(scans, features)` and `fixed_design`

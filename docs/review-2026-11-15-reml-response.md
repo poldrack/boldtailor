@@ -104,7 +104,7 @@ One correction to the review's account of R2: the grid did not fail to bracket t
 
 **Tests.** Recorded sizes of every evaluation's temporary stay within the budget when one grid row over all features would exceed it; the review's shape (100 directions by 30,000 features) stays within the default budget; a budget below one feature falls back to single features; results are identical across batch sizes, including on the multi-basin problem. The grid-row chunking test was replaced, because row chunking is the contract R5 showed to be insufficient.
 
-**On the 8 MiB value.** It was inherited from the earlier implementation without a recorded rationale. Timing `select_random_design` at budgets from 0.25 MiB to unbatched, on four problems (3,000 to 100,000 features, 12 to 120 pooled directions), showed differences of a few percent from 1 MiB upward and a 5–25% penalty below that. The value was kept and the finding is recorded in a comment at the constant. Peak memory was not measured.
+**On the 8 MiB value.** It was inherited from the earlier implementation without a recorded rationale. Timing `select_random_effects_design` at budgets from 0.25 MiB to unbatched, on four problems (3,000 to 100,000 features, 12 to 120 pooled directions), showed differences of a few percent from 1 MiB upward and a 5–25% penalty below that. The value was kept and the finding is recorded in a comment at the constant. Peak memory was not measured.
 
 ## R6. Duplicated numerical policy
 

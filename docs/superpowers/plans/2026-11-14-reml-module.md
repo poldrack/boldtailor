@@ -50,7 +50,7 @@ Conditions the spec implies that a user will hit; each has a named test in the t
 | `src/boldtailor/_reml_terms.py` | `FixedProjection`, `RemlTerms`, `project_fixed`, `reml_terms`; the only place rank tolerances live |
 | `src/boldtailor/_reml_criterion.py` | `criterion`, `profiled_variance` |
 | `src/boldtailor/_reml_search.py` | `RatioOptimum`, `minimize_ratio` |
-| `src/boldtailor/reml.py` | Public: `RemlGroup`, `RemlFit`, `RemlSelection`, `fit_reml`, `select_random_design` |
+| `src/boldtailor/reml.py` | Public: `RemlGroup`, `RemlFit`, `RemlSelection`, `fit_reml`, `select_random_effects_design` |
 | `tests/reml_oracles.py` | Data simulator, dense criterion/fit, `MixedLM` fit, null-LRT reference. No boldtailor imports |
 | `tests/test_ar1.py`, `test_reml_terms.py`, `test_reml_criterion.py`, `test_reml_search.py`, `test_reml.py`, `test_reml_selection.py` | Unit tests per module |
 | `tests/test_reml_oracle.py`, `test_reml_properties.py`, `test_reml_statistics.py` | Oracle agreement, hypothesis properties, Monte Carlo |
@@ -286,7 +286,7 @@ return result.vcomp[0] / result.scale, result.scale
 
 ---
 
-### Task 6: `select_random_design`
+### Task 6: `select_random_effects_design`
 
 **Files:**
 - Modify: `src/boldtailor/reml.py`
@@ -301,7 +301,7 @@ class RemlSelection:
     gap: np.ndarray       # runner-up criterion minus winner criterion among "ok" candidates; NaN if < 2
     n_candidates: int
 
-def select_random_design(groups: Sequence[RemlGroup],
+def select_random_effects_design(groups: Sequence[RemlGroup],
                          candidates: Iterable[Sequence[np.ndarray | None]], *,
                          rho: float | np.ndarray = 0.0) -> RemlSelection
 ```
@@ -317,7 +317,7 @@ def select_random_design(groups: Sequence[RemlGroup],
   - `test_invalid_candidates_raise` *(Review Focus 5)*: empty iterable; candidate with wrong group count; scan mismatch — each `ValueError`.
   - `test_per_feature_rho_equals_separate_selections`.
   - `test_fixed_projection_built_once_per_rho`: monkeypatch `boldtailor.reml.project_fixed` with a counting wrapper; 4 candidates, 2 groups, 2 distinct rho → exactly 4 calls.
-- [ ] **Step 2:** Run — expected: `ImportError: cannot import name 'select_random_design'`. Commit `test: specify REML candidate selection semantics`.
+- [ ] **Step 2:** Run — expected: `ImportError: cannot import name 'select_random_effects_design'`. Commit `test: specify REML candidate selection semantics`.
 - [ ] **Step 3:** Implement. Refactor `fit_reml` to share the projection/partition helpers.
 - [ ] **Step 4:** `uv run pytest tests/test_reml.py tests/test_reml_selection.py tests/test_reml_oracle.py -q` — expected: pass. Commit `feat: add REML candidate selection`.
 
@@ -403,7 +403,7 @@ def fit_ar1_reml(runs, library, settings) -> HrfEstimate                  # esti
 
 - [ ] **Step 1: Write failing tests** in `test_reml_selection.py` (reuse the `planted_runs` fixture from `test_library_cv.py`):
   - `test_planted_hrf_is_selected_iid` and `..._ar1`.
-  - `test_estimate_matches_package_selection`: `select_hrf` kernels equal `library.candidates[i]` for `i` from a direct `select_random_design` call.
+  - `test_estimate_matches_package_selection`: `select_hrf` kernels equal `library.candidates[i]` for `i` from a direct `select_random_effects_design` call.
   - `test_no_rt_mode_has_four_random_effects` (moved from `test_rt_ablation.py:46-48`).
   - `test_noise_estimate_keys_and_bounds`.
   - `test_removed_variants_are_rejected`: `pilot` dispatch with `"remlcombined"` raises.
@@ -424,7 +424,7 @@ def fit_ar1_reml(runs, library, settings) -> HrfEstimate                  # esti
 **Files:**
 - Modify: `experiments/hrf_simulations/fitting.py`, `calibration.py:9-12,23-56,157-167`, `runner.py:40-54`, `test_fitting.py`, `test_calibration.py`, `README.md` ("What is being fitted" section)
 
-**Interfaces — Consumes:** `boldtailor.reml.select_random_design`, `RemlGroup`; `boldtailor.ar1.estimate_rho`; `experiments.hrf_estimation.regularized_noise.shrink_rho` (unchanged).
+**Interfaces — Consumes:** `boldtailor.reml.select_random_effects_design`, `RemlGroup`; `boldtailor.ar1.estimate_rho`; `experiments.hrf_estimation.regularized_noise.shrink_rho` (unchanged).
 **Produces (signatures unchanged for `runner.py`):**
 ```python
 def estimate_rho(runs, cache=None) -> float      # boldtailor.ar1.estimate_rho(signals, cached reference designs).pooled

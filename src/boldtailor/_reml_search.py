@@ -47,7 +47,7 @@ from boldtailor._reml_terms import RemlTerms
 
 _RELATIVE_SPAN = 1e8
 _ROUNDING_ULPS = 64
-# A memory knob, not a speed knob: timing select_random_design at budgets from
+# A memory knob, not a speed knob: timing select_random_effects_design at budgets from
 # 0.25 MiB to unbatched (3k-100k features, 12-120 pooled directions) varied by
 # only a few percent from 1 MiB upward, and was 5-25% slower below that. 8 MiB
 # sits clear of the slow end while keeping each temporary small.

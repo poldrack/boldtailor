@@ -330,7 +330,7 @@ and offset lags; generation independently uses fractional-bin neural activity
 and FFT convolution at 5 ms. This avoids rounding short events to NSD TR/50
 bins. Thus longer neural durations retain their greater area.
 This is essential for the Mumford comparison. Both estimators run on the
-package module `boldtailor.reml` (`select_random_design`): each candidate's
+package module `boldtailor.reml` (`select_random_effects_design`): each candidate's
 task and junk columns are the random-effects design, with one shared scalar
 variance ratio and run-specific coefficients, and the confounds are the
 unpenalised fixed design. The iid and AR(1) estimators differ only in the

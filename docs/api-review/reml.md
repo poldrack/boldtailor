@@ -34,7 +34,7 @@ Scalar restricted maximum likelihood for one random-effect variance.
 - [`_run_candidate`](#definition-24)
 - [`_gap`](#definition-25)
 - [`_run_race`](#definition-26)
-- [`select_random_design`](#definition-27)
+- [`select_random_effects_design`](#definition-27)
 
 <a id="definition-1"></a>
 
@@ -510,12 +510,12 @@ Usage in package/tests:
 
 <a id="definition-27"></a>
 
-## `select_random_design`
+## `select_random_effects_design`
 
 [Source, line 275](../../src/boldtailor/reml.py#L275)
 
 ```python
-select_random_design(groups: Sequence[RemlGroup], candidates: Iterable[Iterable[np.ndarray | None]], *, rho: float | np.ndarray=0.0) -> RemlSelection
+select_random_effects_design(groups: Sequence[RemlGroup], candidates: Iterable[Iterable[np.ndarray | None]], *, rho: float | np.ndarray=0.0) -> RemlSelection
 ```
 
 Pick, per feature, the candidate random design with the best criterion.

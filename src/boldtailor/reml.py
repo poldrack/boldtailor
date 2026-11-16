@@ -1,4 +1,29 @@
-"""Scalar restricted maximum likelihood for one random-effect variance."""
+"""Scalar restricted maximum likelihood for one random-effects variance.
+
+For each feature (for example, a voxel), group r follows the model
+
+    y_r = C_r beta_r + Z_r b_r + epsilon_r
+    b_r ~ N(0, tau_squared I)
+    epsilon_r ~ N(0, sigma_squared R(rho))
+
+The random effects are the coefficients b_r of the supplied columns of Z_r.
+Their interpretation comes from those columns. With one HRF-convolved column
+per trial, they are trial amplitudes, modeled as independent zero-mean draws
+with a common variance. Each group has its own coefficients; tau_squared and
+sigma_squared are shared across groups for that feature. Features are fitted
+separately. A RemlGroup is an observation block, not an automatic random
+intercept for a run or subject.
+
+C_r contains unpenalised fixed effects with unrestricted coefficients beta_r.
+To model trial amplitudes as deviations around a nonzero mean response, put
+that mean response in C_r; this module does not add it or center Z_r for you.
+The supplied rho fixes the AR(1) noise correlation; these functions do not
+estimate rho.
+
+REML integrates over b_r and accounts for the fixed effects. The marginal
+signal covariance is tau_squared Z_r Z_r.T + sigma_squared R(rho).
+The fitted variance ratio is lambda = tau_squared / sigma_squared.
+"""
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -272,13 +297,37 @@ def _run_race(groups, candidates, subsets, result):
     return race, n_candidates
 
 
-def select_random_design(
+def select_random_effects_design(
     groups: Sequence[RemlGroup],
     candidates: Iterable[Iterable[np.ndarray | None]],
     *,
     rho: float | np.ndarray = 0.0,
 ) -> RemlSelection:
-    """Pick, per feature, the candidate random design with the best criterion."""
+    """Select random-effects designs by REML, independently for each feature.
+
+    Each candidate supplies one Z matrix per group, in group order; None means
+    no random-effect columns for that group. The signals, fixed designs C,
+    and supplied rho are held constant across candidates. For example, a
+    candidate can contain trial-response designs made with one HRF, while
+    another candidate uses a different HRF for the same trials.
+
+    For every candidate, estimate the shared-across-groups variance ratio and
+    noise variance, then compare its optimized restricted-likelihood criterion
+    (lower is better). This selects the candidate covariance structure, not
+    random columns or random observations. It uses the supplied data directly;
+    it is not cross-validation and does not return fitted coefficients b_r.
+
+    winner contains zero-based candidate indices. Only fits with status "ok"
+    compete; zero-variance or unidentifiable fits do not become winners. A
+    winner of -1 means no supported candidate; inspect fit.status to distinguish
+    zero variance, absent signal, and numerically unresolved signal. Exact ties
+    favor the earlier candidate. fit holds the winning variance estimates, or
+    the no-random-effects baseline when no candidate wins. gap is the runner-up
+    criterion minus the best, or NaN when fewer than two candidates qualify.
+    any_at_upper and any_unrefined flag limitations in any candidate's search.
+
+    Candidates are consumed once, with only the best and runner-up retained.
+    """
     validate_groups(groups)
     rho, subsets, dof, result = _start(groups, rho)
     _fill(result, subsets, [None] * len(groups))

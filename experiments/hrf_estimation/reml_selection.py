@@ -4,7 +4,7 @@ import numpy as np
 
 from boldtailor.ar1 import estimate_rho
 from boldtailor.hrf_library import HrfCandidate
-from boldtailor.reml import RemlGroup, select_random_design
+from boldtailor.reml import RemlGroup, select_random_effects_design
 from experiments.hrf_estimation.design import build_design
 from experiments.hrf_estimation.estimators import HrfEstimate, validate_features
 
@@ -83,7 +83,7 @@ def select_hrf(runs, library, design, rho=0.0):
     """Per-feature library HRF whose random design has the best REML criterion."""
     groups = _groups(runs)
     candidates = ([design(run, k) for run in runs] for k in library.candidates)
-    selection = select_random_design(groups, candidates, rho=rho)
+    selection = select_random_effects_design(groups, candidates, rho=rho)
     kernels = tuple(None if i < 0 else library.candidates[i] for i in selection.winner)
     return HrfEstimate(
         runs[0].feature_ids.copy(),

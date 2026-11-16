@@ -65,7 +65,7 @@ With `y = default_rng(0).normal(size=(10, 1))`, `C` of shape `(10, 0)`, and `Z =
 ratio = 10000
 status = "ok"
 at_upper = False
-select_random_design(...).winner = 0
+select_random_effects_design(...).winner = 0
 ```
 
 Independent evaluations of the exact flat criterion at ratios 0, 1, and 10000 agreed to rounding, approximately `-5.859064715414505`. Other seeds produced other large positive ratios.

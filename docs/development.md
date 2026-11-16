@@ -289,7 +289,7 @@ the AR(1) fit's; this is a finding from that scenario, not a general law.
 The criterion is the exact restricted likelihood, profiled over `σ²`. Its
 constant depends only on `C` and `ρ`, so criteria are comparable across random
 designs only at fixed `C` and `ρ`, never across `ρ` or `C`.
-`select_random_design` therefore compares candidates per feature, at the
+`select_random_effects_design` therefore compares candidates per feature, at the
 groups' `fixed_design` and that feature's `rho`; `rho` may differ between
 features, and features are never compared with each other.
 

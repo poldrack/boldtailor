@@ -117,7 +117,7 @@ Names follow the package pattern (`fractional_ridge` / `_fractional_ridge`).
 | `_reml_search.py` | `minimize_ratio(terms)`: log grid over `λ·s²`, bisection on the analytic slope inside the neighbouring grid points, explicit `λ = 0` candidate; returns ratio, criterion, boundary flags. The only optimiser. |
 | `ar1.py` (public) | `whiten`, `prepare_reference`, `RhoReference`, `estimate_rho`, `RhoEstimate`; the lag-ratio moments live in `_ar1_moments.py`. |
 | `_reml_inputs.py` | Validation of the public REML inputs (groups, random designs and candidates, `rho`). |
-| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_design`, result dataclasses. |
+| `reml.py` (public) | `RemlGroup`, `fit_reml`, `select_random_effects_design`, result dataclasses. |
 
 Public API sketch (names are the builder's to refine; shapes and semantics are not):
 
@@ -132,7 +132,7 @@ fit_reml(groups, random_design, *, rho=0.0) -> RemlFit
 # RemlFit: ratio, noise_variance, effect_variance, criterion, status  (one per feature),
 #          restricted_dof, rho
 
-select_random_design(groups, candidates, *, rho=0.0) -> RemlSelection
+select_random_effects_design(groups, candidates, *, rho=0.0) -> RemlSelection
 # `candidates` is an iterable; each item is one `random_design` (a sequence with one
 # matrix per group). Consumed lazily, one candidate in memory.
 # Each candidate is whitened once per distinct rho, so the iterable is consumed once

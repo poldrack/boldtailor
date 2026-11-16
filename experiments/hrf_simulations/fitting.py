@@ -6,7 +6,7 @@ from hashlib import sha256
 import numpy as np
 
 from boldtailor import ar1
-from boldtailor.reml import RemlGroup, select_random_design
+from boldtailor.reml import RemlGroup, select_random_effects_design
 from experiments.hrf_estimation.estimators import HrfEstimate
 from experiments.hrf_estimation.scoring import residuals
 from experiments.hrf_simulations.design import task_design, reference_design
@@ -127,7 +127,7 @@ def _select(runs, library, parts, scaling, rho):
     # design_builder must keep the two equal for the scales to be consistent.
     groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in runs]
     candidates = (_random_designs(parts(k), scaling) for k in library.candidates)
-    return select_random_design(groups, candidates, rho=rho)
+    return select_random_effects_design(groups, candidates, rho=rho)
 
 
 def _estimate(runs, kernel, state, diagnostics):

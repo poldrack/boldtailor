@@ -116,7 +116,7 @@ Start with [test_single_trial.py](../tests/test_single_trial.py),
 | Read in order | Functions to follow and their usage |
 | --- | --- |
 | [ar1](api-review/ar1.md), [_ar1_moments](api-review/_ar1_moments.md) | `whiten` transforms rows; `prepare_reference` caches design work; `estimate_rho` estimates autocorrelation using a reference design |
-| [reml](api-review/reml.md), [_reml_inputs](api-review/_reml_inputs.md) | `fit_reml(groups, random_design, rho=...)` estimates one random-effect variance ratio; `select_random_design` compares candidate random designs using the same groups |
+| [reml](api-review/reml.md), [_reml_inputs](api-review/_reml_inputs.md) | `fit_reml(groups, random_design, rho=...)` estimates one random-effect variance ratio; `select_random_effects_design` compares candidate random designs using the same groups |
 | [_reml_terms](api-review/_reml_terms.md) | Follow fixed-space projection, whitening, random-design spectral terms and degeneracy handling |
 | [_reml_criterion](api-review/_reml_criterion.md), [_reml_search](api-review/_reml_search.md) | Follow pooled restricted likelihood and the bounded variance-ratio search |
 | [_numerics](api-review/_numerics.md) | Review shared rank, projection and least-squares conventions used by numerical paths |
@@ -288,7 +288,7 @@ different selected HRF and describe it as the same tuning procedure.
 
 ```python
 from boldtailor.ar1 import estimate_rho
-from boldtailor.reml import RemlGroup, fit_reml, select_random_design
+from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 
 fixed = [np.ones((y.shape[0], 1)) for y in signals]
 random = [rng.normal(size=(y.shape[0], 4)) for y in signals]
@@ -297,7 +297,7 @@ rho = estimate_rho(signals, fixed)
 variance_fit = fit_reml(groups, random, rho=rho.pooled)
 print(variance_fit.status)
 print(variance_fit.ratio.shape)  # (3,)
-comparison = select_random_design(groups, [random], rho=rho.pooled)
+comparison = select_random_effects_design(groups, [random], rho=rho.pooled)
 print(comparison.winner)  # candidate 0 or -1 if no eligible winner
 ```
 
