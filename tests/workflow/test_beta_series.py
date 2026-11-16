@@ -695,3 +695,29 @@ def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
         linked["provenance"][0]["record"]["activities"][-1]["encoding_mode"]
         == "within_run"
     )
+
+
+
+def test_reml_nested_workflow_preserves_method_and_outer_isolation(session, cv_library):
+    """Inner, outer, and final selections use REML without outer-test leakage."""
+    from boldtailor.hrf_options import RemlHrfOptions
+
+    root, runs, model = session
+    reduced = (root, runs[:4], model)
+    options = dict(fractions=[.5, 1.], block_size=2, hrf_method="reml", reml_options=RemlHrfOptions(rho=.1))
+    result = fit(reduced, cv_library, **options)
+    altered = fit((root, altered_runs(runs[:4], 0, 0.), model), cv_library, **options)
+    np.testing.assert_allclose(result["tuning"]["odd"]["scores"].cv_r2, altered["tuning"]["odd"]["scores"].cv_r2)
+    np.testing.assert_array_equal(result["evaluation"]["odd_to_even"]["hrf_indices"], altered["evaluation"]["odd_to_even"]["hrf_indices"])
+    for scope in ("odd", "even", "all"):
+        blocks = result["tuning"][scope]["scores"].provenance.to_dict()["activities"][-1]["block_records"]
+        for block in blocks:
+            for fold in block["activities"][-1]["folds"]:
+                record = fold["hrf_selection"]
+                assert record["method"] == "reml"
+                assert record["task_model"] == model.to_dict()
+    for bundle in result["final"]["hrf_selections"].values():
+        assert bundle["all"].method == "reml"
+    for split in result["evaluation"].values():
+        for block in split["provenance"]:
+            assert block["selection_record"]["activities"][-1]["method"] == "reml"
