@@ -125,23 +125,23 @@ def test_dead_features_do_not_affect_others(data):
         warnings.simplefilter("error")
         fit = _fit(_with_dead_columns(live), fixed, random)
         reference = _fit(live, fixed, random)
-    assert fit.status[1] == "no_signal" and fit.status[3] == "no_signal"
+    assert fit.status[1] == "no_residual_signal" and fit.status[3] == "no_residual_signal"
     for name in ("noise_variance", "effect_variance", "criterion"):
         assert np.isnan(getattr(fit, name)[[1, 3]]).all()
         assert_array_equal(getattr(fit, name)[[0, 2]], getattr(reference, name))
-    assert_array_equal(fit.ratio[[1, 3]], 0.0)
+    assert np.isnan(fit.ratio[[1, 3]]).all()
     assert_array_equal(fit.ratio[[0, 2]], reference.ratio)
     assert not fit.at_upper[[1, 3]].any()
     assert (fit.status[0], fit.status[2]) == reference.status
 
 
-def test_all_features_dead_is_no_signal(data):
+def test_all_features_dead_is_no_residual_signal(data):
     _, fixed, random = data
     signals = [np.zeros((len(c), 2)) for c in fixed]
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         fit = _fit(signals, fixed, random)
-    assert fit.status == ("no_signal", "no_signal")
+    assert fit.status == ("no_residual_signal", "no_residual_signal")
     assert np.isnan(fit.noise_variance).all()
 
 
@@ -290,7 +290,7 @@ def test_unrefined_flag_covers_the_upper_edge_and_is_read_only(data):
 def test_features_without_a_fit_are_not_unrefined(data):
     signals, fixed, random = data
     fit = _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
-    assert fit.status[1] == "no_signal"
+    assert fit.status[1] == "no_residual_signal"
     assert not fit.unrefined.any()
 
 
@@ -331,3 +331,20 @@ def test_live_subset_computes_fixed_basis_once_when_mixing_dead_features(
     signals, fixed, random = data
     _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
     assert calls == len(signals)
+
+
+@pytest.mark.parametrize("rho", [0.0, 0.6])
+@pytest.mark.parametrize("signal_level", [0.0, 3.5])
+def test_no_residual_signal_has_no_estimated_variance_ratio(rho, signal_level):
+    fixed = np.ones((30, 1))
+    signals = np.full((30, 2), signal_level)
+    random = np.random.default_rng(16).normal(size=(30, 3))
+    groups = [RemlGroup(signals, fixed)]
+    fit = fit_reml(groups, [random], rho=rho)
+    selection = select_random_effects_design(groups, [[random], [None]], rho=rho)
+    for result in (fit, selection.fit):
+        assert result.status == ("no_residual_signal",) * 2
+        for field in ("ratio", "noise_variance", "effect_variance", "criterion"):
+            assert np.isnan(getattr(result, field)).all()
+    assert_array_equal(selection.winner, [-1, -1])
+    assert np.isnan(selection.gap).all()

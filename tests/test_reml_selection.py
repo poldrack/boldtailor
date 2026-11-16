@@ -104,7 +104,7 @@ def test_no_supported_candidate_gives_sentinel():
     assert_allclose(selection.fit.noise_variance, at_zero.noise_variance, rtol=1e-12)
 
 
-def test_no_signal_feature_gives_sentinel(planted):
+def test_no_residual_signal_feature_gives_sentinel(planted):
     signals, fixed, candidates = planted
     signals = [np.column_stack([y[:, 0], np.zeros(len(y)), y[:, 1]]) for y in signals]
     groups = _groups(signals, fixed)
@@ -114,10 +114,10 @@ def test_no_signal_feature_gives_sentinel(planted):
     )
     assert_array_equal(selection.winner, [2, -1, 2])
     assert np.isnan(selection.gap[1])
-    assert selection.fit.status[1] == "no_signal"
+    assert selection.fit.status[1] == "no_residual_signal"
     assert np.isnan(selection.fit.noise_variance[1])
     assert np.isnan(selection.fit.criterion[1])
-    assert selection.fit.ratio[1] == 0.0
+    assert np.isnan(selection.fit.ratio[1])
     assert_array_equal(selection.gap[[0, 2]], reference.gap)
     assert_array_equal(selection.fit.criterion[[0, 2]], reference.fit.criterion)
 

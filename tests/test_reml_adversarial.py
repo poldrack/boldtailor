@@ -217,7 +217,7 @@ def test_only_unidentifiable_candidates_leave_the_null_fit(
     np.testing.assert_array_equal(selection.fit.ratio, 0.0)
 
 
-# ------------------------------------------- R3: fixed-span shifts and no_signal
+# ------------------------------------------- R3: fixed-span shifts and no_residual_signal
 
 SHIFT_SCALES = (1e4, 1e6, 1e8, 1e10)
 
@@ -275,18 +275,18 @@ def test_selection_is_invariant_to_resolvable_fixed_span_shifts(scale):
 @pytest.mark.parametrize("scale", [1.0, 1e6])
 @pytest.mark.parametrize("rho", [0.0, 0.6])
 @pytest.mark.parametrize("n_fixed", [1, 3, 8])
-def test_signals_inside_the_fixed_span_are_no_signal(n_fixed, rho, scale):
+def test_signals_inside_the_fixed_span_are_no_residual_signal(n_fixed, rho, scale):
     _, fixed, planted, _ = _planted_problem(3, n_fixed, rho, n=200)
     coefficients = np.random.default_rng(4).normal(size=(n_fixed, 6))
     signals = scale * (fixed @ coefficients)
     fit = fit_reml([RemlGroup(signals, fixed)], [planted], rho=rho)
-    assert fit.status == ("no_signal",) * 6
+    assert fit.status == ("no_residual_signal",) * 6
 
 
-def test_shift_that_destroys_the_residual_is_no_signal():
+def test_shift_that_destroys_the_residual_is_no_residual_signal():
     signals, fixed, planted, _ = _planted_problem(19, 1, 0.0)
     fit = fit_reml([RemlGroup(signals + 1e18, fixed)], [planted])
-    assert fit.status == ("no_signal",) * 4
+    assert fit.status == ("no_residual_signal",) * 4
 
 
 def _weak_column_problem(seed=0):
@@ -298,11 +298,11 @@ def _weak_column_problem(seed=0):
     return design @ weights, design
 
 
-def test_ill_conditioned_saturated_fixed_span_signal_is_no_signal():
+def test_ill_conditioned_saturated_fixed_span_signal_is_no_residual_signal():
     signals, fixed = _weak_column_problem()
     random = np.random.default_rng(1).normal(size=(10, 2))
     fit = fit_reml([RemlGroup(signals, fixed)], [random])
-    assert fit.status == ("no_signal",) * 40
+    assert fit.status == ("no_residual_signal",) * 40
 
 
 # ------------------------------ follow-up F1: column units and unresolved fits
@@ -384,12 +384,12 @@ def test_residual_below_the_span_uncertainty_is_unresolved():
     random = rng.normal(size=(30, 2))
     signals = weak @ rng.normal(size=(1, 5)) + 1e-8 * rng.normal(size=(30, 5))
     fit = fit_reml([RemlGroup(signals, fixed)], [random])
-    assert fit.status == ("unresolved",) * 5
+    assert fit.status == ("numerically_unresolved_residual",) * 5
     for name in ("ratio", "noise_variance", "effect_variance", "criterion"):
         assert np.isnan(getattr(fit, name)).all()
     selection = select_random_effects_design([RemlGroup(signals, fixed)], [[random]])
     np.testing.assert_array_equal(selection.winner, -1)
-    assert selection.fit.status == ("unresolved",) * 5
+    assert selection.fit.status == ("numerically_unresolved_residual",) * 5
     assert np.isnan(selection.gap).all()
 
 
@@ -412,6 +412,6 @@ def test_unresolved_features_do_not_affect_resolved_ones():
     mixed = np.column_stack([live[:, [0]], uncertain, live[:, [1]]])
     fit = fit_reml([RemlGroup(mixed, fixed)], [random])
     reference = fit_reml([RemlGroup(live, fixed)], [random])
-    assert fit.status[1] == "unresolved"
+    assert fit.status[1] == "numerically_unresolved_residual"
     np.testing.assert_array_equal(fit.ratio[[0, 2]], reference.ratio)
     np.testing.assert_array_equal(fit.criterion[[0, 2]], reference.criterion)

@@ -50,7 +50,7 @@ def test_planted_hrf_is_selected_iid(planted_runs):
     flat = tuple(replace(r, signals=np.ones_like(r.signals)) for r in runs)
     empty = api.fit_library_reml(flat, library, {})
     assert empty.kernels == (None, None)
-    assert empty.status == ("no_signal", "no_signal")
+    assert empty.status == ("no_residual_signal", "no_residual_signal")
 
 
 def test_planted_hrf_is_selected_ar1(planted_runs):
