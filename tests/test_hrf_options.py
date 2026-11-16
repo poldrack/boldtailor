@@ -25,7 +25,7 @@ def test_options_own_rho_and_subset_features(options_type):
     assert options_type(rho=0.2).subset([2, 0]).rho == 0.2
 
 
-@pytest.mark.parametrize("rho", [True, [False], np.nan, np.inf, 1., -1., [[0.2]], []])
+@pytest.mark.parametrize("rho", [True, [False], np.nan, np.inf, 1.0, -1.0, [[0.2]], []])
 def test_invalid_rho_is_rejected(options_type, rho):
     """Invalid correlations fail before constructing candidate models."""
     with pytest.raises(ValueError, match="rho"):

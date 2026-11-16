@@ -14,26 +14,60 @@ from boldtailor.data import _owned_table
 from boldtailor.hrf_library import PARAMETER_NAMES, HrfLibrary
 from boldtailor.model import TaskModel
 from boldtailor.provenance import ProvenanceRecord
+from boldtailor.reml import RemlFit, RemlSelection
+
+
+@dataclass(frozen=True, kw_only=True)
+class RemlHrfDiagnostics:
+    """Likelihood comparisons and search qualifications, never prediction scores."""
+
+    selection: RemlSelection
+    candidate_ids: np.ndarray
+    canonical_fit: RemlFit | None
+    delta_criterion: np.ndarray
+    reference_hrf_id: int
+
+    def __post_init__(self):
+        copy_array_fields_in_place(self, ("candidate_ids",), dtype=np.int64)
+        copy_array_fields_in_place(self, ("delta_criterion",))
+        if self.candidate_ids.shape != (self.selection.n_candidates,):
+            raise ValueError("candidate_ids must map every REML candidate")
+        if self.delta_criterion.shape != self.selection.winner.shape:
+            raise ValueError("delta_criterion must have one value per feature")
 
 
 @dataclass(frozen=True, kw_only=True)
 class HrfSelectionResult:
     hrf_indices: np.ndarray
-    cv_r2: np.ndarray
-    canonical_cv_r2: np.ndarray
-    delta_cv_r2: np.ndarray
+    cv_r2: np.ndarray | None
+    canonical_cv_r2: np.ndarray | None
+    delta_cv_r2: np.ndarray | None
     library: HrfLibrary
     _eligibility: pd.DataFrame
     run_labels: tuple[str, ...]
     feature_signature: str | None
     provenance: ProvenanceRecord
     task_model: TaskModel = TaskModel()
+    method: str = "cv"
+    reml: RemlHrfDiagnostics | None = None
 
     def __post_init__(self):
         if not isinstance(self.task_model, TaskModel):
             raise ValueError("task_model must be a TaskModel")
         copy_array_fields_in_place(self, ("hrf_indices",), dtype=np.int64)
-        copy_array_fields_in_place(self, ("cv_r2", "canonical_cv_r2", "delta_cv_r2"))
+        names = ("cv_r2", "canonical_cv_r2", "delta_cv_r2")
+        if self.method not in ("cv", "reml"):
+            raise ValueError("unknown HRF selection method")
+        if self.method == "cv":
+            if self.reml is not None or any(getattr(self, n) is None for n in names):
+                raise ValueError("CV selection requires only CV diagnostics")
+            copy_array_fields_in_place(self, names)
+        elif not isinstance(self.reml, RemlHrfDiagnostics) or any(
+            getattr(self, n) is not None for n in names
+        ):
+            raise ValueError(
+                "REML selection requires REML diagnostics and no CV scores"
+            )
         freeze_sequence_fields_in_place(self, ("run_labels",))
         set_fields_in_place(self, _eligibility=_owned_table(self._eligibility))
 

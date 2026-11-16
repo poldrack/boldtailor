@@ -277,12 +277,19 @@ def reml_diagnostics():
 
     rng = np.random.default_rng(87)
     z = rng.normal(size=(30, 2))
-    groups = [RemlGroup(z @ np.array([[3., 2.], [2., -3.]]) + rng.normal(size=(30, 2)), np.ones((30, 1)))]
+    groups = [
+        RemlGroup(
+            z @ np.array([[3.0, 2.0], [2.0, -3.0]]) + rng.normal(size=(30, 2)),
+            np.ones((30, 1)),
+        )
+    ]
     selected = select_random_effects_design(groups, [[z]])
     return hrf_results.RemlHrfDiagnostics(
-        selection=selected, candidate_ids=np.array([1]),
+        selection=selected,
+        candidate_ids=np.array([1]),
         canonical_fit=fit_reml(groups, [None]),
-        delta_criterion=np.array([2., 3.]), reference_hrf_id=0,
+        delta_criterion=np.array([2.0, 3.0]),
+        reference_hrf_id=0,
     )
 
 
@@ -293,8 +300,15 @@ def test_hrf_results_distinguish_selection_methods(selected_fixture, reml_diagno
     ids = np.full(cv.hrf_indices.shape, -1)
     # Use a matching two-feature result for this schema-level example.
     ids = np.array([1, 1])
-    reml = replace(cv, method="reml", reml=reml_diagnostics, hrf_indices=ids,
-                   cv_r2=None, canonical_cv_r2=None, delta_cv_r2=None)
+    reml = replace(
+        cv,
+        method="reml",
+        reml=reml_diagnostics,
+        hrf_indices=ids,
+        cv_r2=None,
+        canonical_cv_r2=None,
+        delta_cv_r2=None,
+    )
     assert reml.cv_r2 is None
     np.testing.assert_array_equal(reml.reml.candidate_ids, [1])
     assert not reml.reml.candidate_ids.flags.writeable
@@ -309,9 +323,9 @@ def test_hrf_results_distinguish_selection_methods(selected_fixture, reml_diagno
 
 def test_reml_diagnostics_own_arrays(reml_diagnostics):
     """Mutating inputs to diagnostics cannot change saved IDs or comparisons."""
-    ids, delta = np.array([1]), np.array([3., 4.])
+    ids, delta = np.array([1]), np.array([3.0, 4.0])
     result = replace(reml_diagnostics, candidate_ids=ids, delta_criterion=delta)
     ids[:] = 0
     delta[:] = 9
     np.testing.assert_array_equal(result.candidate_ids, [1])
-    np.testing.assert_array_equal(result.delta_criterion, [3., 4.])
+    np.testing.assert_array_equal(result.delta_criterion, [3.0, 4.0])
