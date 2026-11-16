@@ -262,3 +262,21 @@ def test_default_cache_holds_all_pilot_design_groups():
     from experiments.hrf_simulations.fitting import DesignCache
 
     assert DesignCache().max_entries >= 533 * 12 * 4 * 2
+
+
+@pytest.mark.parametrize("method", ["cv", "reml"])
+def test_reused_cache_does_not_reuse_training_signals(planted, library, method):
+    """A design cache can be shared across draws without retaining old BOLD data."""
+    from experiments.hrf_simulations.fitting import DesignCache, fit
+
+    cache = DesignCache()
+    args = (library, "ConsDurRTMod", "brief", "iid")
+    base = fit(planted, *args, method=method, cache=cache)
+    changed = [replace(r, signals=3 * r.signals) for r in planted]
+    cached = fit(changed, *args, method=method, cache=cache)
+    fresh = fit(changed, *args, method=method)
+    assert cached.kernels == fresh.kernels
+    score = "criterion" if method == "reml" else "cv_r2"
+    np.testing.assert_allclose(cached.diagnostics[score], fresh.diagnostics[score])
+    if method == "reml":
+        assert not np.allclose(base.diagnostics[score], cached.diagnostics[score])

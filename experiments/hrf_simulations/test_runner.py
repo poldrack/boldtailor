@@ -189,3 +189,28 @@ def test_failure_rate_includes_failed_estimates():
     legacy = summarize(rows.drop(columns="provisional"))
     assert legacy.n_qualified.iloc[0] == 0
     assert np.isnan(legacy.provisional_rate.iloc[0])
+
+
+def test_paired_report_compares_reml_with_cv():
+    """Paired errors compare both REML noise models against CV on the same case."""
+    from experiments.hrf_simulations.reporting import paired_differences
+
+    table = pd.DataFrame(
+        dict(
+            id=["one"] * 3,
+            model=["ConsDurNoRT"] * 3,
+            convention=["brief"] * 3,
+            split=["full"] * 3,
+            session=[11] * 3,
+            truth=["canonical"] * 3,
+            mechanism=["none"] * 3,
+            noise=["white"] * 3,
+            snr=[1.0] * 3,
+            repeat=[0] * 3,
+            estimator=["cv", "iid", "ar1"],
+            curve_rmse=[0.4, 0.2, 0.3],
+        )
+    )
+    paired = paired_differences(table)
+    assert paired["iid_minus_cv_rmse"].iloc[0] == pytest.approx(-0.2)
+    assert paired["ar1_minus_cv_rmse"].iloc[0] == pytest.approx(-0.1)
