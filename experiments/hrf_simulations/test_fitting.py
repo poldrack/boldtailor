@@ -50,98 +50,151 @@ def test_iid_and_ar1_paths_agree_at_zero_rho(planted, library):
         )
 
 
-def test_unit_rms_scaling_leaves_selection_and_fit_variance_consistent(
-    planted, library
-):
-    """Verify unit rms scaling leaves selection and fit variance consistent."""
+@pytest.mark.parametrize("method", ["cv", "reml"])
+def test_legacy_random_scaling_is_rejected(planted, library, method):
+    """Legacy column scaling cannot silently change the package's trial covariance."""
     from experiments.hrf_simulations.fitting import fit
 
-    args = (planted, library, "ConsDurRTMod", "stimulus", "iid")
-    native = fit(*args, settings={"regressor_scaling": "native"})
-    scaled = fit(*args, settings={"regressor_scaling": "unit_rms"})
-    assert native.kernels[0] == library.candidates[0]
-    assert scaled.kernels == native.kernels
-    assert scaled.status == ("ok",)
-    assert np.all(np.isfinite(scaled.diagnostics["variance_ratio"]))
-    assert scaled.diagnostics["random_scales"][0] != [1.0] * len(
-        scaled.diagnostics["random_scales"][0]
-    )
+    with pytest.raises(ValueError, match="regressor_scaling"):
+        fit(
+            planted,
+            library,
+            "ConsDurNoRT",
+            "brief",
+            "iid",
+            method=method,
+            settings={"regressor_scaling": "unit_rms"},
+        )
 
 
-def _scaled_candidates(runs, library, model, convention):
-    """Each candidate's task+junk columns divided by its unit_rms scales."""
+@pytest.mark.parametrize("method", ["cv", "reml"])
+def test_unsupported_double_duration_model_is_explicit(planted, library, method):
+    """An unsupported two-duration mean must not be silently approximated."""
+    from experiments.hrf_simulations.fitting import fit
+
+    with pytest.raises(ValueError, match="ConsDurRTDur"):
+        fit(planted, library, "ConsDurRTDur", "brief", "iid", method=method)
+
+
+def package_inputs(runs, library, model, convention):
+    """Independently map valid trials and canonical junk into package inputs."""
+    from boldtailor.data import from_arrays
+    from boldtailor.model import Modulator, TaskModel
     from experiments.hrf_simulations.design import task_design
-    from experiments.hrf_simulations.fitting import random_scales
 
-    out = []
-    for candidate in library.candidates:
-        parts = [task_design(r, candidate, model, convention) for r in runs]
-        scales = random_scales(parts, "unit_rms")
-        designs = [np.column_stack([p.task, p.junk]) / scales for p in parts]
-        out.append((parts, scales, designs))
-    return out
+    events, confounds = [], []
+    for run in runs:
+        e = run.events
+        valid = (
+            (e.missing_data == 0)
+            & (e.is_correct == 1)
+            & np.isfinite(e.response_time)
+            & (e.response_time > 0)
+        )
+        selected = e.loc[valid].copy()
+        selected["duration"] = (
+            selected.response_time
+            if model == "RTDur"
+            else 0.1 if convention == "brief" else selected.duration
+        )
+        events.append(selected)
+        nuisance = run.confounds.drop(columns="intercept").copy()
+        junk = task_design(run, library.candidates[0], "ConsDurNoRT", "stimulus").junk
+        nuisance["selection_missing"] = junk[:, 0]
+        nuisance["selection_incorrect"] = junk[:, 1]
+        confounds.append(nuisance)
+    mods = [Modulator("trial_type", kind="categorical", levels=(0, 1))]
+    if model == "ConsDurRTMod":
+        mods.append(Modulator("response_time"))
+    return from_arrays(
+        [r.signals for r in runs],
+        events,
+        frame_times=[r.frame_times for r in runs],
+        confounds=confounds,
+    ), TaskModel(tuple(mods))
 
 
-def test_unit_rms_scaling_divides_random_design_by_pooled_rms(planted, library):
-    """Verify unit rms scaling divides random design by pooled rms."""
-    from boldtailor.reml import RemlGroup, select_random_effects_design
-    from experiments.hrf_estimation.scoring import residuals
+@pytest.mark.parametrize("method", ["cv", "reml"])
+@pytest.mark.parametrize("model", ["ConsDurNoRT", "RTDur", "ConsDurRTMod"])
+@pytest.mark.parametrize("convention", ["brief", "stimulus"])
+def test_identification_matches_public_package(
+    planted, library, method, model, convention
+):
+    """Simulation identification must match the public selector on the declared inputs."""
+    from boldtailor.hrf_selection import select_hrfs
+    from boldtailor.hrf_options import RemlHrfOptions
     from experiments.hrf_simulations.fitting import fit
 
-    model, convention = "ConsDurRTMod", "stimulus"
-    scaled = _scaled_candidates(planted, library, model, convention)
-    for parts, _, designs in scaled:
-        projected = [residuals(p.nuisance, z)[0] for p, z in zip(parts, designs)]
-        pooled = sum(np.sum(z * z, axis=0) for z in projected)
-        rms = np.sqrt(pooled / sum(len(z) for z in projected))
-        np.testing.assert_allclose(rms, 1.0, rtol=1e-12)
-    groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in planted]
-    expected = select_random_effects_design(groups, [d for _, _, d in scaled])
-    winner = int(expected.winner[0])
-    result = fit(
+    data, task_model = package_inputs(planted, library, model, convention)
+    options = dict(
+        method=method,
+        library=library,
+        task_model=task_model,
+        run_labels=[r.run_id for r in planted],
+    )
+    if method == "reml":
+        options["reml_options"] = RemlHrfOptions(rho=0.25)
+    expected = select_hrfs(data, **options)
+    actual = fit(
         planted,
         library,
         model,
         convention,
-        "iid",
-        settings={"regressor_scaling": "unit_rms"},
+        "ar1" if method == "reml" else "iid",
+        oracle_rho=0.25 if method == "reml" else None,
+        method=method,
     )
-    assert result.kernels[0] == library.candidates[winner]
-    assert result.diagnostics["variance_ratio"] == [float(expected.fit.ratio[0])]
-    assert result.diagnostics["sigma2"] == [float(expected.fit.noise_variance[0])]
-    assert result.diagnostics["criterion"] == [float(expected.fit.criterion[0])]
-    assert result.diagnostics["unrefined"] == expected.fit.unrefined.tolist()
-    assert result.diagnostics["any_at_upper"] == expected.any_at_upper.tolist()
-    assert result.diagnostics["any_unrefined"] == expected.any_unrefined.tolist()
-    assert result.diagnostics["provisional"] == expected.any_unrefined.tolist()
-    assert result.diagnostics["random_scales"] == [scaled[winner][1].tolist()]
+    winner = int(expected.hrf_indices[0])
+    assert actual.kernels == ((library.candidates[winner] if winner >= 0 else None),)
+    assert actual.diagnostics["selection_method"] == method
+    assert actual.diagnostics["training_run_ids"] == [r.run_id for r in planted]
+    assert actual.diagnostics["task_model"] == task_model.to_dict()
+    if method == "cv":
+        np.testing.assert_allclose(actual.diagnostics["cv_r2"], expected.cv_r2)
+        assert "criterion" not in actual.diagnostics
+        assert actual.diagnostics["provisional"] == [None]
+    else:
+        d = expected.reml
+        np.testing.assert_allclose(
+            actual.diagnostics["criterion"], d.selection.fit.criterion
+        )
+        np.testing.assert_allclose(
+            actual.diagnostics["variance_ratio"], d.selection.fit.ratio
+        )
+        np.testing.assert_allclose(
+            actual.diagnostics["delta_criterion"], d.delta_criterion
+        )
+        assert actual.diagnostics["any_unrefined"] == d.selection.any_unrefined.tolist()
+        assert actual.status == d.selection.fit.status
+        assert "cv_r2" not in actual.diagnostics
 
 
-@pytest.mark.parametrize("noise_mode", ["iid", "ar1"])
-def test_matched_noiseless_recovery(runs, library, noise_mode):
-    """Recover the generating HRF from noiseless data under the matched fitting model."""
+def test_pure_reference_mean_has_no_reml_winner(planted, library):
+    """A mean-only signal must remain unsupported rather than force canonical recovery."""
+    from boldtailor._hrf_design import trial_regressors
     from experiments.hrf_simulations.fitting import fit
-    from experiments.hrf_simulations.simulation import signal_components
 
-    data = [
+    data, _ = package_inputs(planted, library, "ConsDurNoRT", "brief")
+    runs = [
         replace(
             r,
-            signals=sum(
-                signal_components(r, library.candidates[0], "duration", "brief")
-            )[:, None],
+            signals=(100 + trial_regressors(e, t, library.candidates[0]).sum(axis=1))[
+                :, None
+            ],
         )
-        for r in runs
+        for r, e, t in zip(planted, data.events, data.frame_times, strict=True)
     ]
-    result = fit(
-        data,
-        library,
-        "RTDur",
-        "brief",
-        noise_mode,
-        oracle_rho=0.0 if noise_mode == "ar1" else None,
-    )
-    assert result.status == ("ok",)
-    assert result.kernels[0] == library.candidates[0]
+    result = fit(runs, library, "ConsDurNoRT", "brief", "iid")
+    assert result.kernels == (None,)
+    assert result.status == ("no_residual_signal",)
+
+
+def test_cv_rejects_ar1_options(planted, library):
+    """CV has no whitening option and must not claim to use a supplied rho."""
+    from experiments.hrf_simulations.fitting import fit
+
+    with pytest.raises(ValueError, match="CV|cv"):
+        fit(planted, library, "ConsDurNoRT", "brief", "ar1", method="cv")
 
 
 def test_rho_reference_is_model_independent_and_diagnostic(runs, library):
@@ -157,7 +210,7 @@ def test_rho_reference_is_model_independent_and_diagnostic(runs, library):
     rho = estimate_rho(data)
     assert abs(rho - 0.4) < 0.25
     a = fit(data, library, "ConsDurNoRT", "brief", "ar1")
-    b = fit(data, library, "ConsDurRTDur", "stimulus", "ar1")
+    b = fit(data, library, "RTDur", "stimulus", "ar1")
     assert a.diagnostics["rho"] == b.diagnostics["rho"] == rho
     assert a.diagnostics["training_run_ids"] == [r.run_id for r in runs]
 
@@ -186,7 +239,7 @@ def test_prepared_rho_reference_is_cached_once_per_run(runs, library, monkeypatc
     monkeypatch.setattr(package_ar1, "prepare_reference", counting)
     cache = DesignCache()
     fit(data, library, "ConsDurNoRT", "brief", "ar1", cache=cache)
-    fit(data, library, "ConsDurRTDur", "stimulus", "ar1", cache=cache)
+    fit(data, library, "RTDur", "stimulus", "ar1", cache=cache)
     assert len(calls) == len(data)
     assert estimate_rho(data, cache) == float(expected.pooled)
     assert len(calls) == len(data)

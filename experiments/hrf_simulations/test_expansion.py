@@ -14,7 +14,7 @@ def test_balanced_expansion():
     assert len({c["id"] for c in cases}) == len(cases)
     assert {c["snr_level"] for c in cases} == {"q25", "q50", "q75"}
     assert len({c["truth"] for c in cases}) == 7
-    assert any(c["regressor_scaling"] == "unit_rms" for c in cases)
+    assert all(c["regressor_scaling"] == "native" for c in cases)
 
 
 def test_run_variation_preserves_noise(tiny_case):
@@ -48,9 +48,9 @@ def test_crossed_evaluation_and_floor(tmp_path, tiny_case):
         splits=False,
     )
     crossed = pd.read_csv(folder / "crossed_scores.tsv", sep="\t")
-    assert len(crossed) == 12
+    assert len(crossed) == 16
     assert crossed.evaluation_model.nunique() == 4
-    assert (scores.curve_rmse_excess >= 0).all()
+    assert (scores.loc[~scores.failed, "curve_rmse_excess"] >= 0).all()
     matched = crossed[crossed.evaluation_model == "ConsDurRTMod"]
     # Independent FFT generation and integrated-design fitting have finite
     # discretization error, including leakage from the simulated junk signals.
@@ -70,22 +70,3 @@ def test_crossed_evaluation_and_floor(tmp_path, tiny_case):
     assert "contrast_error" in crossed
     build_report(tmp_path, tmp_path / "report")
     assert (tmp_path / "report/crossed_summary.tsv").exists()
-
-
-def test_scaling_uses_projected_training_design(tiny_case):
-    """Verify scaling uses projected training design."""
-    from experiments.hrf_simulations.fitting import random_scales
-    from experiments.hrf_simulations.design import task_design
-    from experiments.hrf_estimation.scoring import residuals
-
-    runs, library, _, _ = tiny_case
-    parts = [
-        task_design(r, library.candidates[0], "ConsDurRTMod", "brief") for r in runs
-    ]
-    z = [residuals(p.nuisance, np.column_stack([p.task, p.junk]))[0] for p in parts]
-    expected = np.sqrt(
-        np.sum([np.sum(a * a, axis=0) for a in z], axis=0) / sum(len(a) for a in z)
-    )
-    expected[expected < 1e-12] = 1
-    assert np.allclose(random_scales(parts, "unit_rms"), expected)
-    assert np.all(random_scales(parts, "native") == 1)

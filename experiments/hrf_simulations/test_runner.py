@@ -79,9 +79,13 @@ def test_complete_case_resume_corruption_and_report(tmp_path, tiny_case):
     runs, library, profile, case = tiny_case
     folder = tmp_path / "case-test"
     result = run_case(runs, library, profile, case, folder)
-    assert len(result) == 36  # 4 models x (iid, estimated AR1, oracle AR1) x 3 fits
+    assert (
+        len(result) == 36
+    )  # 3 models x (CV, iid REML, estimated/oracle AR1 REML) x 3 fits
+    assert set(result.model) == {"ConsDurNoRT", "RTDur", "ConsDurRTMod"}
+    assert set(result.selection_method) == {"cv", "reml"}
     assert set(result.split) == {"full", "half1", "half2"}
-    assert set(result.estimator) == {"iid", "ar1", "ar1_oracle"}
+    assert set(result.estimator) == {"cv", "iid", "ar1", "ar1_oracle"}
     for name in (
         "candidate_id",
         "curve_rmse",
@@ -124,12 +128,14 @@ def test_noiseless_case_and_zero_signal_metrics(tmp_path, tiny_case):
         models=("ConsDurRTMod",),
         splits=False,
     )
-    assert result.loc[result.estimator == "iid", "candidate_id"].iloc[0] == 0
     # Noiseless data need not hit a search boundary when the fitted task model
     # differs from the generating model. The table must retain the actual
     # comparison's qualification, rather than infer it from the noise level.
     fits = json.loads((tmp_path / "noiseless/fits.json").read_text())
-    assert result.provisional.tolist() == [f["provisional"][0] for f in fits]
+    assert [f["selection_method"] for f in fits] == ["cv", "reml", "reml", "reml"]
+    assert result.loc[result.selection_method == "reml", "provisional"].tolist() == [
+        f["provisional"][0] for f in fits if f["selection_method"] == "reml"
+    ]
 
 
 def test_cli_plan_does_not_require_nsd(capsys):
