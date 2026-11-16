@@ -263,14 +263,20 @@ def test_success_logs_started_then_completed_with_one_execution_id(
 
 
 @pytest.mark.parametrize("name", ENTRY_POINTS)
-def test_completion_event_is_the_returned_provenance_record(
+def test_completion_log_and_provenance_share_operation_identity(
     name, run_entry_point, caplog
 ):
     caplog.set_level(logging.INFO, logger="boldtailor")
     caplog.clear()
     provenance = run_entry_point(name).provenance
     completed = _events(caplog, name)[-1]
-    assert dict(provenance.events[-1]) == completed
+    snapshot = dict(provenance.events[-1])
+    # Provenance is built independently before the result constructor and scope exit.
+    assert snapshot["sequence"] < completed["sequence"]
+    timing = {"timestamp", "sequence"}
+    assert {k: v for k, v in snapshot.items() if k not in timing} == {
+        k: v for k, v in completed.items() if k not in timing
+    }
     assert completed["execution_id"] == provenance.execution_id
     assert completed.get("analysis_id") == provenance.analysis_fingerprint
     assert completed.get("data_id") == provenance.metadata_fingerprint
