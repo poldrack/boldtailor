@@ -1,4 +1,4 @@
-"""Select HRFs by held-out task-model prediction across runs, without repeated images."""
+"""Select HRFs by cross-validation or restricted likelihood."""
 
 from collections.abc import Sequence
 from hashlib import sha256
@@ -21,6 +21,8 @@ from boldtailor._scalars import is_integer
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
+from boldtailor.hrf_options import RemlHrfOptions, resolve_reml_options
+from boldtailor._hrf_reml import select_reml_hrfs
 from boldtailor.model import TaskModel
 from boldtailor.provenance import analysis_fingerprint, identity_activity
 
@@ -128,8 +130,10 @@ def select_hrfs(
     feature_signature: str | None = None,
     candidate_batch_size: int = 32,
     task_model: TaskModel = TaskModel(),
+    method: str = "cv",
+    reml_options: RemlHrfOptions | None = None,
 ) -> HrfSelectionResult:
-    """Choose each feature's HRF by leave-one-run-out task-model prediction.
+    """Choose each feature's HRF by CV (default) or fixed-reference REML.
 
     This is a selection statistic. Confounds and missing-value indicators are
     profiled in each run; task-model amplitudes are learned only from other
@@ -139,21 +143,27 @@ def select_hrfs(
     library = default_hrf_library() if library is None else library
     with fit_operation("hrf_selection", data.provenance) as operation:
         _validate(library, feature_signature, candidate_batch_size, task_model)
-        if data.n_runs < 2:
+        options = resolve_reml_options(method, reml_options)
+        if method == "cv" and data.n_runs < 2:
             raise ValueError("HRF selection requires at least two runs")
         labels = run_labels_for(data, run_labels)
-        runs = prepare_runs(data, library, task_model)
-        values, activity = _selection_values(
-            data,
-            runs,
-            data.signals,
-            library,
-            labels,
-            feature_signature,
-            candidate_batch_size,
-            runs,
-            task_model,
-        )
+        if method == "reml":
+            values, activity = select_reml_hrfs(
+                data, library, labels, feature_signature, task_model, options
+            )
+        else:
+            runs = prepare_runs(data, library, task_model)
+            values, activity = _selection_values(
+                data,
+                runs,
+                data.signals,
+                library,
+                labels,
+                feature_signature,
+                candidate_batch_size,
+                runs,
+                task_model,
+            )
         operation.analysis_id = analysis_fingerprint(
             data.provenance.metadata_fingerprint, activity
         )

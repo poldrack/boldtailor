@@ -39,3 +39,18 @@ class RemlHrfOptions:
         """Preserve supplied noise correlations when partitioning features."""
         rho = self.rho[indices] if np.ndim(self.rho) else self.rho
         return RemlHrfOptions(rho=rho, reference_hrf_id=self.reference_hrf_id)
+
+
+def resolve_reml_options(method, options):
+    """Reject ambiguous method settings instead of silently choosing another model."""
+    if method not in ("cv", "reml"):
+        raise ValueError("HRF method must be 'cv' or 'reml'")
+    if method == "cv":
+        if options is not None:
+            raise ValueError("REML options require method='reml'")
+        return None
+    if options is None:
+        return RemlHrfOptions()
+    if not isinstance(options, RemlHrfOptions):
+        raise ValueError("reml_options must be RemlHrfOptions")
+    return options
