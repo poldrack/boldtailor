@@ -46,8 +46,9 @@
 #
 # The default `max_grayordinates=128` is a smoke run: it uses **every run** and
 # exports the original spatial axis, with NaN outside the requested subset. For a full-brain
-# analysis set `max_grayordinates=None`, `block_size=4096`, and a new `output_root`. Lower `n_jobs` or
-# `block_size` to reduce memory use. Existing outputs for this session stop the run unless
+# analysis set `max_grayordinates=None`, `block_size=4096`, and a new `output_root`.
+# `n_jobs` controls worker processes across spatial blocks; each worker loads all runs
+# for its block. Lower `n_jobs` or `block_size` to reduce memory use. Existing outputs for this session stop the run unless
 # `existing_results="overwrite"`.
 
 # %%
@@ -77,6 +78,7 @@ from boldtailor.diagnostics import one_sample_t
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_selection import select_hrfs, evaluate_hrf_split
 from boldtailor.model import ModelSpec
+from boldtailor.parallel import map_blocks
 from boldtailor.reliability import curve_correlations
 from boldtailor.task_detection import detect_task_model, task_model_notes
 from boldtailor.workflow import (
@@ -103,7 +105,7 @@ config = dict(
     ),
     max_grayordinates=128,  # None for the complete 91k spatial axis
     n_jobs=4,
-    block_size=128,
+    block_size=32,  # four independent blocks in the 128-grayordinate smoke run
     existing_results="error",  # set "overwrite" deliberately when rerunning
     # ridge_mode="fractional_cv",  # "fractional_cv", "cv", "fixed" (with ridge_alpha), or "off"
     # hrf_library="default", hrf_n_samples=512, hrf_seed=0, hrf_selection_rt=True,
@@ -200,6 +202,7 @@ selection_model = inputs.selection_task_model(task_model, settings.hrf_selection
 run_labels = [run.label for run in runs]
 halves = odd_even_parity(runs)
 print(f"{sum(map(len, blocks))} nonconstant grayordinates in {len(blocks)} blocks")
+print(f"Using up to {min(settings.n_jobs, len(blocks))} worker processes")
 print({half: [run_labels[i] for i in indices] for half, indices in halves.items()})
 display(library.parameter_table.head(10))
 figures = {"Library": plots.library_figure(library)}
@@ -218,18 +221,25 @@ display(figures["Library"])
 # directions gives independent odd→even and even→odd predictions and separate half-session
 # HRFs for the reliability analysis. The two halves are determined by run numbers.
 #
-# The explicit loop below processes spatial blocks sequentially so the data flow is
-# visible. Later blockwise fit/CV functions honor `n_jobs`. A feature signature ties
-# selections to the exact spatial locations, preventing reuse on the wrong vertices.
+# The worker below shows the three selection calls for one spatial block. `map_blocks`
+# runs independent blocks in up to `n_jobs` processes, with one BLAS/OpenMP thread per
+# worker. It submits bounded batches and returns results in block order; only the
+# notebook process assembles outputs and prints progress. `n_jobs=1` runs the same
+# worker function locally. A single block cannot use multiple worker processes.
+# A feature signature ties selections to the exact spatial locations, preventing
+# reuse on the wrong vertices.
+
 
 # %%
-selections = {}
-for indices in blocks:
-    data = inputs.load_block(runs, settings.bids_dir, indices, selection_model)
+def select_hrfs_for_block(indices, runs, bids_root, selection_model, library):
+    """Select all-run and split-half HRFs for one independent spatial block."""
+    data = inputs.load_block(runs, bids_root, indices, selection_model)
+    brain = runs[0].image.header.get_axis(1)
+    halves = odd_even_parity(runs)
     selection_options = dict(
         library=library,
         task_model=selection_model,
-        run_labels=run_labels,
+        run_labels=[run.label for run in runs],
         feature_signature=spatial_signature(brain, indices),
     )
     all_selection = select_hrfs(data, **selection_options)
@@ -239,9 +249,17 @@ for indices in blocks:
     even_to_odd = evaluate_hrf_split(
         data, train_runs=halves["even"], test_runs=halves["odd"], **selection_options
     )
-    selections[tuple(indices)] = dict(
-        all=all_selection, odd=odd_to_even, even=even_to_odd
-    )
+    return dict(all=all_selection, odd=odd_to_even, even=even_to_odd)
+
+
+selections = {}
+for indices, bundle in map_blocks(
+    select_hrfs_for_block,
+    blocks,
+    args=(runs, settings.bids_dir, selection_model, library),
+    n_jobs=settings.n_jobs,
+):
+    selections[tuple(indices)] = bundle
     print(f"Selected HRFs for grayordinates {indices[0]}–{indices[-1]}")
 
 # %%
@@ -279,7 +297,10 @@ display(
 # Results are assembled onto the original CIFTI axis for export. Selected-HRF designs
 # vary by HRF group, so their keys are `(run_index, hrf_id)`; a canonical fit has one
 # design per run. The resulting `glms` dictionaries keep contrasts, R², designs, and
-# provenance rather than just the displayed figure.
+# provenance rather than just the displayed figure. The per-block worker below keeps
+# `fit` and `task_delta_r2` explicit. Workers return compact arrays and metadata;
+# the parent process places them at their original spatial indices. Both GLMs use
+# the same `n_jobs` setting as HRF selection, beta-series fitting and ridge CV.
 
 # %%
 model = ModelSpec(
@@ -290,6 +311,49 @@ model = ModelSpec(
     noise_model="ols",
     task_model=task_model,
 )
+
+
+# %%
+def fit_glm_for_block(job, runs, bids_root, model):
+    """Fit one spatial block and return arrays, designs and provenance for assembly."""
+    indices, hrf_selection = job
+    data = inputs.load_block(runs, bids_root, indices, model.task_model)
+    fit_options = {}
+    if hrf_selection is not None:
+        brain = runs[0].image.header.get_axis(1)
+        fit_options = dict(
+            hrf_selection=hrf_selection,
+            feature_signature=spatial_signature(brain, indices),
+        )
+    fitted = fit(data, model, **fit_options)
+    comparison = task_delta_r2(data, model, fitted)
+    block_maps = {}
+    for key, extract in (
+        ("effects", fitted.effect),
+        ("variances", fitted.variance),
+        ("t", fitted.stat),
+        ("z", fitted.z_score),
+    ):
+        block_maps[key] = np.stack(
+            [extract(name) for name in model.task_model.regressor_names]
+        )
+    block_maps["r2"] = np.stack(
+        [comparison.full_r2, comparison.nuisance_r2, comparison.delta_r2]
+    )
+    designs = {}
+    if hrf_selection is None:
+        designs = {(i, 0): design for i, design in enumerate(fitted.design_matrices)}
+    else:
+        for run_index in range(len(runs)):
+            for hrf_id in np.unique(fitted.hrf_indices[fitted.hrf_indices >= 0]):
+                designs[run_index, int(hrf_id)] = fitted.rebuild_group_design(
+                    run_index, int(hrf_id)
+                )
+    block_maps.update(designs=designs, provenance=comparison.provenance.to_dict())
+    return block_maps
+
+
+# %%
 glms = {}
 for model_name in ("CanonicalGLM", "OptimizedGLM"):
     maps = {
@@ -297,44 +361,27 @@ for model_name in ("CanonicalGLM", "OptimizedGLM"):
         for key in ("effects", "variances", "t", "z")
     }
     maps.update(r2=np.full((3, len(brain)), np.nan), designs={}, provenance=[])
-    for indices in blocks:
-        data = inputs.load_block(runs, settings.bids_dir, indices, task_model)
-        fit_options = {}
-        if model_name == "OptimizedGLM":
-            fit_options = dict(
-                hrf_selection=selections[tuple(indices)]["all"],
-                feature_signature=spatial_signature(brain, indices),
-            )
-        fitted = fit(data, model, **fit_options)
-        comparison = task_delta_r2(data, model, fitted)
-        for key, extract in (
-            ("effects", fitted.effect),
-            ("variances", fitted.variance),
-            ("t", fitted.stat),
-            ("z", fitted.z_score),
-        ):
-            maps[key][:, indices] = np.stack(
-                [extract(name) for name in task_model.regressor_names]
-            )
-        maps["r2"][:, indices] = np.stack(
-            [comparison.full_r2, comparison.nuisance_r2, comparison.delta_r2]
+    # Send only this block's selection to its worker, not the whole selection map.
+    jobs = (
+        (
+            indices,
+            selections[tuple(indices)]["all"] if model_name == "OptimizedGLM" else None,
         )
-        if model_name == "CanonicalGLM":
-            maps["designs"].update(
-                {(i, 0): design for i, design in enumerate(fitted.design_matrices)}
-            )
-        else:
-            for run_index in range(len(runs)):
-                for hrf_id in np.unique(fitted.hrf_indices[fitted.hrf_indices >= 0]):
-                    maps["designs"][run_index, int(hrf_id)] = (
-                        fitted.rebuild_group_design(run_index, int(hrf_id))
-                    )
+        for indices in blocks
+    )
+    for (indices, _), block_maps in map_blocks(
+        fit_glm_for_block,
+        jobs,
+        args=(runs, settings.bids_dir, model),
+        n_jobs=settings.n_jobs,
+    ):
+        for key in ("effects", "variances", "t", "z", "r2"):
+            maps[key][:, indices] = block_maps[key]
+        maps["designs"].update(block_maps["designs"])
         maps["provenance"].append(
-            dict(
-                grayordinate_indices=indices.tolist(),
-                record=comparison.provenance.to_dict(),
-            )
+            dict(grayordinate_indices=indices.tolist(), record=block_maps["provenance"])
         )
+        print(f"{model_name}: fitted grayordinates {indices[0]}–{indices[-1]}")
     glms[model_name] = maps
 
 # %%

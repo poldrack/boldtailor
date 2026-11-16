@@ -128,8 +128,16 @@ intermediate tables/figures before publication:
 8. `workflow_artifacts`, `render_report`, and `publish_workflow` serialize and
    publish the already computed results. These calls perform no model fitting.
 
-HRF-selection and conventional-GLM loops are deliberately sequential for teaching;
-`n_jobs` controls the blockwise beta and CV calls. The namespace retains `runs`,
+HRF selection and conventional GLMs use explicit per-block worker functions in the
+notebook, dispatched through `map_blocks`. `n_jobs` now controls all fitting stages,
+including beta series and CV. Each process handles a spatial block across all runs;
+BLAS/OpenMP threads are limited to one per worker. Only the notebook process
+assembles maps and prints progress, in spatial-block order. The 128-grayordinate
+smoke configuration uses blocks of 32 so its four workers have independent work.
+For full-brain fitting, start with `block_size=4096` and choose `n_jobs` to fit the
+available RAM; one block can use only one worker. The notebook prints the number
+of available blocks and effective workers before fitting. Set `n_jobs=1` for serial
+execution of the same worker functions. The namespace retains `runs`,
 `task_model`, `library`, `selections`, `glms`, `ols_fits`, `cv_results`, and
 `activation` so readers can inspect or adapt each stage. The notebook does not
 call `run_workflow` or `fit_beta_models`.

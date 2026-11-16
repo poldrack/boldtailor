@@ -1,5 +1,6 @@
 """Notebook executions on the synthetic fixtures; opt in with --run-notebooks."""
 
+import base64
 import json
 from pathlib import Path
 import subprocess
@@ -389,8 +390,12 @@ def test_workflow_notebook_runs_the_package_workflow_and_shows_its_outputs(
     plots = [p for p in files if p.name.endswith("_plot.png")]
     for name in ("HRFCurveReliability", "GLMR2Surface", "BetaR2Surface", "RTSurface"):
         assert any(f"desc-{name}_plot.png" in p.name for p in plots)
-    # The notebook shows every saved figure once, read back from its PNG.
-    assert len(_displayed_images(executed)) == len(plots)
+    # The explicit walkthrough displays figure objects, sometimes also auto-rendered
+    # by Jupyter. Saved PNGs use export settings and are embedded in the report.
+    assert len(_displayed_images(executed)) >= len(plots)
+    report_html = (output / "sub-07_ses-nsd10_task-nsdcore_report.html").read_text()
+    for path in plots:
+        assert base64.b64encode(path.read_bytes()).decode("ascii") in report_html
     settings = WorkflowSettings.from_dict(metadata["settings"])
     with pytest.raises(FileExistsError):
         check_output(settings)
