@@ -125,7 +125,9 @@ def test_dead_features_do_not_affect_others(data):
         warnings.simplefilter("error")
         fit = _fit(_with_dead_columns(live), fixed, random)
         reference = _fit(live, fixed, random)
-    assert fit.status[1] == "no_residual_signal" and fit.status[3] == "no_residual_signal"
+    assert (
+        fit.status[1] == "no_residual_signal" and fit.status[3] == "no_residual_signal"
+    )
     for name in ("noise_variance", "effect_variance", "criterion"):
         assert np.isnan(getattr(fit, name)[[1, 3]]).all()
         assert_array_equal(getattr(fit, name)[[0, 2]], getattr(reference, name))

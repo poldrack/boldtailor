@@ -375,14 +375,18 @@ coefficients are random effects. `rho` is a scalar or one value per feature,
 with `|rho| < 1`. `candidates` is an iterable of such `random_design`
 sequences, consumed once.
 
+REML status migration: `no_signal` is now `no_residual_signal`, with an
+unestimated `ratio` represented by NaN instead of zero. `unresolved` is now
+`numerically_unresolved_residual`. Numerical screening thresholds are unchanged.
+
 `RemlFit` has per-feature read-only `ratio` (variance ratio λ), `noise_variance`
 (marginal σ²), `effect_variance` (`ratio * noise_variance`), `criterion`
 (−2 restricted log-likelihood up to a constant), `status` (`"ok"`,
-`"variance_zero"`, `"no_signal"`, `"unresolved"`, or `"unidentifiable"`),
+`"variance_zero"`, `"no_residual_signal"`, `"numerically_unresolved_residual"`, or `"unidentifiable"`),
 `at_upper`, `unrefined`, and `rho`, plus the integer `restricted_dof`. A
-`"no_signal"` feature has `ratio` `0.0` and NaN `noise_variance`,
+`"no_residual_signal"` feature has NaN `ratio`, `noise_variance`,
 `effect_variance` and `criterion`; it is one whose energy after projecting out
-the fixed design is within the rounding of that projection. An `"unresolved"`
+the fixed design is within the rounding of that projection. An `"numerically_unresolved_residual"`
 feature has all of those NaN, `ratio` included: its remaining energy is above
 that rounding but within the uncertainty of the computed fixed span, which
 happens only when fixed-design columns are nearly collinear and the signal
@@ -399,7 +403,7 @@ that is positive and not `unrefined` is stationary to near machine precision.
 their `criterion` is a truncation at a candidate-dependent grid edge, not a
 comparable optimum. `RemlSelection` has `winner` (candidate index, `-1` when no
 candidate has status `ok`), the winner's `fit` (for a feature with winner `-1`,
-the `λ = 0` fit, or the NaN fit of an `unresolved` feature), the criterion
+the `λ = 0` fit, or NaN estimates for absent or numerically unresolved residuals), the criterion
 `gap` to the runner-up (NaN without one), `n_candidates`, and `any_at_upper`,
 which marks features for which any candidate, winner or not, was truncated at
 its upper edge. `any_unrefined` also includes interior grid fallbacks of any

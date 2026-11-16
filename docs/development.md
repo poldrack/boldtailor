@@ -294,12 +294,12 @@ groups' `fixed_design` and that feature's `rho`; `rho` may differ between
 features, and features are never compared with each other.
 
 Per-feature `status` is `ok`, `variance_zero` (the optimum is `λ = 0`, so the
-data do not support the random design), `no_signal` (the energy left after
-projecting out `C` is within the rounding of that projection; its `ratio` is
-`0.0` and its other estimates are NaN), `unresolved` (the energy left is above
+data do not support the random design), `no_residual_signal` (the energy left after
+projecting out `C` is within the rounding of that projection; all its estimates,
+including `ratio`, are NaN), `numerically_unresolved_residual` (the energy left is above
 that rounding but within the uncertainty of the computed fixed span, so it may
 be real but cannot be certified; all its estimates, `ratio` included, are NaN),
-or `unidentifiable`. `unresolved` arises only when the fixed design has nearly
+or `unidentifiable`. `numerically_unresolved_residual` arises only when the fixed design has nearly
 collinear columns and the signal loads on the direction they barely determine;
 see the projection floors below. A fit is unidentifiable when the random covariance is a
 multiple of the identity on the whole restricted space: every restricted
@@ -320,8 +320,9 @@ on that candidate's optimum, not a comparable optimum. In a selection, the
 winner is the candidate with the lowest criterion among those with status
 `ok`; ties go to the earlier candidate. A feature with no `ok` candidate has
 winner `-1`, a NaN `gap` (the criterion difference to the runner-up, also NaN
-when only one candidate is `ok`), and its `fit` is the `λ = 0` fit (for an
-`unresolved` feature, the NaN fit). `RemlSelection.any_at_upper` marks the
+when only one candidate is `ok`), and its `fit` is the `λ = 0` fit, or NaN
+estimates for absent or numerically unresolved residuals.
+`RemlSelection.any_at_upper` marks the
 features for which any candidate, winner or not, was truncated: a truncated
 loser might have won at its true optimum, so those selections are provisional.
 `any_unrefined` additionally records interior fallbacks, including losing
@@ -397,11 +398,11 @@ computed from `C` spans the range of `C + E` with `‖E‖ ~ n · eps`, so signa
 along a direction that nearly collinear columns barely determine leaves
 proportionally more, up to `1e5` times the rounding scale in the cases pinned
 in `tests/test_numerics.py`, and at most 1.0 times the amplified one. Energy
-at or below the rounding floor is `no_signal`; between the floors it is
-`unresolved`; above the uncertainty floor the feature is fitted. `ar1` returns
+at or below the rounding floor is `no_residual_signal`; between the floors it is
+`numerically_unresolved_residual`; above the uncertainty floor the feature is fitted. `ar1` returns
 NaN at or below the uncertainty floor and has no status to tell the two cases
 apart. The uncertainty floor is a bound, not a measurement: a residual below
-it is not shown to be noise, which is why it is not reported as `no_signal`.
+it is not shown to be noise, which is why it is not reported as `no_residual_signal`.
 Both are floating-point floors in float64, not significance tests: adding
 `C a` to the signals leaves the fit unchanged for as long as the residual is
 still representable and resolved, and data whose residual is only quantisation

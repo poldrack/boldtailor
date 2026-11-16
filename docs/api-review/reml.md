@@ -12,35 +12,35 @@ Scalar restricted maximum likelihood for one random-effect variance.
 - [`RemlGroup.__post_init__`](#definition-2)
 - [`RemlFit`](#definition-3)
 - [`RemlFit.__post_init__`](#definition-4)
-- [`_Subset`](#definition-5)
-- [`_project`](#definition-6)
-- [`_above`](#definition-7)
-- [`_live_subset`](#definition-8)
-- [`_subsets`](#definition-9)
-- [`_status`](#definition-10)
-- [`_fit_values`](#definition-11)
-- [`_empty_result`](#definition-12)
+- [`_RhoFeatureSubset`](#definition-5)
+- [`_project_out_fixed_effects_by_group`](#definition-6)
+- [`_pooled_energy_exceeds_floor`](#definition-7)
+- [`_prepare_estimable_features_for_rho`](#definition-8)
+- [`_prepare_feature_subsets_by_rho`](#definition-9)
+- [`_classify_variance_ratio_optimum`](#definition-10)
+- [`_fit_subset_variance_components`](#definition-11)
+- [`_allocate_fit_buffers`](#definition-12)
 - [`_copy_fit_values_into`](#definition-13)
-- [`_assemble`](#definition-14)
-- [`_single_dof`](#definition-15)
+- [`_build_reml_fit`](#definition-14)
+- [`_require_common_restricted_dof`](#definition-15)
 - [`_mark_unresolved_in_place`](#definition-16)
-- [`_start`](#definition-17)
-- [`_fit_into`](#definition-18)
+- [`_prepare_reml_fit`](#definition-17)
+- [`_fit_subsets_into_buffers`](#definition-18)
 - [`fit_reml`](#definition-19)
 - [`RemlSelection`](#definition-20)
 - [`RemlSelection.__post_init__`](#definition-21)
-- [`_empty_race`](#definition-22)
+- [`_initialize_candidate_selection`](#definition-22)
 - [`_update_selection_from_fit`](#definition-23)
-- [`_fit_and_update_selection`](#definition-24)
-- [`_gap`](#definition-25)
-- [`_run_race`](#definition-26)
+- [`_fit_candidate_and_update_selection`](#definition-24)
+- [`_compute_runner_up_criterion_gap`](#definition-25)
+- [`_evaluate_candidates_and_update_fit_buffers`](#definition-26)
 - [`select_random_effects_design`](#definition-27)
 
 <a id="definition-1"></a>
 
 ## `RemlGroup`
 
-[Source, line 16](../../src/boldtailor/reml.py#L16)
+[Source, line 44](../../src/boldtailor/reml.py#L44)
 
 ```python
 @dataclass(frozen=True)
@@ -49,25 +49,23 @@ class RemlGroup
 
 Signals ``(scans, features)`` and their unpenalised fixed design ``C``.
 
-Declared fields (private names are implementation storage; `field(...)` describes dataclass construction):
+Declared fields:
 
 ```python
 signals: np.ndarray
 fixed_design: np.ndarray
 ```
 
-Usage in package/tests:
+Usage in module:
 
-- [tests/test_reml.py:77](../../tests/test_reml.py#L77)
-- [tests/test_reml.py:87](../../tests/test_reml.py#L87)
-- [tests/test_reml.py:25](../../tests/test_reml.py#L25)
-- [tests/test_reml.py:206](../../tests/test_reml.py#L206)
+- [src/boldtailor/reml.py:250](../../src/boldtailor/reml.py#L250)
+- [src/boldtailor/reml.py:372](../../src/boldtailor/reml.py#L372)
 
 <a id="definition-2"></a>
 
 ## `RemlGroup.__post_init__`
 
-[Source, line 22](../../src/boldtailor/reml.py#L22)
+[Source, line 50](../../src/boldtailor/reml.py#L50)
 
 ```python
 RemlGroup.__post_init__(self)
@@ -79,7 +77,7 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 ## `RemlFit`
 
-[Source, line 27](../../src/boldtailor/reml.py#L27)
+[Source, line 55](../../src/boldtailor/reml.py#L55)
 
 ```python
 @dataclass(frozen=True)
@@ -91,7 +89,13 @@ Per-feature REML variance estimates; ``noise_variance`` is marginal.
 ``unrefined`` marks a positive ratio taken from the search grid without a
 verified stationary point; ``at_upper`` marks those at the grid's upper edge.
 
-Declared fields (private names are implementation storage; `field(...)` describes dataclass construction):
+``no_residual_signal`` means residual energy is within projection rounding.
+``numerically_unresolved_residual`` means it exceeds rounding but remains
+within fixed-span uncertainty. Both skip fitting and have NaN variance
+estimates, ratio and criterion. ``variance_zero`` instead denotes a fitted
+zero random-effects variance with resolved residual signal.
+
+Declared fields:
 
 ```python
 ratio: np.ndarray
@@ -105,15 +109,18 @@ rho: np.ndarray
 restricted_dof: int
 ```
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:140](../../src/boldtailor/reml.py#L140)
+- [src/boldtailor/reml.py:197](../../src/boldtailor/reml.py#L197)
+- [src/boldtailor/reml.py:199](../../src/boldtailor/reml.py#L199)
+- [src/boldtailor/reml.py:254](../../src/boldtailor/reml.py#L254)
+- [src/boldtailor/reml.py:277](../../src/boldtailor/reml.py#L277)
 
 <a id="definition-4"></a>
 
 ## `RemlFit.__post_init__`
 
-[Source, line 44](../../src/boldtailor/reml.py#L44)
+[Source, line 78](../../src/boldtailor/reml.py#L78)
 
 ```python
 RemlFit.__post_init__(self)
@@ -123,252 +130,256 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-5"></a>
 
-## `_Subset`
+## `_RhoFeatureSubset`
 
-[Source, line 55](../../src/boldtailor/reml.py#L55)
+[Source, line 89](../../src/boldtailor/reml.py#L89)
 
 ```python
 @dataclass(frozen=True)
-class _Subset
+class _RhoFeatureSubset
 ```
 
-Live columns of one rho value and their fixed projections per group.
+Features with resolved residual signal sharing one noise correlation.
 
-``unresolved`` holds the columns whose energy is above projection rounding
-but within the uncertainty of the computed fixed span.
+``fit_feature_indices`` identifies features retained for fitting.
+``unresolved_feature_indices`` identifies residuals above projection
+rounding but within the uncertainty of the computed fixed span.
 
-Declared fields (private names are implementation storage; `field(...)` describes dataclass construction):
+Declared fields:
 
 ```python
-columns: np.ndarray
+fit_feature_indices: np.ndarray
 projections: list
 dof: int
-unresolved: np.ndarray
+unresolved_feature_indices: np.ndarray
 ```
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:89](../../src/boldtailor/reml.py#L89)
+- [src/boldtailor/reml.py:134](../../src/boldtailor/reml.py#L134)
 
 <a id="definition-6"></a>
 
-## `_project`
+## `_project_out_fixed_effects_by_group`
 
-[Source, line 68](../../src/boldtailor/reml.py#L68)
+[Source, line 103](../../src/boldtailor/reml.py#L103)
 
 ```python
-_project(groups, columns, rho)
+_project_out_fixed_effects_by_group(groups, feature_indices, rho)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:80](../../src/boldtailor/reml.py#L80)
+- [src/boldtailor/reml.py:118](../../src/boldtailor/reml.py#L118)
 
 <a id="definition-7"></a>
 
-## `_above`
+## `_pooled_energy_exceeds_floor`
 
-[Source, line 72](../../src/boldtailor/reml.py#L72)
+[Source, line 110](../../src/boldtailor/reml.py#L110)
 
 ```python
-_above(projections, floor)
+_pooled_energy_exceeds_floor(projections, floor)
 ```
 
 Features whose pooled projected energy exceeds the pooled named floor.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:81](../../src/boldtailor/reml.py#L81)
-- [src/boldtailor/reml.py:82](../../src/boldtailor/reml.py#L82)
+- [src/boldtailor/reml.py:119](../../src/boldtailor/reml.py#L119)
+- [src/boldtailor/reml.py:124](../../src/boldtailor/reml.py#L124)
 
 <a id="definition-8"></a>
 
-## `_live_subset`
+## `_prepare_estimable_features_for_rho`
 
-[Source, line 78](../../src/boldtailor/reml.py#L78)
+[Source, line 116](../../src/boldtailor/reml.py#L116)
 
 ```python
-_live_subset(groups, columns, rho)
+_prepare_estimable_features_for_rho(groups, feature_indices, rho)
 ```
 
-Project one rho subset; when it mixes in dead features, re-project the live.
+Prepare resolved residuals for one rho; this does not establish identifiability.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:94](../../src/boldtailor/reml.py#L94)
+- [src/boldtailor/reml.py:149](../../src/boldtailor/reml.py#L149)
 
 <a id="definition-9"></a>
 
-## `_subsets`
+## `_prepare_feature_subsets_by_rho`
 
-[Source, line 92](../../src/boldtailor/reml.py#L92)
+[Source, line 142](../../src/boldtailor/reml.py#L142)
 
 ```python
-_subsets(groups, rho)
+_prepare_feature_subsets_by_rho(groups, rho)
 ```
 
-No source docstring. Read the linked implementation and call sites for the precise contract.
+Batch features by identical rho to reuse whitening and fixed projections.
 
-Usage in package/tests:
+This is a computational grouping: every feature has its own variance
+estimates. The same prepared subsets are reused across candidate designs.
 
-- [src/boldtailor/reml.py:171](../../src/boldtailor/reml.py#L171)
+Usage in module:
+
+- [src/boldtailor/reml.py:232](../../src/boldtailor/reml.py#L232)
 
 <a id="definition-10"></a>
 
-## `_status`
+## `_classify_variance_ratio_optimum`
 
-[Source, line 99](../../src/boldtailor/reml.py#L99)
+[Source, line 156](../../src/boldtailor/reml.py#L156)
 
 ```python
-_status(optimum)
+_classify_variance_ratio_optimum(optimum)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:115](../../src/boldtailor/reml.py#L115)
+- [src/boldtailor/reml.py:172](../../src/boldtailor/reml.py#L172)
 
 <a id="definition-11"></a>
 
-## `_fit_values`
+## `_fit_subset_variance_components`
 
-[Source, line 104](../../src/boldtailor/reml.py#L104)
+[Source, line 161](../../src/boldtailor/reml.py#L161)
 
 ```python
-_fit_values(subset, random_design)
+_fit_subset_variance_components(subset, random_design)
 ```
 
-Fit one candidate on one subset; arrays are indexed like ``subset.columns``.
+Fit variance components in the order of subset.fit_feature_indices.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:251](../../src/boldtailor/reml.py#L251)
-- [src/boldtailor/reml.py:180](../../src/boldtailor/reml.py#L180)
+- [src/boldtailor/reml.py:245](../../src/boldtailor/reml.py#L245)
+- [src/boldtailor/reml.py:329](../../src/boldtailor/reml.py#L329)
 
 <a id="definition-12"></a>
 
-## `_empty_result`
+## `_allocate_fit_buffers`
 
-[Source, line 121](../../src/boldtailor/reml.py#L121)
+[Source, line 178](../../src/boldtailor/reml.py#L178)
 
 ```python
-_empty_result(n_features)
+_allocate_fit_buffers(n_features)
 ```
 
-Every feature starts as no_signal; fits overwrite the live ones.
+Allocate NaN estimates; fitting overwrites features with resolved residuals.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:172](../../src/boldtailor/reml.py#L172)
+- [src/boldtailor/reml.py:233](../../src/boldtailor/reml.py#L233)
 
 <a id="definition-13"></a>
 
 ## `_copy_fit_values_into`
 
-[Source, line 133](../../src/boldtailor/reml.py#L133)
+[Source, line 190](../../src/boldtailor/reml.py#L190)
 
 ```python
-_copy_fit_values_into(result, columns, values, keep=slice(None))
+_copy_fit_values_into(destination, feature_indices, values, keep=slice(None))
 ```
 
-No source docstring. Read the linked implementation and call sites for the precise contract.
+Copy values into destination feature positions; leave sources intact.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:245](../../src/boldtailor/reml.py#L245)
-- [src/boldtailor/reml.py:180](../../src/boldtailor/reml.py#L180)
+- [src/boldtailor/reml.py:242](../../src/boldtailor/reml.py#L242)
+- [src/boldtailor/reml.py:320](../../src/boldtailor/reml.py#L320)
 
 <a id="definition-14"></a>
 
-## `_assemble`
+## `_build_reml_fit`
 
-[Source, line 138](../../src/boldtailor/reml.py#L138)
+[Source, line 197](../../src/boldtailor/reml.py#L197)
 
 ```python
-_assemble(result, rho, restricted_dof) -> RemlFit
+_build_reml_fit(fit_buffers, rho, restricted_dof) -> RemlFit
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:194](../../src/boldtailor/reml.py#L194)
-- [src/boldtailor/reml.py:288](../../src/boldtailor/reml.py#L288)
+- [src/boldtailor/reml.py:260](../../src/boldtailor/reml.py#L260)
+- [src/boldtailor/reml.py:412](../../src/boldtailor/reml.py#L412)
 
 <a id="definition-15"></a>
 
-## `_single_dof`
+## `_require_common_restricted_dof`
 
-[Source, line 153](../../src/boldtailor/reml.py#L153)
+[Source, line 212](../../src/boldtailor/reml.py#L212)
 
 ```python
-_single_dof(subsets) -> int
+_require_common_restricted_dof(subsets) -> int
 ```
 
 The restricted dof shared by every rho subset; rank must not flip with rho.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:174](../../src/boldtailor/reml.py#L174)
+- [src/boldtailor/reml.py:235](../../src/boldtailor/reml.py#L235)
 
 <a id="definition-16"></a>
 
 ## `_mark_unresolved_in_place`
 
-[Source, line 161](../../src/boldtailor/reml.py#L161)
+[Source, line 220](../../src/boldtailor/reml.py#L220)
 
 ```python
-_mark_unresolved_in_place(result, subsets)
+_mark_unresolved_in_place(fit_buffers, subsets)
 ```
 
-Unresolved features claim neither a zero ratio nor an absent signal.
+Mark features whose residual signal is numerically unresolved.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:173](../../src/boldtailor/reml.py#L173)
+- [src/boldtailor/reml.py:234](../../src/boldtailor/reml.py#L234)
 
 <a id="definition-17"></a>
 
-## `_start`
+## `_prepare_reml_fit`
 
-[Source, line 168](../../src/boldtailor/reml.py#L168)
+[Source, line 229](../../src/boldtailor/reml.py#L229)
 
 ```python
-_start(groups, rho)
+_prepare_reml_fit(groups, rho)
 ```
 
-Per-feature rho, its subsets, their dof and the result to fill in.
+Return feature correlations, prepared subsets, shared dof and fit buffers.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:192](../../src/boldtailor/reml.py#L192)
-- [src/boldtailor/reml.py:283](../../src/boldtailor/reml.py#L283)
+- [src/boldtailor/reml.py:258](../../src/boldtailor/reml.py#L258)
+- [src/boldtailor/reml.py:405](../../src/boldtailor/reml.py#L405)
 
 <a id="definition-18"></a>
 
-## `_fit_into`
+## `_fit_subsets_into_buffers`
 
-[Source, line 177](../../src/boldtailor/reml.py#L177)
+[Source, line 238](../../src/boldtailor/reml.py#L238)
 
 ```python
-_fit_into(result, subsets, random_design)
+_fit_subsets_into_buffers(fit_buffers, subsets, random_design)
 ```
 
-No source docstring. Read the linked implementation and call sites for the precise contract.
+Fit each subset and write estimates into the supplied buffers in place.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:193](../../src/boldtailor/reml.py#L193)
-- [src/boldtailor/reml.py:284](../../src/boldtailor/reml.py#L284)
+- [src/boldtailor/reml.py:259](../../src/boldtailor/reml.py#L259)
+- [src/boldtailor/reml.py:406](../../src/boldtailor/reml.py#L406)
 
 <a id="definition-19"></a>
 
 ## `fit_reml`
 
-[Source, line 183](../../src/boldtailor/reml.py#L183)
+[Source, line 249](../../src/boldtailor/reml.py#L249)
 
 ```python
 fit_reml(groups: Sequence[RemlGroup], random_design: Iterable[np.ndarray | None], *, rho: float | np.ndarray=0.0) -> RemlFit
@@ -376,18 +387,11 @@ fit_reml(groups: Sequence[RemlGroup], random_design: Iterable[np.ndarray | None]
 
 Estimate the variance ratio of the random effects, feature by feature.
 
-Usage in package/tests:
-
-- [tests/test_reml.py:29](../../tests/test_reml.py#L29)
-- [tests/test_reml.py:190](../../tests/test_reml.py#L190)
-- [tests/test_reml.py:204](../../tests/test_reml.py#L204)
-- [tests/test_reml.py:206](../../tests/test_reml.py#L206)
-
 <a id="definition-20"></a>
 
 ## `RemlSelection`
 
-[Source, line 201](../../src/boldtailor/reml.py#L201)
+[Source, line 267](../../src/boldtailor/reml.py#L267)
 
 ```python
 @dataclass(frozen=True)
@@ -401,7 +405,7 @@ truncated at the upper edge of its search range. That criterion is an
 upper bound on the candidate's optimum, so the comparison is provisional.
 ``any_unrefined`` also includes interior grid fallbacks of any candidate.
 
-Declared fields (private names are implementation storage; `field(...)` describes dataclass construction):
+Declared fields:
 
 ```python
 winner: np.ndarray
@@ -412,15 +416,16 @@ any_at_upper: np.ndarray
 any_unrefined: np.ndarray
 ```
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:286](../../src/boldtailor/reml.py#L286)
+- [src/boldtailor/reml.py:376](../../src/boldtailor/reml.py#L376)
+- [src/boldtailor/reml.py:410](../../src/boldtailor/reml.py#L410)
 
 <a id="definition-21"></a>
 
 ## `RemlSelection.__post_init__`
 
-[Source, line 217](../../src/boldtailor/reml.py#L217)
+[Source, line 283](../../src/boldtailor/reml.py#L283)
 
 ```python
 RemlSelection.__post_init__(self)
@@ -430,99 +435,117 @@ No source docstring. Read the linked implementation and call sites for the preci
 
 <a id="definition-22"></a>
 
-## `_empty_race`
+## `_initialize_candidate_selection`
 
-[Source, line 223](../../src/boldtailor/reml.py#L223)
+[Source, line 289](../../src/boldtailor/reml.py#L289)
 
 ```python
-_empty_race(n_features)
+_initialize_candidate_selection(n_features)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:264](../../src/boldtailor/reml.py#L264)
+- [src/boldtailor/reml.py:356](../../src/boldtailor/reml.py#L356)
 
 <a id="definition-23"></a>
 
 ## `_update_selection_from_fit`
 
-[Source, line 233](../../src/boldtailor/reml.py#L233)
+[Source, line 299](../../src/boldtailor/reml.py#L299)
 
 ```python
-_update_selection_from_fit(race, result, columns, values, candidate)
+_update_selection_from_fit(selection_state, fit_buffers, feature_indices, values, candidate_index)
 ```
 
-Update the running best and runner-up with one candidate's ok features.
+Update candidate rankings and winning-fit buffers using eligible fits.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:252](../../src/boldtailor/reml.py#L252)
+- [src/boldtailor/reml.py:330](../../src/boldtailor/reml.py#L330)
 
 <a id="definition-24"></a>
 
-## `_fit_and_update_selection`
+## `_fit_candidate_and_update_selection`
 
-[Source, line 248](../../src/boldtailor/reml.py#L248)
+[Source, line 323](../../src/boldtailor/reml.py#L323)
 
 ```python
-_fit_and_update_selection(race, result, subsets, random_design, candidate)
+_fit_candidate_and_update_selection(selection_state, fit_buffers, subsets, random_design, candidate_index)
 ```
 
-No source docstring. Read the linked implementation and call sites for the precise contract.
+Fit one candidate and update selection state and fit buffers in place.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:268](../../src/boldtailor/reml.py#L268)
+- [src/boldtailor/reml.py:362](../../src/boldtailor/reml.py#L362)
 
 <a id="definition-25"></a>
 
-## `_gap`
+## `_compute_runner_up_criterion_gap`
 
-[Source, line 255](../../src/boldtailor/reml.py#L255)
+[Source, line 339](../../src/boldtailor/reml.py#L339)
 
 ```python
-_gap(race)
+_compute_runner_up_criterion_gap(selection_state)
 ```
 
 No source docstring. Read the linked implementation and call sites for the precise contract.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:289](../../src/boldtailor/reml.py#L289)
+- [src/boldtailor/reml.py:413](../../src/boldtailor/reml.py#L413)
 
 <a id="definition-26"></a>
 
-## `_run_race`
+## `_evaluate_candidates_and_update_fit_buffers`
 
-[Source, line 262](../../src/boldtailor/reml.py#L262)
+[Source, line 351](../../src/boldtailor/reml.py#L351)
 
 ```python
-_run_race(groups, candidates, subsets, result)
+_evaluate_candidates_and_update_fit_buffers(groups, candidates, subsets, fit_buffers)
 ```
 
-Fit candidates one at a time as they are drawn; return the race and count.
+Update winning-fit buffers; return selection state and candidate count.
 
-Usage in package/tests:
+Usage in module:
 
-- [src/boldtailor/reml.py:285](../../src/boldtailor/reml.py#L285)
+- [src/boldtailor/reml.py:407](../../src/boldtailor/reml.py#L407)
 
 <a id="definition-27"></a>
 
 ## `select_random_effects_design`
 
-[Source, line 275](../../src/boldtailor/reml.py#L275)
+[Source, line 371](../../src/boldtailor/reml.py#L371)
 
 ```python
 select_random_effects_design(groups: Sequence[RemlGroup], candidates: Iterable[Iterable[np.ndarray | None]], *, rho: float | np.ndarray=0.0) -> RemlSelection
 ```
 
-Pick, per feature, the candidate random design with the best criterion.
+Select random-effects designs by REML, independently for each feature.
 
-Usage in package/tests:
+Each candidate supplies one Z matrix per group, in group order; None means
+no random-effect columns for that group. The signals, fixed designs C,
+and supplied rho are held constant across candidates. For example, a
+candidate can contain trial-response designs made with one HRF, while
+another candidate uses a different HRF for the same trials.
 
-- [tests/test_reml.py:275](../../tests/test_reml.py#L275)
-- [tests/test_reml_adversarial.py:201](../../tests/test_reml_adversarial.py#L201)
-- [tests/test_reml_adversarial.py:212](../../tests/test_reml_adversarial.py#L212)
-- [tests/test_reml_adversarial.py:268](../../tests/test_reml_adversarial.py#L268)
+For every candidate, estimate the shared-across-groups variance ratio and
+noise variance, then compare its optimized restricted-likelihood criterion
+(lower is better). This selects the candidate covariance structure, not
+random columns or random observations. It uses the supplied data directly;
+it is not cross-validation and does not return fitted coefficients b_r.
+
+winner contains zero-based candidate indices. Only fits with status "ok"
+compete; zero-variance or unidentifiable fits do not become winners. A
+winner of -1 means no supported candidate; inspect fit.status to distinguish
+zero random-effects variance, absent residual signal, and numerically
+unresolved residual signal. Exact ties favor the earlier candidate. fit
+holds the winning estimates, or the no-random-effects baseline when no
+candidate wins. Features skipped for absent or unresolved residuals retain
+NaN estimates. gap is the runner-up criterion minus the best criterion,
+or NaN when fewer than two candidates qualify.
+any_at_upper and any_unrefined flag limitations in any candidate's search.
+
+Candidates are consumed once, with only the best and runner-up retained.

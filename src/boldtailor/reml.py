@@ -57,6 +57,12 @@ class RemlFit:
 
     ``unrefined`` marks a positive ratio taken from the search grid without a
     verified stationary point; ``at_upper`` marks those at the grid's upper edge.
+
+    ``no_residual_signal`` means residual energy is within projection rounding.
+    ``numerically_unresolved_residual`` means it exceeds rounding but remains
+    within fixed-span uncertainty. Both skip fitting and have NaN variance
+    estimates, ratio and criterion. ``variance_zero`` instead denotes a fitted
+    zero random-effects variance with resolved residual signal.
     """
 
     ratio: np.ndarray
@@ -80,57 +86,80 @@ class RemlFit:
 
 
 @dataclass(frozen=True)
-class _Subset:
-    """Live columns of one rho value and their fixed projections per group.
+class _RhoFeatureSubset:
+    """Features with resolved residual signal sharing one noise correlation.
 
-    ``unresolved`` holds the columns whose energy is above projection rounding
-    but within the uncertainty of the computed fixed span.
+    ``fit_feature_indices`` identifies features retained for fitting.
+    ``unresolved_feature_indices`` identifies residuals above projection
+    rounding but within the uncertainty of the computed fixed span.
     """
 
-    columns: np.ndarray
+    fit_feature_indices: np.ndarray
     projections: list
     dof: int
-    unresolved: np.ndarray
+    unresolved_feature_indices: np.ndarray
 
 
-def _project(groups, columns, rho):
-    return [project_fixed(g.signals[:, columns], g.fixed_design, rho) for g in groups]
+def _project_out_fixed_effects_by_group(groups, feature_indices, rho):
+    return [
+        project_fixed(g.signals[:, feature_indices], g.fixed_design, rho)
+        for g in groups
+    ]
 
 
-def _above(projections, floor):
+def _pooled_energy_exceeds_floor(projections, floor):
     """Features whose pooled projected energy exceeds the pooled named floor."""
     energy = sum(p.energy for p in projections)
     return energy > sum(getattr(p, floor) for p in projections)
 
 
-def _live_subset(groups, columns, rho):
-    """Project one rho subset; when it mixes in dead features, re-project the live."""
-    projections = _project(groups, columns, rho)
-    live = _above(projections, "uncertainty_floor")
-    unresolved = columns[~live & _above(projections, "rounding_floor")]
-    if live.any() and not live.all():
+def _prepare_estimable_features_for_rho(groups, feature_indices, rho):
+    """Prepare resolved residuals for one rho; this does not establish identifiability."""
+    projections = _project_out_fixed_effects_by_group(groups, feature_indices, rho)
+    has_resolved_residual_signal = _pooled_energy_exceeds_floor(
+        projections, "uncertainty_floor"
+    )
+    unresolved_feature_indices = feature_indices[
+        ~has_resolved_residual_signal
+        & _pooled_energy_exceeds_floor(projections, "rounding_floor")
+    ]
+    if has_resolved_residual_signal.any() and not has_resolved_residual_signal.all():
         projections = [
-            reproject_signals(p, g.signals[:, columns[live]])
+            reproject_signals(
+                p, g.signals[:, feature_indices[has_resolved_residual_signal]]
+            )
             for p, g in zip(projections, groups, strict=True)
         ]
     dof = sum(p.dof for p in projections)
-    return _Subset(columns[live], projections, dof, unresolved)
+    return _RhoFeatureSubset(
+        feature_indices[has_resolved_residual_signal],
+        projections,
+        dof,
+        unresolved_feature_indices,
+    )
 
 
-def _subsets(groups, rho):
+def _prepare_feature_subsets_by_rho(groups, rho):
+    """Batch features by identical rho to reuse whitening and fixed projections.
+
+    This is a computational grouping: every feature has its own variance
+    estimates. The same prepared subsets are reused across candidate designs.
+    """
     return [
-        _live_subset(groups, np.flatnonzero(rho == value), float(value))
+        _prepare_estimable_features_for_rho(
+            groups, np.flatnonzero(rho == value), float(value)
+        )
         for value in np.unique(rho)
     ]
 
 
-def _status(optimum):
+def _classify_variance_ratio_optimum(optimum):
     status = np.where(optimum.at_zero, "variance_zero", "ok")
     return np.where(optimum.unidentifiable, "unidentifiable", status)
 
 
-def _fit_values(subset, random_design):
-    """Fit one candidate on one subset; arrays are indexed like ``subset.columns``."""
+def _fit_subset_variance_components(subset, random_design):
+    """Fit variance components in the order of subset.fit_feature_indices."""
     terms = [
         reml_terms(p, z) for p, z in zip(subset.projections, random_design, strict=True)
     ]
@@ -140,47 +169,47 @@ def _fit_values(subset, random_design):
         "ratio": optimum.ratio,
         "noise_variance": pooled_quadratic(optimum.ratio, pooled) / pooled.dof,
         "criterion": optimum.criterion,
-        "status": _status(optimum),
+        "status": _classify_variance_ratio_optimum(optimum),
         "at_upper": optimum.at_upper,
         "unrefined": optimum.unrefined,
     }
 
 
-def _empty_result(n_features):
-    """Every feature starts as no_signal; fits overwrite the live ones."""
+def _allocate_fit_buffers(n_features):
+    """Allocate NaN estimates; fitting overwrites features with resolved residuals."""
     return {
-        "ratio": np.zeros(n_features),
+        "ratio": np.full(n_features, np.nan),
         "noise_variance": np.full(n_features, np.nan),
         "criterion": np.full(n_features, np.nan),
-        "status": np.full(n_features, "no_signal", dtype=object),
+        "status": np.full(n_features, "no_residual_signal", dtype=object),
         "at_upper": np.zeros(n_features, dtype=bool),
         "unrefined": np.zeros(n_features, dtype=bool),
     }
 
 
-def _copy_fit_values_into(destination, columns, values, keep=slice(None)):
-    """Mutate destination buffers at selected columns; leave source values intact."""
-    destination_columns = columns[keep]
+def _copy_fit_values_into(destination, feature_indices, values, keep=slice(None)):
+    """Copy values into destination feature positions; leave sources intact."""
+    destination_feature_indices = feature_indices[keep]
     for name, array in values.items():
-        destination[name][destination_columns] = array[keep]
+        destination[name][destination_feature_indices] = array[keep]
 
 
-def _assemble(result, rho, restricted_dof) -> RemlFit:
-    ratio, noise = result["ratio"], result["noise_variance"]
+def _build_reml_fit(fit_buffers, rho, restricted_dof) -> RemlFit:
+    ratio, noise = fit_buffers["ratio"], fit_buffers["noise_variance"]
     return RemlFit(
         ratio=ratio,
         noise_variance=noise,
         effect_variance=ratio * noise,
-        criterion=result["criterion"],
-        status=tuple(str(s) for s in result["status"]),
-        at_upper=result["at_upper"],
-        unrefined=result["unrefined"],
+        criterion=fit_buffers["criterion"],
+        status=tuple(str(s) for s in fit_buffers["status"]),
+        at_upper=fit_buffers["at_upper"],
+        unrefined=fit_buffers["unrefined"],
         rho=rho,
         restricted_dof=restricted_dof,
     )
 
 
-def _single_dof(subsets) -> int:
+def _require_common_restricted_dof(subsets) -> int:
     """The restricted dof shared by every rho subset; rank must not flip with rho."""
     dofs = {subset.dof for subset in subsets}
     if len(dofs) != 1:
@@ -188,28 +217,32 @@ def _single_dof(subsets) -> int:
     return dofs.pop()
 
 
-def _mark_unresolved_in_place(result, subsets):
-    """Set unresolved status and NaN ratios in the supplied result buffers."""
+def _mark_unresolved_in_place(fit_buffers, subsets):
+    """Mark features whose residual signal is numerically unresolved."""
     for subset in subsets:
-        result["status"][subset.unresolved] = "unresolved"
-        result["ratio"][subset.unresolved] = np.nan
+        fit_buffers["status"][
+            subset.unresolved_feature_indices
+        ] = "numerically_unresolved_residual"
+        fit_buffers["ratio"][subset.unresolved_feature_indices] = np.nan
 
 
-def _start(groups, rho):
-    """Per-feature rho, its subsets, their dof and the result to fill in."""
+def _prepare_reml_fit(groups, rho):
+    """Return feature correlations, prepared subsets, shared dof and fit buffers."""
     rho = feature_rho(rho, groups[0].signals.shape[1])
-    subsets = _subsets(groups, rho)
-    result = _empty_result(rho.size)
-    _mark_unresolved_in_place(result, subsets)
-    return rho, subsets, _single_dof(subsets), result
+    subsets = _prepare_feature_subsets_by_rho(groups, rho)
+    fit_buffers = _allocate_fit_buffers(rho.size)
+    _mark_unresolved_in_place(fit_buffers, subsets)
+    return rho, subsets, _require_common_restricted_dof(subsets), fit_buffers
 
 
-def _fit_into(result, subsets, random_design):
-    """Fit live features and write their estimates into result in place."""
+def _fit_subsets_into_buffers(fit_buffers, subsets, random_design):
+    """Fit each subset and write estimates into the supplied buffers in place."""
     for subset in subsets:
-        if subset.columns.size:
+        if subset.fit_feature_indices.size:
             _copy_fit_values_into(
-                result, subset.columns, _fit_values(subset, random_design)
+                fit_buffers,
+                subset.fit_feature_indices,
+                _fit_subset_variance_components(subset, random_design),
             )
 
 
@@ -222,9 +255,9 @@ def fit_reml(
     """Estimate the variance ratio of the random effects, feature by feature."""
     validate_groups(groups)
     random_design = checked_random(groups, random_design, "random_design")
-    rho, subsets, dof, result = _start(groups, rho)
-    _fit_into(result, subsets, random_design)
-    return _assemble(result, rho, dof)
+    rho, subsets, dof, fit_buffers = _prepare_reml_fit(groups, rho)
+    _fit_subsets_into_buffers(fit_buffers, subsets, random_design)
+    return _build_reml_fit(fit_buffers, rho, dof)
 
 
 # ---------------------------------------------------------------- selection
@@ -253,57 +286,86 @@ class RemlSelection:
         copy_array_fields_in_place(self, ("any_at_upper", "any_unrefined"), dtype=bool)
 
 
-def _empty_race(n_features):
+def _initialize_candidate_selection(n_features):
     return {
         "winner": np.full(n_features, -1, dtype=np.int64),
-        "best": np.full(n_features, np.inf),
-        "second": np.full(n_features, np.inf),
+        "best_criterion": np.full(n_features, np.inf),
+        "runner_up_criterion": np.full(n_features, np.inf),
         "any_at_upper": np.zeros(n_features, dtype=bool),
         "any_unrefined": np.zeros(n_features, dtype=bool),
     }
 
 
-def _update_selection_from_fit(race, result, columns, values, candidate):
-    """Mutate race counters and result buffers using one candidate's ok fits."""
+def _update_selection_from_fit(
+    selection_state, fit_buffers, feature_indices, values, candidate_index
+):
+    """Update candidate rankings and winning-fit buffers using eligible fits."""
     ok = values["status"] == "ok"
     value = values["criterion"]
-    best, second = race["best"][columns], race["second"][columns]
-    better = ok & (value < best)
-    runner_up = np.where(better, best, np.minimum(second, value))
-    race["second"][columns] = np.where(ok, runner_up, second)
-    race["best"][columns] = np.where(better, value, best)
-    race["winner"][columns[better]] = candidate
-    race["any_at_upper"][columns] |= values["at_upper"]
-    race["any_unrefined"][columns] |= values["unrefined"]
-    _copy_fit_values_into(result, columns, values, better)
+    best_criterion, runner_up_criterion = (
+        selection_state["best_criterion"][feature_indices],
+        selection_state["runner_up_criterion"][feature_indices],
+    )
+    better = ok & (value < best_criterion)
+    runner_up = np.where(better, best_criterion, np.minimum(runner_up_criterion, value))
+    selection_state["runner_up_criterion"][feature_indices] = np.where(
+        ok, runner_up, runner_up_criterion
+    )
+    selection_state["best_criterion"][feature_indices] = np.where(
+        better, value, best_criterion
+    )
+    selection_state["winner"][feature_indices[better]] = candidate_index
+    selection_state["any_at_upper"][feature_indices] |= values["at_upper"]
+    selection_state["any_unrefined"][feature_indices] |= values["unrefined"]
+    _copy_fit_values_into(fit_buffers, feature_indices, values, better)
 
 
-def _fit_and_update_selection(race, result, subsets, random_design, candidate):
-    """Fit one candidate, updating race and result buffers in place."""
+def _fit_candidate_and_update_selection(
+    selection_state, fit_buffers, subsets, random_design, candidate_index
+):
+    """Fit one candidate and update selection state and fit buffers in place."""
     for subset in subsets:
-        if subset.columns.size:
-            values = _fit_values(subset, random_design)
-            _update_selection_from_fit(race, result, subset.columns, values, candidate)
+        if subset.fit_feature_indices.size:
+            values = _fit_subset_variance_components(subset, random_design)
+            _update_selection_from_fit(
+                selection_state,
+                fit_buffers,
+                subset.fit_feature_indices,
+                values,
+                candidate_index,
+            )
 
 
-def _gap(race):
-    supported = (race["winner"] >= 0) & np.isfinite(race["second"])
+def _compute_runner_up_criterion_gap(selection_state):
+    supported = (selection_state["winner"] >= 0) & np.isfinite(
+        selection_state["runner_up_criterion"]
+    )
     gap = np.full(supported.shape, np.nan)
-    gap[supported] = race["second"][supported] - race["best"][supported]
+    gap[supported] = (
+        selection_state["runner_up_criterion"][supported]
+        - selection_state["best_criterion"][supported]
+    )
     return gap
 
 
-def _run_race(groups, candidates, subsets, result):
-    """Fit candidates one at a time as they are drawn; return the race and count."""
-    race, n_candidates = _empty_race(result["ratio"].size), 0
+def _evaluate_candidates_and_update_fit_buffers(
+    groups, candidates, subsets, fit_buffers
+):
+    """Update winning-fit buffers; return selection state and candidate count."""
+    selection_state, n_candidates = (
+        _initialize_candidate_selection(fit_buffers["ratio"].size),
+        0,
+    )
     for index, candidate in enumerate(candidates):
         label = f"candidate {index} random_design"
         random_design = checked_random(groups, candidate, label)
-        _fit_and_update_selection(race, result, subsets, random_design, index)
+        _fit_candidate_and_update_selection(
+            selection_state, fit_buffers, subsets, random_design, index
+        )
         n_candidates = index + 1
     if n_candidates == 0:
         raise ValueError("at least one candidate is required")
-    return race, n_candidates
+    return selection_state, n_candidates
 
 
 def select_random_effects_design(
@@ -329,23 +391,27 @@ def select_random_effects_design(
     winner contains zero-based candidate indices. Only fits with status "ok"
     compete; zero-variance or unidentifiable fits do not become winners. A
     winner of -1 means no supported candidate; inspect fit.status to distinguish
-    zero variance, absent signal, and numerically unresolved signal. Exact ties
-    favor the earlier candidate. fit holds the winning variance estimates, or
-    the no-random-effects baseline when no candidate wins. gap is the runner-up
-    criterion minus the best, or NaN when fewer than two candidates qualify.
+    zero random-effects variance, absent residual signal, and numerically
+    unresolved residual signal. Exact ties favor the earlier candidate. fit
+    holds the winning estimates, or the no-random-effects baseline when no
+    candidate wins. Features skipped for absent or unresolved residuals retain
+    NaN estimates. gap is the runner-up criterion minus the best criterion,
+    or NaN when fewer than two candidates qualify.
     any_at_upper and any_unrefined flag limitations in any candidate's search.
 
     Candidates are consumed once, with only the best and runner-up retained.
     """
     validate_groups(groups)
-    rho, subsets, dof, result = _start(groups, rho)
-    _fit_into(result, subsets, [None] * len(groups))
-    race, count = _run_race(groups, candidates, subsets, result)
+    rho, subsets, dof, fit_buffers = _prepare_reml_fit(groups, rho)
+    _fit_subsets_into_buffers(fit_buffers, subsets, [None] * len(groups))
+    selection_state, count = _evaluate_candidates_and_update_fit_buffers(
+        groups, candidates, subsets, fit_buffers
+    )
     return RemlSelection(
-        winner=race["winner"],
-        fit=_assemble(result, rho, dof),
-        gap=_gap(race),
+        winner=selection_state["winner"],
+        fit=_build_reml_fit(fit_buffers, rho, dof),
+        gap=_compute_runner_up_criterion_gap(selection_state),
         n_candidates=count,
-        any_at_upper=race["any_at_upper"],
-        any_unrefined=race["any_unrefined"],
+        any_at_upper=selection_state["any_at_upper"],
+        any_unrefined=selection_state["any_unrefined"],
     )

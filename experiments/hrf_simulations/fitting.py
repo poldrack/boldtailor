@@ -169,7 +169,7 @@ def fit(
     diagnostics = _run_diagnostics(
         runs, library, model, convention, noise_mode, rho, oracle_rho
     )
-    if state != "no_signal":
+    if state != "no_residual_signal":
         scales = None if kernel is None else random_scales(parts(kernel), scaling)
         diagnostics.update(_fit_diagnostics(selection, scales))
     return _estimate(runs, kernel, state, diagnostics)
