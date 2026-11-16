@@ -14,6 +14,7 @@ from tests.oracles import replace_indices, scaled_condition
 
 
 @pytest.mark.parametrize("alpha", [0.0, 0.1])
+@pytest.mark.integration
 def test_grouped_betas_and_r_squared_match_augmented_ols(selected_fixture, alpha):
     from boldtailor.single_trial import fit_selected_hrfs
 

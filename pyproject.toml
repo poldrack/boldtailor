@@ -45,6 +45,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "integration: representative cross-module checks for the local integration suite",
+]
 
 [tool.black]
 target-version = ["py312"]

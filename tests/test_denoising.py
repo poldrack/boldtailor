@@ -732,6 +732,7 @@ def conventional(names=(), task_model=RT_MODEL):
     )
 
 
+@pytest.mark.integration
 def test_fit_on_augmented_data_matches_explicitly_appended_pcs(fixture, typed):
     saved = snapshot(typed)
     result = run_selection(fixture, typed)

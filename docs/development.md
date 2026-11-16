@@ -11,10 +11,19 @@ Use Python 3.12 or later and uv:
 
 ```bash
 uv sync --group dev
-uv run pytest -q -W error
+# During edits: affected module tests, then the integration suite
+uv run pytest tests/test_reml*.py -q -W error  # example area
+uv run pytest -m integration -q -W error
+# Before merging
+uv run pytest -q -W error --durations=20
 uv run black --check src tests examples/bids_workflow
 uv run git diff --check
 ```
+
+See [Choosing tests during development](testing.md) for module-to-test mappings,
+integration coverage, and when to run broader checks. Run affected module tests
+plus the integration suite before committing; the full default suite is required
+before merging and for test-selection changes.
 
 `uv run pytest` runs the package suite in `tests/`. Example and notebook tests are
 opt-in: `uv run pytest examples/bids_workflow`, `uv run pytest examples/validation`, and

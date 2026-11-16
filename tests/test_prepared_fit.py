@@ -94,6 +94,7 @@ def _nilearn_t_contrast(labels, regression_results, vector):
 
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+@pytest.mark.integration
 def test_fit_prepared_matches_nilearn(noise_model, prepared_problem):
     prepared, contrasts, expected_for = prepared_problem
     expected = expected_for(noise_model)

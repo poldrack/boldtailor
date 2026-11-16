@@ -14,6 +14,7 @@ def _func(settings):
     return settings.output_dir / "sub-07" / "ses-nsd10" / "func"
 
 
+@pytest.mark.integration
 def test_full_run_writes_every_stage_and_the_report(
     six_run_dataset, settings_for, tmp_path
 ):

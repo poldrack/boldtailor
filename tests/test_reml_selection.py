@@ -58,6 +58,7 @@ def _orthogonal_signals(rng, fixed, candidates):
     return signals
 
 
+@pytest.mark.integration
 def test_planted_design_wins(planted):
     signals, fixed, candidates = planted
     groups = _groups(signals, fixed)

@@ -158,6 +158,7 @@ def _nuisance_ols_designs(data, model):
     )
 
 
+@pytest.mark.integration
 def test_fit_matches_nilearn_ols_contrast(single_run_problem):
     signals, events, design, model = single_run_problem
 
@@ -177,6 +178,7 @@ def test_fit_matches_nilearn_ols_contrast(single_run_problem):
     assert result.contrast_names == ("face_gt_house",)
 
 
+@pytest.mark.integration
 def test_fit_matches_nilearn_ar1_contrast(single_run_problem):
     signals, events, design, _ = single_run_problem
     model = ModelSpec(

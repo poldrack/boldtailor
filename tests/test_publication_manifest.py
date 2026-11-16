@@ -43,6 +43,7 @@ def publish(root, **kwargs):
     )
 
 
+@pytest.mark.integration
 def test_manifest_removal_preserves_sources_and_unlisted_files(prior_outputs):
     root = prior_outputs
     (root / "unlisted.bin").write_bytes(b"untouched")
@@ -57,6 +58,7 @@ def test_manifest_removal_preserves_sources_and_unlisted_files(prior_outputs):
 
 
 @pytest.mark.parametrize("failure_at", ["second_removal", "promotion"])
+@pytest.mark.integration
 def test_removal_and_promotion_failures_restore_entire_previous_set(
     prior_outputs, monkeypatch, failure_at
 ):

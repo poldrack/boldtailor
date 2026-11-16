@@ -25,6 +25,7 @@ def _process_probe(block, directory):
     )
 
 
+@pytest.mark.integration
 def test_process_batches_are_bounded_ordered_and_thread_limited(tmp_path):
     results = map_blocks(_process_probe, range(4), args=(tmp_path,), n_jobs=2)
     first = next(results)

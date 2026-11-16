@@ -105,6 +105,7 @@ def reference_scores(
 
 @pytest.mark.parametrize("optimized", [False, True])
 @pytest.mark.parametrize("encoding_mode", ["within_run", "absolute"])
+@pytest.mark.integration
 def test_cv_matches_independent_augmented_ols_and_encoding(
     ridge_problem, optimized, encoding_mode
 ):

@@ -22,6 +22,7 @@ def _selected_fit(data, model, selection):
 
 
 @pytest.mark.parametrize("noise_model", ["ols", "ar1"])
+@pytest.mark.integration
 def test_voxelwise_contrasts_match_independent_run_glms(hrf_glm_problem, noise_model):
     data, model, selection, designs = hrf_glm_problem
     model = replace(model, noise_model=noise_model)

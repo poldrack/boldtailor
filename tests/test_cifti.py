@@ -31,6 +31,7 @@ def test_surface_values_use_vertex_ids_and_exclude_volume(cortical_axis):
         cifti.cortical_values(values[:-1], cortical_axis)
 
 
+@pytest.mark.integration
 def test_scalar_artifact_round_trips_names_axis_and_float32_values(
     cortical_axis, tmp_path
 ):

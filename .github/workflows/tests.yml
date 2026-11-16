@@ -21,7 +21,7 @@ jobs:
       - run: uv run python scripts/notebook_sync.py --check-tracked
       - name: Reconstruct and execute HRF reports from Python sources
         run: uv run pytest -q experiments/hrf_estimation/test_results_notebook.py experiments/hrf_estimation/test_autodiff_notebook.py experiments/hrf_estimation/test_all_methods_notebook.py experiments/hrf_estimation/test_session_comparison_notebook.py experiments/hrf_estimation/test_regularized_notebook.py
-      - run: uv run pytest -q -W error --cov=boldtailor --cov-report=xml
+      - run: uv run pytest -q -W error --cov=boldtailor --cov-report=xml --durations=20
       - uses: codecov/codecov-action@v5
         with:
           files: coverage.xml

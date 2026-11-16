@@ -304,6 +304,7 @@ def record_from_fit(complete_sources):
     return fit(data, ModelSpec(contrasts={"face": "face"})).provenance
 
 
+@pytest.mark.integration
 def test_bids_activity_has_command_and_timestamps(record_from_fit):
     from boldtailor._software import software_environment
 
