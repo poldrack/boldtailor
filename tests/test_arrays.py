@@ -55,3 +55,15 @@ def test_sum_arrays_rejects_empty_input():
 
     with pytest.raises(ValueError, match="at least one array"):
         sum_arrays([])
+
+
+def test_sum_arrays_accepts_zero_dimensional_arrays():
+    """Scalar-shaped arrays remain arrays after sequential summation."""
+    from boldtailor._arrays import sum_arrays
+
+    source = np.array(2.0)
+    result = sum_arrays([source, np.array(3.0)])
+    assert isinstance(result, np.ndarray)
+    assert result.shape == ()
+    assert result.item() == 5.0
+    assert not np.shares_memory(result, source)
