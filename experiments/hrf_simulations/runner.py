@@ -11,7 +11,8 @@ from filelock import FileLock
 
 from experiments.hrf_estimation.splits import make_splits
 from experiments.hrf_simulations.dataset import generate
-from experiments.hrf_simulations.design import MODELS, task_design
+from experiments.hrf_simulations.design import task_design
+from experiments.hrf_simulations.selection_inputs import IDENTIFICATION_MODELS
 from experiments.hrf_simulations.fitting import DesignCache, fit
 from experiments.hrf_simulations.evaluation import evaluate_crossed
 from experiments.hrf_simulations.io import (
@@ -125,7 +126,9 @@ def _fit_case(
     benchmarks = {}
     fitted = {}
     estimators = (
-        ("iid", "ar1", "ar1_oracle") if case["noise"] == "ar1" else ("iid", "ar1")
+        ("cv", "iid", "ar1", "ar1_oracle")
+        if case["noise"] == "ar1"
+        else ("cv", "iid", "ar1")
     )
     for convention in conventions:
         for model in models:
@@ -146,7 +149,8 @@ def _fit_case(
                             library,
                             model,
                             convention,
-                            "iid" if estimator == "iid" else "ar1",
+                            "iid" if estimator in ("cv", "iid") else "ar1",
+                            method="cv" if estimator == "cv" else "reml",
                             oracle_rho=(
                                 profile["rho"] if estimator == "ar1_oracle" else None
                             ),
@@ -174,6 +178,7 @@ def _fit_case(
                             convention=convention,
                             model=model,
                             estimator=estimator,
+                            selection_method=result.diagnostics["selection_method"],
                             split=label,
                             status=result.status[0],
                             provisional=result.diagnostics.get("provisional", [None])[
@@ -205,7 +210,14 @@ def _fit_case(
 
 
 def run_case(
-    runs, library, profile, case, destination, models=MODELS, splits=True, settings=None
+    runs,
+    library,
+    profile,
+    case,
+    destination,
+    models=IDENTIFICATION_MODELS,
+    splits=True,
+    settings=None,
 ):
     folder = Path(destination)
     folder.mkdir(parents=True, exist_ok=True)
@@ -241,7 +253,14 @@ def _run_locked(runs, library, profile, case, folder, models, splits, settings):
         truth=dict(kind=truth.kind, parameters=truth.parameters, curve=curve(truth)),
         profile={k: v for k, v in profile.items() if k != "runs"},
         library_floor=library_floor(truth, library),
-        conventions="physical unit-height boxcars; HRF unit peak; no event normalization",
+        conventions="generation/evaluation: physical unit-height boxcars; identification: package unit-peak event responses",
+        identification=dict(
+            entry_point="boldtailor.hrf_selection.select_hrfs",
+            methods=["cv", "reml"],
+            reference_hrf_id=0,
+            junk="fixed canonical missing/incorrect nuisance",
+            reml_random_effects="independent valid-trial deviations",
+        ),
         evaluation="OLS amplitudes refit on evaluation runs; HRF only held out for halves",
     )
     manifest = json.loads(json.dumps(manifest, default=json_value, sort_keys=True))

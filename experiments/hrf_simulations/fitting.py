@@ -1,15 +1,17 @@
-"""Simulation adapters onto boldtailor's scalar REML and AR(1) estimates."""
+"""Simulation adapters onto the public CV and REML HRF selectors."""
 
 from collections import OrderedDict
 from hashlib import sha256
 
-import numpy as np
+import json
 
 from boldtailor import ar1
-from boldtailor.reml import RemlGroup, select_random_effects_design
+from boldtailor.hrf_options import RemlHrfOptions
+from boldtailor.hrf_selection import select_hrfs
+from boldtailor.provenance import identity_activity
 from experiments.hrf_estimation.estimators import HrfEstimate
-from experiments.hrf_estimation.scoring import residuals
-from experiments.hrf_simulations.design import task_design, reference_design
+from experiments.hrf_simulations.design import reference_design
+from experiments.hrf_simulations.selection_inputs import selection_data
 
 
 class DesignCache:
@@ -23,6 +25,7 @@ class DesignCache:
         digest = sha256(run.events.to_csv(index=False).encode())
         digest.update(run.frame_times.tobytes())
         digest.update(run.confounds.to_numpy(float).tobytes())
+        digest.update(json.dumps(list(run.confounds.columns)).encode())
         identity = (digest.hexdigest(), key)
         if identity not in self.entries:
             self.entries[identity] = builder()
@@ -49,21 +52,6 @@ def estimate_rho(runs, cache=None):
     return float(ar1.estimate_rho([r.signals for r in runs], references).pooled)
 
 
-def random_scales(parts, mode):
-    if mode not in ("native", "unit_rms"):
-        raise ValueError("unknown regressor scaling")
-    count = parts[0].task.shape[1] + parts[0].junk.shape[1]
-    if mode == "native":
-        return np.ones(count)
-    projected = [
-        residuals(p.nuisance, np.column_stack([p.task, p.junk]))[0] for p in parts
-    ]
-    scale = np.sqrt(
-        sum(np.sum(z * z, axis=0) for z in projected) / sum(len(z) for z in projected)
-    )
-    return np.where(scale < 1e-12, 1.0, scale)
-
-
 def _check_inputs(runs, noise_mode, oracle_rho):
     if not runs or any(r.signals.shape[1] != 1 for r in runs):
         raise ValueError("fit requires one simulated vertex and at least one run")
@@ -79,33 +67,37 @@ def _noise_rho(runs, noise_mode, oracle_rho, cache):
     return estimate_rho(runs, cache) if oracle_rho is None else float(oracle_rho)
 
 
-def _candidate_parts(runs, candidate, model, convention, cache, design_builder):
-    """Cached, signal-independent design parts of one candidate for every run."""
-    key = (candidate.kind, candidate.parameters, model, convention, id(design_builder))
-    return [
-        cache.get(r, key, lambda r=r: design_builder(r, candidate, model, convention))
-        for r in runs
-    ]
-
-
-def _random_designs(parts, scaling):
-    scales = random_scales(parts, scaling)
-    return [np.column_stack([p.task, p.junk]) / scales for p in parts]
-
-
-def _fit_diagnostics(selection, scales):
-    fit = selection.fit
+def _fit_diagnostics(result):
+    """Keep likelihood estimates and numerical qualifications in their own fields."""
+    diagnostics = result.reml
+    selected = diagnostics.selection
+    fit = selected.fit
     return dict(
-        criterion=[float(fit.criterion[0])],
-        variance_ratio=[float(fit.ratio[0])],
-        sigma2=[float(fit.noise_variance[0])],
-        at_zero=[fit.status[0] == "variance_zero"],
-        at_upper=[bool(fit.at_upper[0])],
+        criterion=fit.criterion.tolist(),
+        variance_ratio=fit.ratio.tolist(),
+        sigma2=fit.noise_variance.tolist(),
+        effect_variance=fit.effect_variance.tolist(),
+        at_zero=[state == "variance_zero" for state in fit.status],
+        at_upper=fit.at_upper.tolist(),
         unrefined=fit.unrefined.tolist(),
-        any_at_upper=selection.any_at_upper.tolist(),
-        any_unrefined=selection.any_unrefined.tolist(),
-        provisional=selection.any_unrefined.tolist(),
-        random_scales=[None if scales is None else scales.tolist()],
+        any_at_upper=selected.any_at_upper.tolist(),
+        any_unrefined=selected.any_unrefined.tolist(),
+        provisional=selected.any_unrefined.tolist(),
+        canonical_criterion=diagnostics.canonical_fit.criterion.tolist(),
+        canonical_status=list(diagnostics.canonical_fit.status),
+        delta_criterion=diagnostics.delta_criterion.tolist(),
+        criterion_gap=selected.gap.tolist(),
+        reference_hrf_id=diagnostics.reference_hrf_id,
+        candidate_ids=diagnostics.candidate_ids.tolist(),
+    )
+
+
+def _cv_diagnostics(result):
+    return dict(
+        cv_r2=result.cv_r2.tolist(),
+        canonical_cv_r2=result.canonical_cv_r2.tolist(),
+        delta_cv_r2=result.delta_cv_r2.tolist(),
+        provisional=[None],
     )
 
 
@@ -119,15 +111,6 @@ def _run_diagnostics(runs, library, model, convention, noise_mode, rho, oracle_r
         training_run_ids=[r.run_id for r in runs],
         library_fingerprint=library.fingerprint,
     )
-
-
-def _select(runs, library, parts, scaling, rho):
-    # The fixed design is r.confounds while random_scales residualise on
-    # p.nuisance; task_design sets nuisance = confounds, but a custom
-    # design_builder must keep the two equal for the scales to be consistent.
-    groups = [RemlGroup(r.signals, r.confounds.to_numpy(float)) for r in runs]
-    candidates = (_random_designs(parts(k), scaling) for k in library.candidates)
-    return select_random_effects_design(groups, candidates, rho=rho)
 
 
 def _estimate(runs, kernel, state, diagnostics):
@@ -150,26 +133,55 @@ def fit(
     oracle_rho=None,
     cache=None,
     settings=None,
-    design_builder=task_design,
+    *,
+    method="reml",
 ):
-    """Select one vertex's library HRF by REML under iid or AR(1) noise."""
+    """Identify one vertex's HRF with the current package selector.
+
+    CV uses leave-one-run-out prediction. REML uses a fixed canonical mean and
+    independent trial effects, with supplied or training-estimated noise rho.
+    """
     _check_inputs(runs, noise_mode, oracle_rho)
     cache, settings = cache or DesignCache(), settings or {}
-    scaling = settings.get("regressor_scaling", "native")
-    rho = _noise_rho(runs, noise_mode, oracle_rho, cache)
-
-    def parts(candidate):
-        return _candidate_parts(
-            runs, candidate, model, convention, cache, design_builder
-        )
-
-    selection = _select(runs, library, parts, scaling, rho)
-    winner, state = int(selection.winner[0]), selection.fit.status[0]
+    if settings.get("regressor_scaling", "native") != "native":
+        raise ValueError("regressor_scaling must be native for package identification")
+    if method not in ("cv", "reml"):
+        raise ValueError("method must be cv or reml")
+    if method == "cv" and (noise_mode != "iid" or oracle_rho is not None):
+        raise ValueError("CV does not support AR1 noise options")
+    data, task_model = selection_data(runs, library, model, convention, cache)
+    rho = _noise_rho(runs, noise_mode, oracle_rho, cache) if method == "reml" else None
+    options = RemlHrfOptions(rho=rho) if method == "reml" else None
+    result = select_hrfs(
+        data,
+        library=library,
+        task_model=task_model,
+        method=method,
+        reml_options=options,
+        run_labels=[r.run_id for r in runs],
+    )
+    winner = int(result.hrf_indices[0])
+    state = (
+        result.reml.selection.fit.status[0]
+        if method == "reml"
+        else "ok" if winner >= 0 else "no_eligible_hrf"
+    )
     kernel = library.candidates[winner] if winner >= 0 else None
     diagnostics = _run_diagnostics(
-        runs, library, model, convention, noise_mode, rho, oracle_rho
+        runs,
+        library,
+        model,
+        convention,
+        noise_mode if method == "reml" else None,
+        rho,
+        oracle_rho,
     )
-    if state != "no_residual_signal":
-        scales = None if kernel is None else random_scales(parts(kernel), scaling)
-        diagnostics.update(_fit_diagnostics(selection, scales))
+    diagnostics.update(
+        selection_method=method,
+        task_model=task_model.to_dict(),
+        package_selection=identity_activity(result.provenance),
+    )
+    diagnostics.update(
+        _fit_diagnostics(result) if method == "reml" else _cv_diagnostics(result)
+    )
     return _estimate(runs, kernel, state, diagnostics)

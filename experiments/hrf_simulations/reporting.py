@@ -70,6 +70,10 @@ def paired_differences(table):
     ).reset_index()
     if "ar1" in wide and "iid" in wide:
         wide["ar1_minus_iid_rmse"] = wide.ar1 - wide.iid
+    if "cv" in wide:
+        for estimator in ("iid", "ar1", "ar1_oracle"):
+            if estimator in wide:
+                wide[f"{estimator}_minus_cv_rmse"] = wide[estimator] - wide.cv
     return wide
 
 

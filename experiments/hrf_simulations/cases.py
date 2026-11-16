@@ -100,7 +100,6 @@ def expanded_cases(replicates=None, sessions=None):
             [
                 dict(c, block="contrast", betas=[1.0, 1.25]),
                 dict(c, block="run_variation", run_coefficient_sd=0.25),
-                dict(c, block="scaling", regressor_scaling="unit_rms"),
             ]
         )
         if c["mechanism"] in ("amplitude", "additive_duration"):

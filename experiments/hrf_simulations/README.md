@@ -117,7 +117,7 @@ uv run make -f experiments/hrf_simulations/Makefile workflow \
   STAGE=expanded BIDS_ROOT=/path/to/NSD/BIDS N_JOBS=15
 ```
 
-This regenerates calibration on the destination, then executes **12,580 datasets**
+This regenerates calibration on the destination, then executes **12,020 datasets**
 with 20 paired replicates per condition. Alternatively, copy the complete
 `calibration/nsd-v1` directory (including COMPLETE.json); its hashes are checked
 before reuse. Keep the complete calibration together, and retain its source
@@ -135,7 +135,6 @@ were launched as part of preparing this code.
 | Unequal contrast | 560 | Session 10; condition heights 1/1.25 |
 | Matched RT | 320 | Session 10; RT component RMS = half baseline RMS |
 | Run variation | 560 | Session 10; independent mean-one lognormal coefficient multipliers, log SD .25 |
-| Regressor scaling | 560 | Session 10; nuisance-projected training-design RMS normalization |
 
 Controls use canonical/offgrid truths, AR1/spectral noise and median SNR unless
 specified otherwise. All seven mechanism/convention combinations appear except
@@ -150,11 +149,11 @@ only for selected conditions after reviewing Monte Carlo errors: generate
 with those same stage/replicate settings. IDs for existing replicates stay fixed.
 Use the CLI for individual cases, or Make's `CASE` and `REPLICATES` variables.
 
-Run variation uses separate random streams, preserving paired noise. Scaling
-changes the random-effect prior: each candidate's task/junk columns are divided
-by their RMS after nuisance projection, pooled over training runs only, before
-whitening. Native scaling remains the primary analysis; OLS evaluation always
-uses physical units. Winner scales and run coefficients are saved.
+Run variation uses separate random streams, preserving paired noise.
+The old RMS-scaling block is no longer generated: it changed the random-effect
+prior used by the former simulation-specific REML model. The current package
+uses native unit-peak trial responses. Passing `regressor_scaling="unit_rms"`
+now raises an error rather than silently running a different model.
 
 Every selection model is evaluated with all four task models, including
 **select without RT, evaluate with RT**. `crossed_summary.tsv` reports contrast
@@ -283,10 +282,10 @@ half-session fits. Committed empirical split definitions are reused when run IDs
 otherwise a deterministic seed-20261110 partition is saved in the manifest.
 
 The default worker count is **15**. `--n-jobs N` parallelizes independent cases;
-each worker keeps a 65,536-entry candidate-design cache, large enough for all
-533 candidates × 12 runs × four models × two duration conventions. This can
-use several GB per worker. Set the thread environment
-variables shown above to avoid BLAS oversubscription, including with one worker.
+each worker caches signal-independent event/nuisance inputs and AR(1)
+reference bases. Candidate convolution and selection are handled by the package.
+Set the thread environment variables shown above to avoid BLAS oversubscription,
+including with one worker.
 The code does not automatically launch a larger stage.
 
 Options:
@@ -310,34 +309,54 @@ loudly. Interrupted cases can be rerun. A file lock prevents duplicate writers.
 
 ## What is being fitted
 
-| Task model | Condition columns | Extra common RT column |
+HRF identification calls `boldtailor.hrf_selection.select_hrfs` for both
+`method="cv"` and `method="reml"`. Each simulated dataset is fitted with CV,
+iid REML, and REML using a training-estimated AR(1) correlation. AR(1)-generated
+datasets also include REML with the known generating rho.
+
+| Identification model | Event duration | TaskModel columns |
 | --- | --- | --- |
-| ConsDurNoRT | Fixed-duration | None |
-| RTDur | RT-duration | None |
-| ConsDurRTMod | Fixed-duration | Fixed-duration, height = raw RT |
-| ConsDurRTDur | Fixed-duration | RT-duration, height = 1 |
+| ConsDurNoRT | Fixed duration | Task plus reference-coded trial type |
+| RTDur | Observed RT | Task plus reference-coded trial type |
+| ConsDurRTMod | Fixed duration | Task, reference-coded trial type, and raw RT |
 
 Fixed duration is either 0.1 s or the observed stimulus duration (3 s in NSD).
-Missing and incorrect trials have separate stimulus-duration junk regressors.
-Observed RTs, including long RTs, are preserved. RTs are neither centered nor
-orthogonalized. Each candidate supplies one HRF for task and junk across runs.
+Identification uses valid trials only. Missing and incorrect trials enter
+separate, fixed canonical-HRF nuisance columns with their stimulus durations.
+These nuisance columns are shared by CV and REML. RTs are not centered or
+orthogonalized. The package adds its own intercept.
 
-**Scaling distinction from earlier empirical analyses:** their trial-regressor
-helper makes each individual trial response peak at one. Here neural boxcars
-have unit height and are convolved with a unit-peak HRF, with the integration
-time step included. Fitting evaluates cumulative HRF integrals at exact onset
-and offset lags; generation independently uses fractional-bin neural activity
-and FFT convolution at 5 ms. This avoids rounding short events to NSD TR/50
-bins. Thus longer neural durations retain their greater area.
-This is essential for the Mumford comparison. Both estimators run on the
-package module `boldtailor.reml` (`select_random_effects_design`): each candidate's
-task and junk columns are the random-effects design, with one shared scalar
-variance ratio and run-specific coefficients, and the confounds are the
-unpenalised fixed design. The iid and AR(1) estimators differ only in the
-noise model: AR(1) passes the pooled rho, and the package whitens internally
-with `boldtailor.ar1.whiten`, which is normalised so that the noise variance
-and variance ratio mean the same thing in both paths. At rho = 0 the two
-paths give identical selections and estimates (tested).
+`ConsDurRTDur` remains an evaluation model but is not an identification model:
+it requires fixed-duration and RT-duration responses simultaneously, which
+the current package TaskModel does not represent. Explicit attempts to select
+with it raise an error. All four original models remain available for crossed
+contrast evaluation.
+
+CV selects by leave-one-run-out task prediction and requires two training
+runs. REML uses the package's canonical-reference fixed mean (including the
+requested task columns) and one random-effect column per valid trial. It
+requires one estimable run. Variances are shared across runs per vertex.
+This differs from the former simulation-specific REML model, whose random
+effects were aggregated task and junk coefficients. A mean-only signal may
+now have no supported REML winner. Such results remain failures/undefined
+assignments; they are never replaced by a canonical HRF.
+
+**Normalization:** identification uses the package's unit-peak event responses.
+Generation and contrast evaluation retain physical unit-height neural boxcars
+convolved with unit-peak HRFs. Generation uses fractional-bin activity and FFT
+convolution at 5 ms; evaluation uses cumulative integrals at exact event
+boundaries. Longer durations retain their larger area in those two stages.
+Thus RT-duration identification is not an exact physical-unit matched model.
+The simulation tests the package as implemented; it does not change the
+package's normalization to improve recovery.
+
+Each score row records `selection_method`. `estimator=cv` uses CV;
+`iid`, `ar1`, and `ar1_oracle` denote the REML noise variants.
+`fits.json` stores package selection provenance and method-specific scores.
+CV scores are R²; REML criteria and gaps are likelihood comparisons.
+Winning and any-candidate search flags are retained, including unresolved
+losing candidates. CV has no REML provisional-search flag.
+Use a new output directory: manifests reject results from the older implementation.
 
 AR(1) estimation uses a fixed reference containing both duration conventions
 and RT mechanisms, shared by every fitted task model. Rho is estimated only
@@ -357,7 +376,7 @@ uv run python -m experiments.hrf_simulations.cli report \
 ```
 
 Outputs include conditional recovery means and Monte Carlo standard errors,
-unconditional failure rates, paired AR(1)-minus-iid errors, split-half shape
+unconditional failure rates, paired REML-minus-CV and AR(1)-minus-iid errors, split-half shape
 correlations, actual donor-versus-generated spectral diagnostics, and a recovery overview figure. Candidate
 curves and best attainable library errors are retained per case. The overview
 pools conditions descriptively; use the stratified tables for conclusions.
