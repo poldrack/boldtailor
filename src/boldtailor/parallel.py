@@ -8,6 +8,8 @@ transfers small.
 """
 
 from itertools import islice
+from collections.abc import Callable, Iterable, Iterator
+from typing import TypeVar, cast
 from joblib import Parallel, delayed, parallel_config
 
 from boldtailor._scalars import is_integer
@@ -20,12 +22,24 @@ def validate_n_jobs(n_jobs):
     return int(n_jobs)
 
 
-def _serial(function, blocks, args):
+_Block = TypeVar("_Block")
+_Result = TypeVar("_Result")
+
+
+def _serial(
+    function: Callable[..., _Result], blocks: Iterable[_Block], args: tuple[object, ...]
+) -> Iterator[tuple[_Block, _Result]]:
     for block in blocks:
         yield block, function(block, *args)
 
 
-def map_blocks(function, blocks, *, args=(), n_jobs=1):
+def map_blocks(
+    function: Callable[..., _Result],
+    blocks: Iterable[_Block],
+    *,
+    args: tuple[object, ...] = (),
+    n_jobs: int = 1,
+) -> Iterator[tuple[_Block, _Result]]:
     """Yield ordered ``(block, result)`` pairs, dispatching at most n_jobs blocks.
 
     Several workers run in loky processes with one inner BLAS/OpenMP thread;
@@ -38,11 +52,19 @@ def map_blocks(function, blocks, *, args=(), n_jobs=1):
         yield from _serial(function, batch or blocks, args)
         return
     with parallel_config(backend="loky", inner_max_num_threads=1):
+        # Joblib accepts integer batching; its inferred types cover string defaults.
         with Parallel(
-            n_jobs=len(batch), batch_size=1, pre_dispatch=len(batch), max_nbytes=None
+            n_jobs=len(batch),
+            batch_size=1,  # pyright: ignore[reportArgumentType]
+            pre_dispatch=len(batch),  # pyright: ignore[reportArgumentType]
+            max_nbytes=None,
         ) as parallel:
             while batch:
-                results = parallel(delayed(function)(block, *args) for block in batch)
+                # Joblib's default return_as="list" preserves the worker's values.
+                results = cast(
+                    list[_Result],
+                    parallel(delayed(function)(block, *args) for block in batch),
+                )
                 yield from zip(batch, results, strict=True)
                 # Release completed arrays before dispatching another batch.
                 del results
