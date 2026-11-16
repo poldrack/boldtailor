@@ -1,6 +1,7 @@
 """Execute the tutorial against actual synthetic workflow outputs."""
 
 from pathlib import Path
+import os
 
 import jupytext
 import numpy as np
@@ -90,3 +91,59 @@ def test_walkthrough_reports_preflight_problems_without_writing(notebook_config)
     with pytest.raises(ValueError, match="Preflight"):
         execute_notebook(notebook_config)
     assert not Path(notebook_config["output_root"]).exists()
+
+
+def _call_with_pid(block, function, args):
+    return os.getpid(), function(block, *args)
+
+
+def test_parallel_walkthrough_fits_hrfs_and_glms_in_workers(
+    notebook_config, monkeypatch
+):
+    """Run HRF selection and both GLMs in child processes without changing spatial results."""
+    from boldtailor import parallel
+
+    serial = execute_notebook(notebook_config)
+    real_map = parallel.map_blocks
+    worker_pids = {"selection": set(), "glm": set()}
+
+    def observed_map(function, blocks, *, args=(), n_jobs=1):
+        for block, (pid, result) in real_map(
+            _call_with_pid, blocks, args=(function, args), n_jobs=n_jobs
+        ):
+            if isinstance(result, dict):
+                if {"all", "odd", "even"} <= result.keys():
+                    worker_pids["selection"].add(pid)
+                if {"effects", "variances", "t", "z", "r2"} <= result.keys():
+                    worker_pids["glm"].add(pid)
+            yield block, result
+
+    monkeypatch.setattr(parallel, "map_blocks", observed_map)
+    config = {
+        **notebook_config,
+        "n_jobs": 2,
+        "output_root": notebook_config["output_root"] + "-parallel",
+    }
+    concurrent = execute_notebook(config)
+    for stage, pids in worker_pids.items():
+        assert pids and os.getpid() not in pids, f"{stage} must run in child processes"
+    assert list(concurrent["selections"]) == list(serial["selections"])
+    for name, maps in concurrent["glms"].items():
+        for key in ("effects", "variances", "t", "z", "r2"):
+            np.testing.assert_allclose(
+                maps[key],
+                serial["glms"][name][key],
+                rtol=1e-7,
+                atol=1e-9,
+                equal_nan=True,
+            )
+        assert [p["grayordinate_indices"] for p in maps["provenance"]] == [
+            p["grayordinate_indices"] for p in serial["glms"][name]["provenance"]
+        ]
+    for indices, bundle in concurrent["selections"].items():
+        for split in ("all", "odd", "even"):
+            left, right = bundle[split], serial["selections"][indices][split]
+            if split != "all":
+                left, right = left.training_selection, right.training_selection
+            np.testing.assert_array_equal(left.hrf_indices, right.hrf_indices)
+            np.testing.assert_allclose(left.cv_r2, right.cv_r2, rtol=1e-7, atol=1e-9)

@@ -372,7 +372,7 @@ def test_workflow_notebook_runs_the_package_workflow_and_shows_its_outputs(
         fmriprep_root=str(prep),
         output_root=str(output),
         block_size=2,
-        n_jobs=1,
+        n_jobs=2,
         ridge_mode="fixed",
         ridge_alpha=0.1,
         surface_meshes=_left_cortex_meshes(tmp_path),
