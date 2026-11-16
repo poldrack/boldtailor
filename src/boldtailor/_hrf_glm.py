@@ -19,7 +19,7 @@ from boldtailor._hrf_glm_design import (
     group_diagnostics,
 )
 from boldtailor.hrf_glm_results import HrfAnalysisResult
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.model import (
@@ -157,9 +157,7 @@ def fit_selected_glm(
         context = _prepare(data, model, selection, signature, settings)
         operation.analysis_id = context.analysis_id
         fits = _group_fits(data, model, selection, context)
-        provenance = operation.provenance(
-            context.activity, analysis_id=context.analysis_id
-        )
+        provenance = build_fit_provenance(operation, context.activity)
         return _assemble(data, model, selection, context, fits, provenance)
 
 
@@ -207,12 +205,10 @@ def selected_task_delta_r2(
             allow_undefined=True,
         )
         activity = _comparison_activity(model, comparison, context)
-        provenance = operation.provenance(
-            activity,
-            analysis_id=analysis_fingerprint(
-                context.analysis_id, _comparison_identity(model)
-            ),
+        operation.analysis_id = analysis_fingerprint(
+            context.analysis_id, _comparison_identity(model)
         )
+        provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
 
 

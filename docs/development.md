@@ -475,10 +475,20 @@ the most recent eight events in provenance.
 
 Fit and comparison entry points use the private `fit_operation()` context
 manager. Their statistical steps remain explicit in each caller. The context
-owns execution IDs and events; provenance and result construction both occur
-inside its failure boundary. A pending completion is included in final
-provenance and emitted only after result construction succeeds. Start records
-omit `analysis_id`; completion includes it when metadata identity is available.
+owns execution IDs and logging context. Normal exit logs completion; an exception
+logs failure and is re-raised. No call on the yielded metadata is required to
+complete the scope. Callers set `operation.analysis_id` explicitly when the model
+identity becomes available.
+
+`build_fit_provenance(operation, activity, warnings=...)` independently constructs
+a record without changing the operation or emitting log messages. It may be
+called repeatedly, and its use is optional from the logging scope's perspective.
+Fit entry points build provenance and construct the result inside the scope, so
+errors in either still produce a failure log. The provenance completion snapshot
+and the completion log share event names and identities but have separate
+timestamps and sequence numbers: the log is generated only on successful exit.
+Start records omit `analysis_id`; completion includes it when metadata identity
+is available.
 Each nested fit or normalization starts a fresh ID scope and restores its
 caller’s context on exit. Ordinary `bind_context()` remains additive unless
 called with `inherit=False`.

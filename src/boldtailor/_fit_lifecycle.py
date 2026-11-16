@@ -1,4 +1,4 @@
-"""Execution bookkeeping around explicit scientific fit operations."""
+"""Independent logging scopes and provenance construction for fit operations."""
 
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -7,7 +7,6 @@ import logging
 from uuid import uuid4
 
 from boldtailor.logging import (
-    _emit_record,
     _make_event,
     append_event_history,
     bind_context,
@@ -19,41 +18,55 @@ from boldtailor.provenance import ProvenanceRecord, extend_provenance
 
 @dataclass
 class FitOperation:
+    """Execution metadata; analysis_id may be set when the model identity is known."""
+
     name: str
     parent: ProvenanceRecord
     execution_id: str = field(default_factory=lambda: str(uuid4()))
     analysis_id: str | None = None
     history: tuple[Mapping[str, object], ...] = ()
-    completed: Mapping[str, object] | None = None
 
-    def provenance(
-        self,
-        activity: Mapping[str, object],
-        *,
-        analysis_id: str | None,
-        warnings: Sequence[Mapping[str, object]] = (),
-    ) -> ProvenanceRecord:
-        """Prepare final provenance; completion is logged on successful exit."""
-        if self.completed is not None:
-            raise RuntimeError("fit operation already has completed provenance")
-        self.analysis_id = analysis_id
+
+def build_fit_provenance(
+    operation: FitOperation,
+    activity: Mapping[str, object],
+    *,
+    warnings: Sequence[Mapping[str, object]] = (),
+) -> ProvenanceRecord:
+    """Build a snapshot without mutating the operation or emitting log messages.
+
+    The snapshot has its own completion timestamp and sequence number. The
+    logging scope independently records completion on normal exit, including
+    when no provenance is requested. This builder can be called more than once
+    or after the scope has exited; neither changes the scope's outcome.
+    """
+    with bind_context(
+        execution_id=operation.execution_id,
+        data_id=operation.parent.metadata_fingerprint,
+        inherit=False,
+    ):
         completion = _make_event(
-            f"{self.name}_completed", stage="fit", analysis_id=analysis_id
+            f"{operation.name}_completed",
+            stage="fit",
+            analysis_id=operation.analysis_id,
         )
-        record = extend_provenance(
-            self.parent,
-            execution_id=self.execution_id,
-            activity={**activity, "software": software_environment()},
-            events=append_event_history(self.history, completion),
-            warnings=warnings,
-            analysis_id=analysis_id,
-        )
-        self.completed = completion
-        return record
+    return extend_provenance(
+        operation.parent,
+        execution_id=operation.execution_id,
+        activity={**activity, "software": software_environment()},
+        events=append_event_history(operation.history, completion),
+        warnings=warnings,
+        analysis_id=operation.analysis_id,
+    )
 
 
 @contextmanager
 def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]:
+    """Log start, then success on normal exit or failure on an exception.
+
+    No methods need to be called on the yielded metadata. In particular,
+    provenance construction is independent of the logging scope.
+    """
     operation = FitOperation(name, parent)
     with bind_context(
         execution_id=operation.execution_id,
@@ -65,8 +78,6 @@ def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]
         )
         try:
             yield operation
-            if operation.completed is None:
-                raise RuntimeError("fit operation has no completed provenance")
         except Exception as error:
             emit_event(
                 f"{name}_failed",
@@ -77,4 +88,6 @@ def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]
             )
             raise
         else:
-            _emit_record(operation.completed)
+            emit_event(
+                f"{name}_completed", stage="fit", analysis_id=operation.analysis_id
+            )

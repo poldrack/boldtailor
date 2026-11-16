@@ -57,7 +57,7 @@ from boldtailor._denoising_pool import (
     pool_masks,
     validate_threshold,
 )
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor._hrf_cv import prepare_runs
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.denoising_results import (
@@ -373,11 +373,6 @@ def _selection_activity(context, pool, selected, prefixes):
     )
 
 
-def _provenance(operation, record, activity):
-    analysis_id = analysis_fingerprint(record.metadata_fingerprint, activity)
-    return operation.provenance(activity, analysis_id=analysis_id)
-
-
 # ---- public selection ------------------------------------------------------------------------
 
 
@@ -395,6 +390,10 @@ def _assemble(operation, context, pool, selected):
     prefixes = tuple(c.prefix(gate.n_components) for c in components)
     scores, fold_scores = _public_tables(count)
     activity = _selection_activity(context, pool, selected, prefixes)
+    operation.analysis_id = analysis_fingerprint(
+        data.provenance.metadata_fingerprint, activity
+    )
+    provenance = build_fit_provenance(operation, activity)
     return DenoisingResult(
         n_components=gate.n_components,
         pcstop_count=count.n_components,
@@ -418,7 +417,7 @@ def _assemble(operation, context, pool, selected):
         run_labels=labels,
         feature_signature=settings.feature_signature,
         source_identity=run_identities(data),
-        provenance=_provenance(operation, data.provenance, activity),
+        provenance=provenance,
     )
 
 
@@ -576,7 +575,11 @@ def with_denoising(
     parent = _annotated_record(data, result)
     with fit_operation(_AUGMENTATION, parent) as operation:
         confounds = _augmented_confounds(data, result)
-        provenance = _provenance(operation, parent, _augmentation_activity(result))
+        activity = _augmentation_activity(result)
+        operation.analysis_id = analysis_fingerprint(
+            parent.metadata_fingerprint, activity
+        )
+        provenance = build_fit_provenance(operation, activity)
         return AnalysisData(
             _signals=data.signals,
             _events=data.events,

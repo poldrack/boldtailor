@@ -67,7 +67,10 @@ def test_provenance_builder_does_not_mutate_operation_or_log(caplog, parent_reco
         snapshot = dict(record.events[-1])
         assert snapshot["event"] == completed["event"] == "fit_completed"
         assert snapshot["sequence"] < completed["sequence"]
-    assert [event["event"] for event in records(caplog)] == ["fit_started", "fit_completed"]
+    assert [event["event"] for event in records(caplog)] == [
+        "fit_started",
+        "fit_completed",
+    ]
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -76,7 +79,12 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
     from boldtailor.logging import bind_context, emit_event
 
     caplog.set_level(logging.INFO, logger="boldtailor")
-    outer = dict(execution_id="outer", data_id="outer-data", analysis_id="outer-analysis", run_index=9)
+    outer = dict(
+        execution_id="outer",
+        data_id="outer-data",
+        analysis_id="outer-analysis",
+        run_index=9,
+    )
     failure = ValueError("private child detail")
     with bind_context(**outer):
         try:
@@ -88,7 +96,8 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
         restored = emit_event("after_child", stage="fit")
     events = records(caplog)[:-1]
     assert [event["event"] for event in events] == [
-        "fit_started", "fit_failed" if fail else "fit_completed",
+        "fit_started",
+        "fit_failed" if fail else "fit_completed",
     ]
     for event in events:
         assert event["execution_id"] != "outer"
@@ -96,7 +105,9 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
     assert all(restored[key] == value for key, value in outer.items())
 
 
-def test_provenance_construction_failure_logs_failure(caplog, parent_record, monkeypatch):
+def test_provenance_construction_failure_logs_failure(
+    caplog, parent_record, monkeypatch
+):
     import boldtailor._fit_lifecycle as lifecycle
 
     caplog.set_level(logging.INFO, logger="boldtailor")
@@ -115,7 +126,9 @@ def test_provenance_construction_failure_logs_failure(caplog, parent_record, mon
     assert events[-1]["error_code"] == "operation_failed"
 
 
-def test_builder_can_run_after_scope_without_inheriting_unrelated_context(caplog, parent_record):
+def test_builder_can_run_after_scope_without_inheriting_unrelated_context(
+    caplog, parent_record
+):
     from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
     from boldtailor.logging import bind_context, emit_event
 
@@ -138,7 +151,9 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     from boldtailor.logging import emit_event
 
     caplog.set_level(logging.INFO, logger="boldtailor")
-    parent = replace(parent_record, events=tuple({"event": f"old_{i}"} for i in range(8)))
+    parent = replace(
+        parent_record, events=tuple({"event": f"old_{i}"} for i in range(8))
+    )
     with fit_operation("outer", parent) as outer:
         with fit_operation("inner", parent) as inner:
             inner.analysis_id = "b" * 64
@@ -151,6 +166,8 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     assert inner.execution_id != outer.execution_id
     for record, name in [(inner_record, "inner"), (outer_record, "outer")]:
         assert [event["event"] for event in record.events] == [
-            *(f"old_{i}" for i in range(2, 8)), f"{name}_started", f"{name}_completed",
+            *(f"old_{i}" for i in range(2, 8)),
+            f"{name}_started",
+            f"{name}_completed",
         ]
         assert record.events[-1]["execution_id"] == record.execution_id

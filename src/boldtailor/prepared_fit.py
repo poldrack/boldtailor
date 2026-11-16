@@ -18,7 +18,7 @@ from boldtailor._fit_diagnostics import (
     nested_ols_delta,
     validate_result_dimensions,
 )
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor.model import (
     ContrastValue,
     _prepare_contrasts,
@@ -63,9 +63,7 @@ def fit_prepared(
         numerical = fit_designs(
             prepared.signals, designs, fit_spec.contrasts, fit_spec.noise_model
         )
-        provenance = operation.provenance(
-            _fit_activity(prepared, model), analysis_id=operation.analysis_id
-        )
+        provenance = build_fit_provenance(operation, _fit_activity(prepared, model))
         return make_result(
             numerical.contrasts,
             designs,
@@ -117,7 +115,7 @@ def task_delta_r2_prepared(
             comparison,
             parent_id,
         )
-        provenance = operation.provenance(activity, analysis_id=comparison_id)
+        provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
 
 

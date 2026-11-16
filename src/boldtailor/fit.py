@@ -15,7 +15,7 @@ from boldtailor._fit_diagnostics import (
 )
 from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor._hrf_glm import fit_selected_glm, selected_task_delta_r2
 from boldtailor.model import ModelSpec, model_identity, nuisance_model_settings
 from boldtailor.hrf_results import HrfSelectionResult
@@ -53,10 +53,10 @@ def fit(
             data.provenance.metadata_fingerprint, model_provenance.fingerprint
         )
         compiled, numerical = _fit_analysis(data, model)
-        provenance = operation.provenance(
+        provenance = build_fit_provenance(
+            operation,
             _fit_activity(data, model_provenance.activity, compiled),
             warnings=model_provenance.warnings,
-            analysis_id=operation.analysis_id,
         )
         return make_result(
             numerical.contrasts,
@@ -103,7 +103,7 @@ def task_delta_r2(
             comparison,
             expected_parent_id,
         )
-        provenance = operation.provenance(activity, analysis_id=operation.analysis_id)
+        provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
 
 

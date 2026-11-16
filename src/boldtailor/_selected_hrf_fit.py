@@ -25,7 +25,7 @@ from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesi
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import analysis_fingerprint, identity_activity
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 
 
 def _tables(data, labels):
@@ -163,12 +163,10 @@ def fit_groups(
         activity = _fit_activity(
             data, selection, labels, alpha, assignment, digest, fractions
         )
-        provenance = operation.provenance(
-            activity,
-            analysis_id=analysis_fingerprint(
-                data.provenance.metadata_fingerprint, activity
-            ),
+        operation.analysis_id = analysis_fingerprint(
+            data.provenance.metadata_fingerprint, activity
         )
+        provenance = build_fit_provenance(operation, activity)
         design = SelectedTrialDesign(
             hrf_indices=selection.hrf_indices,
             design_fingerprint=activity["design_fingerprint"],

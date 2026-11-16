@@ -17,8 +17,12 @@ errors do not make arbitrary metadata safe to share.
 
 Each fit or task comparison emits one start followed by completion or failure.
 Validation, provenance, and result assembly are inside that boundary. Completion
-is emitted only after the returned object has been constructed successfully;
-its event is already included in that object's provenance.
+is emitted only after the returned object has been constructed successfully.
+The logging context no longer requires a provenance-building method to be called:
+normal exit alone is success. `FitOperation.provenance()` has been replaced by
+`build_fit_provenance(operation, activity, warnings=...)`; callers set the optional
+`operation.analysis_id` explicitly. The builder does not modify the operation,
+emit logs, or control whether the scope succeeds.
 
 Start records omit `analysis_id`. Completion records contain it when the inputs
 support a metadata fingerprint; failure records contain it if established before
@@ -41,6 +45,11 @@ The selected-HRF trial events are new. Each prefix has `_started`, `_completed`,
 and `_failed` variants. HRF selection and cross-validation emit only these
 operation-level events, not per-candidate progress events.
 
-Completion timestamps and sequence numbers are reserved while final provenance
-is assembled. Failed construction may leave sequence gaps; sequences need not
-be contiguous. Publication behavior is unchanged by this migration.
+The provenance completion snapshot is created when provenance is assembled; the
+completion log is created independently at successful scope exit. They share
+operation identities and event names, but their timestamps and sequence numbers
+are no longer identical. Compare execution/analysis IDs rather than requiring
+whole-event equality. A later result-construction error still emits failure,
+never completion, and no result is returned. Snapshot construction may leave
+sequence gaps; sequences need not be contiguous. Publication behavior and
+previously saved provenance records are unchanged.

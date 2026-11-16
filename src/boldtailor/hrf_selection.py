@@ -6,7 +6,7 @@ from hashlib import sha256
 import numpy as np
 
 from boldtailor._deprecation import deprecated
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor._hrf_cv import (
     prepare_runs,  # public re-export
     subset_runs,  # public re-export
@@ -66,11 +66,6 @@ def _activity(runs, library, labels, signature, task_model, name, **extra):
     return activity
 
 
-def _provenance(operation, data, activity):
-    analysis_id = analysis_fingerprint(data.provenance.metadata_fingerprint, activity)
-    return operation.provenance(activity, analysis_id=analysis_id)
-
-
 def _select(
     operation,
     data,
@@ -109,7 +104,10 @@ def _select(
         selection_statistic=True,
         hrf_assignment_fingerprint=sha256(indices.astype("<i8").tobytes()).hexdigest(),
     )
-    provenance = _provenance(operation, data, activity)
+    operation.analysis_id = analysis_fingerprint(
+        data.provenance.metadata_fingerprint, activity
+    )
+    provenance = build_fit_provenance(operation, activity)
     return HrfSelectionResult(
         hrf_indices=indices,
         cv_r2=selected,
@@ -278,7 +276,10 @@ def _evaluate_split(
         training_selection=identity_activity(selection.provenance),
         frozen_task_amplitudes=True,
     )
-    provenance = _provenance(operation, data, activity)
+    operation.analysis_id = analysis_fingerprint(
+        data.provenance.metadata_fingerprint, activity
+    )
+    provenance = build_fit_provenance(operation, activity)
     amplitudes, chosen, canonical, delta = scores
     return HrfEvaluationResult(
         training_selection=selection,

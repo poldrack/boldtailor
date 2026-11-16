@@ -27,7 +27,7 @@ from boldtailor._deprecation import UNSET, renamed_keyword
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_library import HrfCandidate
 from boldtailor.hrf_results import HrfSelectionResult
-from boldtailor._fit_lifecycle import fit_operation
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor.provenance import analysis_fingerprint
 from boldtailor.single_trial_results import SingleTrialResult, SharedTrialDesign
 
@@ -68,12 +68,10 @@ def fit_single_trials(
         activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf_model)
         if fractions is not None:
             activity.update(fraction_metadata(fractions))
-        provenance = operation.provenance(
-            activity,
-            analysis_id=analysis_fingerprint(
-                data.provenance.metadata_fingerprint, activity
-            ),
+        operation.analysis_id = analysis_fingerprint(
+            data.provenance.metadata_fingerprint, activity
         )
+        provenance = build_fit_provenance(operation, activity)
         trials = trial_table(data.events, labels)
         return _assemble_result(compiled, trials, fits, alpha, provenance, fractions)
 
