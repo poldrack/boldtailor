@@ -98,8 +98,9 @@ __all__ = [
 def array_digest(values) -> str:
     """sha256 of an array's shape and little-endian float64 values."""
     array = np.ascontiguousarray(values, dtype="<f8")
-    header = json.dumps(list(array.shape)).encode()
-    return sha256(header + array.tobytes()).hexdigest()
+    digest = sha256(json.dumps(list(array.shape)).encode())
+    digest.update(array)  # hashes the buffer in place, without a bytes copy
+    return digest.hexdigest()
 
 
 def table_digest(frame: pd.DataFrame) -> str:
@@ -1353,14 +1354,14 @@ def _folds(setup):
 # ---- provenance ---------------------------------------------------------------------------
 
 
-def _baseline_confounds(data, labels):
+def _baseline_confounds(identities, labels):
     return [
         dict(
             run=label,
             columns=list(identity.confound_columns),
             fingerprint=identity.confounds,
         )
-        for label, identity in zip(labels, run_identities(data))
+        for label, identity in zip(labels, identities, strict=True)
     ]
 
 
@@ -1469,8 +1470,8 @@ def _count_records(settings, count):
     )
 
 
-def _selection_activity(context, pool, selected, prefixes):
-    data, labels, settings = context
+def _selection_activity(context, pool, selected, prefixes, identities):
+    _, labels, settings = context
     selection, statistic, masks, _ = pool
     count, gate = selected
     task_model, library = settings.task_model, settings.library
@@ -1491,17 +1492,17 @@ def _selection_activity(context, pool, selected, prefixes):
         initial_hrf_assignment_fingerprint=_digest(selection.hrf_indices, "<i8"),
         initial_selection=identity_activity(selection.provenance),
         component_fingerprints=[_digest(p, "<f8") for p in prefixes],
-        baseline_confounds=_baseline_confounds(data, labels),
-        data_identity=[identity.to_dict() for identity in run_identities(data)],
+        baseline_confounds=_baseline_confounds(identities, labels),
+        data_identity=[identity.to_dict() for identity in identities],
     )
 
 
 # ---- public selection ------------------------------------------------------------------------
 
 
-def _assemble(context, pool, selected, *, prefixes, provenance):
+def _assemble(context, pool, selected, *, prefixes, identities, provenance):
     """Construct a denoising result from completed calculations and provenance."""
-    data, labels, settings = context
+    _, labels, settings = context
     selection, statistic, masks, components = pool
     count, gate = selected
     scores, fold_scores = _public_tables(count)
@@ -1527,7 +1528,7 @@ def _assemble(context, pool, selected, *, prefixes, provenance):
         _fold_scores=fold_scores,
         run_labels=labels,
         feature_signature=settings.feature_signature,
-        source_identity=run_identities(data),
+        source_identity=identities,
         provenance=provenance,
     )
 
@@ -1584,13 +1585,19 @@ def select_denoising(
         _, _, _, components = pool
         prefixes = tuple(c.prefix(gate.n_components) for c in components)
         context = (data, labels, settings)
-        activity = _selection_activity(context, pool, selected, prefixes)
+        identities = run_identities(data)  # hashes every run: compute once
+        activity = _selection_activity(context, pool, selected, prefixes, identities)
         operation.analysis_id = analysis_fingerprint(
             data.provenance.metadata_fingerprint, activity
         )
         provenance = build_fit_provenance(operation, activity)
         return _assemble(
-            context, pool, selected, prefixes=prefixes, provenance=provenance
+            context,
+            pool,
+            selected,
+            prefixes=prefixes,
+            identities=identities,
+            provenance=provenance,
         )
 
 

@@ -1,8 +1,6 @@
 """Blockwise public-API calls: HRF selection, GLMs, and beta series."""
 
-from contextlib import redirect_stdout
 import logging
-import os
 
 import numpy as np
 import pandas as pd
@@ -124,16 +122,14 @@ def _glm_block(job, runs, root, model):
     indices, selection = job
     data = load_block(runs, root, indices, model.task_model)
     names = model.task_model.regressor_names
-    # Nilearn prints modulation notices without a verbosity option. Suppress
-    # stdout within each worker; warnings/stderr and parent progress stay visible.
-    with open(os.devnull, "w") as sink, redirect_stdout(sink):
-        result = fit(
-            data,
-            model,
-            hrf_selection=selection,
-            feature_signature=None if selection is None else _signature(runs, indices),
-        )
-        comparison = task_delta_r2(data, model, result)
+    # Design compilation already silences Nilearn's modulation notice at its call.
+    result = fit(
+        data,
+        model,
+        hrf_selection=selection,
+        feature_signature=None if selection is None else _signature(runs, indices),
+    )
+    comparison = task_delta_r2(data, model, result)
     designs = (
         {(i, 0): x for i, x in enumerate(result.design_matrices)}
         if isinstance(result, AnalysisResult)

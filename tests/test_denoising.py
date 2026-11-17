@@ -902,6 +902,7 @@ def test_denoising_assembly_accepts_finished_provenance(fixture, result):
         pool,
         selected,
         prefixes=prefixes,
+        identities=denoising.run_identities(data),  # hashed once by the caller
         provenance=result.provenance,
     )
     assert actual.provenance.to_dict() == before

@@ -14,6 +14,22 @@ the entry half of `denoising.py`, the fit/selection half of `reml.py`,
 `_ridge_cv.py`) and in a few shared objects that do too much (`RunDesign`,
 provenance records, `WorkflowSettings`).
 
+## Status
+
+- **Phase 1: done** (merged to `main`, `d0331a4`). The fractional whole-array
+  oracle in `tests/workflow/test_beta_series.py` had encoded the inner-fold
+  bug and now passes the task model explicitly.
+- **Phase 2: done** (branch `refactor/phase2-seal-caches`). Notes:
+  - `HrfLibrary.origin` returns a read-only view of a fresh deep copy rather
+    than a deep-frozen structure, so existing `dict(library.origin)`
+    comparisons and JSON serialization keep working.
+  - 2.4: the two core `redirect_stdout` sites already wrap only the Nilearn
+    call. The workflow-level redirect around the whole GLM fit was redundant
+    and is removed; existing stdout-capture tests cover both fit paths.
+  - Not done here: splitting `RunDesign`'s two roles (phase 7), and the
+    `RunDesign.expanded` / `.events` DataFrames, which remain mutable.
+- Phases 3–7: not started.
+
 ## Decisions already made
 
 - **Inner-fold selection model (phase 1, item 1) is a bug**, not intended

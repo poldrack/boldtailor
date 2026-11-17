@@ -22,6 +22,16 @@ from boldtailor.model import TaskModel
 _Block = namedtuple("_Block", ["x", "qp", "a", "raw"])
 
 
+def _sealed(array):
+    """The array itself, marked read-only: cached designs are shared process-wide."""
+    array.setflags(write=False)
+    return array
+
+
+def _sealed_block(x, qp, a, raw):
+    return _Block(_sealed(x), _sealed(qp), _sealed(a), _sealed(raw))
+
+
 def _basis(columns):
     u, s, _ = np.linalg.svd(columns, full_matrices=False)
     return u[:, s > s[0] * max(columns.shape) * np.finfo(float).eps]
@@ -63,9 +73,10 @@ class RunDesign:
         )
         self.times, self.nuisance, self.library = times, nuisance, library
         self.task_model, self.fingerprint = task_model, fingerprint
-        self.q = _basis(nuisance)
+        self.q = _sealed(_basis(nuisance))
         self.k = len(task_model.regressor_names)
-        self.eligibility, self.trial_eligibility, self._blocks = {}, {}, {}
+        self._eligibility, self._trial_eligibility = {}, {}
+        self._blocks, self._trial_matrices = {}, {}
 
     def task_design(self, candidate_id):
         """Nilearn task and profiled columns for one candidate on this run."""
@@ -85,31 +96,36 @@ class RunDesign:
         q = np.column_stack([self.q, qp])
         xr = x - q @ (q.T @ x)
         _check_task_rank(xr, x, len(self.times) - q.shape[1])
-        return _Block(xr, qp, xr.T @ xr, x)
+        return _sealed_block(xr, qp, xr.T @ xr, x)
 
     def block(self, candidate_id):
         """Projected and raw task columns, profiled basis, A; zeros if ineligible."""
         if candidate_id not in self._blocks:
             try:
                 self._blocks[candidate_id] = self._build(candidate_id)
-                self.eligibility[candidate_id] = (True, "")
+                self._eligibility[candidate_id] = (True, "")
             except ValueError as error:
-                self.eligibility[candidate_id] = (False, str(error))
-                empty = np.zeros((len(self.times), self.k))
-                self._blocks[candidate_id] = _Block(
-                    empty,
-                    np.zeros((len(self.times), 0)),
-                    np.zeros((self.k, self.k)),
-                    empty,
-                )
+                self._eligibility[candidate_id] = (False, str(error))
+                self._blocks[candidate_id] = self._empty_block()
         return self._blocks[candidate_id]
+
+    def _empty_block(self):
+        empty = np.zeros((len(self.times), self.k))
+        return _sealed_block(
+            empty, np.zeros((len(self.times), 0)), np.zeros((self.k, self.k)), empty
+        )
 
     def eligible(self, candidate_id):
         self.block(candidate_id)
-        return self.eligibility[candidate_id]
+        return self._eligibility[candidate_id]
 
-    @lru_cache(maxsize=256)
     def trial_matrix(self, candidate_id):
+        """Read-only single-trial columns for one candidate, built once per design."""
+        if candidate_id not in self._trial_matrices:
+            self._trial_matrices[candidate_id] = self._build_trial_matrix(candidate_id)
+        return self._trial_matrices[candidate_id]
+
+    def _build_trial_matrix(self, candidate_id):
         confounds = pd.DataFrame(self.nuisance[:, :-1])
         confounds.columns = [f"n{i}" for i in range(confounds.shape[1])]
         x, _, _ = compile_trial_run(
@@ -125,13 +141,13 @@ class RunDesign:
 
     def trial_eligible(self, candidate_id):
         """Estimability of the single-trial design; not used by selection."""
-        if candidate_id not in self.trial_eligibility:
+        if candidate_id not in self._trial_eligibility:
             try:
                 project_trial_design(self.trial_matrix(candidate_id), self.nuisance)
-                self.trial_eligibility[candidate_id] = (True, "")
+                self._trial_eligibility[candidate_id] = (True, "")
             except ValueError as error:
-                self.trial_eligibility[candidate_id] = (False, str(error))
-        return self.trial_eligibility[candidate_id]
+                self._trial_eligibility[candidate_id] = (False, str(error))
+        return self._trial_eligibility[candidate_id]
 
 
 @lru_cache(maxsize=32)

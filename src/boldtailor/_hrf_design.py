@@ -174,9 +174,8 @@ def stimulus_regressor(events, frame_times, candidate):
 
 
 @lru_cache(maxsize=64)
-def _boxcar_sampling(
-    timing_bytes, times_bytes, oversampling=OVERSAMPLING, min_onset=MIN_ONSET
-):
+def _boxcar_sampling(timing_bytes, times_bytes, oversampling, min_onset):
+    """Read-only event and acquisition positions on Nilearn's oversampled grid."""
     timing = np.frombuffer(timing_bytes, dtype="<f8").reshape(-1, 2)
     times = np.frombuffer(times_bytes, dtype="<f8")
     condition = np.vstack([timing.T, np.ones(len(timing))])
@@ -188,7 +187,10 @@ def _boxcar_sampling(
     upper = np.searchsorted(grid, times)
     lower = upper - 1
     fraction = (times - grid[lower]) / (grid[upper] - grid[lower])
-    return starts, stops, lower, upper, fraction
+    arrays = (starts, stops, lower, upper, fraction)
+    for array in arrays:
+        array.setflags(write=False)
+    return arrays
 
 
 def trial_regressors(events, frame_times, candidate):
@@ -207,7 +209,10 @@ def trial_regressors(events, frame_times, candidate):
         raise ValueError("trial onset has no supported sampled response")
     timing = np.asarray(events[["onset", "duration"]], dtype="<f8").tobytes()
     starts, stops, lower, upper, fraction = _boxcar_sampling(
-        timing, np.asarray(times, dtype="<f8").tobytes()
+        timing,
+        np.asarray(times, dtype="<f8").tobytes(),
+        int(OVERSAMPLING),
+        float(MIN_ONSET),
     )
     tr = frame_tr(times)
     kernel = hrf_kernel(candidate, tr, OVERSAMPLING)

@@ -7,6 +7,7 @@ from hashlib import sha256
 from importlib.resources import files
 from itertools import product
 import json
+from copy import deepcopy
 from types import MappingProxyType
 
 import numpy as np
@@ -238,9 +239,7 @@ class HrfLibrary:
         self._curves = readonly_array(curves)
         self._times = readonly_array(np.arange(curves.shape[1]) * 0.1)
         self._fingerprint = digest
-        self._origin: Mapping[str, object] = MappingProxyType(
-            {} if origin is None else dict(origin)
-        )
+        self._origin: dict[str, object] = deepcopy(dict(origin or {}))
 
     @property
     def candidates(self) -> tuple[HrfCandidate, ...]:
@@ -260,7 +259,8 @@ class HrfLibrary:
 
     @property
     def origin(self) -> Mapping[str, object]:
-        return self._origin
+        """Read-only view of an owned copy; nested values are copies too."""
+        return MappingProxyType(deepcopy(self._origin))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, HrfLibrary):
@@ -802,13 +802,19 @@ def glmsingle_hrf_library():
     )
 
 
-@lru_cache(maxsize=4)
 def default_hrf_library(n_samples=512, *, seed=0):
     """The library HRF selection uses when none is given: canonical SPM,
     ``n_samples`` timing-space candidates, then the 20 GLMsingle HRFs.
 
     Built once per ``(n_samples, seed)`` and cached; libraries are immutable.
     """
+    if not is_integer(n_samples) or not is_integer(seed):
+        raise ValueError("n_samples and seed must be integers")
+    return _default_hrf_library(int(n_samples), int(seed))
+
+
+@lru_cache(maxsize=4)
+def _default_hrf_library(n_samples, seed):
     timing = timing_hrf_library(n_samples, seed=seed)
     rows = [c.parameters for c in timing.candidates[1:]]
     origin = {
