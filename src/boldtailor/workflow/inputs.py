@@ -35,7 +35,7 @@ def selection_task_model(task_model, include_rt=True):
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class WorkflowRun:
     inputs: object
     image: object

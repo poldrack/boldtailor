@@ -18,7 +18,7 @@ from boldtailor._scalars import is_integer
 from boldtailor._single_trial_fit import r_squared
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class TrialEncodingResult:
     coefficients: np.ndarray
     predictor_means: np.ndarray

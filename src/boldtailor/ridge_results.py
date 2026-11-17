@@ -14,7 +14,7 @@ from boldtailor._arrays import (
 from boldtailor.provenance import ProvenanceRecord
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class RidgeSelection:
     ridge_alpha: float
     alphas: tuple[float, ...]
@@ -30,7 +30,7 @@ class RidgeSelection:
         copy_array_fields_in_place(self, ("scoring_mask",), dtype=bool)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class CandidateScores:
     regularization: Literal["normalized_ridge", "fractional_ridge"]
     grid: tuple[float, ...]
@@ -51,7 +51,7 @@ class CandidateScores:
         copy_array_tuple_fields_in_place(self, ("trial_masks",), dtype=bool)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class FractionSelection:
     fractions: tuple[float, ...]
     ridge_fraction: np.ndarray

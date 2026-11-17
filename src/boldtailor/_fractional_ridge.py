@@ -62,7 +62,7 @@ def fraction_metadata(fractions):
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PreparedFractionBetas:
     """Raw trial-coefficient basis and signal coordinates for fractional ridge."""
 

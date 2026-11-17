@@ -24,7 +24,7 @@ from boldtailor.data import AnalysisData
 from boldtailor.model import ModelSpec
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class CompiledDesign:
     matrix: pd.DataFrame
     excluded_event_count: int

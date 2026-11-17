@@ -17,7 +17,7 @@ from boldtailor._arrays import (
 from boldtailor.provenance import ProvenanceRecord
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class SharedTrialDesign:
     _matrices: tuple[pd.DataFrame, ...]
 
@@ -31,7 +31,7 @@ class SharedTrialDesign:
         return tuple(d.copy(deep=True) for d in self._matrices)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class SelectedTrialDesign:
     """Selected HRF IDs; each fitted (run, HRF) design is rebuilt on request."""
 
@@ -52,7 +52,7 @@ class SelectedTrialDesign:
         return self.rebuild_matrix(run, hrf_id)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class SingleTrialResult:
     run_betas: tuple[np.ndarray, ...]
     _trial_table: pd.DataFrame

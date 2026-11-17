@@ -218,7 +218,7 @@ def onoff_r2(data, library, *, run_labels=None) -> np.ndarray:
     return readonly_array(1 - ratio)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class PoolMasks:
     """Pool and scoring feature masks fixed for every candidate PC count.
 
@@ -340,7 +340,7 @@ def pool_masks(
     )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class RunComponents:
     """Temporal PCs (time x rank) of one run's normalized, projected pool."""
 
@@ -499,7 +499,7 @@ def _check_inputs(data, indices, components, scoring):
         raise ValueError(f"{NO_TASK_SIGNAL}: the scoring set is empty")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _Terms:
     """One run's task design and BOLD for one HRF, off baseline + indicators.
 
@@ -516,7 +516,7 @@ class _Terms:
     zero: np.ndarray
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _HrfGroup:
     """Scoring features sharing one frozen HRF, with every run's terms."""
 
@@ -956,7 +956,7 @@ def validate_noise_model(value) -> str:
     return value
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _Fit:
     sse: np.ndarray
     rank: int
@@ -1059,7 +1059,7 @@ def _pooled_sse(pieces, n, k):
     return sse
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _GroupTest:
     features: np.ndarray
     f: np.ndarray | None = None

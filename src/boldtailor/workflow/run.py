@@ -73,7 +73,7 @@ class _Session:
         return stage in self.settings.stages
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class _Analysis:
     """Completed stage outputs, assembled once for reporting and publication."""
 

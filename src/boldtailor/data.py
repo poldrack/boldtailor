@@ -31,7 +31,7 @@ from boldtailor.provenance import ProvenanceRecord, RunSources, sources_fingerpr
 _EVENT_COLUMNS = ("onset", "duration")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class AnalysisData:
     _signals: tuple[np.ndarray, ...]
     _events: tuple[pd.DataFrame, ...]

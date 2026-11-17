@@ -34,7 +34,7 @@ class RunInputs:
     bold_json: Path
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RawRun:
     inputs: RunInputs
     image: nib.Cifti2Image

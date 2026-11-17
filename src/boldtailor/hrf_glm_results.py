@@ -17,7 +17,7 @@ from boldtailor.provenance import ProvenanceRecord
 from boldtailor.results import AnalysisAccessors, ContrastResult, owned_contrasts
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class HrfAnalysisResult(AnalysisAccessors):
     """Contrast maps in input feature order; designs rebuilt per (run, HRF ID)."""
 

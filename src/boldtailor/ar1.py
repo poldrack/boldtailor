@@ -32,7 +32,7 @@ def whiten(values: np.ndarray, rho: float) -> np.ndarray:
     return out
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RhoEstimate:
     """Per-group, per-feature AR(1) estimates and their pooled value.
 
@@ -51,7 +51,7 @@ class RhoEstimate:
         copy_array_fields_in_place(self, ("values", "raw"))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RhoReference:
     """Signal-independent work of one reference design, reusable across signals.
 

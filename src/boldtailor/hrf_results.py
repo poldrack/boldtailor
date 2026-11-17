@@ -17,7 +17,7 @@ from boldtailor.provenance import ProvenanceRecord
 from boldtailor.reml import RemlFit, RemlSelection
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class RemlHrfDiagnostics:
     """Likelihood comparisons and search qualifications, never prediction scores."""
 
@@ -36,7 +36,7 @@ class RemlHrfDiagnostics:
             raise ValueError("delta_criterion must have one value per feature")
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class HrfSelectionResult:
     hrf_indices: np.ndarray
     cv_r2: np.ndarray | None
@@ -109,7 +109,7 @@ class HrfSelectionResult:
         )
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class HrfEvaluationResult:
     training_selection: HrfSelectionResult
     training_amplitudes: np.ndarray

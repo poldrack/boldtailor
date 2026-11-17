@@ -49,7 +49,7 @@ def _fit_group(run, x, y, alpha, fractions):
     return fit_fraction_run(x, run.nuisance, y, fractions=fractions)
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class GroupRunFit:
     """One run's fits over every HRF group, assembled in feature order."""
 

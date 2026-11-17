@@ -265,7 +265,7 @@ def _confounds(names):
     return _note(f"Confounds ({len(names)}): {', '.join(names)}")
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class ReportInputs:
     """Named content consumed by report sections, excluding settings and figures."""
 

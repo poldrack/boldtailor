@@ -7,7 +7,7 @@ import numpy as np
 from boldtailor._scalars import is_real
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TrialRunFit:
     betas: np.ndarray
     nuisance_betas: np.ndarray
@@ -17,7 +17,7 @@ class TrialRunFit:
     diagnostics: dict
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class ProjectedTrialDesign:
     """SVD of unit-norm trial columns after removing the nuisance span."""
 
@@ -29,7 +29,7 @@ class ProjectedTrialDesign:
     diagnostics: dict
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PreparedTrialBetas:
     """Signal coordinates shared by all normalized ridge candidates."""
 

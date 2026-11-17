@@ -132,7 +132,7 @@ def feature_rho(rho, n_features):
 # ---------------------------------------------------------------- terms
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class FixedProjection:
     """Whitened signals with the whitened fixed design projected out.
 
@@ -188,7 +188,7 @@ def reproject_signals(projection: FixedProjection, signals) -> FixedProjection:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RemlTerms:
     """Sufficient statistics of one group for the REML criterion."""
 
@@ -267,7 +267,7 @@ def reml_terms(
 # ---------------------------------------------------------------- criterion
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PooledTerms:
     """Sufficient statistics of all groups together."""
 
@@ -366,7 +366,7 @@ _WORKING_BYTES = 8 * 2**20
 _FLAGS = ("at_zero", "at_upper", "unrefined", "unidentifiable")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RatioOptimum:
     """Per-feature variance-ratio optimum and where it sits.
 
@@ -594,7 +594,7 @@ def minimize_ratio(
 # ---------------------------------------------------------------- fitting
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RemlGroup:
     """Signals ``(scans, features)`` and their unpenalised fixed design ``C``."""
 
@@ -605,7 +605,7 @@ class RemlGroup:
         copy_array_fields_in_place(self, ("signals", "fixed_design"))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RemlFit:
     """Per-feature REML variance estimates; ``noise_variance`` is marginal.
 
@@ -682,7 +682,7 @@ class _FitBuffers:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _RhoFeatureSubset:
     """Features with resolved residual signal sharing one noise correlation.
 
@@ -819,7 +819,7 @@ def fit_reml(
 # ---------------------------------------------------------------- selection
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RemlSelection:
     """Per-feature best random design among candidates, by restricted likelihood.
 

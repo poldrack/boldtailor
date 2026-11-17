@@ -28,7 +28,7 @@ provenance records, `WorkflowSettings`).
     and is removed; existing stdout-capture tests cover both fit paths.
   - Not done here: splitting `RunDesign`'s two roles (phase 7), and the
     `RunDesign.expanded` / `.events` DataFrames, which remain mutable.
-- **Phase 3: done** (branch `refactor/phase3-untangle-imports`).
+- **Phase 3: done** (merged to `main`, `1de3adb`).
   `tests/test_import_structure.py` now enforces an acyclic import graph, no
   cross-module imports of `_private` names, module-level package imports
   outside the CLI, and no re-export facades in `workflow`. Notes:
@@ -48,7 +48,19 @@ provenance records, `WorkflowSettings`).
   - Left as is: `denoising.__all__` re-exports its three result classes
     (public module, deliberate), and `experiments/` still reads constants
     through `_hrf_design`.
-- Phases 4–7: not started.
+- **Phase 4: done** (branch `refactor/phase4-named-records`). Notes:
+  - 4.1: `GlmFit`, `BetaFit`, `OuterEvaluation`, `TuningResult` and
+    `CvBetaResult` are frozen dataclasses in `workflow/records.py` (renamed
+    from `_records.py` because the example notebook builds a `GlmFit`). List
+    fields became tuples. Worker payloads (`GlmBlock`, `BetaBlock`,
+    `OuterBlock`) stay `TypedDict`s: they are built once and never mutated.
+    The arrays inside the records are not write-protected.
+  - 4.2: `_GateSettings`, `_GateArrays`, `_PoolStage`, `_CountStage`.
+  - 4.3: `_FitBuffers`, `_SelectionBuffers`.
+  - 4.4: applied to every dataclass with an array or table field (about 45
+    classes, not only the ones listed below), enforced by
+    `tests/test_dataclass_equality.py`.
+- Phases 5–7: not started.
 
 ## Decisions already made
 

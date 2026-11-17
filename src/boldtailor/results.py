@@ -33,7 +33,7 @@ class _NilearnContrast(Protocol):
     def p_value(self) -> np.ndarray: ...
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class ContrastResult:
     effect: np.ndarray
     variance: np.ndarray
@@ -98,7 +98,7 @@ class AnalysisAccessors:
             raise KeyError(f"unknown contrast {name!r}") from error
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class AnalysisResult(AnalysisAccessors):
     _contrasts: Mapping[str, ContrastResult]
     _design_matrices: tuple[pd.DataFrame, ...]
@@ -128,7 +128,7 @@ class AnalysisResult(AnalysisAccessors):
         return self._design_provenance
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True, eq=False)
 class TaskDeltaR2Result:
     _full_r2: np.ndarray
     _nuisance_r2: np.ndarray

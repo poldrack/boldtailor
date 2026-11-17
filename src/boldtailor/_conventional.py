@@ -18,7 +18,7 @@ from boldtailor.model import ContrastValue
 from boldtailor.results import contrast_result, mask_contrast
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class RunFit:
     contrasts: Mapping[str, object]
     r2: np.ndarray
@@ -26,14 +26,14 @@ class RunFit:
     total_sum: np.ndarray
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class ConventionalFit:
     run_fits: tuple[RunFit, ...]
     contrasts: Mapping[str, object]
     aggregate_r2: np.ndarray
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class _GLMFit:
     labels: np.ndarray
     regression_results: dict

@@ -41,7 +41,7 @@ _COLUMN_ROLES = frozenset({"task", "nuisance", "intercept", "other"})
 _DESIGN_ID_SCHEMA = "boldtailor.prepared-design/1"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PreparedDesignAnalysis:
     """Owned inputs with defensive public table accessors.
 
