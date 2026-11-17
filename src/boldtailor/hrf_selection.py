@@ -8,17 +8,21 @@ import numpy as np
 from boldtailor._deprecation import deprecated
 from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor._hrf_cv import (
-    prepare_runs,  # public re-export
-    subset_runs,  # public re-export
     signal_statistics,
     loro_scores,
     choose_eligible,
     pooled_amplitude,
     prediction_loss,
 )
-from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
+from boldtailor._run_design import prepare_runs  # documented as importable here
+from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._scalars import is_integer
-from boldtailor.data import AnalysisData, run_labels_for
+from boldtailor.data import (
+    AnalysisData,
+    run_labels_for,
+    subset_runs,  # documented as importable here
+)
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
 from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
 from boldtailor.hrf_options import RemlHrfOptions, resolve_reml_options

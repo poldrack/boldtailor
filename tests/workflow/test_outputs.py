@@ -13,7 +13,17 @@ from boldtailor.hrf_library import HrfLibrary, PARAMETER_NAMES
 from boldtailor.task_detection import detect_task_model
 from boldtailor.model import Modulator
 from boldtailor.publication import publish_artifact_set
-from boldtailor.workflow import analysis, artifacts, beta_series, inputs, outputs
+from boldtailor.workflow import (
+    analysis,
+    artifacts,
+    beta_series,
+    export_cifti,
+    figures as workflow_figures,
+    inputs,
+    outputs,
+    tables,
+)
+from boldtailor.workflow import manifest as workflow_manifest
 
 SPLIT_DESCRIPTORS = (
     "HRFOdd",
@@ -89,7 +99,9 @@ def test_activation_exports_preserve_map_names_axis_and_values(
         "n_trials": np.array([5, 5, np.nan]),
         "df": np.array([4, 4, np.nan]),
     }
-    written = outputs.activation_artifacts(settings, brain, {"CanonicalTrialOLS": maps})
+    written = export_cifti.activation_artifacts(
+        settings, brain, {"CanonicalTrialOLS": maps}
+    )
     paths = publish_artifact_set(tmp_path / "out", written)
     image = nib.load(paths[0])
     assert image.header.get_axis(0).name.tolist() == list(maps)
@@ -129,7 +141,7 @@ def test_ridge_artifacts_match_numeric_results(
     settings = settings_for(root, ridge_mode="cv", ridge_alphas=(0.0, 0.1))
     runs, task_model, brain, _, models = _beta_models(settings, cv_library)
     model = models["CanonicalTrialRidgeCV"]
-    described = outputs.metadata(
+    described = workflow_manifest.metadata(
         runs,
         cv_library,
         settings,
@@ -145,7 +157,9 @@ def test_ridge_artifacts_match_numeric_results(
         "response_time",
         "trial_type[1]",
     ]
-    written = outputs.beta_model_artifacts(settings, brain, runs, model, cv_library)
+    written = export_cifti.beta_model_artifacts(
+        settings, brain, runs, model, cv_library
+    )
     output = tmp_path / "published"
     sentinel = output / "old_fixed_ridge.txt"
     output.mkdir()
@@ -176,7 +190,7 @@ def test_ridge_artifacts_match_numeric_results(
     assert len(predictors) == 36 and predictors.trial_id.is_unique
     assert len([p for p in paths if p.name.endswith("_predictions.dscalar.nii")]) == 6
     assert len([p for p in paths if p.name.endswith("_targets.dscalar.nii")]) == 6
-    assert outputs.tuning_figure(models).axes
+    assert workflow_figures.tuning_figure(models).axes
     assert sentinel.read_text() == "retain prior fixed-alpha outputs"
     before = {p: p.read_bytes() for p in paths}
     with pytest.raises(FileExistsError):
@@ -224,7 +238,9 @@ def test_fraction_exports_match_the_fitted_models(
     tuned = {k: m for k, m in models.items() if m.tuning}
     assert set(tuned) == {"CanonicalTrialFractionalCV", "OptimizedTrialFractionalCV"}
     for name, model in tuned.items():
-        written = outputs.beta_model_artifacts(settings, brain, runs, model, cv_library)
+        written = export_cifti.beta_model_artifacts(
+            settings, brain, runs, model, cv_library
+        )
         paths = publish_artifact_set(tmp_path / name, written)
         _assert_fraction_exports(paths, model, brain, runs)
         mode = model.hrf.capitalize()
@@ -234,13 +250,15 @@ def test_fraction_exports_match_the_fitted_models(
         assert metadata["selection_rule"] == "maximum_encoding_r2_per_grayordinate"
         assert metadata["validation_target"] == "fixed_ols_betas"
         assert metadata["percentile_role"] == "descriptive_only"
-    table = outputs.tuning_table(models)
+    table = tables.tuning_table(models)
     assert set(table["mode"]) == {"Canonical", "Optimized"}
     for mode in ("Canonical", "Optimized"):
         rows = table.loc[table["mode"] == mode]
         assert rows.groupby("scope").selected_grayordinates.sum().tolist() == [3, 3, 3]
     assert "alpha" not in table
-    assert outputs.tuning_figure(models).axes[0].get_xlabel() == "Ridge fraction"
+    assert (
+        workflow_figures.tuning_figure(models).axes[0].get_xlabel() == "Ridge fraction"
+    )
 
 
 def test_beta_model_writer_covers_every_estimator(
@@ -262,7 +280,7 @@ def test_beta_model_writer_covers_every_estimator(
     names = {
         a.path
         for m in models.values()
-        for a in outputs.beta_model_artifacts(settings, brain, runs, m, cv_library)
+        for a in export_cifti.beta_model_artifacts(settings, brain, runs, m, cv_library)
     }
     stem = settings.stem
     assert (
@@ -293,7 +311,9 @@ def test_beta_model_writer_omits_rt_correlations_without_rt(
     names = {
         a.path
         for m in models.values()
-        for a in outputs.beta_model_artifacts(settings, brain, runs, m, small_library)
+        for a in export_cifti.beta_model_artifacts(
+            settings, brain, runs, m, small_library
+        )
     }
     assert any("desc-CanonicalTrialOLS_betas" in n for n in names)
     assert not any("rtcorrelation" in n for n in names)
@@ -354,7 +374,7 @@ def _metadata(selected, **extra):
         report=None,
     )
     options.update(extra)
-    return outputs.metadata(runs, library, settings, model, **options)
+    return workflow_manifest.metadata(runs, library, settings, model, **options)
 
 
 def test_metadata_records_the_task_model_fingerprint(selected):
@@ -392,7 +412,7 @@ def test_metadata_prose_follows_the_task_model(four_runs, small_library, setting
         root, modulators=(Modulator("trial_type", kind="categorical"),)
     )
     runs, model, _ = _session(settings)
-    published = outputs.metadata(
+    published = workflow_manifest.metadata(
         runs,
         small_library,
         settings,
@@ -422,7 +442,7 @@ def test_metadata_rt_check_follows_the_rt_selection_switch(selected, settings_fo
     settings, runs, model, _, library, _, selections = selected
     assert "RT enters HRF selection" in _metadata(selected)["rt_check"]
     off = settings_for(settings.bids_dir, hrf_selection_rt=False)
-    published = outputs.metadata(
+    published = workflow_manifest.metadata(
         runs,
         library,
         off,
@@ -461,12 +481,14 @@ def test_hrf_artifacts_write_splits_only_when_requested(selected):
     """Verify HRF artifacts write splits only when requested."""
     settings, _, _, brain, library, _, selections = selected
     stem, space = settings.stem, settings.space_entity
-    full = {a.path for a in outputs.hrf_artifacts(settings, brain, selections, library)}
+    full = {
+        a.path for a in export_cifti.hrf_artifacts(settings, brain, selections, library)
+    }
     for descriptor in SPLIT_DESCRIPTORS:
         assert any(f"_desc-{descriptor}_" in n for n in full)
     alone = {
         a.path
-        for a in outputs.hrf_artifacts(
+        for a in export_cifti.hrf_artifacts(
             settings, brain, selections, library, include_splits=False
         )
     }
@@ -571,13 +593,13 @@ def test_hrf_outputs_accept_all_only_selection_bundles(selected):
     """Verify HRF outputs accept all only selection bundles."""
     settings, _, _, brain, library, _, selections = selected
     all_only = {k: {"all": bundle["all"]} for k, bundle in selections.items()}
-    written = outputs.hrf_artifacts(
+    written = export_cifti.hrf_artifacts(
         settings, brain, all_only, library, include_splits=False
     )
     names = {a.path for a in written}
     stem, space = settings.stem, settings.space_entity
     assert f"{stem}_{space}_desc-HRFAll_stat-selection.dscalar.nii" in names
-    full = outputs.hrf_artifacts(
+    full = export_cifti.hrf_artifacts(
         settings, brain, selections, library, include_splits=False
     )
     for one, two in zip(
@@ -586,7 +608,7 @@ def test_hrf_outputs_accept_all_only_selection_bundles(selected):
         assert one.path == two.path
         if one.path.endswith(".dscalar.nii"):
             assert one.payload == two.payload
-    rows = pd.DataFrame(outputs.hrf_boundary_summary(all_only))
+    rows = pd.DataFrame(tables.hrf_boundary_summary(all_only))
     assert set(rows.scope) == {"all"}
     published = _metadata(selected, selections=all_only)
     assert {r["scope"] for r in published["hrf_boundary_summary"]} == {"all"}
@@ -718,10 +740,10 @@ def test_check_output_names_the_existing_files(four_runs, settings_for, tmp_path
 def test_hrf_boundary_table_is_the_pooled_summary_as_a_frame(selected):
     """Verify HRF boundary table is the pooled summary as a frame."""
     selections = selected[-1]
-    table = outputs.hrf_boundary_table(selections)
-    expected = pd.DataFrame(outputs.hrf_boundary_summary(selections))
+    table = tables.hrf_boundary_table(selections)
+    expected = pd.DataFrame(tables.hrf_boundary_summary(selections))
     pd.testing.assert_frame_equal(table, expected)
-    assert outputs.hrf_boundary_table(None) is None
+    assert tables.hrf_boundary_table(None) is None
 
 
 def test_workflow_artifacts_are_the_published_set_less_report_and_description(
@@ -776,7 +798,7 @@ def test_metadata_records_undefined_bound_fractions_as_null(four_runs, settings_
     selections = analysis.select_hrfs(
         runs, root, blocks, library, task_model=model, splits=False
     )
-    published = outputs.metadata(
+    published = workflow_manifest.metadata(
         runs,
         library,
         settings,

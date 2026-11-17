@@ -10,11 +10,8 @@ from types import MappingProxyType
 import numpy as np
 
 from boldtailor._fit_diagnostics import DIAGNOSTIC_NOISE_MODEL
-from boldtailor._hrf_design import (  # HRF_NORMALIZATION: public re-export
-    HRF_NORMALIZATION,
-    MIN_ONSET,
-    OVERSAMPLING,
-)
+from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._scalars import is_boolean, is_integer, is_real  # public
 
 ContrastWeights = Mapping[str, float]
@@ -340,9 +337,9 @@ class ModelSpec:
         noise_model: str = "ar1",
         task_model: TaskModel | None = None,
     ) -> None:
-        normalized = _prepare_contrasts(contrasts)
+        normalized = prepare_contrasts(contrasts)
         selected_confounds = _prepare_confound_names(confounds)
-        _validate_noise_model(noise_model)
+        validate_noise_model(noise_model)
         _validate_task_model(task_model, hrf_model)
         _validate_design_options(high_pass, drift_order, oversampling, min_onset)
         self._contrasts: Mapping[str, ContrastValue] = MappingProxyType(normalized)
@@ -468,7 +465,7 @@ def contrasts_from_metadata(metadata):
     }
 
 
-def _prepare_contrasts(
+def prepare_contrasts(
     contrasts: Mapping[str, ContrastValue],
 ) -> dict[str, ContrastValue]:
     if not contrasts:
@@ -524,7 +521,7 @@ def _prepare_confound_names(values: Sequence[str]) -> tuple[str, ...]:
     return names
 
 
-def _validate_noise_model(value: str) -> None:
+def validate_noise_model(value: str) -> None:
     if value not in {"ols", "ar1"}:
         raise ValueError("noise_model must be 'ols' or 'ar1'")
 

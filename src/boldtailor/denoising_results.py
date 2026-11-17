@@ -19,7 +19,7 @@ from boldtailor._arrays import (
     set_fields_in_place,
 )
 from boldtailor._mixture_threshold import MixtureThreshold
-from boldtailor.data import _owned_table
+from boldtailor._arrays import owned_table
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
 
@@ -202,8 +202,8 @@ class DenoisingResult:
         )
         set_fields_in_place(
             self,
-            _candidate_scores=_owned_table(self._candidate_scores),
-            _fold_scores=_owned_table(self._fold_scores),
+            _candidate_scores=owned_table(self._candidate_scores),
+            _fold_scores=owned_table(self._fold_scores),
         )
         self._validate()
 
@@ -249,12 +249,12 @@ class DenoisingResult:
     @property
     def candidate_scores(self) -> pd.DataFrame:
         """Per count: eligibility, median performance, curve, and reasons."""
-        return _owned_table(self._candidate_scores)
+        return owned_table(self._candidate_scores)
 
     @property
     def fold_scores(self) -> pd.DataFrame:
         """Per fold and count: eligibility, reason, fold median R², sizes."""
-        return _owned_table(self._fold_scores)
+        return owned_table(self._fold_scores)
 
     @property
     def perf(self) -> np.ndarray:

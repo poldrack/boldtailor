@@ -2,7 +2,7 @@
 
 from matplotlib.figure import Figure
 
-from boldtailor.workflow.tables import _tuned, tuning_rows
+from boldtailor.workflow.tables import tuned_models, tuning_rows
 
 
 def plot_tuning(axis, mode, tuning):
@@ -45,7 +45,7 @@ def _plot_alpha_tuning(axis, mode, tuning):
 
 def tuning_figure(beta_models):
     """One tuning-curve panel per tuned model."""
-    tuned = _tuned(beta_models)
+    tuned = tuned_models(beta_models)
     figure = Figure(figsize=(6 * len(tuned), 4), layout="constrained")
     axes = figure.subplots(1, len(tuned), squeeze=False)[0]
     for axis, model in zip(axes, tuned, strict=True):

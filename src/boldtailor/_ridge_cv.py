@@ -7,7 +7,8 @@ from uuid import uuid4
 
 import numpy as np
 
-from boldtailor._hrf_cv import prepare_runs, subset_runs
+from boldtailor._run_design import prepare_runs
+from boldtailor.data import subset_runs
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor._single_trial_fit import r_squared, prepare_trial_betas
 from boldtailor._fractional_ridge import prepare_fraction_betas, NORM_BASIS
@@ -23,10 +24,10 @@ from boldtailor.provenance import (
 )
 from boldtailor.ridge_results import CandidateScores
 from boldtailor.trial_encoding import (
-    _predictor_arrays,
-    _training_design,
-    evaluate_trial_encoding,
     encoding_metadata,
+    evaluate_trial_encoding,
+    predictor_arrays,
+    training_design,
     validate_encoding_mode,
 )
 
@@ -40,12 +41,12 @@ def _validate(data, predictors, library, signature, *, encoding_mode, hrf_method
         raise ValueError(f"Ridge CV requires at least {minimum} runs")
     if signature is not None and (not isinstance(signature, str) or not signature):
         raise ValueError("feature_signature must be a nonempty string or None")
-    arrays, columns = _predictor_arrays(predictors, [len(e) for e in data.events])
+    arrays, columns = predictor_arrays(predictors, [len(e) for e in data.events])
     masks = tuple(np.isfinite(x).all(axis=1) for x in arrays)
     for test in range(data.n_runs):
         if masks[test].sum() < 2:
             raise ValueError(f"validation run {test} needs two complete predictor rows")
-        _training_design(
+        training_design(
             arrays,
             masks,
             [r for r in range(data.n_runs) if r != test],

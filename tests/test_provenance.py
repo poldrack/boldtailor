@@ -10,7 +10,7 @@ from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
     SourceRef,
-    _metadata_fingerprint,
+    sources_fingerprint,
 )
 
 
@@ -387,7 +387,7 @@ def test_sha256_changes_the_metadata_fingerprint(complete_sources):
     b = complete_sources(1)
     with_digest = b[0].signal.replace(sha256="a" * 64)
     b = [b[0].replace(signal=with_digest)]
-    assert _metadata_fingerprint(a) != _metadata_fingerprint(b)
+    assert sources_fingerprint(a) != sources_fingerprint(b)
     assert SourceRef.from_dict(with_digest.to_dict()) == with_digest
     assert with_digest.to_dict()["sha256"] == "a" * 64
 

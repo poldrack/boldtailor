@@ -14,14 +14,14 @@ from boldtailor._arrays import (
 )
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
-from boldtailor.results import _AnalysisAccessors, _ContrastResult, owned_contrasts
+from boldtailor.results import AnalysisAccessors, ContrastResult, owned_contrasts
 
 
 @dataclass(frozen=True, kw_only=True)
-class HrfAnalysisResult(_AnalysisAccessors):
+class HrfAnalysisResult(AnalysisAccessors):
     """Contrast maps in input feature order; designs rebuilt per (run, HRF ID)."""
 
-    _contrasts: Mapping[str, _ContrastResult]
+    _contrasts: Mapping[str, ContrastResult]
     _run_r2: tuple[np.ndarray, ...]
     _r2: np.ndarray
     _provenance: ProvenanceRecord

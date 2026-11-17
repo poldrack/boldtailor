@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from boldtailor._deprecation import UNSET, _Unset, renamed_keyword
+from boldtailor._deprecation import UNSET, Unset, renamed_keyword
 from boldtailor._single_trial_design import compile_trial_run  # public re-export
 from boldtailor._single_trial_fit import (  # public re-exports
     project_trial_design,
@@ -24,9 +24,9 @@ def fit_single_trials(
     *,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
-    hrf_model: str | HrfCandidate | _Unset = UNSET,
+    hrf_model: str | HrfCandidate | Unset = UNSET,
     ridge_fraction: float | np.ndarray | None = None,
-    hrf: str | HrfCandidate | _Unset = UNSET,
+    hrf: str | HrfCandidate | Unset = UNSET,
 ) -> SingleTrialResult:
     """Estimate one native-unit beta per event row, independently in each run.
 
@@ -59,12 +59,12 @@ def fit_single_trials(
 def fit_selected_hrfs(
     data: AnalysisData,
     *,
-    hrf_selection: HrfSelectionResult | _Unset = UNSET,
+    hrf_selection: HrfSelectionResult | Unset = UNSET,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     ridge_fraction: float | np.ndarray | None = None,
-    selection: HrfSelectionResult | _Unset = UNSET,
+    selection: HrfSelectionResult | Unset = UNSET,
 ) -> SingleTrialResult:
     """Fit unrestricted trial betas using each feature's previously selected HRF.
 

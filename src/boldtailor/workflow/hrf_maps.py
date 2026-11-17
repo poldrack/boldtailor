@@ -91,11 +91,34 @@ def selection_values(result: HrfSelectionResult):
 
 
 def all_selection_maps(selections, n_features):
+    """The all-run maps alone, in the same estimator-specific schema."""
     method = selection_method(selections)
     maps = np.full((len(selection_names(method)), n_features), np.nan)
     for indices, bundle in selections.items():
         maps[:, list(indices)] = selection_values(bundle["all"])
     return {"all": maps}
+
+
+def selection_maps(selections, n_features):
+    """All-run, odd and even selection maps plus both cross-half prediction maps."""
+    rows = len(selection_names(selection_method(selections)))
+    maps = {
+        name: np.full(
+            (rows if name in ("all", "odd", "even") else 3, n_features), np.nan
+        )
+        for name in ("all", "odd", "even", "odd_to_even", "even_to_odd")
+    }
+    for indices, bundle in selections.items():
+        for name in ("all", "odd", "even"):
+            result = bundle[name] if name == "all" else bundle[name].training_selection
+            maps[name][:, list(indices)] = selection_values(result)
+        for name in ("odd", "even"):
+            result = bundle[name]
+            target = "odd_to_even" if name == "odd" else "even_to_odd"
+            maps[target][:, list(indices)] = np.stack(
+                [result.test_r2, result.canonical_test_r2, result.delta_test_r2]
+            )
+    return maps
 
 
 def reml_record(result):

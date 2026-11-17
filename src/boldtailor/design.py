@@ -58,7 +58,7 @@ def _compile_run(
     run: int,
 ) -> CompiledDesign:
     selected = _select_confounds(confounds, model.confounds, run)
-    modeled_events, excluded_count, cutoff = _select_modeled_events(
+    modeled_events, excluded_count, cutoff = select_modeled_events(
         events, frame_times, model.min_onset, run
     )
     if model.task_model is None:
@@ -67,7 +67,7 @@ def _compile_run(
         design = _make_task_model_design(
             frame_times, modeled_events, selected, model, run
         )
-    _validate_design_matrix(design, run)
+    validate_design_matrix(design, run)
     return CompiledDesign(
         matrix=design,
         excluded_event_count=excluded_count,
@@ -103,7 +103,7 @@ def _compile_nuisance_run(
 ) -> CompiledDesign:
     selected = _select_confounds(confounds, model.confounds, run)
     matrix = _make_nuisance_matrix(frame_times, selected, model, run)
-    _validate_design_matrix(matrix, run)
+    validate_design_matrix(matrix, run)
     return CompiledDesign(
         matrix=matrix,
         excluded_event_count=0,
@@ -189,7 +189,7 @@ def _make_nuisance_matrix(
         ) from error
 
 
-def _validate_design_matrix(design: pd.DataFrame, run: int) -> None:
+def validate_design_matrix(design: pd.DataFrame, run: int) -> None:
     if design.columns.has_duplicates:
         duplicates = design.columns[design.columns.duplicated()].tolist()
         raise ValueError(f"run {run} design has duplicate columns: {duplicates}")
@@ -197,7 +197,7 @@ def _validate_design_matrix(design: pd.DataFrame, run: int) -> None:
         raise ValueError(f"run {run} design must be finite")
 
 
-def _select_modeled_events(
+def select_modeled_events(
     events: pd.DataFrame,
     frame_times: np.ndarray,
     min_onset: float,

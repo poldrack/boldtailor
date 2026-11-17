@@ -8,7 +8,7 @@ import pytest
 from nilearn.glm.first_level import compute_regressor
 
 from boldtailor.task_detection import detect_task_model
-from boldtailor.workflow import analysis, inputs
+from boldtailor.workflow import analysis, hrf_maps, inputs
 from tests.oracles import scaled_condition
 
 
@@ -93,7 +93,7 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
         ids = (
             np.zeros(3, dtype=int)
             if selection is None
-            else analysis.selection_maps(selected, 4)["all"][0, :3].astype(int)
+            else hrf_maps.selection_maps(selected, 4)["all"][0, :3].astype(int)
         )
         effects, scores = independent_ols(runs, [0, 1, 2], small_library, ids)
         np.testing.assert_allclose(result["effects"][:, :3], effects, atol=1e-8)

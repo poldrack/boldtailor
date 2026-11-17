@@ -1,10 +1,12 @@
-"""Owned NumPy arrays with protection against accidental writes."""
+"""Owned NumPy arrays and tables with protection against accidental writes."""
 
 from collections.abc import Iterable
+from copy import deepcopy
 from itertools import chain
 from typing import Any, TypeVar, overload
 
 import numpy as np
+import pandas as pd
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 
 _Scalar = TypeVar("_Scalar", bound=np.generic)
@@ -78,3 +80,14 @@ def sum_arrays(values: Iterable[NDArray[Any]]) -> NDArray[Any]:
     if first is None:
         raise ValueError("sum_arrays requires at least one array")
     return np.asarray(sum(chain((first,), arrays)))
+
+
+def owned_table(frame: pd.DataFrame) -> pd.DataFrame:
+    """A deep copy that also copies the payloads of object columns."""
+    copied = frame.copy(deep=True)
+    for column, dtype in copied.dtypes.items():
+        if dtype != object:
+            continue
+        payloads = [deepcopy(value) for value in copied[column]]
+        copied[column] = pd.Series(payloads, index=copied.index, dtype=object)
+    return copied

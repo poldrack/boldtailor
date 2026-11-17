@@ -29,7 +29,8 @@ from boldtailor.denoising import (
     validate_counts,
     validate_pcstop,
 )
-from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
+from boldtailor._hrf_design import hrf_model
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays
 from boldtailor.hrf_selection import select_hrfs, subset_runs
@@ -417,7 +418,7 @@ def test_scoring_reuses_cached_task_columns(fixture, base, monkeypatch):
     # Run designs (and their blocks) are cached, so a repeated setup must
     # not convolve the task design again for any run or HRF.
     """Verify scoring reuses cached task columns."""
-    from boldtailor._hrf_cv import RunDesign
+    from boldtailor._run_design import RunDesign
 
     data, model = fixture.data, fixture.task_model
     want = setup_for(data, model, fixture.library, base[0])

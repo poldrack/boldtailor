@@ -1,7 +1,8 @@
 # Documentation
 
 The guides below describe the current code on this branch. Import functions
-from their named modules; package initializers are empty.
+from their named modules. The top-level `boldtailor` initializer also exports
+the primary public names; the `boldtailor.workflow` initializer is empty.
 
 | Document | Purpose |
 | --- | --- |

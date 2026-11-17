@@ -15,44 +15,6 @@ from boldtailor.provenance import ProvenanceRecord
 
 
 @dataclass(frozen=True, kw_only=True)
-class TrialEncodingResult:
-    coefficients: np.ndarray
-    predictor_means: np.ndarray
-    predictor_names: tuple[str, ...]
-    train_runs: tuple[int, ...]
-    test_runs: tuple[int, ...]
-    trial_masks: tuple[np.ndarray, ...]
-    predictions: tuple[np.ndarray, ...]
-    run_sse: np.ndarray
-    run_sst: np.ndarray
-    r2: np.ndarray
-    encoding_mode: str
-    train_run_predictor_means: np.ndarray
-    train_run_intercepts: np.ndarray
-    scoring_offsets: np.ndarray
-
-    def __post_init__(self):
-        copy_array_fields_in_place(self, _ENCODING_ARRAYS)
-        copy_array_tuple_fields_in_place(self, ("predictions",))
-        copy_array_tuple_fields_in_place(self, ("trial_masks",), dtype=bool)
-        freeze_sequence_fields_in_place(
-            self, ("predictor_names", "train_runs", "test_runs")
-        )
-
-
-_ENCODING_ARRAYS = (
-    "coefficients",
-    "predictor_means",
-    "run_sse",
-    "run_sst",
-    "r2",
-    "train_run_predictor_means",
-    "train_run_intercepts",
-    "scoring_offsets",
-)
-
-
-@dataclass(frozen=True, kw_only=True)
 class RidgeSelection:
     ridge_alpha: float
     alphas: tuple[float, ...]

@@ -8,29 +8,26 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs
-from boldtailor._deprecation import UNSET, _Unset, deprecated
+from boldtailor._deprecation import UNSET, Unset, deprecated
 from boldtailor._fit_diagnostics import (
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
     rank_warnings,
     delta_r2_activity,
     delta_r2_identity,
-    nested_ols_delta,
     validate_result_dimensions,
 )
+from boldtailor._conventional import nested_ols_delta
 from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor.model import (
     ContrastValue,
-    _prepare_contrasts,
-    _validate_noise_model,
     contrast_metadata,
     contrasts_from_metadata,
+    prepare_contrasts,
+    validate_noise_model,
 )
 from boldtailor.prepared import PreparedDesignAnalysis
-from boldtailor.provenance import (
-    _freeze_mapping,
-    analysis_fingerprint,
-)
+from boldtailor.provenance import analysis_fingerprint, freeze_mapping
 from boldtailor.results import (
     AnalysisResult,
     TaskDeltaR2Result,
@@ -78,9 +75,9 @@ def task_delta_r2_prepared(
     prepared: PreparedDesignAnalysis,
     full_result: AnalysisResult,
     *,
-    contrasts: Mapping[str, ContrastValue] | _Unset = UNSET,
-    noise_model: str | _Unset = UNSET,
-    model_metadata: Mapping[str, object] | None | _Unset = UNSET,
+    contrasts: Mapping[str, ContrastValue] | Unset = UNSET,
+    noise_model: str | Unset = UNSET,
+    model_metadata: Mapping[str, object] | None | Unset = UNSET,
 ) -> TaskDeltaR2Result:
     """Nested-OLS task delta r-squared for a :func:`fit_prepared` result.
 
@@ -272,11 +269,11 @@ def _prepare_fit_spec(
 ) -> _PreparedFitSpec:
     if not isinstance(contrasts, Mapping):
         raise ValueError("contrasts must be a mapping")
-    normalized = _prepare_contrasts(contrasts)
+    normalized = prepare_contrasts(contrasts)
     if not isinstance(noise_model, str):
         raise ValueError("noise_model must be ols or ar1")
-    _validate_noise_model(noise_model)
-    metadata = _freeze_mapping(model_metadata)
+    validate_noise_model(noise_model)
+    metadata = freeze_mapping(model_metadata)
     return _PreparedFitSpec(
         contrasts=MappingProxyType(normalized),
         noise_model=noise_model,

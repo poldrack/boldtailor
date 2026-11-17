@@ -61,7 +61,8 @@ def generated(data, library, cid, task_model, amplitudes, profiled_gain=2.0):
 
 def test_statistics_shapes_and_profiled_columns(task_fixture):
     """Verify statistics shapes and profiled columns."""
-    from boldtailor._hrf_cv import prepare_runs, signal_statistics
+    from boldtailor._hrf_cv import signal_statistics
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     runs = prepare_runs(data, library, NSD)
@@ -90,7 +91,8 @@ def test_statistics_shapes_and_profiled_columns(task_fixture):
 @pytest.mark.parametrize("batch", [1, 2, 32])
 def test_task_model_loro_matches_stacked_nilearn_ols(task_fixture, batch):
     """Verify task model loro matches stacked Nilearn OLS."""
-    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+    from boldtailor._hrf_cv import loro_scores, signal_statistics
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     runs = prepare_runs(data, library, NSD)
@@ -101,7 +103,8 @@ def test_task_model_loro_matches_stacked_nilearn_ols(task_fixture, batch):
 
 def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
     """Verify task only model reproduces mean stimulus statistics."""
-    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+    from boldtailor._hrf_cv import loro_scores, signal_statistics
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     runs = prepare_runs(data, library)
@@ -115,7 +118,8 @@ def test_task_only_model_reproduces_mean_stimulus_statistics(task_fixture):
 
 def test_noise_free_task_model_scores_one_only_with_the_full_model(task_fixture):
     """Verify noise free task model scores one only with the full model."""
-    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+    from boldtailor._hrf_cv import loro_scores, signal_statistics
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     clean = generated(data, library, 2, NSD, amplitudes=[1.0, 4.0, -2.5])
@@ -152,7 +156,7 @@ def test_singular_pooled_training_matrix_marks_candidate_ineligible():
 
 def test_run_level_rank_failures_are_candidate_specific(task_fixture):
     """Verify run level rank failures are candidate specific."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     frames = columns_for(data, library, 0, NSD)
@@ -174,7 +178,7 @@ def test_run_level_rank_failures_are_candidate_specific(task_fixture):
 
 def test_profiled_column_inside_nuisance_span_is_ineligible(task_fixture):
     """Verify profiled column inside nuisance span is ineligible."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     frames = columns_for(data, library, 1, NSD)
@@ -191,7 +195,7 @@ def test_profiled_column_inside_nuisance_span_is_ineligible(task_fixture):
 
 def test_trial_eligibility_is_separate_from_task_model_eligibility(task_fixture):
     """Verify trial eligibility is separate from task model eligibility."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     run = prepare_runs(data, library, NSD)[0]
@@ -202,7 +206,7 @@ def test_trial_eligibility_is_separate_from_task_model_eligibility(task_fixture)
 
 def test_cache_key_includes_task_model_and_modulator_values(task_fixture):
     """Verify cache key includes task model and modulator values."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     base = prepare_runs(data, library, NSD)[0]
@@ -223,7 +227,7 @@ def test_cache_key_includes_task_model_and_modulator_values(task_fixture):
 
 def test_onsets_outside_supported_window_are_rejected(task_fixture):
     """Verify onsets outside supported window are rejected."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     events = list(data.events)
@@ -237,7 +241,8 @@ def test_onsets_outside_supported_window_are_rejected(task_fixture):
 
 def test_run_ineligible_candidate_scores_minus_inf(task_fixture):
     """Verify run ineligible candidate scores minus infinity."""
-    from boldtailor._hrf_cv import loro_scores, prepare_runs, signal_statistics
+    from boldtailor._hrf_cv import loro_scores, signal_statistics
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     frames = columns_for(data, library, 0, NSD)
@@ -271,7 +276,7 @@ def test_prediction_loss_tolerance_sums_absolute_regressor_cross_terms():
 )
 def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column):
     """Verify prepare runs names runs by supplied labels."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     events, confounds = list(data.events), list(data.confounds)
@@ -301,7 +306,7 @@ def test_prepare_runs_names_runs_by_supplied_labels(task_fixture, broken, column
 
 def test_blocks_keep_the_unprojected_task_columns(task_fixture):
     """Verify blocks keep the unprojected task columns."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     runs = prepare_runs(data, library, NSD)
@@ -313,7 +318,7 @@ def test_blocks_keep_the_unprojected_task_columns(task_fixture):
 
 def test_ineligible_blocks_have_zero_unprojected_columns(task_fixture):
     """Verify ineligible blocks have zero unprojected columns."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     frames = columns_for(data, library, 0, NSD)
@@ -337,7 +342,7 @@ def test_cached_run_design_arrays_are_read_only(task_fixture):
     """Process-cached designs are shared by every analysis, so their arrays,
     including those of ineligible candidates, reject in-place writes.
     """
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     run = prepare_runs(data, library, NSD)[0]
@@ -362,7 +367,7 @@ def test_cached_run_design_exposes_no_mutable_bookkeeping(task_fixture):
     """Eligibility is read through methods; no public attribute is a mutable
     container another caller could alter.
     """
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     run = prepare_runs(data, library, NSD)[0]
@@ -379,13 +384,13 @@ def test_trial_matrices_are_cached_per_design_and_released_with_it(task_fixture)
     import gc
     import weakref
 
-    from boldtailor import _hrf_cv
+    from boldtailor import _run_design
 
     data, library = task_fixture
-    run = _hrf_cv.prepare_runs(data, library, NSD)[0]
+    run = _run_design.prepare_runs(data, library, NSD)[0]
     assert run.trial_matrix(1) is run.trial_matrix(1)
     reference = weakref.ref(run)
     del run
-    _hrf_cv._cached_design.cache_clear()
+    _run_design._cached_design.cache_clear()
     gc.collect()
     assert reference() is None

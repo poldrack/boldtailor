@@ -9,14 +9,14 @@ import pandas as pd
 
 from boldtailor._hrf_design import hrf_model
 from boldtailor._task_design import run_task_columns
-from boldtailor._conventional import _preflight_contrasts, _validate_designs
+from boldtailor._conventional import preflight_contrasts, validate_designs
 from boldtailor.design import (
     CompiledDesign,
     compile_designs,
     compile_nuisance_designs,
     kernel_task_columns,
-    _select_modeled_events,
-    _validate_design_matrix,
+    select_modeled_events,
+    validate_design_matrix,
 )
 
 
@@ -29,8 +29,8 @@ def compile_group_designs(data, model, selection):
         # No signal will be fitted, but malformed models must still fail.
         reference = compile_designs(data, model.replace(hrf_model="spm"))
         matrices = tuple(compiled.matrix for compiled in reference)
-        _preflight_contrasts(matrices, model.contrasts)
-        _validate_designs(matrices)
+        preflight_contrasts(matrices, model.contrasts)
+        validate_designs(matrices)
     for cid in ids:
         candidate = selection.library.candidates[cid]
         for run, (e, t, n) in enumerate(
@@ -85,7 +85,7 @@ def group_design_builder(data, model, selection, nuisance, keys):
 
 
 def _task_model_design(events, times, nuisance, candidate, model, run):
-    modeled, excluded, cutoff = _select_modeled_events(
+    modeled, excluded, cutoff = select_modeled_events(
         events, times, model.min_onset, run
     )
     task = run_task_columns(
@@ -98,17 +98,17 @@ def _task_model_design(events, times, nuisance, candidate, model, run):
         oversampling=model.oversampling,
     )
     matrix = pd.concat([task, nuisance.matrix], axis=1)
-    _validate_design_matrix(matrix, run)
+    validate_design_matrix(matrix, run)
     return CompiledDesign(matrix, excluded, cutoff)
 
 
 def _custom_design(events, times, nuisance, candidate, model, run):
-    modeled, excluded, cutoff = _select_modeled_events(
+    modeled, excluded, cutoff = select_modeled_events(
         events, times, model.min_onset, run
     )
     task = kernel_task_columns(times, modeled, hrf_model(candidate), model, run)
     matrix = pd.concat([task, nuisance.matrix], axis=1)
-    _validate_design_matrix(matrix, run)
+    validate_design_matrix(matrix, run)
     return CompiledDesign(matrix, excluded, cutoff)
 
 

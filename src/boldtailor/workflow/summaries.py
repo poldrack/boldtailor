@@ -3,9 +3,9 @@
 import numpy as np
 import pandas as pd
 
-from boldtailor.workflow.export_cifti import _all_selection_maps
+from boldtailor.workflow.hrf_maps import all_selection_maps
 from boldtailor.workflow.inputs import run_summary
-from boldtailor.workflow.tables import _tuned, ridge_boundary_summary
+from boldtailor.workflow.tables import ridge_boundary_summary, tuned_models
 
 
 def median(values):
@@ -41,7 +41,7 @@ def selected_hrfs(selections, library, n_features, top=10):
     """The most often selected HRFs (all runs) with their peak times."""
     if not selections:
         return None
-    ids = _all_selection_maps(selections, n_features)["all"][0]
+    ids = all_selection_maps(selections, n_features)["all"][0]
     ids = ids[np.isfinite(ids)].astype(int)
     if not ids.size:
         return None
@@ -66,7 +66,7 @@ def encoding_scores(beta_models):
             median_encoding_r2=median(outer["encoding_r2"]),
             grayordinates=int(np.isfinite(outer["encoding_r2"]).sum()),
         )
-        for model in _tuned(beta_models)
+        for model in tuned_models(beta_models)
         for split, outer in model.evaluation.items()
     ]
     return pd.DataFrame(rows) if rows else None

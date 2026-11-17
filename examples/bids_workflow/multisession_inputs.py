@@ -12,7 +12,7 @@ from boldtailor.cifti import read_scalar
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_NAMES
 from boldtailor.reliability import library_indices
 from boldtailor.workflow.files import bids_label
-from boldtailor.workflow.outputs import R2_NAMES
+from boldtailor.workflow.export_cifti import R2_NAMES
 from .session_hrf_cache import MAP_NAMES as HRF_NAMES
 
 METRICS = ("mean_beta", "task_t", "task_delta_r2", "rt_r", "rt_abs_r")

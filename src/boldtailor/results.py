@@ -34,7 +34,7 @@ class _NilearnContrast(Protocol):
 
 
 @dataclass(frozen=True, kw_only=True)
-class _ContrastResult:
+class ContrastResult:
     effect: np.ndarray
     variance: np.ndarray
     stat: np.ndarray
@@ -46,16 +46,16 @@ class _ContrastResult:
 
 
 def owned_contrasts(
-    contrasts: Mapping[str, _ContrastResult],
-) -> Mapping[str, _ContrastResult]:
+    contrasts: Mapping[str, ContrastResult],
+) -> Mapping[str, ContrastResult]:
     """Read-only name-to-contrast mapping; each contrast owns its arrays."""
-    if any(not isinstance(value, _ContrastResult) for value in contrasts.values()):
+    if any(not isinstance(value, ContrastResult) for value in contrasts.values()):
         raise ValueError("contrast values must be contrast results")
     return MappingProxyType(dict(contrasts))
 
 
-class _AnalysisAccessors:
-    _contrasts: Mapping[str, _ContrastResult]
+class AnalysisAccessors:
+    _contrasts: Mapping[str, ContrastResult]
     _run_r2: tuple[np.ndarray, ...]
     _r2: np.ndarray
     _provenance: ProvenanceRecord
@@ -91,7 +91,7 @@ class _AnalysisAccessors:
     def one_sided_p_value(self, name: str) -> np.ndarray:
         return self._contrast(name).one_sided_p_value
 
-    def _contrast(self, name: str) -> _ContrastResult:
+    def _contrast(self, name: str) -> ContrastResult:
         try:
             return self._contrasts[name]
         except KeyError as error:
@@ -99,8 +99,8 @@ class _AnalysisAccessors:
 
 
 @dataclass(frozen=True, kw_only=True)
-class AnalysisResult(_AnalysisAccessors):
-    _contrasts: Mapping[str, _ContrastResult]
+class AnalysisResult(AnalysisAccessors):
+    _contrasts: Mapping[str, ContrastResult]
     _design_matrices: tuple[pd.DataFrame, ...]
     _design_provenance: tuple[DesignProvenance, ...]
     _run_r2: tuple[np.ndarray, ...]
@@ -189,7 +189,7 @@ _DELTA_ARRAYS = ("_full_r2", "_nuisance_r2", "_raw_delta_r2", "_delta_r2")
 
 
 def make_result(
-    contrasts: Mapping[str, _ContrastResult],
+    contrasts: Mapping[str, ContrastResult],
     designs: tuple[pd.DataFrame, ...],
     design_provenance: tuple[DesignProvenance, ...],
     run_r2: tuple[np.ndarray, ...],
@@ -295,8 +295,8 @@ def _is_finite_numeric_design(frame: pd.DataFrame) -> bool:
         return False
 
 
-def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
-    return _ContrastResult(
+def contrast_result(contrast: _NilearnContrast) -> ContrastResult:
+    return ContrastResult(
         effect=contrast.effect_size(),
         variance=contrast.effect_variance(),
         stat=contrast.stat(),
@@ -305,7 +305,7 @@ def contrast_result(contrast: _NilearnContrast) -> _ContrastResult:
     )
 
 
-def mask_contrast(result: _ContrastResult, undefined: np.ndarray) -> _ContrastResult:
+def mask_contrast(result: ContrastResult, undefined: np.ndarray) -> ContrastResult:
     """Return a copy with every statistic set to NaN where ``undefined`` is True."""
 
     def masked(values: np.ndarray) -> np.ndarray:
@@ -313,6 +313,6 @@ def mask_contrast(result: _ContrastResult, undefined: np.ndarray) -> _ContrastRe
         out[undefined] = np.nan
         return out
 
-    return _ContrastResult(
-        **{f.name: masked(getattr(result, f.name)) for f in fields(_ContrastResult)}
+    return ContrastResult(
+        **{f.name: masked(getattr(result, f.name)) for f in fields(ContrastResult)}
     )

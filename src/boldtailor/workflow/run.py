@@ -16,6 +16,7 @@ from boldtailor.reliability import curve_correlations
 from boldtailor.workflow import (
     analysis,
     beta_series,
+    hrf_maps,
     inputs,
     outputs,
     plots,
@@ -23,8 +24,11 @@ from boldtailor.workflow import (
     summaries,
     surfaces,
 )
+from boldtailor.workflow.export_cifti import figure_name
+from boldtailor.workflow.figures import tuning_figure
 from boldtailor.workflow.files import min_runs_per_half, odd_even_parity
 from boldtailor.workflow.settings import STAGES, WorkflowSettings
+from boldtailor.workflow.tables import hrf_boundary_table, tuning_table
 
 log = logging.getLogger("boldtailor.workflow")
 SHORT_PARITY = "fewer than two odd or two even runs"
@@ -271,7 +275,7 @@ def _add_reliability_figures(session, *, selections, figures):
     """Insert reliability figures into figures and return the summary tables."""
     if not selections:
         raise ValueError("reliability requires split HRF selections")
-    maps = analysis.selection_maps(selections, len(session.brain))
+    maps = hrf_maps.selection_maps(selections, len(session.brain))
     odd, even = maps["odd"][0], maps["even"][0]
     reliability, figures["HRFReliability"] = plots.parameter_agreement(
         session.library, odd, even
@@ -298,8 +302,8 @@ def _fit_betas(session, *, selections):
 
 def _add_tuning_figures(beta_models, figures):
     """Insert tuning figures into figures and return the tuning table."""
-    tuning = outputs.tuning_table(beta_models)
-    figures["RidgeTuning"] = outputs.tuning_figure(beta_models)
+    tuning = tuning_table(beta_models)
+    figures["RidgeTuning"] = tuning_figure(beta_models)
     if "selected_grayordinates" in tuning:
         figures["FractionSelection"] = plots.fraction_selection_figure(tuning)
     return tuning
@@ -433,13 +437,11 @@ def _render(session, results, figures, artifacts):
         task_model=session.task_model,
         library=session.library,
         glm_summary=results.glm_summary,
-        hrf_summary=outputs.hrf_boundary_table(results.selections),
+        hrf_summary=hrf_boundary_table(results.selections),
         reml_diagnostics=summaries.reml_diagnostics(results.selections),
         reliability=results.reliability,
         tuning=results.tuning,
-        figures={
-            name: payloads[outputs.figure_name(settings, name)] for name in figures
-        },
+        figures={name: payloads[figure_name(settings, name)] for name in figures},
         skipped=results.skipped,
         notes=session.notes,
         manifest=_manifest([a.path for a in artifacts], settings.stem),

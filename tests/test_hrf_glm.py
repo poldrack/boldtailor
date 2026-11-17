@@ -433,7 +433,7 @@ def task_model_problem(two_candidate_library):
 
 def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem):
     """Verify selected GLM group designs equal scored task columns."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
     from boldtailor._hrf_design import hrf_model
     from boldtailor._task_design import expand_events, task_columns
 

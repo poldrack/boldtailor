@@ -2,16 +2,58 @@
 
 from typing import TypedDict
 
-from dataclasses import replace
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
+from boldtailor._arrays import (
+    copy_array_fields_in_place,
+    copy_array_tuple_fields_in_place,
+    freeze_sequence_fields_in_place,
+)
 from boldtailor._task_design import categorical_names
 
 from boldtailor._scalars import is_integer
 from boldtailor._single_trial_fit import r_squared
-from boldtailor.ridge_results import TrialEncodingResult
+
+
+@dataclass(frozen=True, kw_only=True)
+class TrialEncodingResult:
+    coefficients: np.ndarray
+    predictor_means: np.ndarray
+    predictor_names: tuple[str, ...]
+    train_runs: tuple[int, ...]
+    test_runs: tuple[int, ...]
+    trial_masks: tuple[np.ndarray, ...]
+    predictions: tuple[np.ndarray, ...]
+    run_sse: np.ndarray
+    run_sst: np.ndarray
+    r2: np.ndarray
+    encoding_mode: str
+    train_run_predictor_means: np.ndarray
+    train_run_intercepts: np.ndarray
+    scoring_offsets: np.ndarray
+
+    def __post_init__(self):
+        copy_array_fields_in_place(self, _ENCODING_ARRAYS)
+        copy_array_tuple_fields_in_place(self, ("predictions",))
+        copy_array_tuple_fields_in_place(self, ("trial_masks",), dtype=bool)
+        freeze_sequence_fields_in_place(
+            self, ("predictor_names", "train_runs", "test_runs")
+        )
+
+
+_ENCODING_ARRAYS = (
+    "coefficients",
+    "predictor_means",
+    "run_sse",
+    "run_sst",
+    "r2",
+    "train_run_predictor_means",
+    "train_run_intercepts",
+    "scoring_offsets",
+)
 
 
 def _run_indices(values, n_runs, name):
@@ -25,7 +67,7 @@ def _run_indices(values, n_runs, name):
     return tuple(int(i) for i in indices)
 
 
-def _predictor_arrays(predictors, n_trials):
+def predictor_arrays(predictors, n_trials):
     if len(predictors) != len(n_trials) or not predictors:
         raise ValueError("predictor and beta run counts must agree")
     columns = (
@@ -125,7 +167,7 @@ def _within_design(arrays, masks, train):
     return design, values.mean(axis=0)
 
 
-def _training_design(arrays, masks, train, *, encoding_mode="absolute"):
+def training_design(arrays, masks, train, *, encoding_mode="absolute"):
     validate_encoding_mode(encoding_mode)
     if encoding_mode == "within_run":
         return _within_design(arrays, masks, train)
@@ -208,9 +250,9 @@ def evaluate_trial_encoding(
     test = _run_indices(test_runs, len(betas), "test_runs")
     if set(train) & set(test):
         raise ValueError("training and test runs must be disjoint")
-    arrays, columns = _predictor_arrays(predictors, [len(b) for b in betas])
+    arrays, columns = predictor_arrays(predictors, [len(b) for b in betas])
     masks = tuple(np.isfinite(x).all(axis=1) for x in arrays)
-    design, means = _training_design(arrays, masks, train, encoding_mode=encoding_mode)
+    design, means = training_design(arrays, masks, train, encoding_mode=encoding_mode)
     # Absolute mode historically permits an empty individual training run.
     run_means = np.stack(
         [

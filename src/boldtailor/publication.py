@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from filelock import FileLock, Timeout
 
-from boldtailor.logging import _error_code
+from boldtailor.logging import error_code
 
 _CONTROL_SUFFIX = ".boldtailor"
 _FAILURE_LOG = "failures.jsonl"
@@ -434,7 +434,7 @@ def _record_failure(
     """Append one fixed-field line to the best-effort failure ledger."""
     record = {
         "rollback_failed": bool(rollback_errors),
-        "error_code": _error_code(error),
+        "error_code": error_code(error),
         "execution_id": identifier,
         "published": False,
         "status": "failed",

@@ -58,8 +58,12 @@ Software versions are resolved when provenance is created. An uninstalled
 Boldtailor checkout reports its own version as `unknown`; missing dependency
 metadata still raises an error rather than inventing a version.
 
-Keep functions short and separate numerical work from file I/O. All
-`__init__.py` files stay empty. For behavioral changes, write and run failing
+Keep functions short and separate numerical work from file I/O. The top-level
+`__init__.py` exports the primary public names and nothing else; the workflow
+initializer stays empty. A leading underscore means module-private: a name
+used by another module has no underscore, and shared internals live in
+`_private` modules. `tests/test_import_structure.py` enforces this, an
+acyclic import graph, and module-level imports outside the CLI. For behavioral changes, write and run failing
 pytest tests, commit the tests, then implement the change. Use numerical
 oracles that exercise the scientific behavior rather than tests that duplicate
 implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.md).
@@ -68,14 +72,14 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 
 | Area | Modules |
 | --- | --- |
-| Owned arrays, event tables, timing, and source records | `data`, `_arrays`, `_scalars`, `provenance` |
+| Owned arrays, event tables, timing, and source records | `data`, `_run_inputs`, `_arrays`, `_scalars`, `provenance` |
 | Event-based conventional GLMs | `model`, `design`, `_task_design`, `fit`, `_standard_glm`, `_conventional`, `results` |
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
 | Task-model detection from event tables | `task_detection` |
 | Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
-| Trial design construction and OLS/ridge estimation | `single_trial`, `_shared_hrf_fit`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
-| Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
+| Trial design construction and OLS/ridge estimation | `single_trial`, `_shared_hrf_fit`, `_design_inputs`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
+| Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_run_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
 | Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_ar1_moments`, `_numerics` |
 | Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_mixture_threshold` |
@@ -215,7 +219,8 @@ from floating-point roundoff are clipped in `TaskDeltaR2Result.delta_r2`;
 `raw_delta_r2` retains the original values. Single-trial ridge comparisons use
 the actual penalized fit and preserve signed differences.
 All ΔR² entry points record one shared activity schema built by
-`delta_r2_activity`, and compute R² pairs through `nested_ols_delta`; the
+`delta_r2_activity`, and compute R² pairs through
+`_conventional.nested_ols_delta`; the
 result constructor rejects differences below `-NESTED_OLS_TOLERANCE`.
 
 Single-trial ridge projects task columns and signals off the nuisance span,

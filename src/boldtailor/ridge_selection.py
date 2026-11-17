@@ -5,7 +5,8 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import TIE_TOLERANCE
+from boldtailor._constants import TIE_TOLERANCE
+from boldtailor._ridge_cv import score_candidates
 from boldtailor._scalars import is_real
 from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.data import AnalysisData
@@ -20,7 +21,7 @@ from boldtailor.ridge_results import (
 )
 
 
-def _alpha_grid(alphas):
+def alpha_grid(alphas):
     grid = tuple(validate_alpha(a) for a in alphas)
     if not grid or len(set(grid)) != len(grid):
         raise ValueError("alphas must be a nonempty grid of distinct penalties")
@@ -54,7 +55,7 @@ def select_ridge_penalty(
     candidate_r2, alphas = paired_scores(
         scores, alphas, kind="normalized_ridge", grid_name="alphas"
     )
-    grid = _alpha_grid(alphas)
+    grid = alpha_grid(alphas)
     scores = np.asarray(candidate_r2, dtype=float)
     if scores.ndim != 2 or scores.shape[0] != len(grid):
         raise ValueError("candidate_r2 must have one row per alpha")
@@ -99,9 +100,7 @@ def score_ridge_candidates(
     SPM. This returns feature-level scores, without choosing a block-local
     penalty. Combine blocks before calling select_ridge_penalty.
     """
-    from boldtailor._ridge_cv import score_candidates
-
-    grid = tuple(sorted(_alpha_grid(alphas)))
+    grid = tuple(sorted(alpha_grid(alphas)))
     return score_candidates(
         data,
         predictors,

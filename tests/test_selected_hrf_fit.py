@@ -191,7 +191,7 @@ def test_grouped_results_own_nested_metadata_and_record_designs(selected_fixture
 
 def test_selected_design_rebuilds_the_fitted_matrix_on_demand(selected_fixture):
     """Verify selected design rebuilds the fitted matrix on demand."""
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
     from boldtailor.single_trial import fit_selected_hrfs
 
     data, selection = selected_fixture

@@ -10,7 +10,7 @@ import pytest
 
 from boldtailor.cli import build_parser, settings_from_args
 from boldtailor.hrf_options import RemlHrfOptions
-from boldtailor.workflow import analysis, inputs, outputs, report
+from boldtailor.workflow import analysis, hrf_maps, inputs, report
 from boldtailor.workflow.run import describe_inputs, run_workflow
 from boldtailor.workflow.settings import WorkflowSettings
 from boldtailor.task_detection import detect_task_model
@@ -101,8 +101,8 @@ def test_reml_blocks_preserve_rho_and_diagnostics(
     parts = analysis.select_hrfs(
         runs, root, [indices[:1], indices[1:]], small_library, n_jobs=2, **options
     )
-    expected = outputs._all_selection_maps(whole, len(rho))["all"]
-    actual = outputs._all_selection_maps(parts, len(rho))["all"]
+    expected = hrf_maps.all_selection_maps(whole, len(rho))["all"]
+    actual = hrf_maps.all_selection_maps(parts, len(rho))["all"]
     np.testing.assert_allclose(actual, expected, equal_nan=True, atol=1e-8)
     for block, bundle in parts.items():
         np.testing.assert_array_equal(

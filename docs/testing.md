@@ -47,18 +47,18 @@ The integration suite is additional to every row.
 | `model`, `design`, `_task_design`, task detection | `tests/test_model.py tests/test_design.py tests/test_task_model.py tests/test_task_design.py tests/test_task_detection.py` | Conventional, selected-HRF and single-trial fitting tests |
 | `fit`, `_standard_glm`, `_conventional`, results | `tests/test_fit.py tests/test_multirun.py tests/test_fit_diagnostics.py tests/test_result_schemas.py` | `tests/test_prepared_fit.py tests/test_hrf_glm.py` |
 | `prepared`, `prepared_fit` | `tests/test_prepared_fit.py` | `tests/test_fit_diagnostics.py tests/test_hrf_glm.py` |
-| HRF libraries, designs, selection, CV | `tests/test_hrf*.py tests/test_glmsingle_hrf.py tests/test_sobol_hrf_library.py` | `tests/test_selected_hrf_fit.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
+| HRF libraries, designs, selection, CV, `_run_design`, `_design_inputs` | `tests/test_hrf*.py tests/test_design_inputs.py tests/test_glmsingle_hrf.py tests/test_sobol_hrf_library.py` | `tests/test_selected_hrf_fit.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
 | `_hrf_glm*`, `_hrf_assignment` | `tests/test_hrf_glm.py tests/test_fit.py` | `tests/workflow/test_analysis.py` |
 | Single-trial fitting, `_selected_hrf_fit`, `_shared_hrf_fit` | `tests/test_single_trial*.py tests/test_selected_hrf_fit.py` | `tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
 | Ridge selection, fractional ridge, encoding | `tests/test_ridge*.py tests/test_fractional*.py tests/test_trial_encoding.py` | `tests/workflow/test_beta_series.py` |
 | Denoising and mixture thresholds | `tests/test_denoising*.py tests/test_mixture_threshold.py tests/test_within_run_cv_isolation.py` | `tests/test_hrf_selection.py tests/test_fit.py` |
-| Data ownership, `_arrays`, `_scalars`, result dataclasses | `tests/test_data.py tests/test_arrays.py tests/test_mutation_helpers.py tests/test_result_schemas.py` | Broad fan-out: run full suite for shared helper changes |
+| Data ownership, `_run_inputs`, `_arrays`, `_scalars`, result dataclasses | `tests/test_data.py tests/test_arrays.py tests/test_mutation_helpers.py tests/test_result_schemas.py` | Broad fan-out: run full suite for shared helper changes |
 | Provenance, logging, fit lifecycle | `tests/test_provenance.py tests/test_bids_provenance.py tests/test_logging.py tests/test_lifecycle.py tests/test_fit_lifecycle.py tests/test_software.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_denoising.py` |
 | Publication and CIFTI | `tests/test_publication*.py tests/test_cifti.py` | `tests/workflow/test_outputs.py tests/workflow/test_files.py` |
 | Reliability and diagnostics | `tests/test_reliability.py tests/test_diagnostics.py tests/test_fit_diagnostics.py` | `tests/workflow/test_analysis.py tests/workflow/test_plots.py` |
 | Workflow, CLI, reports | `tests/workflow/` | Select a matching file during edits; run the directory for cross-stage changes |
 | Parallel execution | `tests/test_parallel.py` | `tests/workflow/test_analysis.py tests/workflow/test_beta_series.py` |
-| Packaging, public names, dependencies | `tests/test_package_build.py tests/test_distribution.py tests/test_public_names.py tests/workflow/test_package_layout.py` | Full suite and installed-wheel check in the developer guide |
+| Packaging, public names, import structure, dependencies | `tests/test_import_structure.py tests/test_package_build.py tests/test_distribution.py tests/test_public_names.py tests/workflow/test_package_layout.py` | Full suite and installed-wheel check in the developer guide |
 | Test markers or selection rules | `tests/test_test_selection.py` | Integration selection and full suite |
 
 The full default suite uses `testpaths = ["tests"]`. It does not automatically

@@ -154,4 +154,4 @@ def test_prepared_shares_the_run_count_validator_with_data():
     import boldtailor.data as data_module
     import boldtailor.prepared as prepared_module
 
-    assert prepared_module._validate_run_count is data_module._validate_run_count
+    assert prepared_module.validate_run_count is data_module.validate_run_count

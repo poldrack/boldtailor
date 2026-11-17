@@ -78,7 +78,7 @@ def emit_event(
 
     Omitted fields inherit; None clears a field for this event only.
     """
-    payload = _make_event(
+    payload = make_event(
         event=event,
         stage=stage,
         level=level,
@@ -88,11 +88,11 @@ def emit_event(
         analysis_id=analysis_id,
         run_index=run_index,
     )
-    _emit_record(payload, level=level)
+    emit_record(payload, level=level)
     return payload
 
 
-def _emit_record(payload: Mapping[str, object], *, level: int = logging.INFO) -> None:
+def emit_record(payload: Mapping[str, object], *, level: int = logging.INFO) -> None:
     logging.getLogger(_LOGGER_NAME).log(
         level,
         json.dumps(
@@ -127,7 +127,7 @@ def _context_updates(
     return {key: value for key, value in values.items() if value is not _INHERIT}
 
 
-def _make_event(
+def make_event(
     event: str,
     *,
     stage: str,
@@ -153,7 +153,7 @@ def _make_event(
     )
     payload.update(_merge_context(_LOG_CONTEXT.get(), updates))
     if error is not None:
-        payload["error_code"] = _error_code(error)
+        payload["error_code"] = error_code(error)
     return MappingProxyType(payload)
 
 
@@ -184,7 +184,7 @@ def _timestamp() -> str:
     )
 
 
-def _error_code(error: Exception | str) -> str:
+def error_code(error: Exception | str) -> str:
     if isinstance(error, (ArithmeticError, np.linalg.LinAlgError)):
         return "numerical_failure"
     if isinstance(error, (ValueError, TypeError)):

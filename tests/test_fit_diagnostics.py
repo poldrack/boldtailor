@@ -26,7 +26,7 @@ def test_contrast_metadata_preserves_expression_weights_and_ownership():
 
 def test_nested_ols_delta_returns_r2_pair_and_rejects_nonmonotone(single_run_problem):
     """Verify nested OLS delta returns R-squared pair and rejects nonmonotone."""
-    from boldtailor._fit_diagnostics import nested_ols_delta
+    from boldtailor._conventional import nested_ols_delta
 
     signals, _, design, _ = single_run_problem
     nuisance = design[["constant"]] if "constant" in design else design.iloc[:, -1:]

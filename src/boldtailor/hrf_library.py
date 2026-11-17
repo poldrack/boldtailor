@@ -87,7 +87,7 @@ def _sampling(tr, oversampling):
     return float(tr) / int(oversampling)
 
 
-def _peak_normalized(values):
+def peak_normalized(values):
     """Scale a sampled kernel to unit peak so betas are peak BOLD responses."""
     if not np.isfinite(values).all() or np.max(values) <= 0:
         raise ValueError("HRF kernel must be finite with a positive peak")
@@ -204,10 +204,10 @@ class HrfCandidate:
     def kernel(self, tr, oversampling=OVERSAMPLING):
         dt = _sampling(tr, oversampling)
         if self._kind == "spm":
-            return _peak_normalized(spm_hrf(tr, oversampling))
+            return peak_normalized(spm_hrf(tr, oversampling))
         if self._kind == "glmsingle":
-            return _peak_normalized(_glmsingle_kernel(self._parameters[0], dt))
-        return _peak_normalized(_double_gamma_kernel(self._parameters, dt))
+            return peak_normalized(_glmsingle_kernel(self._parameters[0], dt))
+        return peak_normalized(_double_gamma_kernel(self._parameters, dt))
 
 
 class HrfLibrary:

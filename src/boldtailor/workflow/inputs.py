@@ -191,7 +191,7 @@ def block_signals(runs, indices):
     ]
 
 
-def _trimmed_sources(run, root, indices):
+def trimmed_sources(run, root, indices):
     sources = run_sources(run, Path(root), np.asarray(indices))
     return sources.replace(
         signal=sources.signal.replace(
@@ -210,7 +210,7 @@ def load_block(runs, root, indices, task_model):
         [r.events for r in runs],
         frame_times=[r.frame_times for r in runs],
         confounds=[r.confounds for r in runs],
-        sources=[_trimmed_sources(r, root, indices) for r in runs],
+        sources=[trimmed_sources(r, root, indices) for r in runs],
         provenance_metadata={
             "event_encoding": "raw_trials_with_task_model",
             "task_model": task_model.to_dict(),

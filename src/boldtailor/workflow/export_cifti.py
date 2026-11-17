@@ -9,7 +9,6 @@ from boldtailor.design import expand_events
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_MAP_NAMES
 from boldtailor.reliability import CORRELATION_NAMES, curve_correlations
 from boldtailor.ridge_results import FractionSelection
-from boldtailor.workflow.analysis import selection_maps
 from boldtailor.workflow.artifacts import (
     figure_artifact,
     json_artifact,
@@ -19,18 +18,18 @@ from boldtailor.workflow.artifacts import (
     table_artifact,
 )
 from boldtailor.workflow.hrf_maps import (
-    CV_SELECTION_NAMES as SELECTION_NAMES,
     all_selection_maps,
+    selection_maps,
     selection_names,
 )
 from boldtailor.workflow.inputs import run_summary
 from boldtailor.workflow.manifest import (
-    _alpha_tuning_metadata,
-    _fraction_tuning_metadata,
-    _outer_metadata,
-    _selection_records,
+    alpha_tuning_metadata,
+    fraction_tuning_metadata,
+    outer_metadata,
+    selection_records,
 )
-from boldtailor.workflow.tables import _predictor_table, tuning_table
+from boldtailor.workflow.tables import predictor_table, tuning_table
 
 R2_NAMES = ["full_r2", "confounds_r2", "task_delta_r2"]
 PREDICTION_NAMES = ["selected_test_r2", "canonical_test_r2", "delta_test_r2"]
@@ -164,17 +163,12 @@ def _split_artifacts(settings, brain, library, maps):
     return artifacts
 
 
-def _all_selection_maps(selections, n_features):
-    """All-run maps use the same estimator-specific schema as split maps."""
-    return all_selection_maps(selections, n_features)
-
-
 def hrf_artifacts(settings, brain, selections, library, *, include_splits=True):
     """All-run selection, library and provenance; odd/even splits on request."""
     maps = (
         selection_maps(selections, len(brain))
         if include_splits
-        else _all_selection_maps(selections, len(brain))
+        else all_selection_maps(selections, len(brain))
     )
     scopes = ("all", "odd", "even") if include_splits else ("all",)
     artifacts = [
@@ -182,7 +176,7 @@ def hrf_artifacts(settings, brain, selections, library, *, include_splits=True):
         *_selection_artifacts(settings, brain, library, maps, "all"),
         json_artifact(
             f"{settings.stem}_desc-HRF_provenance.json",
-            _selection_records(selections, scopes),
+            selection_records(selections, scopes),
         ),
     ]
     if include_splits:
@@ -249,7 +243,7 @@ def _tuned_artifacts(settings, brain, runs, model, library):
     base = f"{settings.stem}_desc-{model.name}"
     artifacts = [
         table_artifact(
-            base + "_predictors.tsv", _predictor_table(runs, model.predictors)
+            base + "_predictors.tsv", predictor_table(runs, model.predictors)
         ),
         json_artifact(base + "_metadata.json", model.cv_provenance),
     ]
@@ -332,9 +326,7 @@ def _tuning_artifacts(settings, brain, mode, scope, tuned, table):
             _fraction_selection_maps(settings, brain, descriptor, tuned["selection"])
         )
     meta = (
-        _fraction_tuning_metadata(tuned)
-        if fractional
-        else _alpha_tuning_metadata(tuned)
+        fraction_tuning_metadata(tuned) if fractional else alpha_tuning_metadata(tuned)
     )
     return artifacts + _tuning_files(
         settings, descriptor, mode, scope, tuned, table, meta
@@ -398,9 +390,7 @@ def _outer_artifacts(settings, brain, runs, mode, scope, outer, library):
         *_outer_maps(settings, brain, descriptor, scope, outer, ids),
         _outer_loss(base, outer),
         json_artifact(base + "_provenance.json", outer["provenance"]),
-        json_artifact(
-            base + "_metadata.json", _outer_metadata(runs, outer, fractional)
-        ),
+        json_artifact(base + "_metadata.json", outer_metadata(runs, outer, fractional)),
         parameter_artifact(
             brain, library, ids, _map_path(settings, descriptor, "hrfparameters")
         ),
@@ -454,7 +444,7 @@ def figure_name(settings, name):
     return f"{settings.stem}_desc-{name}_plot.png"
 
 
-def _figure_artifacts(settings, figures):
+def figure_artifacts(settings, figures):
     return [
         figure_artifact(figure_name(settings, name), figure)
         for name, figure in (figures or {}).items()

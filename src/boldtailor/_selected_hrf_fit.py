@@ -7,14 +7,12 @@ import json
 
 import numpy as np
 
-from boldtailor._hrf_cv import prepare_runs
+from boldtailor._run_design import prepare_runs
 from boldtailor.hrf_results import validate_selection
-from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING
-from boldtailor._single_trial_design import (
-    _validate_events,
-    check_trial_ids,
-    trial_table,
-)
+from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._constants import OVERSAMPLING
+from boldtailor._single_trial_design import check_trial_ids, trial_table
+from boldtailor._design_inputs import validate_events
 from boldtailor._single_trial_fit import fit_trial_run, r_squared
 from boldtailor._fractional_ridge import (
     regularization,
@@ -30,7 +28,7 @@ from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 
 def _tables(data, labels):
     for events, times, label in zip(data.events, data.frame_times, labels, strict=True):
-        _validate_events(events, times, label)
+        validate_events(events, times, label)
     trials = trial_table(data.events, labels)
     for run, confounds in enumerate(data.confounds):
         check_trial_ids(trials.trial_id[trials.run_index == run], confounds)

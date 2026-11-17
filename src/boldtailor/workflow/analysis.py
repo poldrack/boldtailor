@@ -19,6 +19,7 @@ from boldtailor.workflow._records import (
 )
 
 from boldtailor.fit import fit, task_delta_r2
+from boldtailor.fractional_ridge import regularization
 from boldtailor import hrf_selection as selection_api
 from boldtailor.hrf_selection import evaluate_hrf_split
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
@@ -27,11 +28,6 @@ from boldtailor.diagnostics import correlate_rt
 from boldtailor.parallel import map_blocks
 from boldtailor.workflow.files import odd_even_parity, reaction_times
 from boldtailor.workflow.inputs import load_block
-from boldtailor.workflow.hrf_maps import (
-    selection_method,
-    selection_names,
-    selection_values,
-)
 
 log = logging.getLogger("boldtailor.workflow")
 
@@ -95,27 +91,6 @@ def select_hrfs(
         selections[tuple(indices)] = result
         log.info("HRF selection: %s–%s", indices[0], indices[-1])
     return selections
-
-
-def selection_maps(selections, n_features):
-    rows = len(selection_names(selection_method(selections)))
-    maps = {
-        name: np.full(
-            (rows if name in ("all", "odd", "even") else 3, n_features), np.nan
-        )
-        for name in ("all", "odd", "even", "odd_to_even", "even_to_odd")
-    }
-    for indices, bundle in selections.items():
-        for name in ("all", "odd", "even"):
-            result = bundle[name] if name == "all" else bundle[name].training_selection
-            maps[name][:, list(indices)] = selection_values(result)
-        for name in ("odd", "even"):
-            result = bundle[name]
-            target = "odd_to_even" if name == "odd" else "even_to_odd"
-            maps[target][:, list(indices)] = np.stack(
-                [result.test_r2, result.canonical_test_r2, result.delta_test_r2]
-            )
-    return maps
 
 
 def _glm_block(job, runs, root, model):
@@ -248,8 +223,6 @@ def fit_beta_series(
 ) -> BetaFit:
     """Fit raw trials at the supplied penalty; tuning is a separate operation."""
     hrf = "canonical" if selections is None else "optimized"
-    from boldtailor.fractional_ridge import regularization
-
     alpha, fractions = regularization(
         ridge_alpha, ridge_fraction, runs[0].image.shape[1]
     )

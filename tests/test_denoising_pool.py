@@ -19,7 +19,8 @@ from boldtailor.denoising import (
     pool_masks,
     run_components,
 )
-from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
+from boldtailor._hrf_design import hrf_model
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor._task_design import run_task_columns
 from boldtailor.data import from_arrays

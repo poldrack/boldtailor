@@ -5,7 +5,8 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import TIE_TOLERANCE
+from boldtailor._constants import TIE_TOLERANCE
+from boldtailor._ridge_cv import score_candidates
 from boldtailor._fractional_ridge import (  # public re-exports
     NORM_BASIS,
     fraction_alphas,
@@ -97,8 +98,6 @@ def score_fraction_candidates(
     unpenalized. Only training betas use each candidate fraction; held-out OLS
     targets use the same training-selected HRF for all candidates.
     """
-    from boldtailor._ridge_cv import score_candidates
-
     grid = tuple(sorted(fraction_grid(fractions), reverse=True))
     return score_candidates(
         data,

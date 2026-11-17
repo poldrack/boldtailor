@@ -19,7 +19,7 @@ from boldtailor.workflow.artifacts import (
     table_artifact,
 )
 from boldtailor.workflow.files import input_paths
-from boldtailor.workflow.inputs import _trimmed_sources
+from boldtailor.workflow.inputs import trimmed_sources
 
 MAP_NAMES = ("hrf_id", "selected_cv_r2", "canonical_cv_r2", "delta_cv_r2")
 
@@ -33,7 +33,7 @@ def request_metadata(runs, root, library, limit, task_model):
         records.append(
             dict(
                 label=run.label,
-                sources=_trimmed_sources(run, root, np.array([], dtype=int)).to_dict(),
+                sources=trimmed_sources(run, root, np.array([], dtype=int)).to_dict(),
                 confound_columns=list(run.confounds),
                 design_inputs=digest.hexdigest(),
             )

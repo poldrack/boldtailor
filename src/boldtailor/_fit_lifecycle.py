@@ -7,13 +7,16 @@ import logging
 from uuid import uuid4
 
 from boldtailor.logging import (
-    _make_event,
     append_event_history,
     bind_context,
     emit_event,
+    make_event,
 )
-from boldtailor.provenance import software_environment
-from boldtailor.provenance import ProvenanceRecord, extend_provenance
+from boldtailor.provenance import (
+    ProvenanceRecord,
+    extend_provenance,
+    software_environment,
+)
 
 
 @dataclass
@@ -45,7 +48,7 @@ def build_fit_provenance(
         data_id=operation.parent.metadata_fingerprint,
         inherit=False,
     ):
-        completion = _make_event(
+        completion = make_event(
             f"{operation.name}_completed",
             stage="fit",
             analysis_id=operation.analysis_id,

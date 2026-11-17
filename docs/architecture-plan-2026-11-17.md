@@ -19,7 +19,7 @@ provenance records, `WorkflowSettings`).
 - **Phase 1: done** (merged to `main`, `d0331a4`). The fractional whole-array
   oracle in `tests/workflow/test_beta_series.py` had encoded the inner-fold
   bug and now passes the task model explicitly.
-- **Phase 2: done** (branch `refactor/phase2-seal-caches`). Notes:
+- **Phase 2: done** (merged to `main`, `55155ce`). Notes:
   - `HrfLibrary.origin` returns a read-only view of a fresh deep copy rather
     than a deep-frozen structure, so existing `dict(library.origin)`
     comparisons and JSON serialization keep working.
@@ -28,7 +28,27 @@ provenance records, `WorkflowSettings`).
     and is removed; existing stdout-capture tests cover both fit paths.
   - Not done here: splitting `RunDesign`'s two roles (phase 7), and the
     `RunDesign.expanded` / `.events` DataFrames, which remain mutable.
-- Phases 3–7: not started.
+- **Phase 3: done** (branch `refactor/phase3-untangle-imports`).
+  `tests/test_import_structure.py` now enforces an acyclic import graph, no
+  cross-module imports of `_private` names, module-level package imports
+  outside the CLI, and no re-export facades in `workflow`. Notes:
+  - New leaf modules: `_design_inputs` (event, nuisance and onset
+    validation), `_run_inputs` (signal, timing and source normalization
+    shared by `data` and `prepared`), `_run_design` (`RunDesign`,
+    `prepare_runs`). `_hrf_cv` keeps only the CV statistics.
+  - `subset_runs` lives in `data`; `TrialEncodingResult` in
+    `trial_encoding`; `nested_ols_delta` in `_conventional`; `owned_table`
+    in `_arrays`; `selection_maps` in `workflow.hrf_maps`.
+  - Renames beyond dropping the underscore: `_basis` -> `column_basis`,
+    `_tuned` -> `tuned_models`, `provenance._metadata_fingerprint` ->
+    `sources_fingerprint` (each would otherwise collide with existing names).
+  - `workflow.outputs` no longer re-exports; examples and tests import from
+    the owning modules. `hrf_selection` still imports `prepare_runs` and
+    `subset_runs` because `docs/api.md` documents them there.
+  - Left as is: `denoising.__all__` re-exports its three result classes
+    (public module, deliberate), and `experiments/` still reads constants
+    through `_hrf_design`.
+- Phases 4–7: not started.
 
 ## Decisions already made
 

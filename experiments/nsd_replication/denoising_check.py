@@ -46,7 +46,8 @@ from boldtailor.denoising import (
     choose_count,
     select_component_count,
 )
-from boldtailor._hrf_cv import pooled_amplitude, prepare_runs
+from boldtailor._hrf_cv import pooled_amplitude
+from boldtailor._run_design import prepare_runs
 from boldtailor.hrf_library import default_hrf_library
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.parallel import map_blocks

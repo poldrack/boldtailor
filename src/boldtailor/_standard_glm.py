@@ -12,9 +12,9 @@ from boldtailor._fit_diagnostics import (
     rank_warnings,
     delta_r2_activity,
     delta_r2_identity,
-    nested_ols_delta,
     validate_result_dimensions,
 )
+from boldtailor._conventional import nested_ols_delta
 from boldtailor.data import AnalysisData
 from boldtailor.design import CompiledDesign, compile_designs, compile_nuisance_designs
 from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation

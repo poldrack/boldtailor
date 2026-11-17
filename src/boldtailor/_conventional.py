@@ -10,6 +10,10 @@ from nilearn.glm import compute_contrast
 from nilearn.glm.contrasts import expression_to_contrast_vector
 from nilearn.glm.first_level import run_glm
 
+from boldtailor._fit_diagnostics import (
+    DIAGNOSTIC_NOISE_MODEL,
+    validate_nested_ols_delta,
+)
 from boldtailor.model import ContrastValue
 from boldtailor.results import contrast_result, mask_contrast
 
@@ -44,8 +48,8 @@ def fit_designs(
     contrasts: Mapping[str, ContrastValue],
     noise_model: str,
 ) -> ConventionalFit:
-    resolved = _preflight_contrasts(designs, contrasts)
-    _validate_designs(designs)
+    resolved = preflight_contrasts(designs, contrasts)
+    validate_designs(designs)
     run_fits = tuple(
         _fit_run(signal, design, run_contrasts, noise_model)
         for signal, design, run_contrasts in zip(
@@ -70,7 +74,7 @@ def fit_r2_designs(
     designs: Sequence[pd.DataFrame],
     noise_model: str,
 ) -> np.ndarray:
-    _validate_designs(designs)
+    validate_designs(designs)
     fits = tuple(
         _fit_glm(signal, design.to_numpy(), noise_model)
         for signal, design in zip(signals, designs, strict=True)
@@ -78,6 +82,18 @@ def fit_r2_designs(
     residual_sum = np.sum([fit.residual_sum for fit in fits], axis=0)
     total_sum = np.sum([fit.total_sum for fit in fits], axis=0)
     return _r2_from_sums(residual_sum, total_sum)
+
+
+def nested_ols_delta(signals, full_designs, nuisance_designs, *, allow_undefined):
+    """Return (full R2, nuisance R2) from nested OLS fits; guard monotonicity."""
+    full = fit_r2_designs(signals, full_designs, DIAGNOSTIC_NOISE_MODEL)
+    nuisance = fit_r2_designs(signals, nuisance_designs, DIAGNOSTIC_NOISE_MODEL)
+    if not allow_undefined and not (
+        np.isfinite(full).all() and np.isfinite(nuisance).all()
+    ):
+        raise ValueError("diagnostic fit produced nonfinite r-squared values")
+    validate_nested_ols_delta(full - nuisance)
+    return full, nuisance
 
 
 def _fit_run(
@@ -154,7 +170,7 @@ def _fixed_effects(contrasts: list[object]) -> object:
     return (1.0 / len(contrasts)) * combined
 
 
-def _preflight_contrasts(
+def preflight_contrasts(
     designs: Sequence[pd.DataFrame],
     contrasts: Mapping[str, ContrastValue],
 ) -> tuple[Mapping[str, np.ndarray], ...]:
@@ -272,7 +288,7 @@ def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
         )
 
 
-def _validate_designs(designs: Sequence[pd.DataFrame]) -> None:
+def validate_designs(designs: Sequence[pd.DataFrame]) -> None:
     for run, design in enumerate(designs):
         matrix = design.to_numpy()
         _warn_if_rank_deficient(matrix, run)

@@ -3,59 +3,17 @@
 from boldtailor.publication import Artifact, publish_artifact_set
 from boldtailor.workflow.artifacts import dataset_description, json_artifact
 from boldtailor.workflow.export_cifti import (
-    PREDICTION_NAMES,
-    R2_NAMES,
-    SELECTION_NAMES,
-    _all_selection_maps,
-    _figure_artifacts,
     activation_artifacts,
     beta_model_artifacts,
-    figure_name,
-    fraction_fit_artifacts,
+    figure_artifacts,
     glm_artifacts,
     hrf_artifacts,
     input_artifacts,
 )
 from boldtailor.workflow.files import input_paths
-from boldtailor.workflow.figures import plot_tuning, tuning_figure
 from boldtailor.workflow.manifest import metadata
-from boldtailor.workflow.tables import (
-    hrf_boundary_summary,
-    hrf_boundary_table,
-    ridge_boundary_summary,
-    tuning_rows,
-    tuning_table,
-)
 
 LOCK_TIMEOUT = 24 * 3600.0  # another session may hold the writer lock for long
-
-__all__ = [
-    "LOCK_TIMEOUT",
-    "PREDICTION_NAMES",
-    "R2_NAMES",
-    "SELECTION_NAMES",
-    "activation_artifacts",
-    "beta_model_artifacts",
-    "check_output",
-    "figure_name",
-    "fraction_fit_artifacts",
-    "glm_artifacts",
-    "hrf_artifacts",
-    "hrf_boundary_summary",
-    "hrf_boundary_table",
-    "input_artifacts",
-    "metadata",
-    "metadata_name",
-    "plot_tuning",
-    "publish_workflow",
-    "report_name",
-    "ridge_boundary_summary",
-    "save_workflow",
-    "tuning_figure",
-    "tuning_rows",
-    "tuning_table",
-    "workflow_artifacts",
-]
 
 
 def _session_files(settings):
@@ -148,7 +106,7 @@ def workflow_artifacts(
         beta_models,
         activation=activation,
         include_hrf_splits=include_hrf_splits,
-    ) + _figure_artifacts(settings, figures)
+    ) + figure_artifacts(settings, figures)
     listed = [a.path for a in artifacts] + [metadata_name(settings)]
     settings_file = metadata(
         runs,

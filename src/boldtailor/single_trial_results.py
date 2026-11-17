@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._arrays import (
-    copy_array_tuple_fields_in_place,
     copy_array_fields_in_place,
+    copy_array_tuple_fields_in_place,
+    owned_table,
     readonly_array,
     set_fields_in_place,
 )
-from boldtailor.data import _owned_table
 from boldtailor.provenance import ProvenanceRecord
 
 
@@ -96,13 +96,13 @@ class SingleTrialResult:
         copy_array_fields_in_place(self, ("full_r2", "nuisance_r2", "delta_r2"))
         set_fields_in_place(
             self,
-            _trial_table=_owned_table(self._trial_table),
+            _trial_table=owned_table(self._trial_table),
             _diagnostics=deepcopy(self._diagnostics),
         )
 
     @property
     def trial_table(self):
-        return _owned_table(self._trial_table)
+        return owned_table(self._trial_table)
 
     @property
     def diagnostics(self):

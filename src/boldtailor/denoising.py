@@ -52,17 +52,14 @@ from boldtailor._arrays import (
     sum_arrays,
 )
 from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
-from boldtailor._hrf_cv import (
-    _basis,
-    _check_task_rank,
-    pooled_amplitude,
-    prepare_runs,
-)
+from boldtailor._hrf_cv import pooled_amplitude
+from boldtailor._run_design import check_task_rank, column_basis, prepare_runs
 from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
 from boldtailor._scalars import is_integer, is_real
-from boldtailor._single_trial_design import _nuisance_matrix
+from boldtailor._design_inputs import nuisance_matrix
 from boldtailor._single_trial_fit import nuisance_span
-from boldtailor.data import AnalysisData, _owned_table, run_labels_for
+from boldtailor.data import AnalysisData, run_labels_for
+from boldtailor._arrays import owned_table
 from boldtailor.denoising_results import (
     DenoisingFold,
     DenoisingResult,
@@ -398,7 +395,7 @@ def _validate_count(count) -> int:
 
 def _projected_pool(signal, confounds, pool):
     """Unit-norm projected pool columns and each column's norm amplification."""
-    q, _ = nuisance_span(_nuisance_matrix(confounds, len(signal)).to_numpy())
+    q, _ = nuisance_span(nuisance_matrix(confounds, len(signal)).to_numpy())
     y = np.asarray(signal, dtype=float)[:, pool]
     residual = y - q @ (q.T @ y)
     # Numerical zero only, as in HRF selection: no weak-signal threshold.
@@ -663,7 +660,7 @@ def _training_statistics(terms, pcs):
     x = terms.x - w @ (w.T @ terms.x)
     y = terms.y - w @ (w.T @ terms.y)
     dof = len(x) - terms.nuisance_rank - w.shape[1]
-    _check_task_rank(x, terms.raw, dof)
+    check_task_rank(x, terms.raw, dof)
     return x.T @ x, x.T @ y
 
 
@@ -882,8 +879,8 @@ class CountSelection:
         freeze_sequence_fields_in_place(self, ("counts", "count_scores"))
         set_fields_in_place(
             self,
-            fold_scores=_owned_table(self.fold_scores),
-            scores=_owned_table(self.scores),
+            fold_scores=owned_table(self.fold_scores),
+            scores=owned_table(self.scores),
         )
 
 
@@ -969,7 +966,7 @@ class _Fit:
 def _rank_reason(x, raw, dof) -> str:
     """Why the projected task design is not estimable, or empty when it is."""
     try:
-        _check_task_rank(x, raw, dof)
+        check_task_rank(x, raw, dof)
     except ValueError as error:
         return str(error)
     return ""
@@ -1015,7 +1012,7 @@ def ar1_coefficients(residuals) -> np.ndarray:
 
 def _off(nuisance, x, y):
     """``x`` and ``y`` projected off the span of ``nuisance``."""
-    q = _basis(nuisance)
+    q = column_basis(nuisance)
     return x - q @ (q.T @ x), y - q @ (q.T @ y)
 
 

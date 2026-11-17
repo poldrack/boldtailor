@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from boldtailor._hrf_cv import subset_runs
+from boldtailor.data import subset_runs
 from boldtailor._hrf_reml import prepare_reml_groups, iter_trial_designs
 from boldtailor.hrf_options import RemlHrfOptions
 from boldtailor.hrf_selection import select_hrfs

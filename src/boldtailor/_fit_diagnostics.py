@@ -41,21 +41,6 @@ def validate_result_dimensions(data, result, *, input_label):
         raise ValueError("full result r-squared values must be finite")
 
 
-def nested_ols_delta(signals, full_designs, nuisance_designs, *, allow_undefined):
-    """Return (full R2, nuisance R2) from nested OLS fits; guard monotonicity."""
-    # Local import: _conventional imports results, which imports this module.
-    from boldtailor._conventional import fit_r2_designs
-
-    full = fit_r2_designs(signals, full_designs, DIAGNOSTIC_NOISE_MODEL)
-    nuisance = fit_r2_designs(signals, nuisance_designs, DIAGNOSTIC_NOISE_MODEL)
-    if not allow_undefined and not (
-        np.isfinite(full).all() and np.isfinite(nuisance).all()
-    ):
-        raise ValueError("diagnostic fit produced nonfinite r-squared values")
-    validate_nested_ols_delta(full - nuisance)
-    return full, nuisance
-
-
 def delta_r2_activity(
     *, name, parent_id, inferential_noise_model, nuisance_model, undefined_features
 ):

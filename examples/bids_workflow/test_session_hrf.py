@@ -137,7 +137,7 @@ def test_malformed_cache_manifest_is_recomputed(
 @pytest.fixture
 def workflow_export(session_data, library, tmp_path):
     from boldtailor.publication import publish_artifact_set
-    from boldtailor.workflow import analysis, outputs
+    from boldtailor.workflow import analysis, export_cifti, manifest
     from boldtailor.workflow.inputs import make_blocks
     from boldtailor.workflow.artifacts import json_artifact
 
@@ -150,9 +150,9 @@ def workflow_export(session_data, library, tmp_path):
         runs, settings.bids_dir, blocks, library, task_model=model
     )
     brain = runs[0].image.header.get_axis(1)
-    artifacts = outputs.hrf_artifacts(settings, brain, selections, library)
-    artifacts.extend(outputs.input_artifacts(settings, runs, model))
-    metadata = outputs.metadata(
+    artifacts = export_cifti.hrf_artifacts(settings, brain, selections, library)
+    artifacts.extend(export_cifti.input_artifacts(settings, runs, model))
+    metadata = manifest.metadata(
         runs,
         library,
         settings,

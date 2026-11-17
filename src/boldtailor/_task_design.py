@@ -7,12 +7,8 @@ import numpy as np
 import pandas as pd
 from nilearn.glm.first_level import make_first_level_design_matrix
 
-from boldtailor._hrf_design import (
-    MIN_ONSET,
-    OVERSAMPLING,
-    resolve_hrf,
-    scale_event_amplitudes,
-)
+from boldtailor._hrf_design import resolve_hrf, scale_event_amplitudes
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor.model import TaskModel, level_name
 
 

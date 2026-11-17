@@ -6,7 +6,7 @@ import pandas as pd
 from boldtailor.ridge_results import FractionSelection
 
 
-def _predictor_table(runs, predictors):
+def predictor_table(runs, predictors):
     tables = []
     for r, (run, predictor) in enumerate(zip(runs, predictors, strict=True)):
         table = predictor.reset_index(drop=True).copy()
@@ -21,7 +21,7 @@ def _predictor_table(runs, predictors):
     return pd.concat(tables, ignore_index=True)
 
 
-def _tuned(beta_models):
+def tuned_models(beta_models):
     return [m for m in beta_models.values() if m.tuning]
 
 
@@ -67,7 +67,7 @@ def _alpha_rows(mode, scope, tuned):
 def tuning_table(beta_models):
     """One row per candidate, scope, and tuned model (mode is the HRF model)."""
     rows = []
-    for model in _tuned(beta_models):
+    for model in tuned_models(beta_models):
         mode = model.hrf.capitalize()
         for scope, tuned in model.tuning.items():
             fractional = isinstance(tuned["selection"], FractionSelection)
@@ -93,12 +93,12 @@ def ridge_boundary_summary(beta_models):
             scope=scope,
             fraction=_boundary_fraction(tuned["selection"]),
         )
-        for model in _tuned(beta_models)
+        for model in tuned_models(beta_models)
         for scope, tuned in model.tuning.items()
     ]
 
 
-def _scope_selection(bundle, scope):
+def scope_selection(bundle, scope):
     return bundle[scope] if scope == "all" else bundle[scope].training_selection
 
 
@@ -130,7 +130,7 @@ def hrf_boundary_summary(selections):
     for scope in ("all", "odd", "even"):
         if not all(scope in b for b in selections.values()):
             continue
-        picked = [_scope_selection(b, scope) for b in selections.values()]
+        picked = [scope_selection(b, scope) for b in selections.values()]
         rows.extend(_pooled_bound_rows(picked, scope))
     return rows
 

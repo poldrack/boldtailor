@@ -11,11 +11,12 @@ from boldtailor.cifti import spatial_signature
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.workflow.inputs import (
-    _trimmed_sources,
+    trimmed_sources,
     make_blocks,
     selection_task_model,
 )
-from boldtailor.workflow.outputs import input_artifacts, metadata
+from boldtailor.workflow.export_cifti import input_artifacts
+from boldtailor.workflow.manifest import metadata
 from .session_hrf_cache import read_selection
 
 METADATA_KEYS = (
@@ -68,7 +69,7 @@ def _matching_provenance(records, runs, root, library, maps, limit, task_model):
         covered.update(indices)
         selection = block["scopes"]["all"]
         provenance = selection["selection_provenance"]
-        current = [_trimmed_sources(r, root, indices).to_dict() for r in runs]
+        current = [trimmed_sources(r, root, indices).to_dict() for r in runs]
         if provenance["sources"] != current:
             return False
         activity = provenance["activities"][-1]

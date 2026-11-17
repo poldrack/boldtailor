@@ -14,7 +14,9 @@ claim that the scientific methods have been independently validated.
 Start here for the architecture; use [api.md](api.md) for parameter explanations
 and result schemas, then the inventory for individual functions. Research code
 in `experiments/` and notebook helpers in `examples/` are outside this package
-inventory. All package initializers are empty: import from the defining module.
+inventory. The top-level `boldtailor` initializer exports the primary public
+names; everything else is imported from its defining module, and the
+`boldtailor.workflow` initializer is empty.
 
 ## The objects that cross module boundaries
 

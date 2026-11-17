@@ -6,12 +6,12 @@ from typing import TypeVar, cast
 _Value = TypeVar("_Value")
 
 
-class _Unset:
+class Unset:
     def __repr__(self) -> str:
         return "<unset>"
 
 
-UNSET = _Unset()
+UNSET = Unset()
 
 
 def deprecated(message: str, *, stacklevel: int = 3) -> None:
@@ -23,10 +23,10 @@ def renamed_keyword(
     owner: str,
     old: str,
     new: str,
-    old_value: _Value | _Unset,
-    new_value: _Value | _Unset,
+    old_value: _Value | Unset,
+    new_value: _Value | Unset,
     *,
-    default: _Value | _Unset = UNSET,
+    default: _Value | Unset = UNSET,
 ) -> _Value:
     """Value for ``new``, accepting ``old`` for one release with a warning.
 

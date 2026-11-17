@@ -604,7 +604,7 @@ def test_selection_defaults_to_the_default_library(cv_fixture):
 def test_selection_calculation_needs_no_logging_operation(cv_fixture):
     """Verify selection calculation needs no logging operation."""
     from boldtailor import hrf_selection
-    from boldtailor._hrf_cv import prepare_runs
+    from boldtailor._run_design import prepare_runs
     from boldtailor.data import run_labels_for
     from boldtailor.hrf_results import HrfSelectionResult
     from boldtailor.model import TaskModel

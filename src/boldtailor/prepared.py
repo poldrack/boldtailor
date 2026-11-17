@@ -12,28 +12,28 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from boldtailor.data import (
-    _as_signal_runs,
-    _prepare_signal,
-    _prepare_sources,
-    _prepare_timing,
-    _validate_run_count,
-    _validate_feature_counts,
+from boldtailor._run_inputs import (
+    as_signal_runs,
+    prepare_signal,
+    prepare_sources,
+    prepare_timing,
+    validate_feature_counts,
+    validate_run_count,
 )
 from boldtailor.provenance import software_environment
 from boldtailor.logging import (
-    _emit_record,
-    _make_event,
     append_event_history,
     bind_context,
     emit_event,
+    emit_record,
+    make_event,
 )
 from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
-    _freeze_mapping,
-    _metadata_fingerprint,
-    _thaw,
+    freeze_mapping,
+    sources_fingerprint,
+    thaw,
 )
 
 ColumnRole = Literal["task", "nuisance", "intercept", "other"]
@@ -116,7 +116,7 @@ class PreparedDesignAnalysis:
 
     @property
     def run_metadata(self) -> tuple[Mapping[str, object], ...]:
-        return tuple(_thaw(metadata) for metadata in self._run_metadata)
+        return tuple(thaw(metadata) for metadata in self._run_metadata)
 
     @property
     def run_design_fingerprints(self) -> tuple[str, ...]:
@@ -151,24 +151,24 @@ def _prepare_analysis(
             emit_event("normalization_started", stage="prepared_design"),
         )
         try:
-            signal_runs = _as_signal_runs(signals)
-            prepared_sources = _prepare_sources(
+            signal_runs = as_signal_runs(signals)
+            prepared_sources = prepare_sources(
                 run_count=len(signal_runs),
                 sources=sources,
                 include_confounds=False,
             )
-            data_id = _metadata_fingerprint(prepared_sources)
+            data_id = sources_fingerprint(prepared_sources)
             prepared_signals = tuple(
-                _prepare_signal(values, run) for run, values in enumerate(signal_runs)
+                prepare_signal(values, run) for run, values in enumerate(signal_runs)
             )
-            _validate_feature_counts(prepared_signals)
+            validate_feature_counts(prepared_signals)
             designs = _prepare_designs(design_matrices, prepared_signals)
             roles = _prepare_roles(column_roles, designs)
             metadata = _prepare_metadata(run_metadata, len(prepared_signals))
             prepared_provenance_metadata = _prepare_provenance_metadata(
                 provenance_metadata
             )
-            times, timing_source = _prepare_timing(
+            times, timing_source = prepare_timing(
                 tr,
                 frame_times,
                 prepared_signals,
@@ -188,7 +188,7 @@ def _prepare_analysis(
                 run_metadata=metadata,
                 provenance_metadata=prepared_provenance_metadata,
             )
-            completed = _make_event(
+            completed = make_event(
                 "normalization_completed", stage="prepared_design", data_id=data_id
             )
             provenance = ProvenanceRecord(
@@ -217,7 +217,7 @@ def _prepare_analysis(
                 data_id=data_id,
             )
             raise
-        _emit_record(completed)
+        emit_record(completed)
         return result
 
 
@@ -248,11 +248,11 @@ def _normalization_activity(
         "runs": runs,
         "run_design_fingerprints": list(run_fingerprints),
         "design_fingerprint": design_fingerprint,
-        "run_metadata": [_thaw(metadata) for metadata in run_metadata],
+        "run_metadata": [thaw(metadata) for metadata in run_metadata],
         "software": software_environment(),
     }
     if provenance_metadata is not None:
-        activity["metadata"] = _thaw(provenance_metadata)
+        activity["metadata"] = thaw(provenance_metadata)
     return activity
 
 
@@ -306,7 +306,7 @@ def _prepare_designs(
     signals: Sequence[np.ndarray],
 ) -> tuple[pd.DataFrame, ...]:
     designs = _as_design_runs(values)
-    _validate_run_count(signals, designs, "design_matrices")
+    validate_run_count(signals, designs, "design_matrices")
     return tuple(
         _prepare_design(design, signal.shape[0], run)
         for run, (design, signal) in enumerate(zip(designs, signals))
@@ -359,7 +359,7 @@ def _prepare_roles(
     designs: Sequence[pd.DataFrame],
 ) -> tuple[Mapping[str, ColumnRole], ...]:
     roles = _as_role_runs(values)
-    _validate_run_count(designs, roles, "column_roles")
+    validate_run_count(designs, roles, "column_roles")
     return tuple(
         _prepare_run_roles(role_map, design.columns, run)
         for run, (role_map, design) in enumerate(zip(roles, designs))
@@ -398,7 +398,7 @@ def _prepare_metadata(
     if values is None:
         return tuple(MappingProxyType({}) for _ in range(run_count))
     metadata = _as_metadata_runs(values)
-    _validate_run_count(range(run_count), metadata, "run_metadata")
+    validate_run_count(range(run_count), metadata, "run_metadata")
     return tuple(_freeze_metadata(item) for item in metadata)
 
 
@@ -416,7 +416,7 @@ def _as_metadata_runs(
 def _freeze_metadata(values: Mapping[str, object]) -> Mapping[str, object]:
     if not isinstance(values, Mapping):
         raise ValueError("run_metadata must contain mappings")
-    return _freeze_mapping(values)
+    return freeze_mapping(values)
 
 
 def _prepare_provenance_metadata(
@@ -424,4 +424,4 @@ def _prepare_provenance_metadata(
 ) -> Mapping[str, object] | None:
     if values is None:
         return None
-    return _freeze_mapping(values)
+    return freeze_mapping(values)

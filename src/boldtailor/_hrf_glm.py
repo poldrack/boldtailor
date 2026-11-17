@@ -5,13 +5,11 @@ from dataclasses import dataclass, fields, replace
 import numpy as np
 
 from boldtailor._conventional import fit_designs
-from boldtailor._fit_diagnostics import (
-    delta_r2_activity,
-    delta_r2_identity,
-    nested_ols_delta,
-)
+from boldtailor._fit_diagnostics import delta_r2_activity, delta_r2_identity
+from boldtailor._conventional import nested_ols_delta
 from boldtailor.hrf_results import validate_selection
-from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
+from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._hrf_glm_design import (
     compile_group_designs,
     design_identity,
@@ -30,8 +28,8 @@ from boldtailor.model import (
 )
 from boldtailor.provenance import analysis_fingerprint, identity_activity
 from boldtailor.results import (
+    ContrastResult,
     TaskDeltaR2Result,
-    _ContrastResult,
     make_task_delta_r2_result,
 )
 
@@ -121,12 +119,12 @@ def _assemble(data, model, selection, context, fits, provenance):
     for name in model.contrasts:
         values = {
             field.name: np.full(data.n_features, np.nan)
-            for field in fields(_ContrastResult)
+            for field in fields(ContrastResult)
         }
         for cid, indices in _feature_groups(selection):
             for field, array in values.items():
                 array[indices] = getattr(fits[cid].contrasts[name], field)
-        contrasts[name] = _ContrastResult(**values)
+        contrasts[name] = ContrastResult(**values)
     run_r2 = tuple(np.full(data.n_features, np.nan) for _ in range(data.n_runs))
     r2 = np.full(data.n_features, np.nan)
     for cid, indices in _feature_groups(selection):

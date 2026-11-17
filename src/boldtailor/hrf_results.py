@@ -7,10 +7,10 @@ import pandas as pd
 from boldtailor._arrays import (
     copy_array_fields_in_place,
     freeze_sequence_fields_in_place,
+    owned_table,
     readonly_array,
     set_fields_in_place,
 )
-from boldtailor.data import _owned_table
 from boldtailor.hrf_library import PARAMETER_NAMES, HrfLibrary
 from boldtailor.model import TaskModel
 from boldtailor.provenance import ProvenanceRecord
@@ -69,11 +69,11 @@ class HrfSelectionResult:
                 "REML selection requires REML diagnostics and no CV scores"
             )
         freeze_sequence_fields_in_place(self, ("run_labels",))
-        set_fields_in_place(self, _eligibility=_owned_table(self._eligibility))
+        set_fields_in_place(self, _eligibility=owned_table(self._eligibility))
 
     @property
     def eligibility(self):
-        return _owned_table(self._eligibility)
+        return owned_table(self._eligibility)
 
     @property
     def parameter_bound_flags(self) -> np.ndarray:

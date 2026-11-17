@@ -5,11 +5,12 @@ from hashlib import sha256
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_cv import prepare_runs
+from boldtailor._run_design import prepare_runs
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from boldtailor.hrf_results import RemlHrfDiagnostics
-from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
+from boldtailor._hrf_design import HRF_NORMALIZATION
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 
 
 def prepare_reml_groups(data, library, task_model, options, labels):

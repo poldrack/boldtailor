@@ -36,7 +36,7 @@ from boldtailor.fractional_ridge import (
     select_ridge_fractions,
 )
 from boldtailor.ridge_selection import (
-    _alpha_grid,
+    alpha_grid,
     score_ridge_candidates,
     select_ridge_penalty,
 )
@@ -53,7 +53,7 @@ from boldtailor.model import TaskModel
 from boldtailor.workflow import inputs
 from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.workflow.files import min_runs_per_half, odd_even_parity
-from boldtailor.workflow.inputs import _trimmed_sources, load_block
+from boldtailor.workflow.inputs import load_block, trimmed_sources
 
 log = logging.getLogger("boldtailor.workflow")
 
@@ -168,7 +168,7 @@ def _global_scores(ctx, scope_runs, scope_predictors):
     )
     provenance = ProvenanceRecord(
         execution_id=str(uuid4()),
-        sources=[_trimmed_sources(r, ctx.root, indices) for r in scope_runs],
+        sources=[trimmed_sources(r, ctx.root, indices) for r in scope_runs],
         activities=(
             dict(
                 name="global_encoding_ridge_cv",
@@ -428,9 +428,7 @@ def _build_cv_context(
         raise ValueError("HRF method requires a library")
     selection_options = HrfOptions(method=hrf_method, reml_options=reml_options)
     fractional = fractions is not None
-    grid = tuple(
-        sorted(_alpha_grid(fraction_grid(fractions) if fractional else alphas))
-    )
+    grid = tuple(sorted(alpha_grid(fraction_grid(fractions) if fractional else alphas)))
     if fractional:
         grid = tuple(reversed(grid))
     halves = _halves(runs, library, hrf_method)

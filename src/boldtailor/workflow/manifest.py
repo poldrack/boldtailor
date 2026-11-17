@@ -10,14 +10,14 @@ from boldtailor.trial_encoding import encoding_metadata
 from boldtailor.workflow.hrf_maps import reml_record
 from boldtailor.workflow.inputs import selection_task_model
 from boldtailor.workflow.tables import (
-    _scope_selection,
-    _tuned,
     hrf_boundary_summary,
     ridge_boundary_summary,
+    scope_selection,
+    tuned_models,
 )
 
 
-def _selection_records(selections, scopes):
+def selection_records(selections, scopes):
     records = []
     for indices, bundle in selections.items():
         records.append(
@@ -31,7 +31,7 @@ def _selection_records(selections, scopes):
 
 def _scope_record(bundle, name):
     result = bundle[name]
-    selected = _scope_selection(bundle, name)
+    selected = scope_selection(bundle, name)
     record = dict(
         provenance=result.provenance.to_dict(),
         selection_provenance=selected.provenance.to_dict(),
@@ -54,7 +54,7 @@ def _shared_tuning_metadata(tuned):
     )
 
 
-def _alpha_tuning_metadata(tuned):
+def alpha_tuning_metadata(tuned):
     scores, selected = tuned["scores"], tuned["selection"]
     return dict(
         **_shared_tuning_metadata(tuned),
@@ -68,7 +68,7 @@ def _alpha_tuning_metadata(tuned):
     )
 
 
-def _fraction_tuning_metadata(tuned):
+def fraction_tuning_metadata(tuned):
     return dict(
         **_shared_tuning_metadata(tuned),
         fractions=list(tuned["scores"].grid),
@@ -89,7 +89,7 @@ def _fraction_outer_metadata(runs):
     )
 
 
-def _outer_metadata(runs, outer, fractional):
+def outer_metadata(runs, outer, fractional):
     within = outer["encoding_mode"] == "within_run"
     return dict(
         **encoding_metadata(outer["encoding_mode"]),
@@ -117,7 +117,7 @@ def _outer_metadata(runs, outer, fractional):
 
 
 def _ridge_metadata(settings, task_model, beta_models):
-    tuned = _tuned(beta_models)
+    tuned = tuned_models(beta_models)
     if not tuned:
         return None
     definition = tuned[0].cv_provenance
@@ -195,7 +195,7 @@ def _rt_check(include_rt, has_rt, beta_models):
     """RT correlations are computed only when RT is a modulator."""
     if not has_rt:
         return {}
-    tuned = bool(_tuned(beta_models))
+    tuned = bool(tuned_models(beta_models))
     return dict(rt_check=_rt_check_description(include_rt, tuned))
 
 

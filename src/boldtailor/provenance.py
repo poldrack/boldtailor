@@ -46,7 +46,7 @@ class SourceRef:
         self._byte_size = _validate_byte_size(byte_size)
         self._modified_at = _validate_modified_at(modified_at)
         self._sha256 = _validate_sha256(sha256)
-        self._annotations = _freeze_mapping({} if annotations is None else annotations)
+        self._annotations = freeze_mapping({} if annotations is None else annotations)
 
     @property
     def role(self) -> str:
@@ -126,7 +126,7 @@ class SourceRef:
         if self._sha256 is not None:
             data["sha256"] = self._sha256
         if self._annotations:
-            data["annotations"] = _thaw(self._annotations)
+            data["annotations"] = thaw(self._annotations)
         return data
 
     @classmethod
@@ -138,7 +138,7 @@ class SourceRef:
             byte_size=_validate_byte_size(data.get("byte_size")),
             modified_at=_validate_modified_at(data.get("modified_at")),
             sha256=_validate_sha256(data.get("sha256")),
-            annotations=_freeze_mapping(data.get("annotations", {})),
+            annotations=freeze_mapping(data.get("annotations", {})),
         )
 
 
@@ -223,7 +223,7 @@ class ProvenanceRecord:
         "_warnings",
         "_schema",
         "_extra",
-        "_metadata_fingerprint",
+        "sources_fingerprint",
     )
 
     def __init__(
@@ -241,12 +241,12 @@ class ProvenanceRecord:
         self._sources = tuple(_copy_run_sources(source) for source in sources)
         self._activities = _freeze_mapping_sequence(activities)
         self._events = _freeze_mapping_sequence(events)
-        fingerprint = _metadata_fingerprint(self._sources)
+        fingerprint = sources_fingerprint(self._sources)
         self._warnings = _augment_warnings(
             _freeze_mapping_sequence(warnings), fingerprint
         )
-        self._extra = _freeze_mapping({} if _extra is None else _extra)
-        self._metadata_fingerprint = fingerprint
+        self._extra = freeze_mapping({} if _extra is None else _extra)
+        self.sources_fingerprint = fingerprint
 
     @property
     def execution_id(self) -> str:
@@ -311,7 +311,7 @@ class ProvenanceRecord:
 
     @property
     def metadata_fingerprint(self) -> str | None:
-        return self._metadata_fingerprint
+        return self.sources_fingerprint
 
     @property
     def analysis_fingerprint(self) -> str | None:
@@ -324,16 +324,16 @@ class ProvenanceRecord:
             "execution_id": self._execution_id,
             "sources": [source.to_dict() for source in self._sources],
             "activities": self.activity_records(),
-            "events": [_thaw(event) for event in self._events],
-            "warnings": [_thaw(warning) for warning in self._warnings],
-            "metadata_fingerprint": self._metadata_fingerprint,
+            "events": [thaw(event) for event in self._events],
+            "warnings": [thaw(warning) for warning in self._warnings],
+            "metadata_fingerprint": self.sources_fingerprint,
         }
-        data.update(_thaw(self._extra))
+        data.update(thaw(self._extra))
         return data
 
     def activity_records(self) -> list[dict[str, object]]:
         """Return owned JSON-compatible activity dictionaries."""
-        return [_thaw(activity) for activity in self._activities]
+        return [thaw(activity) for activity in self._activities]
 
     def canonical_json(self) -> str:
         return json.dumps(
@@ -376,7 +376,7 @@ def analysis_fingerprint(
         return None
     payload = {
         "data_fingerprint": metadata_fingerprint,
-        "model": _thaw(_freeze_mapping(model)),
+        "model": thaw(freeze_mapping(model)),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -558,10 +558,10 @@ def _validate_schema(value: object) -> str:
 def _freeze_mapping_sequence(
     values: Sequence[Mapping[str, object]],
 ) -> tuple[Mapping[str, object], ...]:
-    return tuple(_freeze_mapping(value) for value in values)
+    return tuple(freeze_mapping(value) for value in values)
 
 
-def _freeze_mapping(value: object) -> Mapping[str, object]:
+def freeze_mapping(value: object) -> Mapping[str, object]:
     if value is None:
         return MappingProxyType({})
     if not isinstance(value, Mapping):
@@ -586,25 +586,25 @@ def _freeze_json(value: object) -> object:
     if isinstance(value, Path):
         raise ValueError("path-like objects are not JSON-safe; pass text")
     if isinstance(value, Mapping):
-        return _freeze_mapping(value)
+        return freeze_mapping(value)
     if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
         return tuple(_freeze_json(item) for item in value)
     raise ValueError("values must be JSON-safe")
 
 
 @overload
-def _thaw(value: Mapping[str, object]) -> dict[str, object]: ...
+def thaw(value: Mapping[str, object]) -> dict[str, object]: ...
 
 
 @overload
-def _thaw(value: object) -> object: ...
+def thaw(value: object) -> object: ...
 
 
-def _thaw(value: object) -> object:
+def thaw(value: object) -> object:
     if isinstance(value, Mapping):
-        return {key: _thaw(item) for key, item in value.items()}
+        return {key: thaw(item) for key, item in value.items()}
     if isinstance(value, tuple):
-        return [_thaw(item) for item in value]
+        return [thaw(item) for item in value]
     return value
 
 
@@ -616,10 +616,10 @@ def _augment_warnings(
         return warnings
     if any(warning.get("code") == _QUALITY_WARNING["code"] for warning in warnings):
         return warnings
-    return warnings + (_freeze_mapping(_QUALITY_WARNING),)
+    return warnings + (freeze_mapping(_QUALITY_WARNING),)
 
 
-def _metadata_fingerprint(sources: Sequence[RunSources]) -> str | None:
+def sources_fingerprint(sources: Sequence[RunSources]) -> str | None:
     if not _sources_complete(sources):
         return None
     payload = {

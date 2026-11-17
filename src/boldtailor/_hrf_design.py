@@ -20,12 +20,9 @@ from nilearn.glm.first_level import compute_regressor
 from nilearn.glm.first_level.hemodynamic_models import _sample_condition, glover_hrf
 
 from boldtailor._arrays import readonly_array
-from boldtailor._constants import (  # owned here for every consumer
-    MIN_ONSET,
-    OVERSAMPLING,
-    TIE_TOLERANCE,
-)
-from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate, _peak_normalized
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
+from boldtailor._design_inputs import validate_events, validate_onsets
+from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate, peak_normalized
 
 HRF_NORMALIZATION = "peak_one_event_response"
 _CANONICAL = HrfCandidate(0, "spm", CANONICAL_PARAMETERS)
@@ -33,7 +30,7 @@ _UNIDENTIFIED = "hrf must be 'spm', 'glover', or an identified HrfCandidate"
 
 
 def _glover_kernel(tr, oversampling=OVERSAMPLING):
-    return _peak_normalized(glover_hrf(tr, oversampling))
+    return peak_normalized(glover_hrf(tr, oversampling))
 
 
 # Nilearn names columns after the callable; every package kernel is "kernel".
@@ -147,9 +144,7 @@ def scale_event_amplitudes(events, kernel_fn, frame_times, oversampling, min_ons
 
 
 def convolve_events(onsets, durations, times, candidate, name="stimulus"):
-    onsets = np.asarray(onsets, dtype=float)
-    if np.any(onsets < times[0] + MIN_ONSET) or np.any(onsets >= times[-1]):
-        raise ValueError(f"{name}: onset has no supported sampled response")
+    validate_onsets(onsets, times, f"{name}: onset")
     kernel_fn = hrf_model(candidate)
     scales = event_response_scales(kernel_fn, onsets, durations, times)
     column, _ = compute_regressor(
@@ -166,10 +161,8 @@ def convolve_events(onsets, durations, times, candidate, name="stimulus"):
 
 def stimulus_regressor(events, frame_times, candidate):
     """Convolve unit-amplitude presentations on the actual run sampling grid."""
-    from boldtailor._single_trial_design import _validate_events
-
     times = np.asarray(frame_times, dtype=float)
-    _validate_events(events, times, "stimulus")
+    validate_events(events, times, "stimulus")
     return convolve_events(events.onset, events.duration, times, candidate)
 
 
@@ -201,12 +194,9 @@ def trial_regressors(events, frame_times, candidate):
     acquisition's linear interpolation. Every candidate, including canonical
     SPM, takes this path; it is pinned to Nilearn's compute_regressor.
     """
-    from boldtailor._single_trial_design import _validate_events
-
     times = np.asarray(frame_times, dtype=float)
-    _validate_events(events, times, "trials")
-    if np.any(events.onset < times[0] + MIN_ONSET) or np.any(events.onset >= times[-1]):
-        raise ValueError("trial onset has no supported sampled response")
+    validate_events(events, times, "trials")
+    validate_onsets(events.onset, times, "trial onset")
     timing = np.asarray(events[["onset", "duration"]], dtype="<f8").tobytes()
     starts, stops, lower, upper, fraction = _boxcar_sampling(
         timing,

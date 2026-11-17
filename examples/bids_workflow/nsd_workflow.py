@@ -83,6 +83,7 @@ from boldtailor.reliability import curve_correlations
 from boldtailor.task_detection import detect_task_model, task_model_notes
 from boldtailor.workflow import (
     analysis,
+    hrf_maps,
     inputs,
     outputs,
     plots,
@@ -91,9 +92,12 @@ from boldtailor.workflow import (
     surfaces,
 )
 from boldtailor.workflow.beta_series import BetaModel, fit_cv_beta_series
+from boldtailor.workflow.export_cifti import figure_name
+from boldtailor.workflow.figures import tuning_figure
 from boldtailor.workflow.files import odd_even_parity
 from boldtailor.workflow.run import WorkflowResult, describe_inputs
 from boldtailor.workflow.settings import STAGES
+from boldtailor.workflow.tables import hrf_boundary_table, tuning_table
 from examples.bids_workflow.nsd_settings import nsd_paths, nsd_settings
 
 config = dict(
@@ -263,7 +267,7 @@ for indices, bundle in map_blocks(
     print(f"Selected HRFs for grayordinates {indices[0]}–{indices[-1]}")
 
 # %%
-selection_maps = analysis.selection_maps(selections, len(brain))
+selection_maps = hrf_maps.selection_maps(selections, len(brain))
 display(summaries.selected_hrfs(selections, library, len(brain)))
 display(
     pd.DataFrame(
@@ -557,8 +561,8 @@ if cv_results:
         )
     )
     display(all_tuning["selection"])
-    tuning = outputs.tuning_table(beta_models)
-    figures["RidgeTuning"] = outputs.tuning_figure(beta_models)
+    tuning = tuning_table(beta_models)
+    figures["RidgeTuning"] = tuning_figure(beta_models)
     display(tuning)
     display(figures["RidgeTuning"])
     if "selected_grayordinates" in tuning:
@@ -683,13 +687,13 @@ html = report.render_report(
     task_model=task_model,
     library=library,
     glm_summary=glm_summary,
-    hrf_summary=outputs.hrf_boundary_table(selections),
+    hrf_summary=hrf_boundary_table(selections),
     reliability=reliability,
     tuning=tuning,
     skipped=skipped,
     notes=notes,
     manifest=manifest,
-    figures={name: payloads[outputs.figure_name(settings, name)] for name in figures},
+    figures={name: payloads[figure_name(settings, name)] for name in figures},
     selected_hrfs=summaries.selected_hrfs(selections, library, len(brain)),
     curve_reliability=curve_reliability,
     encoding=summaries.encoding_scores(beta_models),
