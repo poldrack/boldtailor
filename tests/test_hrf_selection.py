@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from boldtailor._hrf_design import stimulus_regressor
+from tests.oracles import stimulus_regressor
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_library import HrfLibrary
@@ -544,20 +544,11 @@ def test_parameter_bound_table_summarizes_the_flags(cv_fixture):
     assert list(table.parameter.unique()) == list(PARAMETER_NAMES[:6])
 
 
-def test_select_hrfs_is_the_name_and_select_hrf_a_deprecated_alias(selected_fixture):
-    """Verify select HRFs is the name and select HRF a deprecated alias."""
+def test_select_hrfs_is_the_only_name(selected_fixture):
+    """The retired alias ``select_hrf`` no longer exists."""
     from boldtailor import hrf_selection
 
-    data, selection = selected_fixture
-    options = dict(library=selection.library, feature_signature="ordered-axis")
-    current = hrf_selection.select_hrfs(data, **options)
-    with pytest.warns(DeprecationWarning, match="select_hrfs"):
-        old = hrf_selection.select_hrf(data, **options)
-    np.testing.assert_array_equal(current.hrf_indices, old.hrf_indices)
-    np.testing.assert_array_equal(current.cv_r2, old.cv_r2)
-    assert (
-        current.provenance.analysis_fingerprint == old.provenance.analysis_fingerprint
-    )
+    assert not hasattr(hrf_selection, "select_hrf")
 
 
 def test_evaluate_hrf_split_threads_candidate_batch_size(selected_fixture, monkeypatch):

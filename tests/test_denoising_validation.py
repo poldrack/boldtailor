@@ -14,7 +14,7 @@ import tomllib
 import numpy as np
 import pytest
 
-from boldtailor._hrf_design import convolve_events
+from tests.oracles import convolve_events
 from boldtailor.data import from_arrays
 from boldtailor.denoising import select_denoising, with_denoising
 from boldtailor.fit import fit

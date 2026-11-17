@@ -785,7 +785,7 @@ def test_task_delta_r2_prepared_rejects_incomplete_role_partitions(
 
 @pytest.mark.parametrize(
     "changed",
-    ["sources", "design", "contrasts", "noise_model", "model_metadata"],
+    ["sources", "design"],
 )
 def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     prepared_delta_problem,
@@ -793,11 +793,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
     complete_sources,
 ):
     """Verify task delta R-squared prepared rejects changed parent identity."""
-    prepared, contrasts, metadata, full_result = prepared_delta_problem
-    supplied_prepared = prepared
-    supplied_contrasts = contrasts
-    supplied_noise_model = "ar1"
-    supplied_metadata = metadata
+    prepared, _, _, full_result = prepared_delta_problem
     if changed == "sources":
         changed_sources = (
             RunSources(
@@ -819,7 +815,7 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
             column_roles=prepared.column_roles,
             sources=changed_sources,
         )
-    elif changed == "design":
+    else:
         designs = prepared.design_matrices
         designs[0].iloc[0, 0] += 0.1
         supplied_prepared = PreparedDesignAnalysis.from_arrays(
@@ -829,28 +825,8 @@ def test_task_delta_r2_prepared_rejects_changed_parent_identity(
             column_roles=prepared.column_roles,
             sources=complete_sources(2),
         )
-    elif changed == "contrasts":
-        supplied_contrasts = {"face": {"face": 1.0}}
-    elif changed == "noise_model":
-        supplied_noise_model = "ols"
-    else:
-        supplied_metadata = {"origin": "fitlins", "node": "changed"}
-
-    if changed in ("sources", "design"):
-        with pytest.raises(ValueError, match="provenance identity"):
-            task_delta_r2_prepared(supplied_prepared, full_result)
-        return
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(ValueError, match="provenance identity"),
-    ):
-        task_delta_r2_prepared(
-            supplied_prepared,
-            full_result,
-            contrasts=supplied_contrasts,
-            noise_model=supplied_noise_model,
-            model_metadata=supplied_metadata,
-        )
+    with pytest.raises(ValueError, match="provenance identity"):
+        task_delta_r2_prepared(supplied_prepared, full_result)
 
 
 def test_task_delta_r2_prepared_rejects_invalid_parent_dimensions(
@@ -1006,20 +982,18 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_finger
 ):
     """Verify task delta R-squared prepared logs preidentity failure without analysis id."""
     caplog.set_level(logging.INFO, logger="boldtailor")
-    prepared, contrasts, _, full_result = prepared_delta_problem
+    prepared, _, _, full_result = prepared_delta_problem
     private_key = "/private/secret/prepared-comparison.json"
+    record = full_result.provenance
+    foreign = replace(
+        full_result,
+        _provenance=record.replace(
+            activities=(*record.activities[:-1], {"model": {private_key: "redacted"}})
+        ),
+    )
 
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(ValueError, match="noise_model"),
-    ):
-        task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts=contrasts,
-            noise_model="private-noise-model",
-            model_metadata={private_key: "redacted"},
-        )
+    with pytest.raises(ValueError, match="fit_prepared"):
+        task_delta_r2_prepared(prepared, foreign)
     from boldtailor.logging import emit_event
 
     emit_event("after_preidentity_comparison_failure", stage="test")
@@ -1050,24 +1024,25 @@ def _same_comparison(left, right):
 def test_task_delta_r2_prepared_reads_the_model_from_provenance(
     prepared_delta_problem,
 ):
-    """Verify task delta R-squared prepared reads the model from provenance."""
+    """The model stored by ``fit_prepared`` is the one the comparison is built on."""
+    from boldtailor import prepared_fit
+
     prepared, contrasts, metadata, full_result = prepared_delta_problem
+    explicit = prepared_fit._prepare_fit_spec(contrasts, "ar1", metadata)
+    assert prepared_fit._stored_fit_spec(full_result) == explicit
     derived = task_delta_r2_prepared(prepared, full_result)
-    with pytest.warns(DeprecationWarning, match="task_delta_r2_prepared"):
-        explicit = task_delta_r2_prepared(
-            prepared,
-            full_result,
-            contrasts=contrasts,
-            noise_model="ar1",
-            model_metadata=metadata,
-        )
-    _same_comparison(derived, explicit)
+    _, expected = prepared_fit._prepare_comparison_identity(
+        prepared, explicit, prepared.provenance.data_fingerprint
+    )
+    assert derived.provenance.analysis_fingerprint == expected
 
 
 def test_task_delta_r2_prepared_restores_expression_contrasts(
     prepared_problem, complete_sources
 ):
-    """Verify task delta R-squared prepared restores expression contrasts."""
+    """Expression contrasts survive the round trip through provenance."""
+    from boldtailor import prepared_fit
+
     prepared, contrasts, _ = prepared_problem
     sourced = PreparedDesignAnalysis.from_arrays(
         signals=prepared.signals,
@@ -1077,12 +1052,10 @@ def test_task_delta_r2_prepared_restores_expression_contrasts(
         sources=complete_sources(prepared.n_runs),
     )
     full_result = fit_prepared(sourced, contrasts=contrasts, noise_model="ols")
+    explicit = prepared_fit._prepare_fit_spec(contrasts, "ols", None)
+    assert prepared_fit._stored_fit_spec(full_result) == explicit
     derived = task_delta_r2_prepared(sourced, full_result)
-    with pytest.warns(DeprecationWarning):
-        explicit = task_delta_r2_prepared(
-            sourced, full_result, contrasts=contrasts, noise_model="ols"
-        )
-    _same_comparison(derived, explicit)
+    assert np.isfinite(derived.delta_r2).all()
 
 
 @pytest.mark.parametrize(
@@ -1093,20 +1066,13 @@ def test_task_delta_r2_prepared_restores_expression_contrasts(
         dict(model_metadata={"origin": "other"}),
     ],
 )
-def test_task_delta_r2_prepared_rejects_keywords_that_disagree_with_provenance(
+def test_task_delta_r2_prepared_takes_the_model_only_from_the_parent(
     prepared_delta_problem, supplied
 ):
-    """Verify task delta R-squared prepared rejects keywords that disagree with
-    provenance.
-    """
-    prepared, contrasts, metadata, full_result = prepared_delta_problem
-    arguments = dict(contrasts=contrasts, noise_model="ar1", model_metadata=metadata)
-    arguments.update(supplied)
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(ValueError, match="provenance identity"),
-    ):
-        task_delta_r2_prepared(prepared, full_result, **arguments)
+    """The retired model keywords are rejected; the parent result defines the model."""
+    prepared, _, _, full_result = prepared_delta_problem
+    with pytest.raises(TypeError):
+        task_delta_r2_prepared(prepared, full_result, **supplied)
 
 
 def test_task_delta_r2_prepared_requires_a_fit_prepared_parent(

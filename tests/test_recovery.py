@@ -7,7 +7,7 @@ from the simulation; production internals are used solely to build signals.
 import numpy as np
 import pandas as pd
 
-from boldtailor._hrf_design import convolve_events
+from tests.oracles import convolve_events
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.fractional_ridge import score_fraction_candidates

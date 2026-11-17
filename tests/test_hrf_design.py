@@ -44,7 +44,7 @@ def test_custom_convolution_matches_independent_sampled_boxcars(
     timing_fixture, candidates, offset, duration
 ):
     """Verify custom convolution matches independent sampled boxcars."""
-    from boldtailor._hrf_design import stimulus_regressor
+    from tests.oracles import stimulus_regressor
 
     events, _, nuisance = timing_fixture
     events.loc[1, "duration"] = duration
@@ -85,7 +85,7 @@ def test_custom_convolution_matches_independent_sampled_boxcars(
 
 def test_custom_boundary_and_run_isolation(timing_fixture, candidates):
     """Verify custom boundary and run isolation."""
-    from boldtailor._hrf_design import stimulus_regressor
+    from tests.oracles import stimulus_regressor
 
     events, times, nuisance = timing_fixture
     for onset in (times[0] - 24 - 0.001, times[-1], times[-1] - 0.001):
@@ -316,7 +316,7 @@ def test_single_event_responses_peak_at_one(two_candidate_library):
 
 def test_stimulus_regressor_scales_each_event_to_unit_peak(candidates):
     """Verify stimulus regressor scales each event to unit peak."""
-    from boldtailor._hrf_design import stimulus_regressor
+    from tests.oracles import stimulus_regressor
 
     times = np.arange(0, 80, 0.1)
     events = pd.DataFrame(dict(onset=[0.0, 40.0], duration=[0.0, 6.0]))

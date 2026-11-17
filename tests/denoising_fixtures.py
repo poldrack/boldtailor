@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import lfilter
 
-from boldtailor._hrf_design import convolve_events
+from tests.oracles import convolve_events
 from boldtailor.data import AnalysisData, from_arrays
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.model import Modulator, TaskModel

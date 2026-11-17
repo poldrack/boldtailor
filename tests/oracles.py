@@ -19,12 +19,38 @@ from scipy.linalg import block_diag
 from scipy.optimize import brentq
 
 from boldtailor._fractional_ridge import fraction_grid, prepare_fraction_betas
-from boldtailor._hrf_design import stimulus_regressor
+from boldtailor._constants import OVERSAMPLING
+from boldtailor._design_inputs import validate_events, validate_onsets
+from boldtailor._hrf_design import event_response_scales, hrf_model
 from boldtailor._single_trial_fit import prepare_trial_betas, validate_alpha
 from boldtailor.data import from_arrays
 from boldtailor.provenance import ProvenanceRecord, RunSources, SourceRef
 
 _NILEARN_SHAPES = {"spm": spm_hrf, "glover": glover_hrf}
+
+
+def convolve_events(onsets, durations, times, candidate, name="stimulus"):
+    """Nilearn's convolution of unit-peak events: the reference for package designs."""
+    validate_onsets(onsets, times, f"{name}: onset")
+    kernel_fn = hrf_model(candidate)
+    scales = event_response_scales(kernel_fn, onsets, durations, times)
+    column, _ = compute_regressor(
+        np.array([onsets, durations, scales]),
+        kernel_fn,
+        times,
+        con_id=name,
+        oversampling=OVERSAMPLING,
+    )
+    if not np.isfinite(column).all() or not np.any(column):
+        raise ValueError(f"{name}: no supported sampled response")
+    return column[:, 0]
+
+
+def stimulus_regressor(events, frame_times, candidate):
+    """Convolve unit-amplitude presentations on the actual run sampling grid."""
+    times = np.asarray(frame_times, dtype=float)
+    validate_events(events, times, "stimulus")
+    return convolve_events(events.onset, events.duration, times, candidate)
 
 
 def peak_kernel(name):

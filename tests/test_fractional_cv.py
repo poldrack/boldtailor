@@ -201,8 +201,8 @@ def test_prepared_fraction_run_betas_match_oracle_in_any_order(
     data, _, library = ridge_problem
     prepared = cv.prepare_runs(data, library) if optimized else None
     ids = np.array([2, 0, 1, -1, 0]) if optimized else np.zeros(data.n_features, int)
-    path = cv.prepare_run_beta_path(
-        data, 0, prepared, ids, "run-01", regularizer=FRACTIONAL_RIDGE
+    path = cv._beta_path(
+        cv.run_tables(data)[0], 0, prepared, ids, "run-01", FRACTIONAL_RIDGE
     )
     for fraction in [1.0, 0.7, 0.2, 0.2, 0.7, 1.0]:
         expected = np.full((len(data.events[0]), data.n_features), np.nan)

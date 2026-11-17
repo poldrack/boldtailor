@@ -4,12 +4,16 @@ from numpy.testing import assert_allclose
 
 from boldtailor.reml import (
     criterion,
-    criterion_slope,
     profiled_variance,
     project_fixed,
     reml_terms,
 )
-from tests.reml_oracles import dense_criterion, dense_profiled_variance, simulate
+from tests.reml_oracles import (
+    criterion_slope,
+    dense_criterion,
+    dense_profiled_variance,
+    simulate,
+)
 
 RATIOS = [0.0, 0.01, 1.0, 10.0, 1e3]
 N_FEATURES = 3

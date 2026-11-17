@@ -333,7 +333,7 @@ def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
     calls = [
         lambda: compile_nuisance_designs(data, model),
         lambda: cv.subset_runs(data, [0, 2]),
-        lambda: cv.prepare_run_beta_path(data, 1, None, np.zeros(2, int), "r"),
+        lambda: cv.run_tables(data),
     ]
     for call in calls:
         access_counts.update(events=0, confounds=0)

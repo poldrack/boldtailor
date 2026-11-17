@@ -61,10 +61,10 @@ def test_trial_results_share_science_and_name_their_design(
     if selected:
         np.testing.assert_array_equal(result.design.hrf_indices, selection.hrf_indices)
         assert result.design.selection_provenance == selection.provenance
-        exposed = result.design.matrix(0, 1).copy()
+        exposed = result.design.rebuild_matrix(0, 1).copy()
         expected = exposed.copy()
         exposed[:] = 0
-        np.testing.assert_array_equal(result.design.matrix(0, 1), expected)
+        np.testing.assert_array_equal(result.design.rebuild_matrix(0, 1), expected)
     else:
         exposed = result.design.matrices[0]
         expected = exposed.copy(deep=True)
@@ -97,12 +97,12 @@ def test_selected_trial_design_owns_arrays_and_rebuilt_matrices(selected_fixture
         selection_provenance=selection.provenance,
         _rebuild=lambda run, hrf_id: matrix,
     )
-    returned = design.matrix(0, 1)
+    returned = design.rebuild_matrix(0, 1)
     matrix[:] = 99
     ids[:] = 0
     np.testing.assert_array_equal(returned, expected)
     np.testing.assert_array_equal(design.hrf_indices, [1, -1])
-    assert not design.matrix(0, 1).flags.writeable
+    assert not design.rebuild_matrix(0, 1).flags.writeable
     assert not design.hrf_indices.flags.writeable
     assert design.design_fingerprint == "0" * 64
 

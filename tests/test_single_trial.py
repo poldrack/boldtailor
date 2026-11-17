@@ -413,40 +413,24 @@ def _same_trials(left, right):
 
 
 def test_fit_single_trials_names_its_hrf_hrf_model(selected_fixture):
-    """Verify fit single trials names its HRF HRF model."""
+    """The HRF keyword is ``hrf_model``; the retired alias ``hrf`` is rejected."""
     data, selection = selected_fixture
     candidate = selection.library.candidates[1]
-    named = entry()(data, hrf_model=candidate)
-    with pytest.warns(DeprecationWarning, match="hrf_model"):
-        old = entry()(data, hrf=candidate)
-    _same_trials(named, old)
-    with pytest.raises(TypeError, match="hrf_model"):
-        entry()(data, hrf=candidate, hrf_model=candidate)
+    entry()(data, hrf_model=candidate)
+    with pytest.raises(TypeError, match="hrf"):
+        entry()(data, hrf=candidate)
 
 
 def test_fit_selected_hrfs_names_its_input_hrf_selection(selected_fixture):
-    """Verify fit selected HRFs names its input HRF selection."""
+    """The selection keyword is required and named ``hrf_selection``."""
     data, selection = selected_fixture
     function = entry(name="fit_selected_hrfs")
     signature = dict(feature_signature="ordered-axis")
-    named = function(data, hrf_selection=selection, **signature)
-    with pytest.warns(DeprecationWarning, match="hrf_selection"):
-        old = function(data, selection=selection, **signature)
-    _same_trials(named, old)
-    with pytest.raises(TypeError, match="hrf_selection"):
-        function(data, selection=selection, hrf_selection=selection, **signature)
+    function(data, hrf_selection=selection, **signature)
+    with pytest.raises(TypeError, match="selection"):
+        function(data, selection=selection, **signature)
     with pytest.raises(TypeError, match="hrf_selection"):
         function(data, **signature)
-
-
-@pytest.mark.parametrize("new_value", ["spm", "".join(["s", "p", "m"])])
-def test_renamed_hrf_rejects_both_names_even_when_new_value_is_default(
-    selected_fixture, new_value
-):
-    """Verify renamed HRF rejects both names even when new value is default."""
-    data, selection = selected_fixture
-    with pytest.raises(TypeError, match="both"):
-        entry()(data, hrf=selection.library.candidates[1], hrf_model=new_value)
 
 
 def test_omitted_hrf_still_uses_canonical_default(selected_fixture):

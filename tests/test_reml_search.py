@@ -5,14 +5,12 @@ from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
 from boldtailor.reml import (
-    _log_grid,
     criterion,
-    criterion_slope,
     minimize_ratio,
     project_fixed,
     reml_terms,
 )
-from tests.reml_oracles import dense_fit, simulate
+from tests.reml_oracles import criterion_slope, dense_fit, search_log_grid, simulate
 
 N_FEATURES = 4
 
@@ -132,7 +130,7 @@ def test_optimum_is_stable_under_fixed_span_shift():
 
 def _best_search_grid_value(terms, n_features):
     """Lowest criterion over zero and the search's own starting grid."""
-    ratios = np.concatenate([[0.0], np.exp(_log_grid(terms, 121))])
+    ratios = np.concatenate([[0.0], np.exp(search_log_grid(terms, 121))])
     stacked = np.broadcast_to(ratios[:, None], (ratios.size, n_features))
     return criterion(stacked, terms).min(axis=0)
 
@@ -185,7 +183,7 @@ def _bracket(log_grid, best_index):
 
 def _unbracketed_interior(terms):
     """Count features whose interior grid minimum lacks a slope sign change."""
-    log_grid = _log_grid(terms, 121)
+    log_grid = search_log_grid(terms, 121)
     n_features = terms[0].residual_ss.shape[0]
     ratios = np.broadcast_to(np.exp(log_grid)[:, None], (log_grid.size, n_features))
     index = np.argmin(criterion(ratios, terms), axis=0)

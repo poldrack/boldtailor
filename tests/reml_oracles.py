@@ -3,10 +3,22 @@
 import warnings
 
 import numpy as np
+
+from boldtailor import reml
 import scipy.linalg
 from scipy.linalg import null_space
 from scipy.optimize import minimize_scalar
 from statsmodels.regression.mixed_linear_model import MixedLM, VCSpec
+
+
+def criterion_slope(ratios, terms):
+    """Derivative of the profiled REML criterion with respect to log(lambda)."""
+    return reml.pooled_slope(np.asarray(ratios, dtype=float), reml.pool_terms(terms))
+
+
+def search_log_grid(terms, size):
+    """The search grid of the pooled singular values."""
+    return reml._search_grid(np.concatenate([t.singular2 for t in terms]), size)
 
 
 def ar1_correlation(n: int, rho: float) -> np.ndarray:

@@ -7,6 +7,7 @@ import pytest
 
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
+from boldtailor._regularizers import NORMALIZED_RIDGE
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.trial_encoding import EncodingDesign
 from tests.oracles import subset_runs as subset
@@ -363,7 +364,9 @@ def test_prepared_run_betas_preserve_feature_order_and_candidate_independence(
     data, _, library = ridge_problem
     prepared = cv.prepare_runs(data, library) if optimized else None
     ids = np.array([2, 0, 1, -1, 0]) if optimized else np.zeros(data.n_features, int)
-    path = cv.prepare_run_beta_path(data, 0, prepared, ids, "run-01")
+    path = cv._beta_path(
+        cv.run_tables(data)[0], 0, prepared, ids, "run-01", NORMALIZED_RIDGE
+    )
     for alpha in [0.0, 0.1, 2.0, 2.0, 0.1, 0.0]:
         expected = augmented_beta(data, 0, ids, library if optimized else None, alpha)
         np.testing.assert_allclose(path.betas_at(alpha), expected, atol=1e-9)

@@ -193,13 +193,12 @@ def test_profiled_column_inside_nuisance_span_is_ineligible(task_fixture):
     assert not ok and "profiled" in reason
 
 
-def test_trial_eligibility_is_separate_from_task_model_eligibility(task_fixture):
-    """Verify trial eligibility is separate from task model eligibility."""
+def test_trial_matrix_has_one_column_per_event_whatever_the_task_model(task_fixture):
+    """The single-trial matrix follows the events, not the task model's regressors."""
     from boldtailor._run_design import prepare_runs
 
     data, library = task_fixture
     run = prepare_runs(data, library, NSD)[0]
-    assert run.trial_eligible(1) == (True, "")
     assert run.trial_matrix(1).shape == (len(data.frame_times[0]), 5)
     assert len(run.events) == 5
 
@@ -371,10 +370,10 @@ def test_cached_run_design_exposes_no_mutable_bookkeeping(task_fixture):
 
     data, library = task_fixture
     run = prepare_runs(data, library, NSD)[0]
-    run.eligible(1), run.trial_eligible(1)
+    run.eligible(1), run.trial_matrix(1)
     public = {k: v for k, v in vars(run).items() if not k.startswith("_")}
     assert not any(isinstance(v, (dict, list, set)) for v in public.values())
-    assert run.eligible(1) == (True, "") and run.trial_eligible(1) == (True, "")
+    assert run.eligible(1) == (True, "")
 
 
 def test_trial_matrices_are_cached_per_design_and_released_with_it(task_fixture):

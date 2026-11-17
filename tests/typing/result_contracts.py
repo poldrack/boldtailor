@@ -3,7 +3,6 @@
 from typing import assert_type
 
 import numpy as np
-from boldtailor._deprecation import UNSET, renamed_keyword
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_options import RemlHrfOptions
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -20,16 +19,8 @@ def check_optional_inputs(
     record: ProvenanceRecord,
 ) -> None:
     """Omitted values and activity records have explicit, usable contracts."""
-    task_delta_r2_prepared(
-        prepared, result, contrasts=UNSET, noise_model=UNSET, model_metadata=UNSET
-    )
-    fit_single_trials(data, hrf_model=UNSET)
-    fit_selected_hrfs(data, hrf_selection=UNSET, selection=UNSET)
+    task_delta_r2_prepared(prepared, result)
+    fit_single_trials(data, hrf_model="spm")
     assert_type(record.activity_records(), list[dict[str, object]])
     options = RemlHrfOptions(rho=np.array([0.1, 0.2]))
     assert_type(options.subset([1]), RemlHrfOptions)
-
-
-def check_resolved_alias(value: str) -> None:
-    """Resolved aliases exclude the omitted-argument sentinel."""
-    assert_type(renamed_keyword("fit", "old", "new", UNSET, "spm"), str)

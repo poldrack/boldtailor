@@ -42,7 +42,7 @@ def test_voxelwise_contrasts_match_independent_run_glms(hrf_glm_problem, noise_m
             np.testing.assert_allclose(
                 result.run_r2[run][feature], 1 - sse[-1] / sst[-1]
             )
-            pd.testing.assert_frame_equal(result.group_design(run, cid), design)
+            pd.testing.assert_frame_equal(result.rebuild_group_design(run, cid), design)
             for name, column in [("stimulus", "stimulus"), ("rt_effect", "rt")]:
                 vector = np.zeros(matrix.shape[1])
                 vector[design.columns.get_loc(column)] = 1
@@ -97,7 +97,7 @@ def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model)
             )
     np.testing.assert_allclose(actual.r2, expected.r2, atol=1e-12)
     for run, design in enumerate(expected.design_matrices):
-        pd.testing.assert_frame_equal(actual.group_design(run, 0), design)
+        pd.testing.assert_frame_equal(actual.rebuild_group_design(run, 0), design)
 
 
 def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
@@ -200,9 +200,9 @@ def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
         assert not values.flags.writeable
         with pytest.raises(ValueError):
             values.flat[0] = 0
-    design = result.group_design(0, 1)
+    design = result.rebuild_group_design(0, 1)
     design.iloc[:, :] = 0
-    assert result.group_design(0, 1).to_numpy().any()
+    assert result.rebuild_group_design(0, 1).to_numpy().any()
     np.testing.assert_array_equal(result.hrf_indices, selection.hrf_indices)
     assert result.selection_provenance == selection.provenance
     info = result.provenance.to_dict()["activities"][-1]
@@ -278,7 +278,7 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
     model = model.replace(confounds=("motion", "stimulus_kernel"))
     result = _selected_fit(data, model, selection)
     for run, cid in result.group_design_provenance:
-        actual = result.group_design(run, cid)
+        actual = result.rebuild_group_design(run, cid)
         expected = hrf_glm_oracle_design(
             data.events[run],
             data.frame_times[run],
@@ -442,7 +442,7 @@ def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem
     runs = prepare_runs(data, library, model.task_model)
     assert result.group_design_provenance
     for run, cid in result.group_design_provenance:
-        design = result.group_design(run, cid)
+        design = result.rebuild_group_design(run, cid)
         scored = runs[run].task_design(cid)
         expected = task_columns(
             expand_events(data.events[run], model.task_model, run),
@@ -459,11 +459,11 @@ def test_selected_glm_group_designs_equal_scored_task_columns(task_model_problem
         assert list(design.columns[scored.shape[1] :]) == ["motion", "constant"]
     assert (
         "missing_response_time"
-        in result.group_design(1, int(selection.hrf_indices[0])).columns
+        in result.rebuild_group_design(1, int(selection.hrf_indices[0])).columns
     )
     assert (
         "missing_response_time"
-        not in result.group_design(0, int(selection.hrf_indices[0])).columns
+        not in result.rebuild_group_design(0, int(selection.hrf_indices[0])).columns
     )
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["task_model"] == model.task_model.to_dict()
@@ -490,7 +490,7 @@ def test_selected_glm_spm_group_also_uses_shared_task_columns(task_model_problem
             min_onset=model.min_onset,
             oversampling=model.oversampling,
         )
-        design = result.group_design(run, 0)
+        design = result.rebuild_group_design(run, 0)
         np.testing.assert_array_equal(
             design.iloc[:, : expected.shape[1]].to_numpy(), expected.to_numpy()
         )
@@ -562,7 +562,7 @@ def test_selected_glm_accepts_selection_on_a_subset_task_model(task_model_proble
     )
     result = fit(data, model, hrf_selection=narrow, feature_signature="axis-tm")
     for run, cid in result.group_design_provenance:
-        design = result.group_design(run, cid)
+        design = result.rebuild_group_design(run, cid)
         expected = task_columns(
             expand_events(data.events[run], model.task_model, run),
             data.frame_times[run],
@@ -683,7 +683,7 @@ def test_task_model_selected_glm_matches_nilearn_on_known_amplitudes(
     )
     result = fit(data, model, hrf_selection=selection, feature_signature="axis-oracle")
     for feature, cid in enumerate(_TRUE_CIDS):
-        designs = [result.group_design(run, cid) for run in range(3)]
+        designs = [result.rebuild_group_design(run, cid) for run in range(3)]
         expected = _nilearn_equal_weight(
             data.signals, designs, feature, "response_time"
         )
@@ -726,7 +726,9 @@ def test_selected_glm_rebuilds_group_designs_on_demand(hrf_glm_problem):
     compiled, _ = compile_group_designs(data, model, selection)
     assert set(result.group_design_provenance) == set(compiled)
     for (run, cid), design in compiled.items():
-        pd.testing.assert_frame_equal(result.group_design(run, cid), design.matrix)
+        pd.testing.assert_frame_equal(
+            result.rebuild_group_design(run, cid), design.matrix
+        )
     assert not hasattr(result, "group_designs")
     assert not any(
         isinstance(value, pd.DataFrame)
@@ -748,7 +750,7 @@ def test_selected_glm_group_design_rejects_pairs_that_were_not_fitted(
     result = _selected_fit(data, model, narrow)
     assert set(result.group_design_provenance) == {(r, 1) for r in range(3)}
     with pytest.raises(KeyError):
-        result.group_design(*key)
+        result.rebuild_group_design(*key)
 
 
 def test_explicit_group_design_rebuild_and_materialization(hrf_glm_problem):
