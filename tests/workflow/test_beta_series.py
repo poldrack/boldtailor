@@ -732,3 +732,115 @@ def test_reml_nested_workflow_preserves_method_and_outer_isolation(session, cv_l
     for split in result["evaluation"].values():
         for block in split["provenance"]:
             assert block["selection_record"]["activities"][-1]["method"] == "reml"
+
+
+# --- nested selection model and shared blocks ---------------------------------
+
+
+def fold_selection_models(result):
+    """Task models recorded by every inner-fold HRF selection of every scope."""
+    models = []
+    for tuned in result["tuning"].values():
+        activity = tuned["scores"].provenance.to_dict()["activities"][-1]
+        for block in activity["block_records"]:
+            for fold in block["activities"][-1]["folds"]:
+                models.append(fold["hrf_selection"]["task_model"])
+    return models
+
+
+@pytest.mark.parametrize("narrowed", [False, True])
+@pytest.mark.parametrize("fractional", [False, True])
+def test_cv_inner_folds_select_hrfs_with_the_selection_model(
+    session, cv_library, narrowed, fractional
+):
+    """Inner tuning folds score HRFs with the same selection model as the outer
+    evaluation and final fit, for CV selection with either penalty family.
+    """
+    root, runs, model = session
+    expected = inputs.selection_task_model(model, not narrowed)
+    grid = dict(fractions=[0.5, 1.0]) if fractional else dict(alphas=[0.0, 0.1])
+    result = beta_series.fit_cv_beta_series(
+        runs,
+        root,
+        library=cv_library,
+        block_size=4,
+        task_model=model,
+        selection_model=expected if narrowed else None,
+        **grid,
+    )
+    assert model.modulators and expected.to_dict() != TaskModel().to_dict()
+    recorded = fold_selection_models(result)
+    assert recorded and all(m == expected.to_dict() for m in recorded)
+    for bundle in result["final"]["hrf_selections"].values():
+        assert bundle["all"].task_model == expected
+
+
+def constant_runs(runs, column):
+    """Runs whose signal at one grayordinate is constant within every run."""
+    changed = []
+    for run in runs:
+        y = np.array(run.image.get_fdata())
+        y[:, column] = 100.0
+        changed.append(replace(run, image=nib.Cifti2Image(y, header=run.image.header)))
+    return changed
+
+
+def tuned_indices(result, scope):
+    activity = result["tuning"][scope]["scores"].provenance.to_dict()["activities"][-1]
+    return sorted(
+        i for b in activity["block_records"] for i in b["grayordinate_indices"]
+    )
+
+
+@pytest.mark.parametrize("supplied", [False, True])
+def test_cv_path_uses_the_session_blocks_without_constant_grayordinates(
+    session, supplied
+):
+    """CV tuning, evaluation and refit use the nonconstant session blocks,
+    whether supplied or built, and leave excluded positions undefined.
+    """
+    root, runs, model = session
+    runs = constant_runs(runs, 1)
+    blocks = inputs.make_blocks(runs, block_size=2)
+    kept = sorted(np.concatenate(blocks).tolist())
+    assert 1 not in kept
+    result = beta_series.fit_cv_beta_series(
+        runs,
+        root,
+        task_model=model,
+        library=None,
+        alphas=[0.0, 0.1],
+        **(dict(blocks=blocks) if supplied else dict(block_size=2)),
+    )
+    for scope in ("odd", "even", "all"):
+        assert tuned_indices(result, scope) == kept
+        assert np.isnan(result["tuning"][scope]["scores"].cv_r2[:, 1]).all()
+    for evaluation in result["evaluation"].values():
+        assert np.isnan(evaluation["encoding_r2"][1])
+        assert evaluation["hrf_indices"][1] == -1
+    fixed = analysis.fit_beta_series(runs, root, blocks, task_model=model)
+    for tuned, plain in zip(result["final"]["betas"], fixed["betas"], strict=True):
+        np.testing.assert_array_equal(np.isnan(tuned), np.isnan(plain))
+        assert np.isnan(tuned[:, 1]).all()
+
+
+def test_cv_model_shares_the_blocks_of_the_fixed_models(six_run_dataset, settings_for):
+    """fit_beta_models passes the session blocks to the CV model, so tuned and
+    untuned beta series cover the same grayordinates.
+    """
+    root, _ = six_run_dataset
+    settings = settings_for(
+        root, ridge_mode="cv", ridge_alphas=(0.0, 0.1), block_size=2
+    )
+    runs = constant_runs(inputs.load_session(settings), 1)
+    model = detect_task_model([r.events for r in runs])
+    blocks = inputs.make_blocks(runs, block_size=2)
+    models = beta_series.fit_beta_models(
+        runs, root, blocks, settings, None, None, model
+    )
+    tuned, plain = models["CanonicalTrialRidgeCV"], models["CanonicalTrialOLS"]
+    for a, b in zip(tuned.fit["betas"], plain.fit["betas"], strict=True):
+        np.testing.assert_array_equal(np.isnan(a), np.isnan(b))
+    assert tuned_indices(dict(tuning=tuned.tuning), "all") == sorted(
+        np.concatenate(blocks).tolist()
+    )

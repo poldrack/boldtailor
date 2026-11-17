@@ -287,6 +287,24 @@ def test_auto_threshold_is_the_mixture_threshold_of_all_finite_values():
     assert 0 < masks.pool_size and 0 < masks.scoring_size
 
 
+def test_auto_threshold_warns_when_the_mixture_fit_did_not_converge(monkeypatch):
+    """A non-converged mixture still sets the threshold, but the caller is warned
+    and told how to avoid relying on it.
+    """
+    from boldtailor import _mixture_threshold
+
+    monkeypatch.setitem(_mixture_threshold.SETTINGS, "max_iter", 1)
+    values = bimodal_statistic()
+    with pytest.warns(RuntimeWarning, match="did not converge") as caught:
+        masks = pool_masks(
+            values, "auto", hrf_indices=defined(), context="the noise pool (run 'a')"
+        )
+    message = str(caught[0].message)
+    assert "the noise pool (run 'a')" in message and "pool_r2_threshold" in message
+    assert masks.mixture is not None and not masks.mixture.converged
+    assert masks.threshold == masks.mixture.threshold
+
+
 def test_auto_threshold_on_the_fixture_pools_the_noise_features(fixture, statistic):
     """Verify auto threshold on the fixture pools the noise features."""
     masks = pool_masks(statistic, "auto", hrf_indices=defined())

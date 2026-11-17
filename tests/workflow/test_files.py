@@ -130,3 +130,26 @@ def test_missing_ok_reaction_times_tolerate_absent_or_text_values():
     np.testing.assert_array_equal(np.isnan(rt[0]), [True, True, True])
     np.testing.assert_allclose(rt[1], [0.5, np.nan, 2.0])
     assert all(values.dtype == float for values in rt)
+
+
+@pytest.mark.parametrize(
+    "method,ridge_cv,optimized,expected",
+    [
+        ("cv", False, True, 2),
+        ("reml", False, True, 1),
+        ("cv", True, True, 3),
+        ("cv", True, False, 2),
+        ("reml", True, True, 2),
+        ("reml", True, False, 2),
+    ],
+)
+def test_minimum_runs_per_half_follows_method_and_nesting(
+    method, ridge_cv, optimized, expected
+):
+    """Split HRF selection needs two runs per half (one for REML); nested ridge
+    CV needs one more unless HRFs are canonical or REML-selected.
+    """
+    assert (
+        workflow_files.min_runs_per_half(method, ridge_cv=ridge_cv, optimized=optimized)
+        == expected
+    )
