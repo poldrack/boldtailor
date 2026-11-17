@@ -271,8 +271,6 @@ def test_glmsingle_attribution_ships_and_is_cited():
         assert GLMSINGLE_NOTICE in text, path
     for module in (
         "_mixture_threshold",
-        "_denoising_pool",
-        "_denoising_cv",
         "denoising",
     ):
         source = Path(f"src/boldtailor/{module}.py").read_text()

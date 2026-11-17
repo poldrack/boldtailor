@@ -7,8 +7,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_criterion import profiled_variance
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor.reml import profiled_variance, project_fixed, reml_terms
 from boldtailor.ar1 import estimate_rho
 from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
 from tests.reml_oracles import (

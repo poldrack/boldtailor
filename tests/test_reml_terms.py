@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor.reml import project_fixed, reml_terms
 from boldtailor.ar1 import whiten
 from tests.reml_oracles import simulate
 
@@ -85,7 +85,7 @@ SHAPES = {"tall": (40, 3), "square": (12, 12), "wide": (6, 90)}
 @pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
 def test_spectral_norm_matches_svd(shape):
     """Verify spectral norm matches SVD."""
-    from boldtailor._reml_terms import _spectral_norm
+    from boldtailor.reml import _spectral_norm
 
     matrix = np.random.default_rng(0).normal(size=shape)
     expected = np.linalg.svd(matrix, compute_uv=False)[0]
@@ -94,7 +94,7 @@ def test_spectral_norm_matches_svd(shape):
 
 def test_spectral_norm_of_rank_deficient_and_zero_matrices():
     """Verify spectral norm of rank deficient and zero matrices."""
-    from boldtailor._reml_terms import _spectral_norm
+    from boldtailor.reml import _spectral_norm
 
     column = np.random.default_rng(1).normal(size=(8, 1))
     repeated = np.tile(column, (1, 30))
@@ -106,7 +106,7 @@ def test_spectral_norm_of_rank_deficient_and_zero_matrices():
 @pytest.mark.parametrize("shape", SHAPES.values(), ids=SHAPES.keys())
 def test_spectral_norm_decomposes_the_smaller_gram_matrix(shape, monkeypatch):
     """Verify spectral norm decomposes the smaller gram matrix."""
-    from boldtailor._reml_terms import _spectral_norm
+    from boldtailor.reml import _spectral_norm
 
     seen = []
     eigvalsh = np.linalg.eigvalsh
@@ -130,7 +130,7 @@ def test_wide_random_design_keeps_fixed_span_rank_policy(group):
 @pytest.mark.parametrize("scale", [1e-200, 1e200])
 def test_spectral_norm_does_not_overflow_or_underflow(scale):
     """Verify spectral norm does not overflow or underflow."""
-    from boldtailor._reml_terms import _spectral_norm
+    from boldtailor.reml import _spectral_norm
 
     base = np.random.default_rng(0).normal(size=(20, 5))
     expected = scale * np.linalg.svd(base, compute_uv=False)[0]

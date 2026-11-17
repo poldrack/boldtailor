@@ -24,15 +24,17 @@ from scipy import stats
 from scipy.linalg import block_diag
 from nilearn.glm.first_level import run_glm
 
-from boldtailor._denoising_cv import prepare_scoring, select_component_count
-from boldtailor._denoising_gate import (
+from boldtailor.denoising import (
+    RunComponents,
     apply_gate,
     ar1_coefficients,
+    prepare_scoring,
+    run_components,
+    select_component_count,
+    select_denoising,
     validate_gate,
     validate_noise_model,
 )
-from boldtailor._denoising_pool import RunComponents, run_components
-from boldtailor.denoising import select_denoising
 from boldtailor.denoising_results import SignificanceGate
 from boldtailor.data import from_arrays
 from tests.denoising_fixtures import make_denoising_fixture
@@ -326,7 +328,7 @@ def test_rho_is_estimated_separately_for_each_run(base):
 
 def test_zero_coefficients_reproduce_the_ols_gate(base, monkeypatch):
     """Verify zero coefficients reproduce the OLS gate."""
-    import boldtailor._denoising_gate as module
+    import boldtailor.denoising as module
 
     _, setup = base
     ols = gate(setup, 2, noise_model="ols")
@@ -666,7 +668,7 @@ def test_internal_errors_in_the_fit_are_not_hidden_as_exclusions(
     base, pcstop_count, monkeypatch
 ):
     """Verify internal errors in the fit are not hidden as exclusions."""
-    import boldtailor._denoising_gate as module
+    import boldtailor.denoising as module
 
     def broken(*args):
         raise ValueError("internal failure")

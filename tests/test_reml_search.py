@@ -4,9 +4,14 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_criterion import criterion, criterion_slope
-from boldtailor._reml_search import _log_grid, minimize_ratio
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor.reml import (
+    _log_grid,
+    criterion,
+    criterion_slope,
+    minimize_ratio,
+    project_fixed,
+    reml_terms,
+)
 from tests.reml_oracles import dense_fit, simulate
 
 N_FEATURES = 4
@@ -202,7 +207,7 @@ def test_neighbour_bracket_shows_sign_change_for_interior_optima(cases):
 def _two_basin_terms():
     """The review's narrow minimum: bracketed by a slope crossing, yet not the
     lowest grid point, so refining only around the grid argmin loses it."""
-    from boldtailor._reml_terms import RemlTerms
+    from boldtailor.reml import RemlTerms
 
     y = [5.659277805656175, 1.3575913902516368, 12.166250878076637]
     y += [440.03410697431354, 0.024484911495792103, 0.2989731950657336]
@@ -222,7 +227,7 @@ def _two_basin_terms():
 
 def _recorded_bytes(monkeypatch):
     """Record the bytes of the (k, ...) temporary behind every evaluation."""
-    import boldtailor._reml_search as search
+    import boldtailor.reml as search
 
     sizes = []
 
@@ -248,7 +253,7 @@ def _assert_same_optimum(result, expected):
 
 def test_search_temporaries_stay_within_the_budget(monkeypatch):
     """One grid row over all features exceeds the budget; batches must not."""
-    import boldtailor._reml_search as search
+    import boldtailor.reml as search
 
     _, terms = _simulated_terms(5, 1.0, n_features=1750)
     directions = sum(t.singular2.size for t in terms)
@@ -262,8 +267,8 @@ def test_search_temporaries_stay_within_the_budget(monkeypatch):
 
 def test_default_budget_bounds_a_wide_problem(monkeypatch):
     """The review's shape: 100 directions by 30000 features is 22.9 MiB a row."""
-    import boldtailor._reml_search as search
-    from boldtailor._reml_terms import RemlTerms
+    import boldtailor.reml as search
+    from boldtailor.reml import RemlTerms
 
     rng = np.random.default_rng(0)
     terms = [
@@ -282,7 +287,7 @@ def test_default_budget_bounds_a_wide_problem(monkeypatch):
 
 def test_budget_below_one_feature_falls_back_to_single_features(monkeypatch):
     """Verify budget below one feature falls back to single features."""
-    import boldtailor._reml_search as search
+    import boldtailor.reml as search
 
     _, terms = _simulated_terms(5, 1.0, n_features=7)
     directions = sum(t.singular2.size for t in terms)
@@ -295,7 +300,7 @@ def test_budget_below_one_feature_falls_back_to_single_features(monkeypatch):
 
 def test_batches_do_not_change_a_multi_basin_optimum(monkeypatch):
     """Verify batches do not change a multi basin optimum."""
-    import boldtailor._reml_search as search
+    import boldtailor.reml as search
 
     terms = _two_basin_terms()
     tiled = [
@@ -323,7 +328,7 @@ def test_every_slope_crossing_competes():
 
 def test_grid_spacing_does_not_grow_with_spectral_spread():
     """Verify grid spacing does not grow with spectral spread."""
-    from boldtailor._reml_search import _search_grid
+    from boldtailor.reml import _search_grid
 
     base_step = 2 * np.log(1e8) / 120
     for singular2 in (np.array([3.0]), np.array([1.0, 2.0]), np.logspace(-10, 10, 8)):
@@ -337,7 +342,7 @@ def test_grid_spacing_does_not_grow_with_spectral_spread():
 def _nearly_flat_terms(seed):
     """Saturated design whose spectrum differs only at rounding level: the
     profile varies by less than the criterion's own rounding noise."""
-    from boldtailor._reml_terms import RemlTerms
+    from boldtailor.reml import RemlTerms
 
     y2 = np.random.default_rng(seed).normal(size=(6, 4)) ** 2
     return [
@@ -440,7 +445,7 @@ def test_every_refined_positive_optimum_is_stationary(cases):
 
 def test_exact_zero_slope_grid_point_is_not_unrefined():
     """A grid point whose analytic slope is 0.0 is an exact stationary point."""
-    from boldtailor._reml_terms import RemlTerms
+    from boldtailor.reml import RemlTerms
 
     terms = [
         RemlTerms(

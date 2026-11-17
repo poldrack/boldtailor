@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 from scipy.linalg import block_diag, orth
 
-from boldtailor._denoising_pool import (
+from boldtailor.denoising import (
     FALLBACK_SIZE,
     PoolMasks,
     analysis_components,

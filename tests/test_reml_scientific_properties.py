@@ -9,15 +9,18 @@ from hypothesis import given, settings, strategies as st
 from numpy.testing import assert_allclose, assert_array_equal
 
 from boldtailor._ar1_moments import basis_expected_lag_ratio, invert_lag_ratio
-from boldtailor._reml_criterion import (
+from boldtailor.reml import (
     PooledTerms,
-    pooled_quadratic,
+    RemlGroup,
+    _confounded,
+    fit_reml,
+    minimize_ratio,
     pooled_criterion,
+    pooled_quadratic,
     pooled_slope,
+    project_fixed,
+    reml_terms,
 )
-from boldtailor._reml_search import _confounded, minimize_ratio
-from boldtailor._reml_terms import project_fixed, reml_terms
-from boldtailor.reml import RemlGroup, fit_reml
 
 PROPERTIES = settings(max_examples=50, deadline=None, derandomize=True)
 SEEDS = st.integers(0, 2**32 - 1)

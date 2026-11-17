@@ -18,13 +18,34 @@ from boldtailor._arrays import (
     readonly_array,
     set_fields_in_place,
 )
-from boldtailor._denoising_identity import RunIdentity
 from boldtailor._mixture_threshold import MixtureThreshold
 from boldtailor.data import _owned_table
 from boldtailor.hrf_results import HrfSelectionResult
 from boldtailor.provenance import ProvenanceRecord
 
 COMPONENT_PREFIX = "denoise_pc_"
+
+
+@dataclass(frozen=True)
+class RunIdentity:
+    """Fingerprints of one run of the analysis a result was selected on."""
+
+    n_scans: int
+    signal: str
+    frame_times: str
+    confounds: str
+    confound_columns: tuple[str, ...]
+    events: str
+
+    def to_dict(self) -> dict[str, object]:
+        return dict(
+            n_scans=self.n_scans,
+            signal=self.signal,
+            frame_times=self.frame_times,
+            confounds=self.confounds,
+            confound_columns=list(self.confound_columns),
+            events=self.events,
+        )
 
 
 def component_names(count: int) -> tuple[str, ...]:

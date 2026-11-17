@@ -2,8 +2,13 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from boldtailor._reml_criterion import criterion, criterion_slope, profiled_variance
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor.reml import (
+    criterion,
+    criterion_slope,
+    profiled_variance,
+    project_fixed,
+    reml_terms,
+)
 from tests.reml_oracles import dense_criterion, dense_profiled_variance, simulate
 
 RATIOS = [0.0, 0.01, 1.0, 10.0, 1e3]
@@ -117,7 +122,7 @@ def test_slope_matches_finite_differences(rho):
 
 def test_joint_value_and_slope_match_separate_evaluations(ar1):
     """Verify joint value and slope match separate evaluations."""
-    from boldtailor._reml_criterion import pool_terms, pooled_value_and_slope
+    from boldtailor.reml import pool_terms, pooled_value_and_slope
 
     terms = ar1[3]
     ratios = np.array([_at(r) for r in RATIOS])

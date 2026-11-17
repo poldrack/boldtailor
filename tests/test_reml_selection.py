@@ -343,7 +343,7 @@ def test_untruncated_selection_has_no_flag(planted):
 def test_losing_interior_fallback_makes_selection_provisional(monkeypatch):
     """Verify losing interior fallback makes selection provisional."""
     import boldtailor.reml as api
-    from boldtailor._reml_search import minimize_ratio
+    from boldtailor.reml import minimize_ratio
     from tests.test_reml_adversarial import _diagonal_problem
 
     y, z, _ = _diagonal_problem(54, "wide")

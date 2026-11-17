@@ -39,11 +39,12 @@ import time
 import numpy as np
 import pandas as pd
 
-from boldtailor._denoising_cv import choose_count, select_component_count
-from boldtailor._denoising_pool import (
+from boldtailor.denoising import (
     CANONICAL,
     _onoff_terms,
     analysis_components,
+    choose_count,
+    select_component_count,
 )
 from boldtailor._hrf_cv import pooled_amplitude, prepare_runs
 from boldtailor.hrf_library import default_hrf_library

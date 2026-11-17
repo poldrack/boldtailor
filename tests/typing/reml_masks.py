@@ -9,8 +9,7 @@ from typing import assert_type
 import numpy as np
 from numpy.typing import NDArray
 
-from boldtailor._reml_terms import FixedProjection
-from boldtailor.reml import _pooled_energy_exceeds_floor
+from boldtailor.reml import FixedProjection, _pooled_energy_exceeds_floor
 
 
 def check_feature_mask(projections: list[FixedProjection]) -> None:

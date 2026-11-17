@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from boldtailor._reml_terms import project_fixed, reml_terms
+from boldtailor.reml import project_fixed, reml_terms
 from boldtailor.ar1 import estimate_rho, prepare_reference
 from boldtailor.reml import RemlGroup, fit_reml
 

@@ -35,21 +35,13 @@ from boldtailor._arrays import (
     copy_array_fields_in_place,
     freeze_sequence_fields_in_place,
 )
-from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
-from boldtailor._reml_criterion import (
-    criterion,
-    pool_terms,
-    pooled_quadratic,
-    profiled_variance,
+from boldtailor._numerics import (
+    conditioned_basis,
+    project_out,
+    rank_tolerance,
+    residualise,
 )
-from boldtailor._reml_search import RatioOptimum, minimize_ratio
-from boldtailor._reml_terms import (
-    FixedProjection,
-    RemlTerms,
-    project_fixed,
-    reml_terms,
-    reproject_signals,
-)
+from boldtailor.ar1 import whiten
 
 __all__ = [
     "FixedProjection",
@@ -66,6 +58,540 @@ __all__ = [
     "reml_terms",
     "select_random_effects_design",
 ]
+
+
+# ---------------------------------------------------------------- inputs
+
+
+def _check_finite(values, name, index):
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"{name} of group {index} contains non-finite values")
+
+
+def _check_matrix(values, name, index):
+    if np.ndim(values) != 2:
+        raise ValueError(f"{name} of group {index} must be 2-D (scans, columns)")
+    _check_finite(values, name, index)
+
+
+def _check_group(group, index):
+    _check_matrix(group.signals, "signals", index)
+    _check_matrix(group.fixed_design, "fixed_design", index)
+    if group.signals.shape[0] != group.fixed_design.shape[0]:
+        raise ValueError(f"scan counts differ within group {index}")
+
+
+def _check_random(group, random, label, index):
+    if random is None:
+        return
+    _check_matrix(random, label, index)
+    if np.shape(random)[0] != group.signals.shape[0]:
+        raise ValueError(
+            f"scan counts differ between signals and {label} of group {index}"
+        )
+
+
+def _as_random(random):
+    return None if random is None else np.asarray(random, dtype=float)
+
+
+def validate_groups(groups):
+    """Raise ValueError unless the groups are finite, 2-D and share features."""
+    if len(groups) == 0:
+        raise ValueError("at least one group is required")
+    for index, group in enumerate(groups):
+        _check_group(group, index)
+    if len({g.signals.shape[1] for g in groups}) != 1:
+        raise ValueError("feature counts differ across groups")
+    if groups[0].signals.shape[1] == 0:
+        raise ValueError("signals must have at least one feature")
+
+
+def checked_random(groups, random_design, label):
+    """One validated float random design (or None) per group from any iterable."""
+    designs = [_as_random(z) for z in random_design]
+    if len(designs) != len(groups):
+        raise ValueError(f"{label} must have one entry per group")
+    for index, (group, random) in enumerate(zip(groups, designs, strict=True)):
+        _check_random(group, random, label, index)
+    return designs
+
+
+def feature_rho(rho, n_features):
+    """Broadcast rho to one stationary value per feature."""
+    values = np.asarray(rho, dtype=float)
+    if values.ndim == 0:
+        values = np.full(n_features, float(values))
+    if values.shape != (n_features,):
+        raise ValueError("rho must be a scalar or have shape (features,)")
+    if not np.all(np.abs(values) < 1):
+        raise ValueError("rho must be finite with |rho| < 1")
+    return values
+
+
+# ---------------------------------------------------------------- terms
+
+
+@dataclass(frozen=True)
+class FixedProjection:
+    """Whitened signals with the whitened fixed design projected out.
+
+    ``energy`` at or below ``rounding_floor`` is projection rounding; at or
+    below ``uncertainty_floor`` it cannot be told apart from the error of the
+    computed fixed span.
+    """
+
+    basis: np.ndarray
+    signals: np.ndarray
+    energy: np.ndarray
+    rounding_floor: np.ndarray
+    uncertainty_floor: np.ndarray
+    dof: int
+    rho: float
+
+    def __post_init__(self):
+        copy_array_fields_in_place(self, ("basis", "signals", "energy"))
+        copy_array_fields_in_place(self, ("rounding_floor", "uncertainty_floor"))
+
+
+def project_fixed(signals, fixed_design, rho: float = 0.0) -> FixedProjection:
+    """Whiten by AR(1) and remove the span of the fixed design."""
+    y = whiten(signals, rho)
+    basis, amplification = conditioned_basis(whiten(fixed_design, rho))
+    dof = y.shape[0] - basis.shape[1]
+    if dof <= 0:
+        raise ValueError("positive restricted degrees of freedom required")
+    residual, rounding, uncertainty = project_out(y, basis, amplification)
+    return FixedProjection(
+        basis=basis,
+        signals=residual,
+        energy=np.sum(residual**2, axis=0),
+        rounding_floor=rounding,
+        uncertainty_floor=uncertainty,
+        dof=dof,
+        rho=float(rho),
+    )
+
+
+def reproject_signals(projection: FixedProjection, signals) -> FixedProjection:
+    """Whiten and project ``signals`` onto an existing fixed-design basis."""
+    residual = residualise(whiten(signals, projection.rho), projection.basis)
+    zeros = np.zeros(residual.shape[1])
+    return FixedProjection(
+        basis=projection.basis,
+        signals=residual,
+        energy=np.sum(residual**2, axis=0),
+        rounding_floor=zeros,
+        uncertainty_floor=zeros,
+        dof=projection.dof,
+        rho=projection.rho,
+    )
+
+
+@dataclass(frozen=True)
+class RemlTerms:
+    """Sufficient statistics of one group for the REML criterion."""
+
+    singular2: np.ndarray
+    coordinates2: np.ndarray
+    residual_ss: np.ndarray
+    dof: int
+    energy: np.ndarray
+
+    def __post_init__(self):
+        copy_array_fields_in_place(
+            self, ("singular2", "coordinates2", "residual_ss", "energy")
+        )
+
+
+def _smaller_gram(matrix):
+    """Z'Z or ZZ', whichever is smaller; both share the nonzero eigenvalues."""
+    rows, columns = matrix.shape
+    return matrix.T @ matrix if columns <= rows else matrix @ matrix.T
+
+
+def _spectral_norm(matrix):
+    """Largest singular value from the smaller Gram matrix, without a second SVD."""
+    peak = np.abs(matrix).max()
+    if peak == 0.0:
+        return 0.0
+    return peak * np.sqrt(
+        max(np.linalg.eigvalsh(_smaller_gram(matrix / peak))[-1], 0.0)
+    )
+
+
+def _projected_random(projection, random_design):
+    z = whiten(random_design, projection.rho)
+    return residualise(z, projection.basis), _spectral_norm(z)
+
+
+def _random_directions(projection, random_design):
+    n = projection.signals.shape[0]
+    if random_design is None or np.shape(random_design)[1] == 0:
+        return np.empty((n, 0)), np.empty(0)
+    projected, norm = _projected_random(projection, np.asarray(random_design, float))
+    u, s, _ = np.linalg.svd(projected, full_matrices=False)
+    keep = s > rank_tolerance(projected.shape, norm)
+    return u[:, keep], s[keep]
+
+
+def _orthogonal_energy(projection, directions, coordinates):
+    """Energy outside the retained random span, without subtracting energies.
+
+    At full restricted rank the complement has dimension zero. Otherwise
+    forming the residual preserves small orthogonal signals that disappear
+    in ``||y||² - ||U'y||²``. Its rounding error is at the amplitude scale.
+    """
+    if directions.shape[1] == projection.dof:
+        return np.zeros(projection.signals.shape[1])
+    residual = projection.signals - directions @ coordinates
+    return np.sum(residual**2, axis=0)
+
+
+def reml_terms(
+    projection: FixedProjection, random_design: np.ndarray | None
+) -> RemlTerms:
+    """Reduce a projected group to singular values and squared coordinates."""
+    u, s = _random_directions(projection, random_design)
+    coordinates = u.T @ projection.signals
+    energy = projection.energy
+    return RemlTerms(
+        singular2=s**2,
+        coordinates2=coordinates**2,
+        residual_ss=_orthogonal_energy(projection, u, coordinates),
+        dof=projection.dof,
+        energy=energy,
+    )
+
+
+# ---------------------------------------------------------------- criterion
+
+
+@dataclass(frozen=True)
+class PooledTerms:
+    """Sufficient statistics of all groups together."""
+
+    singular2: np.ndarray
+    coordinates2: np.ndarray
+    residual_ss: np.ndarray
+    dof: int
+
+
+def pool_terms(terms: Sequence[RemlTerms]) -> PooledTerms:
+    """Concatenate singular values and coordinates; sum residuals and dof."""
+    return PooledTerms(
+        singular2=np.concatenate([t.singular2 for t in terms]),
+        coordinates2=np.concatenate([t.coordinates2 for t in terms], axis=0),
+        residual_ss=np.sum([t.residual_ss for t in terms], axis=0),
+        dof=sum(t.dof for t in terms),
+    )
+
+
+def _scaled(ratios, singular2):
+    """ratio * s2 with shape (..., k, features)."""
+    return ratios[..., None, :] * singular2[:, None]
+
+
+def pooled_quadratic(ratios, pooled: PooledTerms) -> np.ndarray:
+    """Q(lambda), the whitened residual quadratic form, shaped like ``ratios``."""
+    shrunk = 1.0 + _scaled(ratios, pooled.singular2)
+    return pooled.residual_ss + (pooled.coordinates2 / shrunk).sum(axis=-2)
+
+
+def pooled_criterion(ratios, pooled: PooledTerms) -> np.ndarray:
+    """N log(Q/N) + sum log(1 + lambda s2) from pooled statistics."""
+    scaled = _scaled(ratios, pooled.singular2)
+    logdet = np.log1p(scaled).sum(axis=-2)
+    scaled += 1.0
+    q = pooled.residual_ss + (pooled.coordinates2 / scaled).sum(axis=-2)
+    return pooled.dof * np.log(q / pooled.dof) + logdet
+
+
+def pooled_criterion_at_zero(pooled: PooledTerms) -> np.ndarray:
+    """The criterion at lambda = 0, N log(energy / N), without (k, features) work."""
+    q = pooled.residual_ss + pooled.coordinates2.sum(axis=0)
+    return pooled.dof * np.log(q / pooled.dof)
+
+
+def pooled_slope(ratios, pooled: PooledTerms) -> np.ndarray:
+    """Derivative of the criterion in log(lambda), from pooled statistics."""
+    scaled = _scaled(ratios, pooled.singular2)
+    shrunk = 1.0 + scaled
+    fraction = scaled / shrunk
+    weighted = pooled.coordinates2 / shrunk
+    q = pooled.residual_ss + weighted.sum(axis=-2)
+    q_slope = -(weighted * fraction).sum(axis=-2)
+    return pooled.dof * q_slope / q + fraction.sum(axis=-2)
+
+
+def pooled_value_and_slope(ratios, pooled: PooledTerms):
+    """Criterion and its slope in log(lambda), sharing one pass of temporaries."""
+    scaled = _scaled(ratios, pooled.singular2)
+    logdet = np.log1p(scaled).sum(axis=-2)
+    shrunk = 1.0 + scaled
+    scaled /= shrunk
+    weighted = pooled.coordinates2 / shrunk
+    q = pooled.residual_ss + weighted.sum(axis=-2)
+    weighted *= scaled
+    slope = scaled.sum(axis=-2) - pooled.dof * weighted.sum(axis=-2) / q
+    return pooled.dof * np.log(q / pooled.dof) + logdet, slope
+
+
+def profiled_variance(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
+    """Profiled noise variance Q(lambda) / N, shaped like ``ratios``."""
+    pooled = pool_terms(terms)
+    return pooled_quadratic(np.asarray(ratios, dtype=float), pooled) / pooled.dof
+
+
+def criterion(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
+    """Profiled REML criterion N log(Q/N) + sum log(1 + lambda s2)."""
+    return pooled_criterion(np.asarray(ratios, dtype=float), pool_terms(terms))
+
+
+def criterion_slope(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
+    """Derivative of ``criterion`` with respect to log(lambda)."""
+    return pooled_slope(np.asarray(ratios, dtype=float), pool_terms(terms))
+
+
+# ---------------------------------------------------------------- search
+
+
+_RELATIVE_SPAN = 1e8
+_ROUNDING_ULPS = 64
+# A memory knob, not a speed knob: timing select_random_effects_design at budgets from
+# 0.25 MiB to unbatched (3k-100k features, 12-120 pooled directions) varied by
+# only a few percent from 1 MiB upward, and was 5-25% slower below that. 8 MiB
+# sits clear of the slow end while keeping each temporary small.
+_WORKING_BYTES = 8 * 2**20
+_FLAGS = ("at_zero", "at_upper", "unrefined", "unidentifiable")
+
+
+@dataclass(frozen=True)
+class RatioOptimum:
+    """Per-feature variance-ratio optimum and where it sits.
+
+    ``unrefined`` marks a positive ratio that is a grid point, not a slope
+    root; ``at_upper`` marks those at the upper edge of the grid.
+    """
+
+    ratio: np.ndarray
+    criterion: np.ndarray
+    at_zero: np.ndarray
+    at_upper: np.ndarray
+    unrefined: np.ndarray
+    unidentifiable: np.ndarray
+
+    def __post_init__(self):
+        copy_array_fields_in_place(self, ("ratio", "criterion"))
+        copy_array_fields_in_place(self, _FLAGS, dtype=bool)
+
+
+def _search_grid(singular2, size):
+    """Log-ratio grid spanning 1e-8 / max(s2) to 1e8 / min(s2).
+
+    ``size`` points cover a single singular value; a wider spectrum adds
+    points so that the spacing never exceeds that base step.
+    """
+    low = np.log(1.0 / _RELATIVE_SPAN / singular2.max())
+    high = np.log(_RELATIVE_SPAN / singular2.min())
+    step = 2.0 * np.log(_RELATIVE_SPAN) / (size - 1)
+    return np.linspace(low, high, max(size, int(np.ceil((high - low) / step)) + 1))
+
+
+def _log_grid(terms: Sequence[RemlTerms], size: int) -> np.ndarray:
+    """The search grid of the pooled singular values."""
+    return _search_grid(np.concatenate([t.singular2 for t in terms]), size)
+
+
+def _chunk_rows(pooled: PooledTerms) -> int:
+    """Grid rows per chunk so one (rows, k, features) temporary stays bounded."""
+    row_bytes = 8 * pooled.singular2.size * pooled.residual_ss.size
+    return max(1, _WORKING_BYTES // max(row_bytes, 1))
+
+
+def _batch_features(pooled: PooledTerms, grid_points: int) -> int:
+    """Features per batch: one (k, features) temporary and one (grid, features)
+    table within the budget, and never fewer than one feature."""
+    return max(1, _WORKING_BYTES // (8 * max(pooled.singular2.size, grid_points)))
+
+
+def _grid_chunks(pooled: PooledTerms, log_grid):
+    """Criterion and slope of each chunk of grid rows, for every feature."""
+    n_features, rows = pooled.residual_ss.size, _chunk_rows(pooled)
+    ratios = np.exp(log_grid)
+    for start in range(0, ratios.size, rows):
+        part = ratios[start : start + rows]
+        yield pooled_value_and_slope(
+            np.broadcast_to(part[:, None], (part.size, n_features)), pooled
+        )
+
+
+def _on_grid(pooled: PooledTerms, log_grid):
+    """Criterion and slope on the grid, each of shape (grid, features)."""
+    values, slopes = zip(*_grid_chunks(pooled, log_grid), strict=True)
+    return np.concatenate(values, axis=0), np.concatenate(slopes, axis=0)
+
+
+def _take(pooled: PooledTerms, features) -> PooledTerms:
+    """The pooled statistics of the given feature columns."""
+    return PooledTerms(
+        singular2=pooled.singular2,
+        coordinates2=pooled.coordinates2[:, features],
+        residual_ss=pooled.residual_ss[features],
+        dof=pooled.dof,
+    )
+
+
+def _bisect_slope(pooled, low, high, iterations):
+    """Vectorised bisection for the zero of the slope in log ratio."""
+    for _ in range(iterations):
+        middle = 0.5 * (low + high)
+        rising = pooled_slope(np.exp(middle), pooled) > 0
+        low, high = np.where(rising, low, middle), np.where(rising, middle, high)
+    return 0.5 * (low + high)
+
+
+def _refined(pooled, log_grid, cell, feature, iterations):
+    """Slope root and its criterion for each (cell, feature) crossing."""
+    crossed = _take(pooled, feature)
+    root = _bisect_slope(crossed, log_grid[cell], log_grid[cell + 1], iterations)
+    return root, pooled_criterion(np.exp(root), crossed)
+
+
+def _stacked(parts, position):
+    """Concatenate one output of the refined chunks; empty when there are none."""
+    return np.concatenate([np.empty(0), *(part[position] for part in parts)])
+
+
+def _crossing_roots(pooled, log_grid, slopes, iterations):
+    """Feature, slope root and criterion of every cell where the slope turns up."""
+    cell, feature = np.nonzero((slopes[:-1] < 0) & (slopes[1:] > 0))
+    step = _batch_features(pooled, 1)
+    parts = [
+        _refined(
+            pooled, log_grid, cell[i : i + step], feature[i : i + step], iterations
+        )
+        for i in range(0, cell.size, step)
+    ]
+    return feature, _stacked(parts, 0), _stacked(parts, 1)
+
+
+def _lowest_root(n_features, feature, root, value):
+    """Per feature, its lowest-criterion root; value inf where it has none."""
+    lowest = np.full(n_features, np.inf)
+    np.minimum.at(lowest, feature, value)
+    position = np.full(n_features, np.nan)
+    is_lowest = value == lowest[feature]
+    position[feature[is_lowest]] = root[is_lowest]
+    return position, lowest
+
+
+def _rounding_slack(value, dof):
+    """Criterion rounding noise. On a flat criterion a grid point can sit a few
+    ulps below the better-determined slope root, which must still win; at an
+    exact rounding tie with lambda = 0 the result may therefore flip to zero."""
+    return _ROUNDING_ULPS * np.finfo(float).eps * (np.abs(value) + dof)
+
+
+def _best_grid_point(values):
+    index = np.argmin(values, axis=0)
+    return index, np.take_along_axis(values, index[None], axis=0)[0]
+
+
+def _best_positive(pooled, log_grid, iterations):
+    values, slopes = _on_grid(pooled, log_grid)
+    index, grid_value = _best_grid_point(values)
+    roots = _crossing_roots(pooled, log_grid, slopes, iterations)
+    root, root_value = _lowest_root(index.size, *roots)
+    accept = root_value <= grid_value + _rounding_slack(grid_value, pooled.dof)
+    grid_stationary = np.take_along_axis(slopes, index[None], axis=0)[0] == 0.0
+    refined = accept | grid_stationary
+    best = np.where(accept, root, log_grid[index])
+    # The grid's upper edge is a truncation, not an optimum: flag it.
+    on_edge = (index == log_grid.size - 1) & ~refined
+    return np.exp(best), np.where(accept, root_value, grid_value), on_edge, refined
+
+
+def _boundary_optimum(pooled, ratio, *, at_zero) -> RatioOptimum:
+    """An optimum that needs no search; its criterion is the value at zero."""
+    n_features = pooled.residual_ss.size
+    flags = np.full(n_features, at_zero)
+    return RatioOptimum(
+        ratio=np.full(n_features, ratio),
+        criterion=pooled_criterion_at_zero(pooled),
+        at_zero=flags,
+        at_upper=np.zeros(n_features, dtype=bool),
+        unrefined=np.zeros(n_features, dtype=bool),
+        unidentifiable=~flags,
+    )
+
+
+def _confounded(pooled: PooledTerms) -> bool:
+    """True when the random covariance is c I on the whole restricted space.
+
+    That needs a retained direction for every restricted degree of freedom
+    and one common singular value, up to the rounding of the decompositions
+    that produced them (relative error about dof * eps per singular value).
+    """
+    singular2 = pooled.singular2
+    spread = singular2.max() - singular2.min()
+    tolerance = 4 * pooled.dof * np.finfo(float).eps * singular2.max()
+    return singular2.size == pooled.dof and spread <= tolerance
+
+
+def _search_batch(pooled, log_grid, iterations) -> RatioOptimum:
+    """Search one batch of features and compare the result with zero."""
+    ratio, value, on_edge, refined = _best_positive(pooled, log_grid, iterations)
+    at_zero_value = pooled_criterion_at_zero(pooled)
+    at_zero = at_zero_value <= value + _rounding_slack(at_zero_value, pooled.dof)
+    return RatioOptimum(
+        ratio=np.where(at_zero, 0.0, ratio),
+        criterion=np.where(at_zero, at_zero_value, value),
+        at_zero=at_zero,
+        at_upper=on_edge & ~at_zero,
+        unrefined=~refined & ~at_zero,
+        unidentifiable=np.zeros(value.size, dtype=bool),
+    )
+
+
+def _joined(parts: Sequence[RatioOptimum]) -> RatioOptimum:
+    names = ("ratio", "criterion", *_FLAGS)
+    return RatioOptimum(
+        **{name: np.concatenate([getattr(p, name) for p in parts]) for name in names}
+    )
+
+
+def _searched_optimum(pooled, grid_size, iterations) -> RatioOptimum:
+    """Search the features batch by batch within the working budget."""
+    log_grid = _search_grid(pooled.singular2, grid_size)
+    n_features = pooled.residual_ss.size
+    step = _batch_features(pooled, log_grid.size)
+    batches = (slice(i, i + step) for i in range(0, n_features, step))
+    return _joined(
+        [_search_batch(_take(pooled, b), log_grid, iterations) for b in batches]
+    )
+
+
+def minimize_ratio(
+    terms: Sequence[RemlTerms] | PooledTerms,
+    *,
+    grid_size: int = 121,
+    iterations: int = 48,
+) -> RatioOptimum:
+    """Minimise the profiled criterion over lambda >= 0 for every feature.
+
+    ``iterations`` is the number of slope bisections inside each bracket.
+    Unidentifiable fits have a NaN ratio and the criterion's constant value.
+    """
+    pooled = terms if isinstance(terms, PooledTerms) else pool_terms(terms)
+    if pooled.singular2.size == 0:
+        return _boundary_optimum(pooled, 0.0, at_zero=True)
+    if _confounded(pooled):
+        return _boundary_optimum(pooled, np.nan, at_zero=False)
+    return _searched_optimum(pooled, grid_size, iterations)
+
+
+# ---------------------------------------------------------------- fitting
 
 
 @dataclass(frozen=True)
@@ -108,9 +634,6 @@ class RemlFit:
         copy_array_fields_in_place(self, ("criterion", "rho"))
         copy_array_fields_in_place(self, ("at_upper", "unrefined"), dtype=bool)
         freeze_sequence_fields_in_place(self, ("status",))
-
-
-# ---------------------------------------------------------------- fitting
 
 
 @dataclass(frozen=True)

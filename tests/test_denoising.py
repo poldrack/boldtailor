@@ -14,11 +14,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from boldtailor._denoising_cv import select_component_count
-from boldtailor._denoising_pool import analysis_components, onoff_r2, pool_masks
 from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor.data import AnalysisData, from_arrays
-from boldtailor.denoising import select_denoising, with_denoising
+from boldtailor.denoising import (
+    analysis_components,
+    onoff_r2,
+    pool_masks,
+    select_component_count,
+    select_denoising,
+    with_denoising,
+)
 from boldtailor.denoising_results import DenoisingResult
 from boldtailor.fit import fit, task_delta_r2
 from boldtailor.hrf_library import default_hrf_library

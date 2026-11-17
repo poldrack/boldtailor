@@ -17,19 +17,17 @@ import numpy as np
 import pytest
 from scipy.linalg import block_diag
 
-from boldtailor._denoising_cv import (
+from boldtailor.denoising import (
+    analysis_components,
     choose_count,
+    onoff_r2,
+    pool_masks,
     prepare_scoring,
+    run_components,
     score_count,
     select_component_count,
     validate_counts,
     validate_pcstop,
-)
-from boldtailor._denoising_pool import (
-    analysis_components,
-    onoff_r2,
-    pool_masks,
-    run_components,
 )
 from boldtailor._hrf_design import MIN_ONSET, OVERSAMPLING, hrf_model
 from boldtailor._task_design import run_task_columns

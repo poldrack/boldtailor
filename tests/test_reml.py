@@ -5,10 +5,16 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from boldtailor._reml_search import minimize_ratio
-from boldtailor._reml_terms import project_fixed, reml_terms
 import boldtailor.reml as reml
-from boldtailor.reml import RemlFit, RemlGroup, fit_reml, select_random_effects_design
+from boldtailor.reml import (
+    RemlFit,
+    RemlGroup,
+    fit_reml,
+    minimize_ratio,
+    project_fixed,
+    reml_terms,
+    select_random_effects_design,
+)
 from tests.reml_oracles import dense_fit, simulate
 
 N_FEATURES = 4
@@ -322,21 +328,15 @@ def test_features_without_a_fit_are_not_unrefined(data):
 
 def test_fit_values_pools_terms_once(data, monkeypatch):
     """Verify fit values pools terms once."""
-    import boldtailor._reml_criterion as crit
-
     calls = 0
-    original = crit.pool_terms
+    original = reml.pool_terms
 
     def counted(terms):
         nonlocal calls
         calls += 1
         return original(terms)
 
-    monkeypatch.setattr(crit, "pool_terms", counted)
     monkeypatch.setattr(reml, "pool_terms", counted)
-    import boldtailor._reml_search as search
-
-    monkeypatch.setattr(search, "pool_terms", counted)
     _fit(*data)
     assert calls == 1
 
@@ -345,17 +345,15 @@ def test_live_subset_computes_fixed_basis_once_when_mixing_dead_features(
     data, monkeypatch
 ):
     """Verify live subset computes fixed basis once when mixing dead features."""
-    import boldtailor._reml_terms as terms_mod
-
     calls = 0
-    original = terms_mod.conditioned_basis
+    original = reml.conditioned_basis
 
     def counted(matrix):
         nonlocal calls
         calls += 1
         return original(matrix)
 
-    monkeypatch.setattr(terms_mod, "conditioned_basis", counted)
+    monkeypatch.setattr(reml, "conditioned_basis", counted)
     signals, fixed, random = data
     _fit(_with_dead_columns(_columns(signals, [0, 1])), fixed, random)
     assert calls == len(signals)
