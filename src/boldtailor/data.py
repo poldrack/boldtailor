@@ -53,11 +53,11 @@ class AnalysisData:
 
     @property
     def events(self) -> tuple[pd.DataFrame, ...]:
-        return self._events
+        return tuple(_owned_table(frame) for frame in self._events)
 
     @property
     def confounds(self) -> tuple[pd.DataFrame, ...]:
-        return self._confounds
+        return tuple(_owned_table(frame) for frame in self._confounds)
 
     @property
     def frame_times(self) -> tuple[np.ndarray, ...]:

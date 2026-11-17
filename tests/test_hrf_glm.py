@@ -289,8 +289,8 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
         pd.testing.assert_frame_equal(actual, expected)
 
 
-def test_selected_delta_requires_completeglm_run_sources(hrf_glm_problem):
-    """Verify selected delta requires completeglm run sources."""
+def test_selected_delta_succeeds_with_anonymous_run_sources(hrf_glm_problem):
+    """Verify selected delta succeeds with anonymous in-memory run sources."""
     data, model, selection, _ = hrf_glm_problem
     anonymous = from_arrays(
         data.signals,
@@ -299,8 +299,8 @@ def test_selected_delta_requires_completeglm_run_sources(hrf_glm_problem):
         confounds=data.confounds,
     )
     result = _selected_fit(anonymous, model, selection)
-    with pytest.raises(ValueError, match="fingerprint|source|provenance"):
-        task_delta_r2(anonymous, model, result)
+    delta = task_delta_r2(anonymous, model, result)
+    assert delta.delta_r2 is not None
 
 
 def test_selected_delta_handles_constant_target_after_hrf_transfer(hrf_glm_problem):
