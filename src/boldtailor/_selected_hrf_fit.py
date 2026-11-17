@@ -63,9 +63,12 @@ class GroupRunFit:
     total_ss: np.ndarray
     diagnostics: list[dict]
     ridge_alphas: np.ndarray
+    design_digest: str
 
 
-def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunFit:
+def _fit_run(run, y, ids, alpha, run_index, fractions=None) -> GroupRunFit:
+    """Fit every HRF group of one run; digest its designs in HRF-ascending order."""
+    digest = sha256()
     n_features = y.shape[1]
     betas = np.full((len(run.events), n_features), np.nan)
     full, null, total = (np.zeros(n_features) for _ in range(3))
@@ -98,20 +101,28 @@ def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunF
         total_ss=total,
         diagnostics=diagnostics,
         ridge_alphas=alphas,
+        design_digest=digest.hexdigest(),
     )
 
 
-def _fit_activity(data, selection, labels, alpha, assignment, digest, fractions=None):
-    """Finish the design digest (fed run-major, HRF-ascending) and describe the fit."""
-    for times, confounds, label in zip(
-        data.frame_times, data.confounds, labels, strict=True
+def _design_fingerprint(data, labels, fits):
+    """Combine the runs' design digests with their sampling times and nuisance names."""
+    digest = sha256()
+    for fit, times, confounds, label in zip(
+        fits, data.frame_times, data.confounds, labels, strict=True
     ):
+        digest.update(fit.design_digest.encode())
         digest.update(np.asarray(times, dtype="<f8").tobytes())
         digest.update(json.dumps([label, list(confounds)]).encode())
+    return digest.hexdigest()
+
+
+def _fit_activity(data, selection, labels, alpha, assignment, fits, fractions=None):
+    """Describe the fit and identify its designs."""
     activity = dict(
         name="selected_hrf_single_trial",
         library_fingerprint=selection.library.fingerprint,
-        design_fingerprint=digest.hexdigest(),
+        design_fingerprint=_design_fingerprint(data, labels, fits),
         hrf_assignment_fingerprint=assignment,
         feature_signature=selection.feature_signature,
         run_labels=list(labels),
@@ -165,13 +176,12 @@ def fit_selected_hrf_trials(
         labels = run_labels_for(data, run_labels)
         trials = _tables(data, labels)
         runs = prepare_runs(data, selection.library)
-        digest = sha256()
         fits = [
-            _fit_run(run, y, selection.hrf_indices, alpha, r, digest, fractions)
+            _fit_run(run, y, selection.hrf_indices, alpha, r, fractions)
             for r, (run, y) in enumerate(zip(runs, data.signals, strict=True))
         ]
         activity = _fit_activity(
-            data, selection, labels, alpha, assignment, digest, fractions
+            data, selection, labels, alpha, assignment, fits, fractions
         )
         provenance = finish_fit(operation, activity)
         design = SelectedTrialDesign(
