@@ -185,7 +185,9 @@ class Modulator:
         if self._kind == "numeric":
             return (self._column,)
         if self._levels is None:
-            raise ValueError(f"categorical modulator {self._column!r} has no levels yet")
+            raise ValueError(
+                f"categorical modulator {self._column!r} has no levels yet"
+            )
         return tuple(
             f"{self._column}[{lv}]" for lv in self._levels if lv != self._reference
         )
@@ -211,9 +213,7 @@ def _resolve_reference_name(column: str, reference: object) -> str | None:
         return None
     name = level_name(reference)
     if name is None:
-        raise ValueError(
-            f"modulator {column!r} reference must be a nonmissing level"
-        )
+        raise ValueError(f"modulator {column!r} reference must be a nonmissing level")
     return name
 
 
@@ -227,9 +227,7 @@ def _resolve_levels(
     if len(set(names)) != len(names):
         raise ValueError(f"modulator {column!r} levels must be distinct")
     if len(names) < 2:
-        raise ValueError(
-            f"categorical modulator {column!r} needs at least two levels"
-        )
+        raise ValueError(f"categorical modulator {column!r} needs at least two levels")
     levels = _sorted_levels(names)
     if reference is not None and reference not in levels:
         raise ValueError(

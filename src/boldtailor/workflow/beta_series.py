@@ -249,7 +249,9 @@ def _outer_block(indices, ctx, alpha, train, test):
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
             task_model=ctx.selection_model,
-            **_block_selection_options(ctx.selection_options, indices, include_model=False),
+            **_block_selection_options(
+                ctx.selection_options, indices, include_model=False
+            ),
         )
     )
     options = (
@@ -377,7 +379,9 @@ def _final_selection(indices, ctx):
             run_labels=[r.label for r in ctx.runs],
             feature_signature=_signature(ctx.runs, indices),
             task_model=ctx.selection_model,
-            **_block_selection_options(ctx.selection_options, indices, include_model=False),
+            **_block_selection_options(
+                ctx.selection_options, indices, include_model=False
+            ),
         )
     )
 
@@ -576,7 +580,9 @@ def fit_cv_beta_series(
     final_penalty = _selected_penalty(result["tuning"]["all"]["selection"])
     final_fit = _final_fit(ctx, final_penalty)
     result["final"] = link_final_provenance(
-        final_fit, result["tuning"]["all"]["provenance"], encoding_mode=ctx.encoding_mode
+        final_fit,
+        result["tuning"]["all"]["provenance"],
+        encoding_mode=ctx.encoding_mode,
     )
     result["provenance"] = _cv_provenance(ctx, mode, final_penalty)
     return result

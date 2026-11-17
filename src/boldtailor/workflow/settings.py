@@ -523,16 +523,21 @@ class WorkflowSettings:
         fractions = _check_grid(
             ridge_fractions, "ridge_fractions", _fraction, "in (0, 1]"
         )
-        alphas = _check_grid(
-            ridge_alphas, "ridge_alphas", _penalty, "finite and >= 0"
-        )
+        alphas = _check_grid(ridge_alphas, "ridge_alphas", _penalty, "finite and >= 0")
         if not is_real(ridge_percentile) or not 0 <= ridge_percentile <= 100:
             raise ValueError("ridge_percentile must lie in [0, 100]")
         fixed_bad = not is_real(ridge_alpha) or ridge_alpha <= 0
         if ridge_mode == "fixed" and fixed_bad:
             raise ValueError("ridge_alpha must be positive in fixed mode")
         _check_choice(encoding_mode, "encoding_mode", ENCODING_MODES)
-        return ridge_mode, fractions, alphas, ridge_percentile, ridge_alpha, encoding_mode
+        return (
+            ridge_mode,
+            fractions,
+            alphas,
+            ridge_percentile,
+            ridge_alpha,
+            encoding_mode,
+        )
 
     @staticmethod
     def _validate_stages(stages):

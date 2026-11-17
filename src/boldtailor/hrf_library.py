@@ -163,7 +163,9 @@ class HrfCandidate:
         else:
             resolved = _parameters(parameters)
             if kind == "spm" and resolved != CANONICAL_PARAMETERS:
-                raise ValueError("SPM candidate parameters must match the canonical kernel")
+                raise ValueError(
+                    "SPM candidate parameters must match the canonical kernel"
+                )
         self._id = id
         self._kind = kind
         self._parameters = resolved
