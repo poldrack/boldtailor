@@ -3,12 +3,9 @@
 import numpy as np
 import pandas as pd
 
+from boldtailor.workflow.export_cifti import _all_selection_maps
 from boldtailor.workflow.inputs import run_summary
-from boldtailor.workflow.outputs import (
-    _all_selection_maps,
-    _tuned,
-    ridge_boundary_summary,
-)
+from boldtailor.workflow.tables import _tuned, ridge_boundary_summary
 
 
 def median(values):
