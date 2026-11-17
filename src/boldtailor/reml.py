@@ -636,6 +636,52 @@ class RemlFit:
         freeze_sequence_fields_in_place(self, ("status",))
 
 
+@dataclass(eq=False)
+class _FitBuffers:
+    """Per-feature estimates written subset by subset, then frozen to a ``RemlFit``."""
+
+    ratio: np.ndarray
+    noise_variance: np.ndarray
+    criterion: np.ndarray
+    status: np.ndarray
+    at_upper: np.ndarray
+    unrefined: np.ndarray
+
+    @classmethod
+    def empty(cls, n_features):
+        """NaN estimates; fitting overwrites features with resolved residuals."""
+        return cls(
+            *(np.full(n_features, np.nan) for _ in range(3)),
+            status=np.full(n_features, "no_residual_signal", dtype=object),
+            at_upper=np.zeros(n_features, dtype=bool),
+            unrefined=np.zeros(n_features, dtype=bool),
+        )
+
+    def write(self, feature_indices, values, keep=slice(None)):
+        """Copy a subset's kept values into their feature positions."""
+        destination = feature_indices[keep]
+        for name, array in vars(values).items():
+            getattr(self, name)[destination] = array[keep]
+
+    def mark_unresolved(self, feature_indices):
+        """Mark features whose residual signal is numerically unresolved."""
+        self.status[feature_indices] = "numerically_unresolved_residual"
+        self.ratio[feature_indices] = np.nan
+
+    def freeze(self, rho, restricted_dof) -> RemlFit:
+        return RemlFit(
+            ratio=self.ratio,
+            noise_variance=self.noise_variance,
+            effect_variance=self.ratio * self.noise_variance,
+            criterion=self.criterion,
+            status=tuple(str(s) for s in self.status),
+            at_upper=self.at_upper,
+            unrefined=self.unrefined,
+            rho=rho,
+            restricted_dof=restricted_dof,
+        )
+
+
 @dataclass(frozen=True)
 class _RhoFeatureSubset:
     """Features with resolved residual signal sharing one noise correlation.
@@ -718,47 +764,13 @@ def _fit_subset_variance_components(subset, random_design):
     ]
     pooled = pool_terms(terms)
     optimum = minimize_ratio(pooled)
-    return {
-        "ratio": optimum.ratio,
-        "noise_variance": pooled_quadratic(optimum.ratio, pooled) / pooled.dof,
-        "criterion": optimum.criterion,
-        "status": _classify_variance_ratio_optimum(optimum),
-        "at_upper": optimum.at_upper,
-        "unrefined": optimum.unrefined,
-    }
-
-
-def _allocate_fit_buffers(n_features):
-    """Allocate NaN estimates; fitting overwrites features with resolved residuals."""
-    return {
-        "ratio": np.full(n_features, np.nan),
-        "noise_variance": np.full(n_features, np.nan),
-        "criterion": np.full(n_features, np.nan),
-        "status": np.full(n_features, "no_residual_signal", dtype=object),
-        "at_upper": np.zeros(n_features, dtype=bool),
-        "unrefined": np.zeros(n_features, dtype=bool),
-    }
-
-
-def _copy_fit_values_into(destination, feature_indices, values, keep=slice(None)):
-    """Copy values into destination feature positions; leave sources intact."""
-    destination_feature_indices = feature_indices[keep]
-    for name, array in values.items():
-        destination[name][destination_feature_indices] = array[keep]
-
-
-def _build_reml_fit(fit_buffers, rho, restricted_dof) -> RemlFit:
-    ratio, noise = fit_buffers["ratio"], fit_buffers["noise_variance"]
-    return RemlFit(
-        ratio=ratio,
-        noise_variance=noise,
-        effect_variance=ratio * noise,
-        criterion=fit_buffers["criterion"],
-        status=tuple(str(s) for s in fit_buffers["status"]),
-        at_upper=fit_buffers["at_upper"],
-        unrefined=fit_buffers["unrefined"],
-        rho=rho,
-        restricted_dof=restricted_dof,
+    return _FitBuffers(
+        ratio=optimum.ratio,
+        noise_variance=pooled_quadratic(optimum.ratio, pooled) / pooled.dof,
+        criterion=optimum.criterion,
+        status=_classify_variance_ratio_optimum(optimum),
+        at_upper=optimum.at_upper,
+        unrefined=optimum.unrefined,
     )
 
 
@@ -770,21 +782,13 @@ def _require_common_restricted_dof(subsets) -> int:
     return dofs.pop()
 
 
-def _mark_unresolved_in_place(fit_buffers, subsets):
-    """Mark features whose residual signal is numerically unresolved."""
-    for subset in subsets:
-        fit_buffers["status"][
-            subset.unresolved_feature_indices
-        ] = "numerically_unresolved_residual"
-        fit_buffers["ratio"][subset.unresolved_feature_indices] = np.nan
-
-
 def _prepare_reml_fit(groups, rho):
     """Return feature correlations, prepared subsets, shared dof and fit buffers."""
     rho = feature_rho(rho, groups[0].signals.shape[1])
     subsets = _prepare_feature_subsets_by_rho(groups, rho)
-    fit_buffers = _allocate_fit_buffers(rho.size)
-    _mark_unresolved_in_place(fit_buffers, subsets)
+    fit_buffers = _FitBuffers.empty(rho.size)
+    for subset in subsets:
+        fit_buffers.mark_unresolved(subset.unresolved_feature_indices)
     return rho, subsets, _require_common_restricted_dof(subsets), fit_buffers
 
 
@@ -792,8 +796,7 @@ def _fit_subsets_into_buffers(fit_buffers, subsets, random_design):
     """Fit each subset and write estimates into the supplied buffers in place."""
     for subset in subsets:
         if subset.fit_feature_indices.size:
-            _copy_fit_values_into(
-                fit_buffers,
+            fit_buffers.write(
                 subset.fit_feature_indices,
                 _fit_subset_variance_components(subset, random_design),
             )
@@ -810,7 +813,7 @@ def fit_reml(
     random_design = checked_random(groups, random_design, "random_design")
     rho, subsets, dof, fit_buffers = _prepare_reml_fit(groups, rho)
     _fit_subsets_into_buffers(fit_buffers, subsets, random_design)
-    return _build_reml_fit(fit_buffers, rho, dof)
+    return fit_buffers.freeze(rho, dof)
 
 
 # ---------------------------------------------------------------- selection
@@ -839,38 +842,58 @@ class RemlSelection:
         copy_array_fields_in_place(self, ("any_at_upper", "any_unrefined"), dtype=bool)
 
 
-def _initialize_candidate_selection(n_features):
-    return {
-        "winner": np.full(n_features, -1, dtype=np.int64),
-        "best_criterion": np.full(n_features, np.inf),
-        "runner_up_criterion": np.full(n_features, np.inf),
-        "any_at_upper": np.zeros(n_features, dtype=bool),
-        "any_unrefined": np.zeros(n_features, dtype=bool),
-    }
+@dataclass(eq=False)
+class _SelectionBuffers:
+    """Best and runner-up criteria per feature, updated candidate by candidate."""
 
+    winner: np.ndarray
+    best_criterion: np.ndarray
+    runner_up_criterion: np.ndarray
+    any_at_upper: np.ndarray
+    any_unrefined: np.ndarray
 
-def _update_selection_from_fit(
-    selection_state, fit_buffers, feature_indices, values, candidate_index
-):
-    """Update candidate rankings and winning-fit buffers using eligible fits."""
-    ok = values["status"] == "ok"
-    value = values["criterion"]
-    best_criterion, runner_up_criterion = (
-        selection_state["best_criterion"][feature_indices],
-        selection_state["runner_up_criterion"][feature_indices],
-    )
-    better = ok & (value < best_criterion)
-    runner_up = np.where(better, best_criterion, np.minimum(runner_up_criterion, value))
-    selection_state["runner_up_criterion"][feature_indices] = np.where(
-        ok, runner_up, runner_up_criterion
-    )
-    selection_state["best_criterion"][feature_indices] = np.where(
-        better, value, best_criterion
-    )
-    selection_state["winner"][feature_indices[better]] = candidate_index
-    selection_state["any_at_upper"][feature_indices] |= values["at_upper"]
-    selection_state["any_unrefined"][feature_indices] |= values["unrefined"]
-    _copy_fit_values_into(fit_buffers, feature_indices, values, better)
+    @classmethod
+    def empty(cls, n_features):
+        return cls(
+            winner=np.full(n_features, -1, dtype=np.int64),
+            best_criterion=np.full(n_features, np.inf),
+            runner_up_criterion=np.full(n_features, np.inf),
+            any_at_upper=np.zeros(n_features, dtype=bool),
+            any_unrefined=np.zeros(n_features, dtype=bool),
+        )
+
+    def update(self, feature_indices, values, candidate_index):
+        """Rank one candidate's fits; return which of them became the winner."""
+        ok, value = values.status == "ok", values.criterion
+        best = self.best_criterion[feature_indices]
+        runner_up = self.runner_up_criterion[feature_indices]
+        better = ok & (value < best)
+        contender = np.where(better, best, np.minimum(runner_up, value))
+        self.runner_up_criterion[feature_indices] = np.where(ok, contender, runner_up)
+        self.best_criterion[feature_indices] = np.where(better, value, best)
+        self.winner[feature_indices[better]] = candidate_index
+        self.any_at_upper[feature_indices] |= values.at_upper
+        self.any_unrefined[feature_indices] |= values.unrefined
+        return better
+
+    def gap(self):
+        """Runner-up minus best criterion; NaN with fewer than two supported fits."""
+        supported = (self.winner >= 0) & np.isfinite(self.runner_up_criterion)
+        gap = np.full(supported.shape, np.nan)
+        gap[supported] = (
+            self.runner_up_criterion[supported] - self.best_criterion[supported]
+        )
+        return gap
+
+    def freeze(self, fit, n_candidates) -> "RemlSelection":
+        return RemlSelection(
+            winner=self.winner,
+            fit=fit,
+            gap=self.gap(),
+            n_candidates=n_candidates,
+            any_at_upper=self.any_at_upper,
+            any_unrefined=self.any_unrefined,
+        )
 
 
 def _fit_candidate_and_update_selection(
@@ -880,35 +903,16 @@ def _fit_candidate_and_update_selection(
     for subset in subsets:
         if subset.fit_feature_indices.size:
             values = _fit_subset_variance_components(subset, random_design)
-            _update_selection_from_fit(
-                selection_state,
-                fit_buffers,
-                subset.fit_feature_indices,
-                values,
-                candidate_index,
-            )
-
-
-def _compute_runner_up_criterion_gap(selection_state):
-    supported = (selection_state["winner"] >= 0) & np.isfinite(
-        selection_state["runner_up_criterion"]
-    )
-    gap = np.full(supported.shape, np.nan)
-    gap[supported] = (
-        selection_state["runner_up_criterion"][supported]
-        - selection_state["best_criterion"][supported]
-    )
-    return gap
+            indices = subset.fit_feature_indices
+            better = selection_state.update(indices, values, candidate_index)
+            fit_buffers.write(indices, values, better)
 
 
 def _evaluate_candidates_and_update_fit_buffers(
     groups, candidates, subsets, fit_buffers
 ):
     """Update winning-fit buffers; return selection state and candidate count."""
-    selection_state, n_candidates = (
-        _initialize_candidate_selection(fit_buffers["ratio"].size),
-        0,
-    )
+    selection_state, n_candidates = _SelectionBuffers.empty(fit_buffers.ratio.size), 0
     for index, candidate in enumerate(candidates):
         label = f"candidate {index} random_design"
         random_design = checked_random(groups, candidate, label)
@@ -960,11 +964,4 @@ def select_random_effects_design(
     selection_state, count = _evaluate_candidates_and_update_fit_buffers(
         groups, candidates, subsets, fit_buffers
     )
-    return RemlSelection(
-        winner=selection_state["winner"],
-        fit=_build_reml_fit(fit_buffers, rho, dof),
-        gap=_compute_runner_up_criterion_gap(selection_state),
-        n_candidates=count,
-        any_at_upper=selection_state["any_at_upper"],
-        any_unrefined=selection_state["any_unrefined"],
-    )
+    return selection_state.freeze(fit_buffers.freeze(rho, dof), count)
