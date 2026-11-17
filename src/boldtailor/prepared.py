@@ -4,14 +4,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 import hashlib
 import json
-import logging
 from types import MappingProxyType
 from typing import Any, Literal
-from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 
+from boldtailor._fit_lifecycle import normalization
 from boldtailor._run_inputs import (
     as_signal_runs,
     prepare_signal,
@@ -21,13 +20,6 @@ from boldtailor._run_inputs import (
     validate_run_count,
 )
 from boldtailor.provenance import software_environment
-from boldtailor.logging import (
-    append_event_history,
-    bind_context,
-    emit_event,
-    emit_record,
-    make_event,
-)
 from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
@@ -143,82 +135,49 @@ def _prepare_analysis(
     run_metadata: Mapping[str, object] | Sequence[Mapping[str, object]] | None,
     provenance_metadata: Mapping[str, object] | None,
 ) -> PreparedDesignAnalysis:
-    execution_id = str(uuid4())
-    data_id = None
-    with bind_context(execution_id=execution_id, inherit=False):
-        history = append_event_history(
-            (),
-            emit_event("normalization_started", stage="prepared_design"),
+    with normalization("prepared_design") as operation:
+        signal_runs = as_signal_runs(signals)
+        prepared_sources = prepare_sources(
+            run_count=len(signal_runs),
+            sources=sources,
+            include_confounds=False,
         )
-        try:
-            signal_runs = as_signal_runs(signals)
-            prepared_sources = prepare_sources(
-                run_count=len(signal_runs),
-                sources=sources,
-                include_confounds=False,
-            )
-            data_id = sources_fingerprint(prepared_sources)
-            prepared_signals = tuple(
-                prepare_signal(values, run) for run, values in enumerate(signal_runs)
-            )
-            validate_feature_counts(prepared_signals)
-            designs = _prepare_designs(design_matrices, prepared_signals)
-            roles = _prepare_roles(column_roles, designs)
-            metadata = _prepare_metadata(run_metadata, len(prepared_signals))
-            prepared_provenance_metadata = _prepare_provenance_metadata(
-                provenance_metadata
-            )
-            times, timing_source = prepare_timing(
-                tr,
-                frame_times,
-                prepared_signals,
-            )
-            run_fingerprints = tuple(
-                _run_design_fingerprint(design, frame_time, run_roles)
-                for design, frame_time, run_roles in zip(designs, times, roles)
-            )
-            design_fingerprint = _aggregate_design_fingerprint(run_fingerprints)
-            activity = _normalization_activity(
-                timing_source=timing_source,
-                designs=designs,
-                roles=roles,
-                n_features=prepared_signals[0].shape[1],
-                run_fingerprints=run_fingerprints,
-                design_fingerprint=design_fingerprint,
-                run_metadata=metadata,
-                provenance_metadata=prepared_provenance_metadata,
-            )
-            completed = make_event(
-                "normalization_completed", stage="prepared_design", data_id=data_id
-            )
-            provenance = ProvenanceRecord(
-                execution_id=execution_id,
-                sources=prepared_sources,
-                activities=(activity,),
-                events=append_event_history(history, completed),
-            )
-            result = cls(
-                _signals=prepared_signals,
-                _design_matrices=designs,
-                _frame_times=times,
-                _timing_source=timing_source,
-                _column_roles=roles,
-                _run_metadata=metadata,
-                _run_design_fingerprints=run_fingerprints,
-                _design_fingerprint=design_fingerprint,
-                _provenance=provenance,
-            )
-        except Exception as error:
-            emit_event(
-                "normalization_failed",
-                stage="prepared_design",
-                level=logging.ERROR,
-                error=error,
-                data_id=data_id,
-            )
-            raise
-        emit_record(completed)
-        return result
+        operation.data_id = sources_fingerprint(prepared_sources)
+        prepared_signals = tuple(
+            prepare_signal(values, run) for run, values in enumerate(signal_runs)
+        )
+        validate_feature_counts(prepared_signals)
+        designs = _prepare_designs(design_matrices, prepared_signals)
+        roles = _prepare_roles(column_roles, designs)
+        metadata = _prepare_metadata(run_metadata, len(prepared_signals))
+        prepared_provenance_metadata = _prepare_provenance_metadata(provenance_metadata)
+        times, timing_source = prepare_timing(tr, frame_times, prepared_signals)
+        run_fingerprints = tuple(
+            _run_design_fingerprint(design, frame_time, run_roles)
+            for design, frame_time, run_roles in zip(designs, times, roles)
+        )
+        design_fingerprint = _aggregate_design_fingerprint(run_fingerprints)
+        activity = _normalization_activity(
+            timing_source=timing_source,
+            designs=designs,
+            roles=roles,
+            n_features=prepared_signals[0].shape[1],
+            run_fingerprints=run_fingerprints,
+            design_fingerprint=design_fingerprint,
+            run_metadata=metadata,
+            provenance_metadata=prepared_provenance_metadata,
+        )
+        return cls(
+            _signals=prepared_signals,
+            _design_matrices=designs,
+            _frame_times=times,
+            _timing_source=timing_source,
+            _column_roles=roles,
+            _run_metadata=metadata,
+            _run_design_fingerprints=run_fingerprints,
+            _design_fingerprint=design_fingerprint,
+            _provenance=operation.provenance(prepared_sources, activity),
+        )
 
 
 def _normalization_activity(

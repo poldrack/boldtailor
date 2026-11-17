@@ -10,6 +10,7 @@ from boldtailor.logging import (
     append_event_history,
     bind_context,
     emit_event,
+    emit_record,
     make_event,
 )
 from boldtailor.provenance import (
@@ -112,3 +113,57 @@ def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]
             emit_event(
                 f"{name}_completed", stage="fit", analysis_id=operation.analysis_id
             )
+
+
+@dataclass
+class Normalization:
+    """Execution metadata of one input normalization; set ``data_id`` once known."""
+
+    stage: str
+    execution_id: str = field(default_factory=lambda: str(uuid4()))
+    data_id: str | None = None
+    history: tuple[Mapping[str, object], ...] = ()
+    completed: Mapping[str, object] | None = None
+
+    def provenance(self, sources, activity) -> ProvenanceRecord:
+        """The record of the normalized inputs; its last event is the logged completion."""
+        self.completed = make_event(
+            "normalization_completed", stage=self.stage, data_id=self.data_id
+        )
+        return ProvenanceRecord(
+            execution_id=self.execution_id,
+            sources=sources,
+            activities=(activity,),
+            events=append_event_history(self.history, self.completed),
+        )
+
+
+@contextmanager
+def normalization(stage: str) -> Iterator[Normalization]:
+    """Log start, then the recorded completion on normal exit or a failure.
+
+    Unlike a fit, normalization logs the very completion event stored in its
+    provenance, so build the provenance inside the scope.
+    """
+    operation = Normalization(stage)
+    with bind_context(execution_id=operation.execution_id, inherit=False):
+        operation.history = append_event_history(
+            (), emit_event("normalization_started", stage=stage)
+        )
+        try:
+            yield operation
+        except Exception as error:
+            emit_event(
+                "normalization_failed",
+                stage=stage,
+                level=logging.ERROR,
+                error=error,
+                data_id=operation.data_id,
+            )
+            raise
+        emit_record(
+            operation.completed
+            or make_event(
+                "normalization_completed", stage=stage, data_id=operation.data_id
+            )
+        )

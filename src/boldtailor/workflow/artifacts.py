@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 
+from boldtailor.bids_provenance import STABLE_BIDS_VERSION
 from boldtailor.cifti import scalar_artifact
 from boldtailor.hrf_library import PARAMETER_NAMES
 from boldtailor.publication import Artifact
@@ -43,7 +44,7 @@ def dataset_description(name):
         "dataset_description.json",
         {
             "Name": name,
-            "BIDSVersion": "1.11.1",
+            "BIDSVersion": STABLE_BIDS_VERSION,
             "DatasetType": "derivative",
             "GeneratedBy": [{"Name": "boldtailor", "Version": version("boldtailor")}],
         },

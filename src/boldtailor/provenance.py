@@ -335,6 +335,11 @@ class ProvenanceRecord:
         """Return owned JSON-compatible activity dictionaries."""
         return [thaw(activity) for activity in self._activities]
 
+    @property
+    def latest_activity(self) -> dict[str, object]:
+        """An owned copy of the activity that produced this record; empty if none."""
+        return thaw(self._activities[-1]) if self._activities else {}
+
     def canonical_json(self) -> str:
         return json.dumps(
             self.to_dict(),
@@ -384,7 +389,7 @@ def analysis_fingerprint(
 
 def identity_activity(record: ProvenanceRecord) -> dict[str, object]:
     """The record's last activity without environment-only keys, for embedding in identities."""
-    activity = dict(record.activity_records()[-1])
+    activity = record.latest_activity
     activity.pop("software", None)
     return activity
 

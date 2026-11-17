@@ -150,7 +150,7 @@ def validate_selection(data, selection, signature):
     ids = selection.hrf_indices
     if ids.shape != (data.n_features,):
         raise ValueError("selection feature count must match data")
-    activity = selection.provenance.activity_records()[-1]
+    activity = selection.provenance.latest_activity
     assignment = hrf_assignment_fingerprint(ids)
     if activity.get("library_fingerprint") != selection.library.fingerprint:
         raise ValueError("selection library fingerprint does not match identity")

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-import logging
 import re
-from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 
+from boldtailor._fit_lifecycle import normalization
 from boldtailor._arrays import owned_table
 from boldtailor._run_inputs import (
     as_signal_runs,
@@ -19,13 +18,6 @@ from boldtailor._run_inputs import (
     validate_run_count,
 )
 from boldtailor.provenance import software_environment
-from boldtailor.logging import (
-    append_event_history,
-    bind_context,
-    emit_event,
-    emit_record,
-    make_event,
-)
 from boldtailor.provenance import ProvenanceRecord, RunSources, sources_fingerprint
 
 _EVENT_COLUMNS = ("onset", "duration")
@@ -83,70 +75,41 @@ def from_arrays(
     sources: Sequence[RunSources] | None = None,
     provenance_metadata: Mapping[str, object] | None = None,
 ) -> AnalysisData:
-    execution_id = str(uuid4())
-    data_id = None
-    with bind_context(execution_id=execution_id, inherit=False):
-        history = append_event_history(
-            (),
-            emit_event("normalization_started", stage="data"),
+    with normalization("data") as operation:
+        run_signals = as_signal_runs(signals)
+        run_events = _as_table_runs(events)
+        validate_run_count(run_signals, run_events, "events")
+        prepared_sources = prepare_sources(
+            run_count=len(run_signals),
+            sources=sources,
+            include_confounds=confounds is not None,
         )
-        try:
-            run_signals = as_signal_runs(signals)
-            run_events = _as_table_runs(events)
-            validate_run_count(run_signals, run_events, "events")
-            prepared_sources = prepare_sources(
-                run_count=len(run_signals),
-                sources=sources,
-                include_confounds=confounds is not None,
-            )
-            data_id = sources_fingerprint(prepared_sources)
-            prepared_signals = tuple(
-                prepare_signal(values, run) for run, values in enumerate(run_signals)
-            )
-            validate_feature_counts(prepared_signals)
-            prepared_events = tuple(
-                _prepare_events(frame, run) for run, frame in enumerate(run_events)
-            )
-            prepared_confounds = _prepare_confounds(confounds, prepared_signals)
-            prepared_times, timing_source = prepare_timing(
-                tr,
-                frame_times,
-                prepared_signals,
-            )
-            activity = _normalization_activity(
-                timing_source=timing_source,
-                n_runs=len(prepared_signals),
-                n_features=prepared_signals[0].shape[1],
-                provenance_metadata=provenance_metadata,
-            )
-            completed = make_event(
-                "normalization_completed", stage="data", data_id=data_id
-            )
-            provenance = ProvenanceRecord(
-                execution_id=execution_id,
-                sources=prepared_sources,
-                activities=(activity,),
-                events=append_event_history(history, completed),
-            )
-            result = AnalysisData(
-                _signals=prepared_signals,
-                _events=prepared_events,
-                _confounds=prepared_confounds,
-                _frame_times=prepared_times,
-                _timing_source=timing_source,
-                _provenance=provenance,
-            )
-        except Exception as error:
-            emit_event(
-                "normalization_failed",
-                stage="data",
-                level=logging.ERROR,
-                error=error,
-                data_id=data_id,
-            )
-            raise
-        emit_record(completed)
-        return result
+        operation.data_id = sources_fingerprint(prepared_sources)
+        prepared_signals = tuple(
+            prepare_signal(values, run) for run, values in enumerate(run_signals)
+        )
+        validate_feature_counts(prepared_signals)
+        prepared_events = tuple(
+            _prepare_events(frame, run) for run, frame in enumerate(run_events)
+        )
+        prepared_confounds = _prepare_confounds(confounds, prepared_signals)
+        prepared_times, timing_source = prepare_timing(
+            tr, frame_times, prepared_signals
+        )
+        activity = _normalization_activity(
+            timing_source=timing_source,
+            n_runs=len(prepared_signals),
+            n_features=prepared_signals[0].shape[1],
+            provenance_metadata=provenance_metadata,
+        )
+        return AnalysisData(
+            _signals=prepared_signals,
+            _events=prepared_events,
+            _confounds=prepared_confounds,
+            _frame_times=prepared_times,
+            _timing_source=timing_source,
+            _provenance=operation.provenance(prepared_sources, activity),
+        )
 
 
 def _as_table_runs(

@@ -144,8 +144,7 @@ def _parent_fit_spec(
 
 
 def _stored_fit_spec(full_result: AnalysisResult) -> _PreparedFitSpec:
-    activities = full_result.provenance.activity_records()
-    model = activities[-1].get("model") if activities else None
+    model = full_result.provenance.latest_activity.get("model")
     if not isinstance(model, Mapping) or model.get("kind") != "prepared_design":
         raise ValueError("full_result must be an AnalysisResult from fit_prepared")
     return _prepare_fit_spec(

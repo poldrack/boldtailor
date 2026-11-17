@@ -239,7 +239,7 @@ def test_normalization_builds_one_record(
     import json
     import logging
 
-    import boldtailor.data as module
+    import boldtailor._fit_lifecycle as module
 
     sources = complete_sources(1) if complete else None
     metadata = {"purpose": "normalization"}
