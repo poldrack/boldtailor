@@ -677,16 +677,15 @@ def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
     scores = score_ridge_candidates(data, predictors, alphas=[0.0, 1.0])
     scores = replace(
         scores,
-        provenance=replace(
-            scores.provenance,
+        provenance=scores.provenance.replace(
             activities=(*scores.provenance.activities, {"name": "audit_note"}),
         ),
     )
     decision = beta_series.tuning_provenance(
         scores, select_ridge_penalty(scores), encoding_mode="within_run"
     )
-    decision = replace(
-        decision, activities=(*decision.activities, {"name": "audit_note"})
+    decision = decision.replace(
+        activities=(*decision.activities, {"name": "audit_note"})
     )
     linked = beta_series.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"

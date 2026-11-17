@@ -50,7 +50,7 @@ def denoise(dataset):
 
 def selected_fit(data, library, names=()):
     selection = select_hrfs(data, library=library, task_model=TaskModel())
-    model = replace(MODEL, confounds=(*BASELINE, *names))
+    model = MODEL.replace(confounds=(*BASELINE, *names))
     return selection, fit(data, model, hrf_selection=selection)
 
 
@@ -159,7 +159,7 @@ def test_frozen_pool_and_count_improve_outer_run_beta_recovery(
     baseline = fit(recovery.outer, MODEL, hrf_selection=arms["baseline"][0])
     denoised = fit(
         denoised_outer,
-        replace(MODEL, confounds=(*BASELINE, *names)),
+        MODEL.replace(confounds=(*BASELINE, *names)),
         hrf_selection=arms["denoised"][0],
     )
     truth = recovery.amplitudes

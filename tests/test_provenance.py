@@ -385,8 +385,8 @@ def test_sha256_changes_the_metadata_fingerprint(complete_sources):
     """Verify sha256 changes the metadata fingerprint."""
     a = complete_sources(1)
     b = complete_sources(1)
-    with_digest = replace(b[0].signal, sha256="a" * 64)
-    b = [replace(b[0], signal=with_digest)]
+    with_digest = b[0].signal.replace(sha256="a" * 64)
+    b = [b[0].replace(signal=with_digest)]
     assert _metadata_fingerprint(a) != _metadata_fingerprint(b)
     assert SourceRef.from_dict(with_digest.to_dict()) == with_digest
     assert with_digest.to_dict()["sha256"] == "a" * 64

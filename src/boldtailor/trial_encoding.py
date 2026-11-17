@@ -264,7 +264,7 @@ def evaluate_trial_encoding(
 def _indicator_frame(values, modulator, label):
     """One 0/1 column per non-reference level; missing values become NaN."""
     try:
-        names = categorical_names(values, replace(modulator, missing="indicator"))
+        names = categorical_names(values, modulator.replace(missing="indicator"))
     except ValueError as error:
         raise ValueError(f"{label}: {error}") from error
     levels = [lv for lv in modulator.levels if lv != modulator.reference]

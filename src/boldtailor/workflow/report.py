@@ -4,7 +4,7 @@ import base64
 import html
 import shlex
 from collections.abc import Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -75,7 +75,7 @@ def embed_png(data):
 
 
 def _default(name):
-    return next(f.default for f in fields(WorkflowSettings) if f.name == name)
+    return WorkflowSettings.DEFAULTS[name]
 
 
 def _quoted(*words):

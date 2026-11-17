@@ -26,7 +26,7 @@ def _selected_fit(data, model, selection):
 def test_voxelwise_contrasts_match_independent_run_glms(hrf_glm_problem, noise_model):
     """Verify voxelwise contrasts match independent run GLMs."""
     data, model, selection, designs = hrf_glm_problem
-    model = replace(model, noise_model=noise_model)
+    model = model.replace(noise_model=noise_model)
     result = _selected_fit(data, model, selection)
     for feature, cid in enumerate(selection.hrf_indices[:4]):
         contrasts = {name: [] for name in model.contrasts}
@@ -85,7 +85,7 @@ def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model)
         confounds=data.confounds,
     )
     selection = select_hrfs(selection_data, library=HrfLibrary.from_parameters([]))
-    model = replace(model, hrf_model="spm", noise_model=noise_model)
+    model = model.replace(hrf_model="spm", noise_model=noise_model)
     actual = fit(data, model, hrf_selection=selection)
     expected = fit(data, model)
     for name in model.contrasts:
@@ -103,7 +103,7 @@ def test_canonical_assignment_matches_existing_api(hrf_glm_problem, noise_model)
 def test_delta_r2_uses_nested_ols_with_selected_hrfs(hrf_glm_problem):
     """Verify delta R-squared uses nested OLS with selected HRFs."""
     data, model, selection, designs = hrf_glm_problem
-    model = replace(model, noise_model="ar1")
+    model = model.replace(noise_model="ar1")
     result = _selected_fit(data, model, selection)
     delta = task_delta_r2(data, model, result)
     for feature, cid in enumerate(selection.hrf_indices[:4]):
@@ -213,7 +213,7 @@ def test_result_owns_designs_and_records_effective_model(hrf_glm_problem):
     assert info["hrf_normalization"] == "peak_one_event_response"
     assert result.provenance.analysis_fingerprint
     # An ignored fixed-HRF choice must not alter the effective model identity.
-    other = _selected_fit(data, replace(model, hrf_model="spm"), selection)
+    other = _selected_fit(data, model.replace(hrf_model="spm"), selection)
     assert (
         result.provenance.analysis_fingerprint == other.provenance.analysis_fingerprint
     )
@@ -225,7 +225,7 @@ def test_delta_rejects_a_different_analysis(hrf_glm_problem, change):
     data, model, selection, _ = hrf_glm_problem
     result = _selected_fit(data, model, selection)
     if change == "model":
-        model = replace(model, noise_model="ar1")
+        model = model.replace(noise_model="ar1")
     else:
         events, confounds = data.events, data.confounds
         sources = [glm_run_sources(r) for r in range(3)]
@@ -275,7 +275,7 @@ def test_custom_hrf_keeps_condition_and_confound_names_distinct(hrf_glm_problem)
     data = from_arrays(
         data.signals, data.events, frame_times=data.frame_times, confounds=confounds
     )
-    model = replace(model, confounds=("motion", "stimulus_kernel"))
+    model = model.replace(confounds=("motion", "stimulus_kernel"))
     result = _selected_fit(data, model, selection)
     for run, cid in result.group_design_provenance:
         actual = result.group_design(run, cid)
@@ -370,7 +370,7 @@ def test_fit_rejects_invalid_contrasts_for_any_assignment(
     signature = "axis-v1"
     if undefined_assignment:
         selection, signature = _undefined_selection(data), None
-    bad_model = replace(model, contrasts={"bad": contrast})
+    bad_model = model.replace(contrasts={"bad": contrast})
     with pytest.raises(ValueError, match=message):
         fit(data, bad_model, hrf_selection=selection, feature_signature=signature)
 
@@ -508,7 +508,7 @@ def test_selected_glm_setting_mismatch_names_the_required_values(
     with pytest.raises(ValueError, match=r"-24\.0.*50|50.*-24\.0"):
         fit(
             data,
-            replace(model, **model_changes),
+            model.replace(**model_changes),
             hrf_selection=selection,
             feature_signature="axis-tm",
         )
@@ -543,7 +543,7 @@ def test_selected_glm_rejects_mismatched_selection_settings(
     with pytest.raises(ValueError, match=message):
         fit(
             data,
-            replace(model, **model_changes),
+            model.replace(**model_changes),
             hrf_selection=selection,
             feature_signature="axis-tm",
         )
@@ -603,7 +603,7 @@ def test_selected_glm_reports_design_errors_with_the_run_once(task_model_problem
     ):
         fit(
             data,
-            replace(model, task_model=strict, contrasts={"task": {"task": 1}}),
+            model.replace(task_model=strict, contrasts={"task": {"task": 1}}),
             hrf_selection=chosen,
             feature_signature="axis-tm",
         )

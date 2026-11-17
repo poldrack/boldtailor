@@ -622,7 +622,6 @@ GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
 ```python
-from dataclasses import replace
 from boldtailor.denoising import select_denoising, with_denoising
 from boldtailor.fit import fit
 from boldtailor.hrf_selection import select_hrfs
@@ -630,9 +629,7 @@ from boldtailor.hrf_selection import select_hrfs
 denoising = select_denoising(data, task_model=task_model, library=library)
 augmented = with_denoising(data, denoising)
 selection = select_hrfs(augmented, library=library, task_model=task_model)
-fitted_model = replace(
-    model, confounds=tuple(augmented.confounds[0].columns)
-)
+fitted_model = model.replace(confounds=tuple(augmented.confounds[0].columns))
 result = fit(augmented, fitted_model, hrf_selection=selection)
 ```
 

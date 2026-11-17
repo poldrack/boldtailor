@@ -1660,7 +1660,7 @@ def _annotated_record(data, result):
         n_components=result.n_components,
     )
     sources = tuple(_annotated_run(s, mark) for s in data.provenance.sources)
-    return replace(data.provenance, sources=sources)
+    return data.provenance.replace(sources=sources)
 
 
 def with_denoising(

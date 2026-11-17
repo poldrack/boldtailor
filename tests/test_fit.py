@@ -759,7 +759,7 @@ def test_plain_string_hrf_designs_use_peak_kernels(single_run_problem, hrf_name)
     from tests.oracles import oracle_event_scales, peak_kernel
 
     signals, events, _, model = single_run_problem
-    model = replace(model, hrf_model=hrf_name)
+    model = model.replace(hrf_model=hrf_name)
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
     design = fit(data, model).design_matrices[0]
     assert list(design.columns) == ["face", "house", "constant"]
@@ -806,7 +806,7 @@ def test_plain_string_hrf_fit_records_peak_normalization(single_run_problem, hrf
 
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
-    result = fit(data, replace(model, hrf_model=hrf_name))
+    result = fit(data, model.replace(hrf_model=hrf_name))
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["model"]["hrf_normalization"] == "peak_one_event_response"
 
@@ -820,7 +820,7 @@ def test_nilearn_basis_fit_records_nilearn_sum_normalization(
 
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
-    result = fit(data, replace(model, hrf_model=hrf_name, contrasts={"face": "face"}))
+    result = fit(data, model.replace(hrf_model=hrf_name, contrasts={"face": "face"}))
     activity = result.provenance.to_dict()["activities"][-1]
     assert activity["model"]["hrf_normalization"] == "nilearn_sum_one"
 
@@ -833,7 +833,7 @@ def test_plain_fit_prints_nothing(single_run_problem, hrf_name, capsys):
     signals, events, _, model = single_run_problem
     data = from_arrays(signals, events, frame_times=np.arange(30) * 2.0)
     capsys.readouterr()
-    fit(data, replace(model, hrf_model=hrf_name))
+    fit(data, model.replace(hrf_model=hrf_name))
     assert capsys.readouterr().out == ""
 
 
@@ -849,7 +849,7 @@ def test_fir_and_user_kernels_record_no_normalization(single_run_problem, hrf_mo
     from boldtailor.model import model_identity
 
     _, _, _, model = single_run_problem
-    identity = model_identity(replace(model, hrf_model=hrf_model))
+    identity = model_identity(model.replace(hrf_model=hrf_model))
     assert identity.activity.get("hrf_normalization") is None
 
 

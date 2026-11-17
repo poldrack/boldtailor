@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from hashlib import sha256
 from types import MappingProxyType
 
@@ -72,7 +72,6 @@ def _sorted_levels(levels):
     return tuple(sorted(levels))
 
 
-@dataclass(frozen=True)
 class Modulator:
     """One task regressor family derived from a raw events column.
 
@@ -81,135 +80,231 @@ class Modulator:
     non-reference level, so the task regressor is the reference-level response.
     """
 
-    column: str
-    missing: str = "error"
-    kind: str = "numeric"
-    levels: tuple[str, ...] | None = None
-    reference: str | None = None
+    __slots__ = ("_column", "_missing", "_kind", "_levels", "_reference")
 
-    def __post_init__(self) -> None:
-        _validate_modulator_column(self.column)
-        if self.missing not in _MISSING_POLICIES:
+    def __init__(
+        self,
+        column: str,
+        missing: str = "error",
+        kind: str = "numeric",
+        levels: Sequence[object] | None = None,
+        reference: object = None,
+    ) -> None:
+        _validate_modulator_column(column)
+        if missing not in _MISSING_POLICIES:
             raise ValueError("modulator missing policy must be 'error' or 'indicator'")
-        if self.kind not in _KINDS:
+        if kind not in _KINDS:
             raise ValueError("modulator kind must be 'numeric' or 'categorical'")
-        if self.kind == "numeric":
-            if self.levels is not None or self.reference is not None:
+        if kind == "numeric":
+            if levels is not None or reference is not None:
                 raise ValueError(
                     "levels and reference apply only to categorical modulators"
                 )
-            return
-        self._set_reference(self._reference_name())
-        if self.levels is not None:
-            self._set_resolved_levels(self.levels)
+            resolved_levels = None
+            resolved_reference = None
+        else:
+            resolved_reference = _resolve_reference_name(column, reference)
+            if levels is not None:
+                resolved_levels, resolved_reference = _resolve_levels(
+                    column, levels, resolved_reference
+                )
+            else:
+                resolved_levels = None
+        self._column = column
+        self._missing = missing
+        self._kind = kind
+        self._levels = resolved_levels
+        self._reference = resolved_reference
 
-    def _reference_name(self):
-        if self.reference is None:
-            return None
-        name = level_name(self.reference)
-        if name is None:
-            raise ValueError(
-                f"modulator {self.column!r} reference must be a nonmissing level"
-            )
-        return name
+    @property
+    def column(self) -> str:
+        return self._column
 
-    def _set_reference(self, name):
-        object.__setattr__(self, "reference", name)
+    @property
+    def missing(self) -> str:
+        return self._missing
 
-    def _set_resolved_levels(self, values):
-        """Validate and assign normalized levels and reference on this modulator."""
-        names = [level_name(v) for v in values]
-        if any(n is None for n in names):
-            raise ValueError(f"modulator {self.column!r} levels must be nonmissing")
-        if len(set(names)) != len(names):
-            raise ValueError(f"modulator {self.column!r} levels must be distinct")
-        if len(names) < 2:
-            raise ValueError(
-                f"categorical modulator {self.column!r} needs at least two levels"
-            )
-        levels = _sorted_levels(names)
-        if self.reference is not None and self.reference not in levels:
-            raise ValueError(
-                f"reference {self.reference!r} is not a level of {self.column!r}: "
-                f"{list(levels)}"
-            )
-        object.__setattr__(self, "levels", levels)
-        self._set_reference(self.reference or levels[0])
+    @property
+    def kind(self) -> str:
+        return self._kind
+
+    @property
+    def levels(self) -> tuple[str, ...] | None:
+        return self._levels
+
+    @property
+    def reference(self) -> str | None:
+        return self._reference
+
+    def replace(self, **changes: object) -> Modulator:
+        values: dict[str, object] = {
+            "column": self._column,
+            "missing": self._missing,
+            "kind": self._kind,
+            "levels": self._levels,
+            "reference": self._reference,
+        }
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected Modulator fields: {sorted(unknown)}")
+        values.update(changes)
+        return Modulator(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Modulator):
+            return NotImplemented
+        return (
+            self._column == other._column
+            and self._missing == other._missing
+            and self._kind == other._kind
+            and self._levels == other._levels
+            and self._reference == other._reference
+        )
+
+    def __hash__(self) -> int:
+        return hash(
+            (self._column, self._missing, self._kind, self._levels, self._reference)
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"Modulator(column={self._column!r}, missing={self._missing!r}, "
+            f"kind={self._kind!r}, levels={self._levels!r}, "
+            f"reference={self._reference!r})"
+        )
 
     @property
     def resolved(self) -> bool:
-        return self.kind == "numeric" or self.levels is not None
+        return self._kind == "numeric" or self._levels is not None
 
-    def with_levels(self, values) -> "Modulator":
-        return replace(self, levels=tuple(values))
+    def with_levels(self, values) -> Modulator:
+        return self.replace(levels=tuple(values))
 
     @property
     def regressor_names(self) -> tuple[str, ...]:
-        if self.kind == "numeric":
-            return (self.column,)
-        if self.levels is None:
-            raise ValueError(f"categorical modulator {self.column!r} has no levels yet")
+        if self._kind == "numeric":
+            return (self._column,)
+        if self._levels is None:
+            raise ValueError(f"categorical modulator {self._column!r} has no levels yet")
         return tuple(
-            f"{self.column}[{lv}]" for lv in self.levels if lv != self.reference
+            f"{self._column}[{lv}]" for lv in self._levels if lv != self._reference
         )
 
     @property
     def indicator_name(self) -> str:
-        return f"missing_{self.column}"
+        return f"missing_{self._column}"
 
     def to_dict(self) -> dict[str, object]:
-        values: dict[str, object] = {"column": self.column, "missing": self.missing, "kind": self.kind}
-        if self.kind == "categorical":
-            values["levels"] = None if self.levels is None else list(self.levels)
-            values["reference"] = self.reference
+        values: dict[str, object] = {
+            "column": self._column,
+            "missing": self._missing,
+            "kind": self._kind,
+        }
+        if self._kind == "categorical":
+            values["levels"] = None if self._levels is None else list(self._levels)
+            values["reference"] = self._reference
         return values
 
 
-@dataclass(frozen=True)
+def _resolve_reference_name(column: str, reference: object) -> str | None:
+    if reference is None:
+        return None
+    name = level_name(reference)
+    if name is None:
+        raise ValueError(
+            f"modulator {column!r} reference must be a nonmissing level"
+        )
+    return name
+
+
+def _resolve_levels(
+    column: str, values: Sequence[object], reference: str | None
+) -> tuple[tuple[str, ...], str]:
+    """Validate and return normalized levels and reference."""
+    names = [level_name(v) for v in values]
+    if any(n is None for n in names):
+        raise ValueError(f"modulator {column!r} levels must be nonmissing")
+    if len(set(names)) != len(names):
+        raise ValueError(f"modulator {column!r} levels must be distinct")
+    if len(names) < 2:
+        raise ValueError(
+            f"categorical modulator {column!r} needs at least two levels"
+        )
+    levels = _sorted_levels(names)
+    if reference is not None and reference not in levels:
+        raise ValueError(
+            f"reference {reference!r} is not a level of {column!r}: {list(levels)}"
+        )
+    return levels, (reference or levels[0])
+
+
 class TaskModel:
     """Task regressor plus modulators; the default is the task regressor alone."""
 
-    modulators: tuple[Modulator, ...] = ()
+    __slots__ = ("_modulators",)
 
-    def __post_init__(self) -> None:
-        modulators = tuple(self.modulators)
-        if any(not isinstance(m, Modulator) for m in modulators):
+    def __init__(self, modulators: Sequence[Modulator] = ()) -> None:
+        resolved = tuple(modulators)
+        if any(not isinstance(m, Modulator) for m in resolved):
             raise ValueError("task model modulators must be Modulator instances")
-        columns = [m.column for m in modulators]
+        columns = [m.column for m in resolved]
         if len(set(columns)) != len(columns):
             raise ValueError("modulator columns must be unique")
-        if any(not m.resolved for m in modulators):
+        if any(not m.resolved for m in resolved):
             raise ValueError("categorical modulators need levels before fitting")
-        names = [n for m in modulators for n in m.regressor_names]
+        names = [n for m in resolved for n in m.regressor_names]
         if len(set(names)) != len(names) or "task" in names:
             raise ValueError("task-model regressor names must be unique")
-        object.__setattr__(self, "modulators", modulators)
+        self._modulators = resolved
+
+    @property
+    def modulators(self) -> tuple[Modulator, ...]:
+        return self._modulators
+
+    def replace(self, **changes: object) -> TaskModel:
+        values: dict[str, object] = {"modulators": self._modulators}
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected TaskModel fields: {sorted(unknown)}")
+        values.update(changes)
+        return TaskModel(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TaskModel):
+            return NotImplemented
+        return self._modulators == other._modulators
+
+    def __hash__(self) -> int:
+        return hash(self._modulators)
+
+    def __repr__(self) -> str:
+        return f"TaskModel(modulators={self._modulators!r})"
 
     @property
     def regressor_names(self) -> tuple[str, ...]:
-        return ("task", *(n for m in self.modulators for n in m.regressor_names))
+        return ("task", *(n for m in self._modulators for n in m.regressor_names))
 
     @property
     def profiled_names(self) -> tuple[str, ...]:
         return tuple(
-            m.indicator_name for m in self.modulators if m.missing == "indicator"
+            m.indicator_name for m in self._modulators if m.missing == "indicator"
         )
 
     def to_dict(self) -> dict[str, object]:
         return {
             "regressors": list(self.regressor_names),
-            "modulators": [m.to_dict() for m in self.modulators],
+            "modulators": [m.to_dict() for m in self._modulators],
         }
 
     @property
     def fingerprint(self) -> str:
         return sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()
 
-    def is_subset_of(self, other: "TaskModel") -> bool:
+    def is_subset_of(self, other: TaskModel) -> bool:
         """True when every modulator here appears unchanged in the other model."""
         if not isinstance(other, TaskModel):
             raise ValueError("is_subset_of expects a TaskModel")
-        return set(self.modulators) <= set(other.modulators)
+        return set(self._modulators) <= set(other._modulators)
 
 
 def _validate_modulator_column(column: object) -> None:
@@ -219,41 +314,139 @@ def _validate_modulator_column(column: object) -> None:
         raise ValueError(f"modulator column {column!r} is reserved")
 
 
-@dataclass(frozen=True)
 class ModelSpec:
-    contrasts: Mapping[str, ContrastValue]
-    confounds: Sequence[str] = ()
-    hrf_model: HRFModel = "glover"
-    drift_model: str | None = "cosine"
-    high_pass: float = 0.01
-    drift_order: int = 1
-    oversampling: int = OVERSAMPLING
-    min_onset: float = MIN_ONSET
-    noise_model: str = "ar1"
-    task_model: TaskModel | None = None
-    _contrast_names: tuple[str, ...] = field(init=False, repr=False)
+    __slots__ = (
+        "_contrasts",
+        "_confounds",
+        "_hrf_model",
+        "_drift_model",
+        "_high_pass",
+        "_drift_order",
+        "_oversampling",
+        "_min_onset",
+        "_noise_model",
+        "_task_model",
+        "_contrast_names",
+    )
 
-    def __post_init__(self) -> None:
-        normalized = _prepare_contrasts(self.contrasts)
-        selected_confounds = _prepare_confound_names(self.confounds)
-        _validate_noise_model(self.noise_model)
-        _validate_task_model(self.task_model, self.hrf_model)
-        _validate_design_options(
-            self.high_pass,
-            self.drift_order,
-            self.oversampling,
-            self.min_onset,
-        )
-        object.__setattr__(self, "contrasts", MappingProxyType(normalized))
-        object.__setattr__(self, "confounds", selected_confounds)
+    def __init__(
+        self,
+        contrasts: Mapping[str, ContrastValue],
+        confounds: Sequence[str] = (),
+        hrf_model: HRFModel = "glover",
+        drift_model: str | None = "cosine",
+        high_pass: float = 0.01,
+        drift_order: int = 1,
+        oversampling: int = OVERSAMPLING,
+        min_onset: float = MIN_ONSET,
+        noise_model: str = "ar1",
+        task_model: TaskModel | None = None,
+    ) -> None:
+        normalized = _prepare_contrasts(contrasts)
+        selected_confounds = _prepare_confound_names(confounds)
+        _validate_noise_model(noise_model)
+        _validate_task_model(task_model, hrf_model)
+        _validate_design_options(high_pass, drift_order, oversampling, min_onset)
+        self._contrasts: Mapping[str, ContrastValue] = MappingProxyType(normalized)
+        self._confounds = selected_confounds
+        self._hrf_model = hrf_model
+        self._drift_model = drift_model
+        self._high_pass = high_pass
         # Stored as builtin ints so model identities stay JSON-native.
-        object.__setattr__(self, "drift_order", int(self.drift_order))
-        object.__setattr__(self, "oversampling", int(self.oversampling))
-        object.__setattr__(self, "_contrast_names", tuple(normalized))
+        self._drift_order = int(drift_order)
+        self._oversampling = int(oversampling)
+        self._min_onset = min_onset
+        self._noise_model = noise_model
+        self._task_model = task_model
+        self._contrast_names = tuple(normalized)
+
+    @property
+    def contrasts(self) -> Mapping[str, ContrastValue]:
+        return self._contrasts
+
+    @property
+    def confounds(self) -> tuple[str, ...]:
+        return self._confounds
+
+    @property
+    def hrf_model(self) -> HRFModel:
+        return self._hrf_model
+
+    @property
+    def drift_model(self) -> str | None:
+        return self._drift_model
+
+    @property
+    def high_pass(self) -> float:
+        return self._high_pass
+
+    @property
+    def drift_order(self) -> int:
+        return self._drift_order
+
+    @property
+    def oversampling(self) -> int:
+        return self._oversampling
+
+    @property
+    def min_onset(self) -> float:
+        return self._min_onset
+
+    @property
+    def noise_model(self) -> str:
+        return self._noise_model
+
+    @property
+    def task_model(self) -> TaskModel | None:
+        return self._task_model
 
     @property
     def contrast_names(self) -> tuple[str, ...]:
         return self._contrast_names
+
+    def replace(self, **changes: object) -> ModelSpec:
+        values: dict[str, object] = {
+            "contrasts": self._contrasts,
+            "confounds": self._confounds,
+            "hrf_model": self._hrf_model,
+            "drift_model": self._drift_model,
+            "high_pass": self._high_pass,
+            "drift_order": self._drift_order,
+            "oversampling": self._oversampling,
+            "min_onset": self._min_onset,
+            "noise_model": self._noise_model,
+            "task_model": self._task_model,
+        }
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected ModelSpec fields: {sorted(unknown)}")
+        values.update(changes)
+        return ModelSpec(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelSpec):
+            return NotImplemented
+        return (
+            self._contrasts == other._contrasts
+            and self._confounds == other._confounds
+            and self._hrf_model == other._hrf_model
+            and self._drift_model == other._drift_model
+            and self._high_pass == other._high_pass
+            and self._drift_order == other._drift_order
+            and self._oversampling == other._oversampling
+            and self._min_onset == other._min_onset
+            and self._noise_model == other._noise_model
+            and self._task_model == other._task_model
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"ModelSpec(contrasts={self._contrasts!r}, confounds={self._confounds!r}, "
+            f"hrf_model={self._hrf_model!r}, drift_model={self._drift_model!r}, "
+            f"high_pass={self._high_pass!r}, drift_order={self._drift_order!r}, "
+            f"oversampling={self._oversampling!r}, min_onset={self._min_onset!r}, "
+            f"noise_model={self._noise_model!r}, task_model={self._task_model!r})"
+        )
 
 
 def contrast_metadata(contrasts):

@@ -1107,7 +1107,7 @@ def test_task_delta_r2_prepared_requires_a_fit_prepared_parent(
     prepared, _, _, full_result = prepared_delta_problem
     record = full_result.provenance
     stripped = replace(
-        full_result, _provenance=replace(record, activities=record.activities[:-1])
+        full_result, _provenance=record.replace(activities=record.activities[:-1])
     )
     with pytest.raises(ValueError, match="fit_prepared"):
         task_delta_r2_prepared(prepared, stripped)

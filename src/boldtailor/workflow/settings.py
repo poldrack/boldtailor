@@ -5,7 +5,6 @@ import re
 from collections.abc import Mapping
 from typing import Literal, overload
 
-from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from boldtailor._scalars import is_integer, is_real
@@ -167,121 +166,338 @@ def _check_grid(values, name, accept, wanted):
     return grid
 
 
-@dataclass(frozen=True, kw_only=True)
 class WorkflowSettings:
-    bids_dir: Path
-    subject: str
-    session: str
-    task: str
-    fmriprep_dir: Path | None = None
-    output_dir: Path | None = None
-    space: str = "fsLR-91k"
-    modulators: tuple[Modulator, ...] | None = None
-    hrf_method: str = "cv"
-    reml_rho: float | None = None
-    reml_reference_hrf_id: int | None = None
-    hrf_library: str = "default"
-    hrf_n_samples: int = 512
-    hrf_seed: int = 0
-    hrf_selection_rt: bool = True
-    ridge_mode: str = "fractional_cv"
-    ridge_fractions: tuple[float, ...] = (
-        0.1,
-        0.2,
-        0.3,
-        0.4,
-        0.5,
-        0.6,
-        0.7,
-        0.8,
-        0.9,
-        1.0,
-    )
-    ridge_alphas: tuple[float, ...] = (0.0, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0)
-    ridge_percentile: float = 90.0
-    ridge_alpha: float = 0.1
-    encoding_mode: str = "within_run"
-    stages: frozenset[str] = field(default_factory=lambda: frozenset(STAGES))
-    surface_maps: bool = True
-    surface_meshes: Mapping[str, Path] | None = None
-    n_jobs: int = 4
-    block_size: int = 4096
-    max_grayordinates: int | None = None
-    existing_results: str = "error"
+    DEFAULTS: dict[str, object] = {
+        "fmriprep_dir": None,
+        "output_dir": None,
+        "space": "fsLR-91k",
+        "modulators": None,
+        "hrf_method": "cv",
+        "reml_rho": None,
+        "reml_reference_hrf_id": None,
+        "hrf_library": "default",
+        "hrf_n_samples": 512,
+        "hrf_seed": 0,
+        "hrf_selection_rt": True,
+        "ridge_mode": "fractional_cv",
+        "ridge_fractions": (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+        "ridge_alphas": (0.0, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0),
+        "ridge_percentile": 90.0,
+        "ridge_alpha": 0.1,
+        "encoding_mode": "within_run",
+        "stages": frozenset(STAGES),
+        "surface_maps": True,
+        "surface_meshes": None,
+        "n_jobs": 4,
+        "block_size": 4096,
+        "max_grayordinates": None,
+        "existing_results": "error",
+    }
 
-    def __post_init__(self):
-        self._validate_and_set_paths()
-        self._validate_and_set_labels()
-        self._validate_and_set_modulators()
-        self._validate_hrf()
-        self._validate_and_set_ridge()
-        self._validate_and_set_stages()
-        self._validate_and_set_surfaces()
-        self._validate_and_set_execution()
-        self._set_resolved_output_dir()
+    _FIELD_NAMES = (
+        "bids_dir",
+        "subject",
+        "session",
+        "task",
+        "fmriprep_dir",
+        "output_dir",
+        "space",
+        "modulators",
+        "hrf_method",
+        "reml_rho",
+        "reml_reference_hrf_id",
+        "hrf_library",
+        "hrf_n_samples",
+        "hrf_seed",
+        "hrf_selection_rt",
+        "ridge_mode",
+        "ridge_fractions",
+        "ridge_alphas",
+        "ridge_percentile",
+        "ridge_alpha",
+        "encoding_mode",
+        "stages",
+        "surface_maps",
+        "surface_meshes",
+        "n_jobs",
+        "block_size",
+        "max_grayordinates",
+        "existing_results",
+    )
+
+    __slots__ = tuple(f"_{name}" for name in _FIELD_NAMES)
+
+    def __init__(
+        self,
+        *,
+        bids_dir: Path,
+        subject: str,
+        session: str,
+        task: str,
+        fmriprep_dir: Path | None = None,
+        output_dir: Path | None = None,
+        space: str = "fsLR-91k",
+        modulators: tuple[Modulator, ...] | None = None,
+        hrf_method: str = "cv",
+        reml_rho: float | None = None,
+        reml_reference_hrf_id: int | None = None,
+        hrf_library: str = "default",
+        hrf_n_samples: int = 512,
+        hrf_seed: int = 0,
+        hrf_selection_rt: bool = True,
+        ridge_mode: str = "fractional_cv",
+        ridge_fractions: tuple[float, ...] = (
+            0.1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+        ),
+        ridge_alphas: tuple[float, ...] = (0.0, 0.001, 0.01, 0.1, 1.0, 10.0, 100.0),
+        ridge_percentile: float = 90.0,
+        ridge_alpha: float = 0.1,
+        encoding_mode: str = "within_run",
+        stages: frozenset[str] = frozenset(STAGES),
+        surface_maps: bool = True,
+        surface_meshes: Mapping[str, Path] | None = None,
+        n_jobs: int = 4,
+        block_size: int = 4096,
+        max_grayordinates: int | None = None,
+        existing_results: str = "error",
+    ) -> None:
+        self._bids_dir, self._fmriprep_dir, self._space = self._validate_paths(
+            bids_dir, fmriprep_dir, space
+        )
+        self._subject = _check_label(subject, "subject", "sub")
+        self._session = _check_label(session, "session", "ses")
+        self._task = _check_label(task, "task", "")
+        self._modulators = self._validate_modulators(modulators)
+        self._hrf_library = _check_choice(hrf_library, "hrf_library", HRF_LIBRARIES)
+        self._hrf_n_samples = self._validate_hrf_n_samples(hrf_n_samples)
+        if not is_integer(hrf_seed) or hrf_seed < 0:
+            raise ValueError("hrf_seed must be a nonnegative integer")
+        self._hrf_seed = hrf_seed
+        _check_bool(hrf_selection_rt, "hrf_selection_rt")
+        self._hrf_selection_rt = hrf_selection_rt
+        self._hrf_method, self._reml_rho, self._reml_reference_hrf_id = (
+            self._validate_reml(hrf_method, reml_rho, reml_reference_hrf_id)
+        )
+        (
+            self._ridge_mode,
+            self._ridge_fractions,
+            self._ridge_alphas,
+            self._ridge_percentile,
+            self._ridge_alpha,
+            self._encoding_mode,
+        ) = self._validate_ridge(
+            ridge_mode,
+            ridge_fractions,
+            ridge_alphas,
+            ridge_percentile,
+            ridge_alpha,
+            encoding_mode,
+        )
+        self._stages = self._validate_stages(stages)
+        self._surface_maps, self._surface_meshes = self._validate_surfaces(
+            surface_maps, surface_meshes
+        )
+        self._n_jobs = _check_positive_int(n_jobs, "n_jobs")
+        self._block_size = _check_positive_int(block_size, "block_size")
+        self._max_grayordinates = _check_positive_int(
+            max_grayordinates, "max_grayordinates", optional=True
+        )
+        self._existing_results = _check_choice(
+            existing_results, "existing_results", EXISTING_RESULTS
+        )
+        out = output_dir
+        if out is None:
+            out = self._bids_dir / "derivatives" / self.output_name()
+        self._output_dir = Path(out).expanduser()
         self._check_output_overlap()
 
-    def _set(self, name, value):
-        object.__setattr__(self, name, value)
+    @property
+    def bids_dir(self) -> Path:
+        return self._bids_dir
 
-    def _validate_and_set_paths(self):
-        """Validate and assign normalized fields on this settings instance."""
-        root = Path(self.bids_dir).expanduser()
+    @property
+    def subject(self) -> str:
+        return self._subject
+
+    @property
+    def session(self) -> str:
+        return self._session
+
+    @property
+    def task(self) -> str:
+        return self._task
+
+    @property
+    def fmriprep_dir(self) -> Path:
+        return self._fmriprep_dir
+
+    @property
+    def output_dir(self) -> Path:
+        return self._output_dir
+
+    @property
+    def space(self) -> str:
+        return self._space
+
+    @property
+    def modulators(self) -> tuple[Modulator, ...] | None:
+        return self._modulators
+
+    @property
+    def hrf_method(self) -> str:
+        return self._hrf_method
+
+    @property
+    def reml_rho(self) -> float | None:
+        return self._reml_rho
+
+    @property
+    def reml_reference_hrf_id(self) -> int | None:
+        return self._reml_reference_hrf_id
+
+    @property
+    def hrf_library(self) -> str:
+        return self._hrf_library
+
+    @property
+    def hrf_n_samples(self) -> int:
+        return self._hrf_n_samples
+
+    @property
+    def hrf_seed(self) -> int:
+        return self._hrf_seed
+
+    @property
+    def hrf_selection_rt(self) -> bool:
+        return self._hrf_selection_rt
+
+    @property
+    def ridge_mode(self) -> str:
+        return self._ridge_mode
+
+    @property
+    def ridge_fractions(self) -> tuple[float, ...]:
+        return self._ridge_fractions
+
+    @property
+    def ridge_alphas(self) -> tuple[float, ...]:
+        return self._ridge_alphas
+
+    @property
+    def ridge_percentile(self) -> float:
+        return self._ridge_percentile
+
+    @property
+    def ridge_alpha(self) -> float:
+        return self._ridge_alpha
+
+    @property
+    def encoding_mode(self) -> str:
+        return self._encoding_mode
+
+    @property
+    def stages(self) -> frozenset[str]:
+        return self._stages
+
+    @property
+    def surface_maps(self) -> bool:
+        return self._surface_maps
+
+    @property
+    def surface_meshes(self) -> Mapping[str, Path] | None:
+        return self._surface_meshes
+
+    @property
+    def n_jobs(self) -> int:
+        return self._n_jobs
+
+    @property
+    def block_size(self) -> int:
+        return self._block_size
+
+    @property
+    def max_grayordinates(self) -> int | None:
+        return self._max_grayordinates
+
+    @property
+    def existing_results(self) -> str:
+        return self._existing_results
+
+    def replace(self, **changes: object) -> "WorkflowSettings":
+        values = {name: getattr(self, name) for name in self._FIELD_NAMES}
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected WorkflowSettings fields: {sorted(unknown)}")
+        values.update(changes)
+        return WorkflowSettings(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, WorkflowSettings):
+            return NotImplemented
+        return all(
+            getattr(self, name) == getattr(other, name) for name in self._FIELD_NAMES
+        )
+
+    def __repr__(self) -> str:
+        fields_repr = ", ".join(
+            f"{name}={getattr(self, name)!r}" for name in self._FIELD_NAMES
+        )
+        return f"WorkflowSettings({fields_repr})"
+
+    @staticmethod
+    def _validate_paths(bids_dir, fmriprep_dir, space):
+        root = Path(bids_dir).expanduser()
         if not root.is_dir():
             raise ValueError(f"bids_dir {root} is not a directory")
-        self._set("bids_dir", root)
-        prep = self.fmriprep_dir
-        self._set(
-            "fmriprep_dir",
-            Path(prep).expanduser() if prep is not None else resolve_fmriprep_dir(root),
+        prep = (
+            Path(fmriprep_dir).expanduser()
+            if fmriprep_dir is not None
+            else resolve_fmriprep_dir(root)
         )
-        self._set("space", _check_choice(self.space, "space", SUPPORTED_SPACES))
+        return root, prep, _check_choice(space, "space", SUPPORTED_SPACES)
 
-    def _validate_and_set_labels(self):
-        """Validate and assign normalized fields on this settings instance."""
-        self._set("subject", _check_label(self.subject, "subject", "sub"))
-        self._set("session", _check_label(self.session, "session", "ses"))
-        self._set("task", _check_label(self.task, "task", ""))
-
-    def _validate_and_set_modulators(self):
-        """Validate and assign normalized fields on this settings instance."""
-        if self.modulators is None:
-            return
-        mods = tuple(self.modulators)
+    @staticmethod
+    def _validate_modulators(modulators):
+        if modulators is None:
+            return None
+        mods = tuple(modulators)
         if any(not isinstance(m, Modulator) for m in mods):
             raise ValueError("modulators must be Modulator instances or None")
         for mod in mods:
             _check_unresolved(mod)
             _check_expressible(mod)
-        self._set("modulators", mods)
+        return mods
 
-    def _validate_hrf(self):
-        _check_choice(self.hrf_library, "hrf_library", HRF_LIBRARIES)
-        n = _check_positive_int(self.hrf_n_samples, "hrf_n_samples")
+    @staticmethod
+    def _validate_hrf_n_samples(hrf_n_samples):
+        n = _check_positive_int(hrf_n_samples, "hrf_n_samples")
         if n & (n - 1):
             raise ValueError("hrf_n_samples must be a power of two")
-        if not is_integer(self.hrf_seed) or self.hrf_seed < 0:
-            raise ValueError("hrf_seed must be a nonnegative integer")
-        _check_bool(self.hrf_selection_rt, "hrf_selection_rt")
-        self._validate_reml()
+        return n
 
-    def _validate_reml(self):
-        _check_choice(self.hrf_method, "hrf_method", ("cv", "reml"))
-        if self.hrf_method == "cv":
-            if self.reml_rho is not None or self.reml_reference_hrf_id is not None:
+    def _validate_reml(self, hrf_method, reml_rho, reml_reference_hrf_id):
+        _check_choice(hrf_method, "hrf_method", ("cv", "reml"))
+        if hrf_method == "cv":
+            if reml_rho is not None or reml_reference_hrf_id is not None:
                 raise ValueError("REML settings require hrf_method='reml'")
-            return
-        rho = 0.0 if self.reml_rho is None else self.reml_rho
-        reference = (
-            0 if self.reml_reference_hrf_id is None else self.reml_reference_hrf_id
-        )
+            return hrf_method, None, None
+        rho = 0.0 if reml_rho is None else reml_rho
+        reference = 0 if reml_reference_hrf_id is None else reml_reference_hrf_id
         if not is_real(rho):
             raise ValueError("reml_rho must be a scalar correlation")
         options = RemlHrfOptions(rho=rho, reference_hrf_id=reference)
         if reference:
             options.validate(1, self.build_library())
-        self._set("reml_rho", float(rho))
-        self._set("reml_reference_hrf_id", int(reference))
+        return hrf_method, float(rho), int(reference)
 
     def selection_options(self):
         """Resolved public HRF selection options used by every workflow stage."""
@@ -294,68 +510,53 @@ class WorkflowSettings:
             )
         return dict(method=self.hrf_method, reml_options=options)
 
-    def _validate_and_set_ridge(self):
-        """Validate and assign normalized fields on this settings instance."""
-        _check_choice(self.ridge_mode, "ridge_mode", RIDGE_MODES)
-        self._set(
-            "ridge_fractions",
-            _check_grid(
-                self.ridge_fractions, "ridge_fractions", _fraction, "in (0, 1]"
-            ),
+    @staticmethod
+    def _validate_ridge(
+        ridge_mode,
+        ridge_fractions,
+        ridge_alphas,
+        ridge_percentile,
+        ridge_alpha,
+        encoding_mode,
+    ):
+        _check_choice(ridge_mode, "ridge_mode", RIDGE_MODES)
+        fractions = _check_grid(
+            ridge_fractions, "ridge_fractions", _fraction, "in (0, 1]"
         )
-        self._set(
-            "ridge_alphas",
-            _check_grid(self.ridge_alphas, "ridge_alphas", _penalty, "finite and >= 0"),
+        alphas = _check_grid(
+            ridge_alphas, "ridge_alphas", _penalty, "finite and >= 0"
         )
-        if not is_real(self.ridge_percentile) or not 0 <= self.ridge_percentile <= 100:
+        if not is_real(ridge_percentile) or not 0 <= ridge_percentile <= 100:
             raise ValueError("ridge_percentile must lie in [0, 100]")
-        fixed_bad = not is_real(self.ridge_alpha) or self.ridge_alpha <= 0
-        if self.ridge_mode == "fixed" and fixed_bad:
+        fixed_bad = not is_real(ridge_alpha) or ridge_alpha <= 0
+        if ridge_mode == "fixed" and fixed_bad:
             raise ValueError("ridge_alpha must be positive in fixed mode")
-        _check_choice(self.encoding_mode, "encoding_mode", ENCODING_MODES)
+        _check_choice(encoding_mode, "encoding_mode", ENCODING_MODES)
+        return ridge_mode, fractions, alphas, ridge_percentile, ridge_alpha, encoding_mode
 
-    def _validate_and_set_stages(self):
-        """Validate and assign normalized fields on this settings instance."""
-        stages = frozenset(self.stages)
-        unknown = stages - set(STAGES)
+    @staticmethod
+    def _validate_stages(stages):
+        resolved = frozenset(stages)
+        unknown = resolved - set(STAGES)
         if unknown:
             raise ValueError(
                 f"stages must be drawn from {', '.join(STAGES)}; "
                 f"unknown: {sorted(unknown)}"
             )
         for stage, needed in STAGE_REQUIRES.items():
-            if stage in stages and needed not in stages:
+            if stage in resolved and needed not in resolved:
                 raise ValueError(f"stage {stage} requires stage {needed}")
-        self._set("stages", stages)
+        return resolved
 
-    def _validate_and_set_surfaces(self):
-        """Validate and assign normalized fields on this settings instance."""
-        _check_bool(self.surface_maps, "surface_maps")
-        if self.surface_meshes is None:
-            return
-        meshes = {k: Path(v).expanduser() for k, v in dict(self.surface_meshes).items()}
+    @staticmethod
+    def _validate_surfaces(surface_maps, surface_meshes):
+        _check_bool(surface_maps, "surface_maps")
+        if surface_meshes is None:
+            return surface_maps, None
+        meshes = {k: Path(v).expanduser() for k, v in dict(surface_meshes).items()}
         if set(meshes) != {"left", "right"}:
             raise ValueError("surface_meshes must map exactly 'left' and 'right'")
-        self._set("surface_meshes", meshes)
-
-    def _validate_and_set_execution(self):
-        """Validate and assign normalized fields on this settings instance."""
-        self._set("n_jobs", _check_positive_int(self.n_jobs, "n_jobs"))
-        self._set("block_size", _check_positive_int(self.block_size, "block_size"))
-        self._set(
-            "max_grayordinates",
-            _check_positive_int(
-                self.max_grayordinates, "max_grayordinates", optional=True
-            ),
-        )
-        _check_choice(self.existing_results, "existing_results", EXISTING_RESULTS)
-
-    def _set_resolved_output_dir(self):
-        """Validate and assign normalized fields on this settings instance."""
-        out = self.output_dir
-        if out is None:
-            out = self.bids_dir / "derivatives" / self.output_name()
-        self._set("output_dir", Path(out).expanduser())
+        return surface_maps, meshes
 
     def _check_output_overlap(self):
         """Outputs may never share a directory tree with the inputs."""
@@ -403,8 +604,7 @@ class WorkflowSettings:
 
     def to_dict(self):
         return {
-            item.name: _to_plain(item.name, getattr(self, item.name))
-            for item in fields(self)
+            name: _to_plain(name, getattr(self, name)) for name in self._FIELD_NAMES
         }
 
     @classmethod

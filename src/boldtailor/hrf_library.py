@@ -145,7 +145,6 @@ def _glmsingle_kernel(index, dt):
     return np.interp(np.arange(count) * dt, source, curve)
 
 
-@dataclass(frozen=True)
 class HrfCandidate:
     """Stable library index and identified kernel, sampled at TR/oversampling.
 
@@ -154,62 +153,129 @@ class HrfCandidate:
     ``glmsingle``. Every kernel is scaled to a peak of one.
     """
 
-    id: int
-    kind: str
-    parameters: tuple[float, ...]
+    __slots__ = ("_id", "_kind", "_parameters")
 
-    def __post_init__(self):
-        if self.kind not in _KINDS:
+    def __init__(self, id: int, kind: str, parameters: tuple[float, ...]) -> None:
+        if kind not in _KINDS:
             raise ValueError("unknown HRF kind")
-        if self.kind == "glmsingle":
-            object.__setattr__(self, "parameters", _glmsingle_index(self.parameters))
-            return
-        object.__setattr__(self, "parameters", _parameters(self.parameters))
-        if self.kind == "spm" and self.parameters != CANONICAL_PARAMETERS:
-            raise ValueError("SPM candidate parameters must match the canonical kernel")
+        if kind == "glmsingle":
+            resolved = _glmsingle_index(parameters)
+        else:
+            resolved = _parameters(parameters)
+            if kind == "spm" and resolved != CANONICAL_PARAMETERS:
+                raise ValueError("SPM candidate parameters must match the canonical kernel")
+        self._id = id
+        self._kind = kind
+        self._parameters = resolved
+
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def kind(self) -> str:
+        return self._kind
+
+    @property
+    def parameters(self) -> tuple[float, ...]:
+        return self._parameters
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HrfCandidate):
+            return NotImplemented
+        return (
+            self._id == other._id
+            and self._kind == other._kind
+            and self._parameters == other._parameters
+        )
+
+    def __hash__(self) -> int:
+        return hash((self._id, self._kind, self._parameters))
+
+    def __repr__(self) -> str:
+        return (
+            f"HrfCandidate(id={self._id!r}, kind={self._kind!r}, "
+            f"parameters={self._parameters!r})"
+        )
 
     def kernel(self, tr, oversampling=OVERSAMPLING):
         dt = _sampling(tr, oversampling)
-        if self.kind == "spm":
+        if self._kind == "spm":
             return _peak_normalized(spm_hrf(tr, oversampling))
-        if self.kind == "glmsingle":
-            return _peak_normalized(_glmsingle_kernel(self.parameters[0], dt))
-        return _peak_normalized(_double_gamma_kernel(self.parameters, dt))
+        if self._kind == "glmsingle":
+            return _peak_normalized(_glmsingle_kernel(self._parameters[0], dt))
+        return _peak_normalized(_double_gamma_kernel(self._parameters, dt))
 
 
-@dataclass(frozen=True)
 class HrfLibrary:
     """Owned candidate order and 0.1-second curves; table access returns a copy."""
 
-    candidates: tuple[HrfCandidate, ...]
-    curves: np.ndarray = field(init=False, repr=False, compare=False)
-    times: np.ndarray = field(init=False, repr=False, compare=False)
-    fingerprint: str = field(init=False)
-    origin: Mapping[str, object] = field(default_factory=dict, compare=False)
+    __slots__ = ("_candidates", "_curves", "_times", "_fingerprint", "_origin")
 
-    def __post_init__(self):
-        candidates = tuple(self.candidates)
+    def __init__(
+        self,
+        candidates: tuple[HrfCandidate, ...],
+        origin: Mapping[str, object] | None = None,
+    ) -> None:
+        resolved = tuple(candidates)
         if (
-            not candidates
-            or candidates[0].kind != "spm"
-            or any(c.id != i for i, c in enumerate(candidates))
+            not resolved
+            or resolved[0].kind != "spm"
+            or any(c.id != i for i, c in enumerate(resolved))
         ):
             raise ValueError(
                 "library requires canonical candidate 0 and ordered stable IDs"
             )
-        kernels = [c.kernel(0.1, 1) for c in candidates]
+        kernels = [c.kernel(0.1, 1) for c in resolved]
         curves = np.zeros((len(kernels), max(map(len, kernels))))
         for row, values in zip(curves, kernels, strict=True):
             row[: len(values)] = values
-        identity = [(c.id, c.kind, c.parameters) for c in candidates]
+        identity = [(c.id, c.kind, c.parameters) for c in resolved]
         digest = sha256(json.dumps(identity).encode() + curves.tobytes()).hexdigest()
-        object.__setattr__(self, "candidates", candidates)
-        object.__setattr__(self, "curves", readonly_array(curves))
-        object.__setattr__(
-            self, "times", readonly_array(np.arange(curves.shape[1]) * 0.1)
+        self._candidates = resolved
+        self._curves = readonly_array(curves)
+        self._times = readonly_array(np.arange(curves.shape[1]) * 0.1)
+        self._fingerprint = digest
+        self._origin: Mapping[str, object] = MappingProxyType(
+            {} if origin is None else dict(origin)
         )
-        object.__setattr__(self, "fingerprint", digest)
-        object.__setattr__(self, "origin", MappingProxyType(dict(self.origin)))
+
+    @property
+    def candidates(self) -> tuple[HrfCandidate, ...]:
+        return self._candidates
+
+    @property
+    def curves(self) -> np.ndarray:
+        return self._curves
+
+    @property
+    def times(self) -> np.ndarray:
+        return self._times
+
+    @property
+    def fingerprint(self) -> str:
+        return self._fingerprint
+
+    @property
+    def origin(self) -> Mapping[str, object]:
+        return self._origin
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HrfLibrary):
+            return NotImplemented
+        return (
+            self._candidates == other._candidates
+            and self._fingerprint == other._fingerprint
+        )
+
+    def __hash__(self) -> int:
+        return hash((self._candidates, self._fingerprint))
+
+    def __repr__(self) -> str:
+        return (
+            f"HrfLibrary(candidates={self._candidates!r}, "
+            f"fingerprint={self._fingerprint!r})"
+        )
 
     @classmethod
     def from_parameters(cls, parameters, origin=None, *, include_glmsingle=False):

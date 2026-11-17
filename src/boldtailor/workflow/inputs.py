@@ -192,10 +192,8 @@ def block_signals(runs, indices):
 
 def _trimmed_sources(run, root, indices):
     sources = run_sources(run, Path(root), np.asarray(indices))
-    return replace(
-        sources,
-        signal=replace(
-            sources.signal,
+    return sources.replace(
+        signal=sources.signal.replace(
             annotations={
                 **sources.signal.annotations,
                 "retained_frame_indices": run.retained_frames.tolist(),

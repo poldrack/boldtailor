@@ -20,18 +20,18 @@ def test_reml_settings_roundtrip_and_cli(dataset, settings_for):
     """Method-specific settings survive serialization and the report command line."""
     root, *_ = dataset
     cv = settings_for(root, ridge_mode="off", hrf_library="sobol", hrf_n_samples=2)
-    settings = replace(
-        cv, output_dir=None, hrf_method="reml", reml_rho=0.2, reml_reference_hrf_id=1
+    settings = cv.replace(
+        output_dir=None, hrf_method="reml", reml_rho=0.2, reml_reference_hrf_id=1
     )
     restored = WorkflowSettings.from_dict(settings.to_dict())
     assert restored.to_dict() == settings.to_dict()
     assert settings.output_dir != cv.output_dir
     assert (
-        replace(settings, output_dir=None, reml_rho=0.3).output_dir
+        settings.replace(output_dir=None, reml_rho=0.3).output_dir
         != settings.output_dir
     )
     assert (
-        replace(settings, output_dir=None, reml_reference_hrf_id=0).output_dir
+        settings.replace(output_dir=None, reml_reference_hrf_id=0).output_dir
         != settings.output_dir
     )
     args = build_parser().parse_args(shlex.split(report.command_line(settings))[1:])
@@ -78,7 +78,7 @@ def test_reml_run_minima_are_method_specific(dataset, four_runs, settings_for):
         ridge_fractions=(0.5, 1.0),
     )
     assert not describe_inputs(reml)["problems"]
-    cv = replace(reml, hrf_method="cv", reml_rho=None, reml_reference_hrf_id=None)
+    cv = reml.replace(hrf_method="cv", reml_rho=None, reml_reference_hrf_id=None)
     assert describe_inputs(cv)["problems"]
 
 

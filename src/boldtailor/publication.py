@@ -37,16 +37,33 @@ class PublicationError(RuntimeError):
         self.rollback_errors = tuple(rollback_errors)
 
 
-@dataclass(frozen=True, slots=True)
 class Artifact:
     """One immutable in-memory artifact addressed relative to a destination."""
 
-    path: str
-    payload: bytes
+    __slots__ = ("_path", "_payload")
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "path", _validate_artifact_path(self.path))
-        object.__setattr__(self, "payload", _own_bytes(self.payload))
+    def __init__(self, path: str, payload: bytes) -> None:
+        self._path = _validate_artifact_path(path)
+        self._payload = _own_bytes(payload)
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def payload(self) -> bytes:
+        return self._payload
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Artifact):
+            return NotImplemented
+        return self._path == other._path and self._payload == other._payload
+
+    def __hash__(self) -> int:
+        return hash((self._path, self._payload))
+
+    def __repr__(self) -> str:
+        return f"Artifact(path={self._path!r}, payload={self._payload!r})"
 
 
 @dataclass(slots=True)

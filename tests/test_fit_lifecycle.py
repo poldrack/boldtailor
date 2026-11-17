@@ -158,8 +158,8 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     from boldtailor.logging import emit_event
 
     caplog.set_level(logging.INFO, logger="boldtailor")
-    parent = replace(
-        parent_record, events=tuple({"event": f"old_{i}"} for i in range(8))
+    parent = parent_record.replace(
+        events=tuple({"event": f"old_{i}"} for i in range(8))
     )
     with fit_operation("outer", parent) as outer:
         with fit_operation("inner", parent) as inner:

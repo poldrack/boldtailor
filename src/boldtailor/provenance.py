@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -20,39 +19,114 @@ _QUALITY_WARNING = {
 }
 
 
-@dataclass(frozen=True)
 class SourceRef:
-    role: str
-    uri: str | None = None
-    media_type: str | None = None
-    byte_size: int | None = None
-    modified_at: str | None = None
-    sha256: str | None = None
-    annotations: Mapping[str, object] = field(default_factory=dict)
+    __slots__ = (
+        "_role",
+        "_uri",
+        "_media_type",
+        "_byte_size",
+        "_modified_at",
+        "_sha256",
+        "_annotations",
+    )
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "role", _validate_role(self.role))
-        object.__setattr__(self, "uri", _validate_uri(self.uri))
-        object.__setattr__(self, "media_type", _validate_optional_text(self.media_type))
-        object.__setattr__(self, "byte_size", _validate_byte_size(self.byte_size))
-        object.__setattr__(self, "modified_at", _validate_modified_at(self.modified_at))
-        object.__setattr__(self, "sha256", _validate_sha256(self.sha256))
-        object.__setattr__(self, "annotations", _freeze_mapping(self.annotations))
+    def __init__(
+        self,
+        role: str,
+        uri: str | None = None,
+        media_type: str | None = None,
+        byte_size: int | None = None,
+        modified_at: str | None = None,
+        sha256: str | None = None,
+        annotations: Mapping[str, object] | None = None,
+    ) -> None:
+        self._role = _validate_role(role)
+        self._uri = _validate_uri(uri)
+        self._media_type = _validate_optional_text(media_type)
+        self._byte_size = _validate_byte_size(byte_size)
+        self._modified_at = _validate_modified_at(modified_at)
+        self._sha256 = _validate_sha256(sha256)
+        self._annotations = _freeze_mapping({} if annotations is None else annotations)
+
+    @property
+    def role(self) -> str:
+        return self._role
+
+    @property
+    def uri(self) -> str | None:
+        return self._uri
+
+    @property
+    def media_type(self) -> str | None:
+        return self._media_type
+
+    @property
+    def byte_size(self) -> int | None:
+        return self._byte_size
+
+    @property
+    def modified_at(self) -> str | None:
+        return self._modified_at
+
+    @property
+    def sha256(self) -> str | None:
+        return self._sha256
+
+    @property
+    def annotations(self) -> Mapping[str, object]:
+        return self._annotations
+
+    def replace(self, **changes: object) -> SourceRef:
+        values: dict[str, object] = {
+            "role": self._role,
+            "uri": self._uri,
+            "media_type": self._media_type,
+            "byte_size": self._byte_size,
+            "modified_at": self._modified_at,
+            "sha256": self._sha256,
+            "annotations": self._annotations,
+        }
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected SourceRef fields: {sorted(unknown)}")
+        values.update(changes)
+        return SourceRef(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SourceRef):
+            return NotImplemented
+        return (
+            self._role == other._role
+            and self._uri == other._uri
+            and self._media_type == other._media_type
+            and self._byte_size == other._byte_size
+            and self._modified_at == other._modified_at
+            and self._sha256 == other._sha256
+            and self._annotations == other._annotations
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"SourceRef(role={self._role!r}, uri={self._uri!r}, "
+            f"media_type={self._media_type!r}, byte_size={self._byte_size!r}, "
+            f"modified_at={self._modified_at!r}, sha256={self._sha256!r}, "
+            f"annotations={self._annotations!r})"
+        )
 
     def to_dict(self) -> dict[str, object]:
-        data: dict[str, object] = {"role": self.role}
-        if self.uri is not None:
-            data["uri"] = self.uri
-        if self.media_type is not None:
-            data["media_type"] = self.media_type
-        if self.byte_size is not None:
-            data["byte_size"] = self.byte_size
-        if self.modified_at is not None:
-            data["modified_at"] = self.modified_at
-        if self.sha256 is not None:
-            data["sha256"] = self.sha256
-        if self.annotations:
-            data["annotations"] = _thaw(self.annotations)
+        data: dict[str, object] = {"role": self._role}
+        if self._uri is not None:
+            data["uri"] = self._uri
+        if self._media_type is not None:
+            data["media_type"] = self._media_type
+        if self._byte_size is not None:
+            data["byte_size"] = self._byte_size
+        if self._modified_at is not None:
+            data["modified_at"] = self._modified_at
+        if self._sha256 is not None:
+            data["sha256"] = self._sha256
+        if self._annotations:
+            data["annotations"] = _thaw(self._annotations)
         return data
 
     @classmethod
@@ -68,29 +142,67 @@ class SourceRef:
         )
 
 
-@dataclass(frozen=True)
 class RunSources:
-    signal: SourceRef
-    events: SourceRef
-    confounds: SourceRef | None = None
+    __slots__ = ("_signal", "_events", "_confounds")
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "signal", _copy_source_ref(self.signal, "signal"))
-        object.__setattr__(self, "events", _copy_source_ref(self.events, "events"))
-        if self.confounds is not None:
-            object.__setattr__(
-                self,
-                "confounds",
-                _copy_source_ref(self.confounds, "confounds"),
-            )
+    def __init__(
+        self,
+        signal: SourceRef,
+        events: SourceRef,
+        confounds: SourceRef | None = None,
+    ) -> None:
+        self._signal = _copy_source_ref(signal, "signal")
+        self._events = _copy_source_ref(events, "events")
+        self._confounds = (
+            None if confounds is None else _copy_source_ref(confounds, "confounds")
+        )
+
+    @property
+    def signal(self) -> SourceRef:
+        return self._signal
+
+    @property
+    def events(self) -> SourceRef:
+        return self._events
+
+    @property
+    def confounds(self) -> SourceRef | None:
+        return self._confounds
+
+    def replace(self, **changes: object) -> RunSources:
+        values: dict[str, object] = {
+            "signal": self._signal,
+            "events": self._events,
+            "confounds": self._confounds,
+        }
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected RunSources fields: {sorted(unknown)}")
+        values.update(changes)
+        return RunSources(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, RunSources):
+            return NotImplemented
+        return (
+            self._signal == other._signal
+            and self._events == other._events
+            and self._confounds == other._confounds
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"RunSources(signal={self._signal!r}, events={self._events!r}, "
+            f"confounds={self._confounds!r})"
+        )
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
-            "signal": self.signal.to_dict(),
-            "events": self.events.to_dict(),
+            "signal": self._signal.to_dict(),
+            "events": self._events.to_dict(),
         }
-        if self.confounds is not None:
-            data["confounds"] = self.confounds.to_dict()
+        if self._confounds is not None:
+            data["confounds"] = self._confounds.to_dict()
         return data
 
     @classmethod
@@ -102,46 +214,99 @@ class RunSources:
         )
 
 
-@dataclass(frozen=True)
 class ProvenanceRecord:
-    execution_id: str
-    sources: Sequence[RunSources] = ()
-    activities: Sequence[Mapping[str, object]] = ()
-    events: Sequence[Mapping[str, object]] = ()
-    warnings: Sequence[Mapping[str, object]] = ()
-    schema: str = SCHEMA_ID
-    _extra: Mapping[str, object] = field(default_factory=dict, repr=False)
-    _metadata_fingerprint: str | None = field(init=False, repr=False)
+    __slots__ = (
+        "_execution_id",
+        "_sources",
+        "_activities",
+        "_events",
+        "_warnings",
+        "_schema",
+        "_extra",
+        "_metadata_fingerprint",
+    )
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "schema", _validate_schema(self.schema))
-        object.__setattr__(self, "execution_id", _validate_uuid(self.execution_id))
-        object.__setattr__(
-            self,
-            "sources",
-            tuple(_copy_run_sources(source) for source in self.sources),
+    def __init__(
+        self,
+        execution_id: str,
+        sources: Sequence[RunSources] = (),
+        activities: Sequence[Mapping[str, object]] = (),
+        events: Sequence[Mapping[str, object]] = (),
+        warnings: Sequence[Mapping[str, object]] = (),
+        schema: str = SCHEMA_ID,
+        _extra: Mapping[str, object] | None = None,
+    ) -> None:
+        self._schema = _validate_schema(schema)
+        self._execution_id = _validate_uuid(execution_id)
+        self._sources = tuple(_copy_run_sources(source) for source in sources)
+        self._activities = _freeze_mapping_sequence(activities)
+        self._events = _freeze_mapping_sequence(events)
+        fingerprint = _metadata_fingerprint(self._sources)
+        self._warnings = _augment_warnings(
+            _freeze_mapping_sequence(warnings), fingerprint
         )
-        object.__setattr__(
-            self,
-            "activities",
-            _freeze_mapping_sequence(self.activities),
+        self._extra = _freeze_mapping({} if _extra is None else _extra)
+        self._metadata_fingerprint = fingerprint
+
+    @property
+    def execution_id(self) -> str:
+        return self._execution_id
+
+    @property
+    def sources(self) -> tuple[RunSources, ...]:
+        return self._sources
+
+    @property
+    def activities(self) -> Sequence[Mapping[str, object]]:
+        return self._activities
+
+    @property
+    def events(self) -> Sequence[Mapping[str, object]]:
+        return self._events
+
+    @property
+    def warnings(self) -> Sequence[Mapping[str, object]]:
+        return self._warnings
+
+    @property
+    def schema(self) -> str:
+        return self._schema
+
+    def replace(self, **changes: object) -> ProvenanceRecord:
+        values: dict[str, object] = {
+            "execution_id": self._execution_id,
+            "sources": self._sources,
+            "activities": self._activities,
+            "events": self._events,
+            "warnings": self._warnings,
+            "schema": self._schema,
+            "_extra": self._extra,
+        }
+        unknown = set(changes) - set(values)
+        if unknown:
+            raise TypeError(f"unexpected ProvenanceRecord fields: {sorted(unknown)}")
+        values.update(changes)
+        return ProvenanceRecord(**values)  # type: ignore[arg-type]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ProvenanceRecord):
+            return NotImplemented
+        return (
+            self._execution_id == other._execution_id
+            and self._sources == other._sources
+            and self._activities == other._activities
+            and self._events == other._events
+            and self._warnings == other._warnings
+            and self._schema == other._schema
+            and self._extra == other._extra
         )
-        object.__setattr__(
-            self,
-            "events",
-            _freeze_mapping_sequence(self.events),
-        )
-        fingerprint = _metadata_fingerprint(self.sources)
-        object.__setattr__(
-            self,
-            "warnings",
-            _augment_warnings(_freeze_mapping_sequence(self.warnings), fingerprint),
-        )
-        object.__setattr__(self, "_extra", _freeze_mapping(self._extra))
-        object.__setattr__(
-            self,
-            "_metadata_fingerprint",
-            fingerprint,
+
+    def __repr__(self) -> str:
+        return (
+            f"ProvenanceRecord(execution_id={self._execution_id!r}, "
+            f"sources={self._sources!r}, activities={self._activities!r}, "
+            f"events={self._events!r}, warnings={self._warnings!r}, "
+            f"schema={self._schema!r})"
         )
 
     @property
@@ -155,20 +320,20 @@ class ProvenanceRecord:
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
-            "schema": self.schema,
-            "execution_id": self.execution_id,
-            "sources": [source.to_dict() for source in self.sources],
+            "schema": self._schema,
+            "execution_id": self._execution_id,
+            "sources": [source.to_dict() for source in self._sources],
             "activities": self.activity_records(),
-            "events": [_thaw(event) for event in self.events],
-            "warnings": [_thaw(warning) for warning in self.warnings],
-            "metadata_fingerprint": self.metadata_fingerprint,
+            "events": [_thaw(event) for event in self._events],
+            "warnings": [_thaw(warning) for warning in self._warnings],
+            "metadata_fingerprint": self._metadata_fingerprint,
         }
         data.update(_thaw(self._extra))
         return data
 
     def activity_records(self) -> list[dict[str, object]]:
         """Return owned JSON-compatible activity dictionaries."""
-        return [_thaw(activity) for activity in self.activities]
+        return [_thaw(activity) for activity in self._activities]
 
     def canonical_json(self) -> str:
         return json.dumps(
@@ -233,8 +398,7 @@ def extend_provenance(
     warnings: Sequence[Mapping[str, object]],
     analysis_id: str | None,
 ) -> ProvenanceRecord:
-    return replace(
-        record,
+    return record.replace(
         execution_id=execution_id,
         activities=(*record.activities, activity),
         events=tuple(events),

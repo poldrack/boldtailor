@@ -27,7 +27,7 @@ def compile_group_designs(data, model, selection):
     ids = np.unique(selection.hrf_indices[selection.hrf_indices >= 0])
     if not len(ids):
         # No signal will be fitted, but malformed models must still fail.
-        reference = compile_designs(data, replace(model, hrf_model="spm"))
+        reference = compile_designs(data, model.replace(hrf_model="spm"))
         matrices = tuple(compiled.matrix for compiled in reference)
         _preflight_contrasts(matrices, model.contrasts)
         _validate_designs(matrices)

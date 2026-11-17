@@ -122,7 +122,7 @@ def _glm_instances(problem):
     from boldtailor.fit import fit, task_delta_r2
 
     data, model, selection, _ = problem
-    canonical = replace(model, hrf_model="spm")
+    canonical = model.replace(hrf_model="spm")
     full = fit(data, canonical)
     return {
         "AnalysisResult": lambda: full,

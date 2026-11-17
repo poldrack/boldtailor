@@ -126,7 +126,7 @@ def selected_glm_problem(selected_fixture, complete_sources):
 
 def _glm_calls(glm_problem):
     data, model, full = glm_problem
-    ar1 = replace(model, noise_model="ar1")
+    ar1 = model.replace(noise_model="ar1")
     return {
         "fit": (
             lambda: fit(data, model),
@@ -174,7 +174,7 @@ def _prepared_calls(prepared_problem):
     prepared, kwargs, full = prepared_problem
     bad = dict(kwargs, model_metadata={"bad": object()})
     record = full.provenance
-    unprepared = replace(full, _provenance=replace(record, activities=()))
+    unprepared = replace(full, _provenance=record.replace(activities=()))
     return {
         "prepared_fit": (
             lambda: fit_prepared(prepared, **kwargs),
@@ -190,7 +190,7 @@ def _prepared_calls(prepared_problem):
 def _selected_glm_calls(selected_glm_problem):
     data, model, kwargs, full = selected_glm_problem
     wrong = dict(kwargs, feature_signature="wrong")
-    ar1 = replace(model, noise_model="ar1")
+    ar1 = model.replace(noise_model="ar1")
     return {
         "selected_glm_fit": (
             lambda: fit(data, model, **kwargs),
