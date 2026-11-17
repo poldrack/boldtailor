@@ -276,15 +276,14 @@ def test_result_memory_does_not_scale_with_selected_hrf_count(selected_fixture):
 
 
 def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
-    """Verify fit run returns a named group run fit."""
-    from hashlib import sha256
-
+    """A run's fit carries its own design digest; no hash object is passed in."""
     from boldtailor import _selected_hrf_fit as module
     from boldtailor.hrf_selection import prepare_runs
 
     data, selection = selected_fixture
-    run = prepare_runs(data, selection.library)[0]
-    fit = module._fit_run(run, data.signals[0], selection.hrf_indices, 0.0, 0, sha256())
+    runs = prepare_runs(data, selection.library)
+    ids = selection.hrf_indices
+    fit = module._fit_run(runs[0], data.signals[0], ids, 0.0, 0)
     assert type(fit) is module.GroupRunFit
     assert [f.name for f in fields(module.GroupRunFit)] == [
         "betas",
@@ -293,7 +292,12 @@ def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
         "total_ss",
         "diagnostics",
         "ridge_alphas",
+        "design_digest",
     ]
+    again = module._fit_run(runs[0], data.signals[0], ids, 0.0, 0)
+    other = module._fit_run(runs[1], data.signals[1], ids, 0.0, 1)
+    assert len(fit.design_digest) == 64
+    assert fit.design_digest == again.design_digest != other.design_digest
     assert fit.betas.shape == (len(data.events[0]), data.n_features)
     assert {d["run_index"] for d in fit.diagnostics} == {0}
 
