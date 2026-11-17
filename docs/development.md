@@ -77,12 +77,12 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_shared_hrf_fit`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
-| Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_reml_terms`, `_reml_criterion`, `_reml_search`, `_ar1_moments`, `_numerics` |
-| Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_denoising_pool`, `_denoising_cv`, `_denoising_gate`, `_denoising_identity`, `_mixture_threshold` |
+| Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_ar1_moments`, `_numerics` |
+| Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_mixture_threshold` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication`, `_software` |
 | Shared constants and deprecation shims | `_constants`, `_deprecation` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
-| Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
+| Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `export_cifti`, `figures`, `tables`, `manifest`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
 | Notebook-only BIDS workflow helpers | `examples/bids_workflow` |
 
 Public fitting entry points delegate to complete operations at the same level:
@@ -426,7 +426,7 @@ the number of distinct `ρ` values: unbinned per-vertex `ρ` (for example 1,750
 values × 533 candidates × 12 runs) is impractical, and callers bin it
 (`regularized_pilot.py` uses steps of 0.02). All `ρ` subsets must share one
 restricted dof (the rank of the whitened `C` must not change with `ρ`);
-otherwise `ValueError` is raised. Input validation lives in `_reml_inputs`.
+otherwise `ValueError` is raised. Input validation lives in `reml`.
 Zero-feature signals, non-finite inputs, shape mismatches, `|ρ| >= 1`, an empty
 candidate iterable, and a candidate with the wrong number of groups raise
 `ValueError`; candidate errors name the candidate index, and a candidate may be

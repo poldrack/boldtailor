@@ -116,9 +116,7 @@ Start with [test_single_trial.py](../tests/test_single_trial.py),
 | Read in order | Functions to follow and their usage |
 | --- | --- |
 | [ar1](api-review/ar1.md), [_ar1_moments](api-review/_ar1_moments.md) | `whiten` transforms rows; `prepare_reference` caches design work; `estimate_rho` estimates autocorrelation using a reference design |
-| [reml](api-review/reml.md), [_reml_inputs](api-review/_reml_inputs.md) | `fit_reml(groups, random_design, rho=...)` estimates one random-effect variance ratio; `select_random_effects_design` compares candidate random designs using the same groups |
-| [_reml_terms](api-review/_reml_terms.md) | Follow fixed-space projection, whitening, random-design spectral terms and degeneracy handling |
-| [_reml_criterion](api-review/_reml_criterion.md), [_reml_search](api-review/_reml_search.md) | Follow pooled restricted likelihood and the bounded variance-ratio search |
+| [reml](archive/api-review/reml.md) | `fit_reml(groups, random_design, rho=...)` estimates one random-effect variance ratio; `select_random_effects_design` compares candidate random designs using the same groups; includes input validation, fixed-space projection, pooled restricted likelihood, and bounded variance-ratio search |
 | [_numerics](api-review/_numerics.md) | Review shared rank, projection and least-squares conventions used by numerical paths |
 
 **Review questions.** `rho` is supplied to REML, not estimated inside it. Each
@@ -140,14 +138,12 @@ Start with [test_reml_oracle.py](../tests/test_reml_oracle.py),
 
 ### 5. Optional task-guided denoising
 
-Read [denoising](api-review/denoising.md): `select_denoising` selects temporal
+Read [denoising](archive/api-review/denoising.md): `select_denoising` selects temporal
 noise PCs and `with_denoising` appends them to the baseline confounds of the same
-analysis. Then follow [_denoising_pool](api-review/_denoising_pool.md) and
-[_mixture_threshold](api-review/_mixture_threshold.md) for the noise pool/PCA,
-[_denoising_cv](api-review/_denoising_cv.md) for PC-count selection,
-[_denoising_gate](api-review/_denoising_gate.md) for the additional significance
-gate, and [_denoising_identity](api-review/_denoising_identity.md) plus
-[denoising_results](api-review/denoising_results.md) for identity and outputs.
+analysis (including the noise pool/PCA, PC-count selection, significance gate, and
+source-identity checks), using [_mixture_threshold](archive/api-review/_mixture_threshold.md)
+for the automatic tail threshold and
+[denoising_results](archive/api-review/denoising_results.md) for identity and outputs.
 
 **Review questions.** HRFs, the pool and its components use all supplied runs;
 count-selection scores are not independent performance estimates. The significance
