@@ -1103,66 +1103,89 @@ def _group_test(setup, group, count, noise_model) -> _GroupTest:
     return _GroupTest(group.features, f, df1, df2, rho=rho)
 
 
-def _arrays(n_runs, n_features):
-    values = {key: np.full(n_features, np.nan) for key in ("f", "p", "df1", "df2")}
-    values.update(
-        tested=np.zeros(n_features, bool),
-        excluded=np.zeros(n_features, bool),
-        rho=np.full((n_runs, n_features), np.nan),
-    )
-    return values
+@dataclass(frozen=True)
+class _GateSettings:
+    """The significance gate's switch, levels and noise model."""
+
+    enabled: bool
+    alpha: float
+    binomial_alpha: float
+    noise_model: str
+
+    def validated(self) -> "_GateSettings":
+        return _GateSettings(
+            *validate_gate(self.enabled, self.alpha, self.binomial_alpha),
+            validate_noise_model(self.noise_model),
+        )
+
+
+@dataclass(eq=False)
+class _GateArrays:
+    """Per-feature gate statistics, filled group by group, then frozen."""
+
+    f_statistic: np.ndarray
+    p_value: np.ndarray
+    df1: np.ndarray
+    df2: np.ndarray
+    tested: np.ndarray
+    excluded: np.ndarray
+    ar_coefficients: np.ndarray
+
+    @classmethod
+    def empty(cls, n_runs, n_features):
+        return cls(
+            *(np.full(n_features, np.nan) for _ in range(4)),
+            tested=np.zeros(n_features, bool),
+            excluded=np.zeros(n_features, bool),
+            ar_coefficients=np.full((n_runs, n_features), np.nan),
+        )
+
+    def record(self, test, zero):
+        """Store one HRF group's F-tests for its nonzero-target features."""
+        keep = test.features[~zero]
+        self.tested[keep] = True
+        self.f_statistic[keep] = test.f[~zero]
+        self.p_value[keep] = stats.f.sf(test.f[~zero], test.df1, test.df2)
+        self.df1[keep], self.df2[keep] = test.df1, test.df2
+        if test.rho is not None:
+            self.ar_coefficients[:, keep] = test.rho[:, ~zero]
+
+    def freeze(self, settings, count, decision, exclusions=(), m=0, binomial_p=np.nan):
+        """The public gate result for a decision on the pcstop ``count``."""
+        return SignificanceGate(
+            **vars(settings),
+            **vars(self),
+            pcstop_count=int(count),
+            n_components=int(count) if decision in (KEPT, DISABLED) else 0,
+            decision=decision,
+            exclusions=tuple(exclusions),
+            m=int(m),
+            n=int(self.tested.sum()),
+            binomial_p=float(binomial_p),
+        )
 
 
 def _record_test_results_in_place(values, exclusions, hrf_id, test, zero):
     """Update values arrays and append exclusion records; do not modify test."""
     if test.reason:
-        values["excluded"][test.features] = True
+        values.excluded[test.features] = True
         exclusions.append((hrf_id, len(test.features), test.reason))
         return
-    keep, drop = test.features[~zero], test.features[zero]
+    drop = test.features[zero]
     if len(drop):
-        values["excluded"][drop] = True
+        values.excluded[drop] = True
         exclusions.append((hrf_id, len(drop), ZERO_TARGET))
-    values["tested"][keep] = True
-    values["f"][keep] = test.f[~zero]
-    values["p"][keep] = stats.f.sf(test.f[~zero], test.df1, test.df2)
-    values["df1"][keep], values["df2"][keep] = test.df1, test.df2
-    if test.rho is not None:
-        values["rho"][:, keep] = test.rho[:, ~zero]
+    values.record(test, zero)
 
 
 def _feature_tests(setup, count, noise_model):
-    values, exclusions = _arrays(setup.n_runs, len(setup.scoring)), []
+    values, exclusions = _GateArrays.empty(setup.n_runs, len(setup.scoring)), []
     for group in setup.groups:
         # The gate tests exactly the features pcstop scored.
         zero = ~setup.scored[group.features]
         test = _group_test(setup, group, count, noise_model)
         _record_test_results_in_place(values, exclusions, group.hrf_id, test, zero)
     return values, exclusions
-
-
-def _gate(settings, count, decision, values, exclusions=(), m=0, binomial_p=np.nan):
-    enabled, alpha, binomial_alpha, noise_model = settings
-    return SignificanceGate(
-        enabled=enabled,
-        alpha=alpha,
-        binomial_alpha=binomial_alpha,
-        noise_model=noise_model,
-        pcstop_count=int(count),
-        n_components=int(count) if decision in (KEPT, DISABLED) else 0,
-        decision=decision,
-        f_statistic=values["f"],
-        p_value=values["p"],
-        df1=values["df1"],
-        df2=values["df2"],
-        tested=values["tested"],
-        excluded=values["excluded"],
-        ar_coefficients=values["rho"],
-        exclusions=tuple(exclusions),
-        m=int(m),
-        n=int(values["tested"].sum()),
-        binomial_p=float(binomial_p),
-    )
 
 
 def apply_gate(
@@ -1181,22 +1204,19 @@ def apply_gate(
     With the gate disabled the count is returned untested; a zero count
     skips the gate. With no testable feature the count is rejected.
     """
-    settings = (
-        *validate_gate(enabled, alpha, binomial_alpha),
-        validate_noise_model(noise_model),
-    )
+    settings = _GateSettings(enabled, alpha, binomial_alpha, noise_model).validated()
     if not enabled or count == 0:
         decision = DISABLED if not enabled else SKIPPED
-        empty = _arrays(setup.n_runs, len(setup.scoring))
-        return _gate(settings, count, decision, empty)
+        empty = _GateArrays.empty(setup.n_runs, len(setup.scoring))
+        return empty.freeze(settings, count, decision)
     values, exclusions = _feature_tests(setup, count, noise_model)
-    tested = values["tested"]
-    m, n = int(np.sum(values["p"][tested] < alpha)), int(tested.sum())
+    tested = values.tested
+    m, n = int(np.sum(values.p_value[tested] < alpha)), int(tested.sum())
     if n == 0:
-        return _gate(settings, count, REJECTED, values, exclusions)
+        return values.freeze(settings, count, REJECTED, exclusions)
     p = stats.binomtest(m, n, alpha, alternative="greater").pvalue
     decision = KEPT if p < binomial_alpha else REJECTED
-    return _gate(settings, count, decision, values, exclusions, m, p)
+    return values.freeze(settings, count, decision, exclusions, m, p)
 
 
 # ---- validation and labels --------------------------------------------------------
@@ -1216,7 +1236,7 @@ class _Settings:
     counts: tuple[int, ...]
     threshold: float | str
     pcstop: float
-    gate: tuple[bool, float, float, str]
+    gate: _GateSettings
     feature_signature: str | None
 
 
@@ -1229,22 +1249,17 @@ def _check_models(task_model, library, signature):
         raise ValueError("feature_signature must be a nonempty string or None")
 
 
-def _settings(data, task_model, library, grid, signature):
-    """Validate everything before any fitting.
-
-    ``grid`` is (counts, r2 threshold, pcstop, (gate, alpha, binomial alpha,
-    noise model)).
-    """
+def _settings(data, task_model, library, *, counts, threshold, pcstop, gate, signature):
+    """Validate everything before any fitting; ``gate`` is a ``_GateSettings``."""
     _check_data(data)
     _check_models(task_model, library, signature)
-    counts, threshold, pcstop, gate = grid
     return _Settings(
         task_model=task_model,
         library=library,
         counts=validate_counts(counts),
         threshold=validate_threshold(threshold),
         pcstop=validate_pcstop(pcstop),
-        gate=(*validate_gate(*gate[:3]), validate_noise_model(gate[3])),
+        gate=gate.validated(),
         feature_signature=signature,
     )
 
@@ -1262,6 +1277,24 @@ def _digest(values, dtype) -> str:
 
 
 # ---- full-data HRFs, pool, and PCs ---------------------------------------------------
+
+
+@dataclass(frozen=True, eq=False)
+class _PoolStage:
+    """Frozen full-data HRFs, ON-OFF R², pool/scoring masks, and run-wise PCs."""
+
+    selection: object
+    statistic: np.ndarray
+    masks: PoolMasks
+    components: tuple[RunComponents, ...]
+
+
+@dataclass(frozen=True, eq=False)
+class _CountStage:
+    """pcstop's count selection and the gate's decision on it."""
+
+    count: object
+    gate: SignificanceGate
 
 
 def _pool(data, labels, settings):
@@ -1285,33 +1318,26 @@ def _pool(data, labels, settings):
         raise ValueError(
             f"{NO_TASK_SIGNAL}: no feature has a finite ON-OFF R² and a defined HRF"
         )
-    return selection, statistic, masks, analysis_components(data, masks.pool)
+    return _PoolStage(
+        selection, statistic, masks, analysis_components(data, masks.pool)
+    )
 
 
 def _count_selection(data, labels, settings, pool):
     """pcstop's count, then Boldtailor's significance gate on it."""
-    selection, _, masks, components = pool
     count = select_component_count(
         data,
-        hrf_indices=selection.hrf_indices,
-        components=components,
-        scoring=masks.scoring,
+        hrf_indices=pool.selection.hrf_indices,
+        components=pool.components,
+        scoring=pool.masks.scoring,
         task_model=settings.task_model,
         library=settings.library,
         counts=settings.counts,
         pcstop=settings.pcstop,
         run_labels=labels,
     )
-    enabled, alpha, binomial_alpha, noise_model = settings.gate
-    gate = apply_gate(
-        count.setup,
-        count.n_components,
-        enabled=enabled,
-        alpha=alpha,
-        binomial_alpha=binomial_alpha,
-        noise_model=noise_model,
-    )
-    return count, gate
+    gate = apply_gate(count.setup, count.n_components, **vars(settings.gate))
+    return _CountStage(count, gate)
 
 
 # ---- result parts ----------------------------------------------------------------------
@@ -1467,10 +1493,9 @@ def _count_records(settings, count):
     )
 
 
-def _selection_activity(context, pool, selected, prefixes, identities):
-    _, labels, settings = context
-    selection, statistic, masks, _ = pool
-    count, gate = selected
+def _selection_activity(labels, settings, pool, selected, prefixes, identities):
+    selection, statistic, masks = pool.selection, pool.statistic, pool.masks
+    count, gate = selected.count, selected.gate
     task_model, library = settings.task_model, settings.library
     return dict(
         name="denoising_selection",
@@ -1497,11 +1522,10 @@ def _selection_activity(context, pool, selected, prefixes, identities):
 # ---- public selection ------------------------------------------------------------------------
 
 
-def _assemble(context, pool, selected, *, prefixes, identities, provenance):
+def _assemble(labels, settings, pool, selected, *, prefixes, identities, provenance):
     """Construct a denoising result from completed calculations and provenance."""
-    _, labels, settings = context
-    selection, statistic, masks, components = pool
-    count, gate = selected
+    selection, statistic, masks = pool.selection, pool.statistic, pool.masks
+    count, gate = selected.count, selected.gate
     scores, fold_scores = _public_tables(count)
     return DenoisingResult(
         n_components=gate.n_components,
@@ -1519,7 +1543,7 @@ def _assemble(context, pool, selected, *, prefixes, identities, provenance):
         onoff_r2=statistic,
         initial_selection=selection,
         run_components=prefixes,
-        components=_diagnostics(components, labels, masks.pool_size),
+        components=_diagnostics(pool.components, labels, masks.pool_size),
         folds=_folds(count.setup),
         _candidate_scores=scores,
         _fold_scores=fold_scores,
@@ -1569,27 +1593,37 @@ def select_denoising(
     ``significance_gate=False`` reproduces GLMsingle's pcstop-only choice.
     """
     library = default_hrf_library() if library is None else library
-    gate = (significance_gate, gate_alpha, gate_binomial_alpha, gate_noise_model)
-    grid = (counts, pool_r2_threshold, pcstop, gate)
-    settings = _settings(data, task_model, library, grid, feature_signature)
+    settings = _settings(
+        data,
+        task_model,
+        library,
+        counts=counts,
+        threshold=pool_r2_threshold,
+        pcstop=pcstop,
+        gate=_GateSettings(
+            significance_gate, gate_alpha, gate_binomial_alpha, gate_noise_model
+        ),
+        signature=feature_signature,
+    )
     labels = run_labels_for(data, run_labels)
     _check_run_designs(data, labels, settings)
     with fit_operation("denoising_selection", data.provenance) as operation:
         pool = _pool(data, labels, settings)
         selected = _count_selection(data, labels, settings, pool)
-        _, gate = selected
         # Every run supports the chosen count because each trains some fold.
-        _, _, _, components = pool
-        prefixes = tuple(c.prefix(gate.n_components) for c in components)
-        context = (data, labels, settings)
+        count = selected.gate.n_components
+        prefixes = tuple(c.prefix(count) for c in pool.components)
         identities = run_identities(data)  # hashes every run: compute once
-        activity = _selection_activity(context, pool, selected, prefixes, identities)
+        activity = _selection_activity(
+            labels, settings, pool, selected, prefixes, identities
+        )
         operation.analysis_id = analysis_fingerprint(
             data.provenance.metadata_fingerprint, activity
         )
         provenance = build_fit_provenance(operation, activity)
         return _assemble(
-            context,
+            labels,
+            settings,
             pool,
             selected,
             prefixes=prefixes,
