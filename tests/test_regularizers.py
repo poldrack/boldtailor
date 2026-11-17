@@ -118,3 +118,14 @@ def test_prepared_fraction_betas_retain_no_signal_sized_arrays():
     held = [getattr(prepared, f.name) for f in fields(prepared)]
     assert not any(getattr(value, "shape", None) == signals.shape for value in held)
     assert prepared.betas_at(0.5).shape == (6, 9)
+
+
+def test_each_family_states_its_tie_rule_once():
+    """Tuning metadata and provenance quote the family's tie rule, not their own copy."""
+    from boldtailor.workflow import manifest, ridge_provenance
+
+    assert NORMALIZED_RIDGE.tie_rule.startswith("smallest alpha within")
+    assert FRACTIONAL_RIDGE.tie_rule.startswith("largest fraction within")
+    for module in (manifest, ridge_provenance):
+        source = Path(module.__file__).read_text()
+        assert "within 1e-12 of the maximum" not in source
