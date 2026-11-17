@@ -324,3 +324,30 @@ def test_stimulus_regressor_scales_each_event_to_unit_peak(candidates):
         x = stimulus_regressor(events, times, candidate)
         assert x[times < 38].max() == pytest.approx(1.0, abs=1e-4)
         assert x[times >= 40].max() == pytest.approx(1.0, abs=5e-4)
+
+
+def test_cached_boxcar_sampling_is_read_only_and_shared_by_both_callers():
+    """The cached sampling grid cannot be written through, and trial regressors
+    and response scales reuse one cache entry for the same timing.
+    """
+    from boldtailor import _hrf_design
+    from boldtailor.hrf_library import HrfLibrary
+
+    times = 0.5 + 1.3 * np.arange(60)
+    events = pd.DataFrame(dict(onset=[5.0, 21.5, 40.25], duration=[1.0, 2.5, 0.0]))
+    candidate = HrfLibrary.from_parameters([]).candidates[0]
+    _hrf_design._boxcar_sampling.cache_clear()
+    _hrf_design.trial_regressors(events, times, candidate)
+    _hrf_design.event_response_scales(
+        _hrf_design.hrf_model(candidate), events.onset, events.duration, times
+    )
+    info = _hrf_design._boxcar_sampling.cache_info()
+    assert (info.misses, info.hits) == (1, 1)
+    timing = np.asarray(events[["onset", "duration"]], dtype="<f8").tobytes()
+    cached = _hrf_design._boxcar_sampling(
+        timing,
+        np.asarray(times, dtype="<f8").tobytes(),
+        _hrf_design.OVERSAMPLING,
+        _hrf_design.MIN_ONSET,
+    )
+    assert not any(array.flags.writeable for array in cached)

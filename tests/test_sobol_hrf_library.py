@@ -112,3 +112,19 @@ def test_every_sampled_sobol_parameter_is_informative():
     assert hrf_library.sobol_hrf_library(64).informative_parameters == tuple(
         hrf_library.PARAMETER_NAMES[:6]
     )
+
+
+def test_origin_cannot_be_changed_through_nested_values_or_the_source():
+    """Nested origin values are owned: neither the caller's mapping nor a value
+    read from the library can alter what the library reports.
+    """
+    source = {"kind": "custom", "bounds": {"peak_time": [3.0, 8.0]}}
+    library = hrf_library.HrfLibrary.from_parameters(
+        [(5, 15, 1, 1, 5, 0, 32)], origin=source
+    )
+    source["bounds"]["peak_time"][0] = 99.0
+    library.origin["bounds"]["peak_time"][1] = 99.0
+    assert dict(library.origin) == {
+        "kind": "custom",
+        "bounds": {"peak_time": [3.0, 8.0]},
+    }

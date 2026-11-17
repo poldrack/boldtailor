@@ -912,3 +912,44 @@ def test_denoising_assembly_accepts_finished_provenance(fixture, result):
     ):
         np.testing.assert_allclose(actual_pc, expected_pc)
     assert result.provenance.to_dict() == before
+
+
+# ---- identity hashing ---------------------------------------------------------
+
+
+def test_array_digest_hashes_shape_and_little_endian_float64_values():
+    """The digest is sha256 of the JSON shape then float64 bytes, whatever the
+    input's dtype, layout or writeability.
+    """
+    from boldtailor.denoising import array_digest
+
+    values = np.arange(24, dtype=np.float32).reshape(4, 6)[:, ::2]
+    frozen = np.array(values, dtype=float)
+    frozen.setflags(write=False)
+    expected = sha256(b"[4, 3]" + np.ascontiguousarray(values, "<f8").tobytes())
+    assert array_digest(values) == array_digest(frozen) == expected.hexdigest()
+    assert array_digest(np.zeros((0, 3))) == sha256(b"[0, 3]").hexdigest()
+
+
+def test_selection_hashes_each_run_once(fixture, monkeypatch):
+    """One denoising selection computes the run identities a single time; the
+    result, its provenance and the confound records all reuse them.
+    """
+    from boldtailor import denoising
+
+    calls = []
+    original = denoising.run_identities
+
+    def counted(data):
+        calls.append(data)
+        return original(data)
+
+    monkeypatch.setattr(denoising, "run_identities", counted)
+    selected = run_selection(fixture)
+    assert len(calls) == 1
+    assert selected.source_identity == original(fixture.data)
+    activity = selected.provenance.activity_records()[-1]
+    assert activity["data_identity"] == [i.to_dict() for i in selected.source_identity]
+    assert [c["fingerprint"] for c in activity["baseline_confounds"]] == [
+        i.confounds for i in selected.source_identity
+    ]

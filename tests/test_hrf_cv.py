@@ -328,3 +328,64 @@ def test_ineligible_blocks_have_zero_unprojected_columns(task_fixture):
     assert not runs[2].eligible(0)[0]
     assert runs[2].block(0).raw.shape == (len(data.frame_times[2]), 3)
     assert np.all(runs[2].block(0).raw == 0)
+
+
+# --- cached run designs are sealed ------------------------------------------------
+
+
+def test_cached_run_design_arrays_are_read_only(task_fixture):
+    """Process-cached designs are shared by every analysis, so their arrays,
+    including those of ineligible candidates, reject in-place writes.
+    """
+    from boldtailor._hrf_cv import prepare_runs
+
+    data, library = task_fixture
+    run = prepare_runs(data, library, NSD)[0]
+    shared = [run.q, run.nuisance, run.times, run.trial_matrix(1), *run.block(1)]
+    assert not any(array.flags.writeable for array in shared)
+    with pytest.raises(ValueError, match="read-only"):
+        run.block(1).x[0, 0] = 1.0
+    frames = columns_for(data, library, 0, NSD)
+    confounds = [
+        n.assign(null_task=f["task"].to_numpy()) if r == 2 else n
+        for r, (n, f) in enumerate(zip(data.confounds, frames, strict=True))
+    ]
+    altered = from_arrays(
+        data.signals, data.events, frame_times=data.frame_times, confounds=confounds
+    )
+    ineligible = prepare_runs(altered, library, NSD)[2]
+    assert not ineligible.eligible(0)[0]
+    assert not any(array.flags.writeable for array in ineligible.block(0))
+
+
+def test_cached_run_design_exposes_no_mutable_bookkeeping(task_fixture):
+    """Eligibility is read through methods; no public attribute is a mutable
+    container another caller could alter.
+    """
+    from boldtailor._hrf_cv import prepare_runs
+
+    data, library = task_fixture
+    run = prepare_runs(data, library, NSD)[0]
+    run.eligible(1), run.trial_eligible(1)
+    public = {k: v for k, v in vars(run).items() if not k.startswith("_")}
+    assert not any(isinstance(v, (dict, list, set)) for v in public.values())
+    assert run.eligible(1) == (True, "") and run.trial_eligible(1) == (True, "")
+
+
+def test_trial_matrices_are_cached_per_design_and_released_with_it(task_fixture):
+    """A design reuses its own trial matrices and is freed, with them, once the
+    design cache drops it.
+    """
+    import gc
+    import weakref
+
+    from boldtailor import _hrf_cv
+
+    data, library = task_fixture
+    run = _hrf_cv.prepare_runs(data, library, NSD)[0]
+    assert run.trial_matrix(1) is run.trial_matrix(1)
+    reference = weakref.ref(run)
+    del run
+    _hrf_cv._cached_design.cache_clear()
+    gc.collect()
+    assert reference() is None

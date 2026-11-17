@@ -119,3 +119,11 @@ def test_library_rebuilds_exactly_from_its_parameter_table():
         np.testing.assert_array_equal(rebuilt.curves, library.curves)
     plain = HrfLibrary.from_parameters([[3, 10, 0.5, 0.5, 2, 0, 36]])
     assert HrfLibrary.from_table(plain.parameter_table).fingerprint == plain.fingerprint
+
+
+def test_default_library_is_shared_however_its_defaults_are_spelled():
+    """Positional, keyword and omitted default arguments name one cached library."""
+    library = default_hrf_library()
+    assert default_hrf_library(512) is library
+    assert default_hrf_library(n_samples=512, seed=0) is library
+    assert default_hrf_library(np.int64(512)) is library
