@@ -60,7 +60,30 @@ provenance records, `WorkflowSettings`).
   - 4.4: applied to every dataclass with an array or table field (about 45
     classes, not only the ones listed below), enforced by
     `tests/test_dataclass_equality.py`.
-- Phases 5–7: not started.
+- **Phase 5: skipped for now** at the user's direction.
+- **Phase 6: done** (branch `refactor/phase6-regularizer-strategy`, on top of
+  the unmerged phase 4 branch). Notes:
+  - `_regularizers.py` defines `NORMALIZED_RIDGE` and `FRACTIONAL_RIDGE`
+    (grid, fit option, beta path, validation target, tie rule, provenance
+    descriptors). No function takes a `fractional` flag any more; a test
+    enforces it. A scikit-learn estimator interface was considered and not
+    adopted for the ridge path (per-feature designs, scoring and selection are
+    separate steps, results are frozen records).
+  - `trial_encoding.EncodingDesign` is prepared once per fold and scores each
+    candidate; `evaluate_trial_encoding` is now a wrapper around it. Ridge CV
+    also copies the run tables once per call instead of once per fold.
+  - Tuning provenance builders moved to `workflow/ridge_provenance.py`.
+  - `PreparedFractionBetas` no longer retains the run's signals.
+  - Item 5, left unchanged and open: `score_candidates` is the only core
+    entry point that builds provenance without `fit_operation`, so scoring
+    emits no lifecycle log events. No document says this is deliberate;
+    aligning it would change logging output, so it needs a decision.
+  - Item 6, no change needed: the tuning metadata's "within-run validation
+    SST" is accurate in both encoding modes, because the total sum of squares
+    is centered within each test run either way.
+  - A few branches on `regularizer.per_feature` remain where the two families
+    genuinely differ (which selector runs, per-feature buffers).
+- Phases 5 and 7: not started.
 
 ## Decisions already made
 

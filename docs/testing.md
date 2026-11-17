@@ -50,7 +50,7 @@ The integration suite is additional to every row.
 | HRF libraries, designs, selection, CV, `_run_design`, `_design_inputs` | `tests/test_hrf*.py tests/test_design_inputs.py tests/test_glmsingle_hrf.py tests/test_sobol_hrf_library.py` | `tests/test_selected_hrf_fit.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
 | `_hrf_glm*`, `_hrf_assignment` | `tests/test_hrf_glm.py tests/test_fit.py` | `tests/workflow/test_analysis.py` |
 | Single-trial fitting, `_selected_hrf_fit`, `_shared_hrf_fit` | `tests/test_single_trial*.py tests/test_selected_hrf_fit.py` | `tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
-| Ridge selection, fractional ridge, encoding | `tests/test_ridge*.py tests/test_fractional*.py tests/test_trial_encoding.py` | `tests/workflow/test_beta_series.py` |
+| Ridge selection, fractional ridge, `_regularizers`, encoding | `tests/test_ridge*.py tests/test_fractional*.py tests/test_regularizers.py tests/test_trial_encoding.py tests/test_encoding_design.py` | `tests/workflow/test_beta_series.py` |
 | Denoising and mixture thresholds | `tests/test_denoising*.py tests/test_mixture_threshold.py tests/test_within_run_cv_isolation.py` | `tests/test_hrf_selection.py tests/test_fit.py` |
 | Data ownership, `_run_inputs`, `_arrays`, `_scalars`, result dataclasses | `tests/test_data.py tests/test_arrays.py tests/test_mutation_helpers.py tests/test_result_schemas.py` | Broad fan-out: run full suite for shared helper changes |
 | Provenance, logging, fit lifecycle | `tests/test_provenance.py tests/test_bids_provenance.py tests/test_logging.py tests/test_lifecycle.py tests/test_fit_lifecycle.py tests/test_software.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_denoising.py` |

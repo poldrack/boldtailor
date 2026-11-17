@@ -231,7 +231,7 @@ def fit_beta_series(
             n_jobs=n_jobs,
         ),
         runs,
-        fractional=fractions is not None,
+        per_feature_alphas=fractions is not None,
     )
     log.info("%s: complete", label)
     return BetaFit(
@@ -244,12 +244,12 @@ def fit_beta_series(
     )
 
 
-def _assemble_beta_blocks(fitted_blocks, runs, *, fractional):
+def _assemble_beta_blocks(fitted_blocks, runs, *, per_feature_alphas):
     """Session-wide arrays filled block by block; the trial table is block-invariant."""
     n = runs[0].image.shape[1]
     betas = [np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs]
     r2 = np.full((3, n), np.nan)
-    run_alphas = np.full((len(runs), n), np.nan) if fractional else None
+    run_alphas = np.full((len(runs), n), np.nan) if per_feature_alphas else None
     designs, provenance, trial_table = {}, [], None
     for (indices, _), block in fitted_blocks:
         for target, values in zip(betas, block["betas"], strict=True):

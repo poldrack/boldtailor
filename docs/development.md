@@ -77,7 +77,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Fixed designs supplied by callers | `prepared`, `prepared_fit` |
 | Shared conventional/prepared diagnostics | `_fit_diagnostics`, `model.contrast_metadata` |
 | Task-model detection from event tables | `task_detection` |
-| Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
+| Encoding and penalty selection | `trial_encoding`, `ridge_selection`, `fractional_ridge`, `_regularizers`, `_ridge_cv`, `_fractional_ridge`, `ridge_results` |
 | Trial design construction and OLS/ridge estimation | `single_trial`, `_shared_hrf_fit`, `_design_inputs`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` |
 | Candidate HRFs, selection, evaluation, and grouped fits | `hrf_library`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_run_design`, `_hrf_cv`, `_selected_hrf_fit` |
 | Conventional GLMs using voxelwise HRFs | `_hrf_assignment`, `_hrf_glm_design`, `_hrf_glm`, `hrf_glm_results` |
@@ -555,7 +555,8 @@ preserved; source fingerprints describe metadata, not BOLD contents.
 
 Ridge CV reads the final penalty explicitly from `tuning["all"]["selection"]`.
 The final refit does not depend on which tuning scope ran last.
-`tuning_provenance()` and `link_final_provenance()` take `encoding_mode`
+`tuning_provenance()` and `link_final_provenance()` (in
+`workflow.ridge_provenance`) take `encoding_mode`
 explicitly, so additional provenance activities do not change where metadata
 is read. `link_final_provenance()` returns a new result with independent block
 provenance; callers must use its return value. Numerical arrays are shared and

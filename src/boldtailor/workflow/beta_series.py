@@ -11,33 +11,25 @@ from boldtailor.workflow.records import (
 )
 
 from collections.abc import Mapping
-from copy import deepcopy
-from dataclasses import dataclass, replace
-from hashlib import sha256
+from dataclasses import dataclass
 import logging
 from numbers import Real
 from uuid import uuid4
 
 import numpy as np
-import pandas as pd
 
+from boldtailor._regularizers import FRACTIONAL_RIDGE, NORMALIZED_RIDGE, Regularizer
+from boldtailor._ridge_cv import score_candidates
 from boldtailor.hrf_selection import select_hrfs, subset_runs
 from boldtailor.hrf_options import resolve_reml_options
 from boldtailor.provenance import (
     ProvenanceRecord,
-    analysis_fingerprint,
-    extend_provenance,
 )
 from boldtailor.ridge_results import CandidateScores
 from boldtailor.fractional_ridge import (
-    NORM_BASIS,
-    fraction_grid,
-    score_fraction_candidates,
     select_ridge_fractions,
 )
 from boldtailor.ridge_selection import (
-    alpha_grid,
-    score_ridge_candidates,
     select_ridge_penalty,
 )
 from boldtailor.single_trial import fit_single_trials, fit_selected_hrfs
@@ -54,6 +46,11 @@ from boldtailor.workflow import inputs
 from boldtailor.workflow.analysis import fit_beta_series
 from boldtailor.workflow.files import min_runs_per_half, odd_even_parity
 from boldtailor.workflow.inputs import load_block, trimmed_sources
+from boldtailor.workflow.ridge_provenance import (
+    cv_provenance,
+    link_final_provenance,
+    tuning_provenance,
+)
 
 log = logging.getLogger("boldtailor.workflow")
 
@@ -109,10 +106,10 @@ class _CvContext:
     predictors: object
     blocks: object
     library: object
-    alphas: tuple[float, ...]
+    grid: tuple[float, ...]
     percentile: float
     n_jobs: int
-    fractional: bool
+    regularizer: Regularizer
     encoding_mode: str
     task_model: TaskModel
     selection_model: TaskModel
@@ -121,14 +118,14 @@ class _CvContext:
 
 def _score_block(indices, ctx, scope_runs, scope_predictors):
     options = _block_selection_options(ctx.selection_options, indices)
-    scorer = score_fraction_candidates if ctx.fractional else score_ridge_candidates
-    return scorer(
+    return score_candidates(
         load_block(scope_runs, ctx.root, indices, ctx.task_model),
         scope_predictors,
-        **({"fractions": ctx.alphas} if ctx.fractional else {"alphas": ctx.alphas}),
-        library=ctx.library,
-        run_labels=[r.label for r in scope_runs],
-        feature_signature=_signature(scope_runs, indices),
+        ctx.grid,
+        ctx.library,
+        [r.label for r in scope_runs],
+        _signature(scope_runs, indices),
+        regularizer=ctx.regularizer,
         encoding_mode=ctx.encoding_mode,
         hrf_method=options["method"],
         reml_options=options["reml_options"],
@@ -138,9 +135,9 @@ def _score_block(indices, ctx, scope_runs, scope_predictors):
 
 def _global_scores(ctx, scope_runs, scope_predictors):
     n_features = scope_runs[0].image.shape[1]
-    shape = (len(scope_runs), len(ctx.alphas), n_features)
+    shape = (len(scope_runs), len(ctx.grid), n_features)
     sse, sst = np.full(shape, np.nan), np.full(shape, np.nan)
-    scores = np.full((len(ctx.alphas), n_features), np.nan)
+    scores = np.full((len(ctx.grid), n_features), np.nan)
     assignments = np.full((len(scope_runs), n_features), -1, dtype=int)
     records = []
     for indices, result in map_blocks(
@@ -161,11 +158,7 @@ def _global_scores(ctx, scope_runs, scope_predictors):
             )
         )
     indices = np.concatenate(ctx.blocks)
-    grid_record = (
-        {"fractions": list(ctx.alphas)}
-        if ctx.fractional
-        else {"alphas": list(ctx.alphas)}
-    )
+    grid_record = {ctx.regularizer.grid_name: list(ctx.grid)}
     provenance = ProvenanceRecord(
         execution_id=str(uuid4()),
         sources=[trimmed_sources(r, ctx.root, indices) for r in scope_runs],
@@ -180,8 +173,8 @@ def _global_scores(ctx, scope_runs, scope_predictors):
         ),
     )
     return CandidateScores(
-        regularization="fractional_ridge" if ctx.fractional else "normalized_ridge",
-        grid=ctx.alphas,
+        regularization=ctx.regularizer.name,
+        grid=ctx.grid,
         cv_r2=scores,
         fold_sse=sse,
         fold_sst=sst,
@@ -192,15 +185,24 @@ def _global_scores(ctx, scope_runs, scope_predictors):
     )
 
 
+def _select(ctx, scores):
+    """Per-feature fractions, or one alpha by the percentile objective."""
+    if ctx.regularizer.per_feature:
+        return select_ridge_fractions(scores)
+    return select_ridge_penalty(scores, percentile=ctx.percentile)
+
+
+def _penalty_option(regularizer, penalty, indices=slice(None)):
+    """The fit keyword for this family; per-feature penalties follow the block."""
+    value = penalty[indices] if regularizer.per_feature else penalty
+    return {regularizer.fit_option: value}
+
+
 def _tune(ctx, train):
     scope_runs = [ctx.runs[i] for i in train]
     scope_predictors = [ctx.predictors[i] for i in train]
     scores = _global_scores(ctx, scope_runs, scope_predictors)
-    selection = (
-        select_ridge_fractions(scores)
-        if ctx.fractional
-        else select_ridge_penalty(scores, percentile=ctx.percentile)
-    )
+    selection = _select(ctx, scores)
     return TuningResult(
         scores=scores,
         selection=selection,
@@ -239,9 +241,8 @@ def _outer_block(indices, ctx, alpha, train, test):
             **_block_selection_options(ctx.selection_options, indices),
         )
     )
-    options = (
-        {"ridge_fraction": alpha[indices]} if ctx.fractional else {"ridge_alpha": alpha}
-    )
+    family = ctx.regularizer
+    options = _penalty_option(family, alpha, indices)
     fitted = _fit_outer_trials(data, selection, labels, signature, options)
     ids = (
         np.zeros(len(indices), dtype=int)
@@ -249,12 +250,12 @@ def _outer_block(indices, ctx, alpha, train, test):
         else selection.hrf_indices
     )
     scoring_betas = list(fitted.run_betas)
-    if ctx.fractional:
+    if family.fixed_target is not None:
         # Retain training-selected HRFs; held-out responses only define OLS targets.
-        ols_options = dict(
-            ridge_fraction=np.where(np.isfinite(alpha[indices]), 1.0, np.nan)
+        fixed = np.where(np.isfinite(alpha[indices]), family.fixed_target, np.nan)
+        ols = _fit_outer_trials(
+            data, selection, labels, signature, {family.fit_option: fixed}
         )
-        ols = _fit_outer_trials(data, selection, labels, signature, ols_options)
         for r in test:
             scoring_betas[r] = ols.run_betas[r]
     encoded = evaluate_trial_encoding(
@@ -312,7 +313,7 @@ def _outer_buffers(ctx, train, test):
         run_sst=np.full((len(test), n), np.nan),
         hrf_indices=np.full(n, -1, dtype=int),
         run_ridge_alphas=(
-            np.full((len(ctx.runs), n), np.nan) if ctx.fractional else None
+            np.full((len(ctx.runs), n), np.nan) if ctx.regularizer.per_feature else None
         ),
     )
     for key in _OUTER_TRIALS:
@@ -356,14 +357,14 @@ def _evaluate(ctx, alpha, train, test, tuning_fingerprint):
     return OuterEvaluation(
         **buffers,
         **invariants,
-        regularization="fractional_ridge" if ctx.fractional else "normalized_ridge",
+        regularization=ctx.regularizer.name,
         encoding_mode=ctx.encoding_mode,
         selection_task_model=ctx.selection_model.to_dict(),
         coefficient_names=("task", *ctx.predictors[0].columns),
         train_run_labels=tuple(ctx.runs[r].label for r in train),
         test_run_labels=tuple(ctx.runs[r].label for r in test),
-        ridge_alpha=None if ctx.fractional else alpha,
-        ridge_fraction=np.array(alpha) if ctx.fractional else None,
+        ridge_alpha=None if ctx.regularizer.per_feature else alpha,
+        ridge_fraction=np.array(alpha) if ctx.regularizer.per_feature else None,
         provenance=tuple(provenance),
         tuning_analysis_fingerprint=tuning_fingerprint,
     )
@@ -394,7 +395,7 @@ def _final_fit(ctx, alpha):
                 n_jobs=ctx.n_jobs,
             )
         }
-    options = {"ridge_fraction": alpha} if ctx.fractional else {"ridge_alpha": alpha}
+    options = _penalty_option(ctx.regularizer, alpha)
     return fit_beta_series(
         ctx.runs,
         ctx.root,
@@ -438,10 +439,8 @@ def _build_cv_context(
     if library is None and hrf_method != "cv":
         raise ValueError("HRF method requires a library")
     selection_options = HrfOptions(method=hrf_method, reml_options=reml_options)
-    fractional = fractions is not None
-    grid = tuple(sorted(alpha_grid(fraction_grid(fractions) if fractional else alphas)))
-    if fractional:
-        grid = tuple(reversed(grid))
+    regularizer = NORMALIZED_RIDGE if fractions is None else FRACTIONAL_RIDGE
+    grid = regularizer.grid(alphas if fractions is None else fractions)
     halves = _halves(runs, library, hrf_method)
     if blocks is None:
         blocks = inputs.make_blocks(
@@ -456,44 +455,16 @@ def _build_cv_context(
         predictors=predictors,
         blocks=blocks,
         library=library,
-        alphas=grid,
+        grid=grid,
         percentile=percentile,
         n_jobs=n_jobs,
-        fractional=fractional,
+        regularizer=regularizer,
         encoding_mode=encoding_mode,
         task_model=task_model,
         selection_model=selection_model,
         selection_options=selection_options,
     )
     return ctx, halves
-
-
-def _selected_penalty(tuned):
-    selection = tuned.selection
-    return selection.ridge_fraction if tuned.fractional else selection.ridge_alpha
-
-
-def _cv_provenance(ctx, mode, final_penalty):
-    provenance = dict(
-        **encoding_metadata(ctx.encoding_mode),
-        objective="percentile_of_" + encoding_metadata(ctx.encoding_mode)["score"],
-        percentile=ctx.percentile,
-        alphas=list(ctx.alphas),
-        validation_target="candidate_regularized_betas",
-        hrf_model=mode,
-        library_fingerprint=None if ctx.library is None else ctx.library.fingerprint,
-        final_ridge_alpha=None if ctx.fractional else final_penalty,
-        outer_splits="odd_to_even_and_even_to_odd",
-    )
-    if ctx.fractional:
-        provenance.update(
-            objective="maximum_encoding_r2_per_grayordinate",
-            fractions=provenance.pop("alphas"),
-            validation_target="fixed_ols_betas",
-            percentile_role="descriptive_only",
-            fraction_norm_basis=NORM_BASIS,
-        )
-    return provenance
 
 
 def fit_cv_beta_series(
@@ -549,7 +520,7 @@ def fit_cv_beta_series(
     for scope, train in (*halves.items(), ("all", list(range(len(runs))))):
         log.info("Ridge CV (%s, %s): tuning %d runs", mode, scope, len(train))
         tuning[scope] = _tune(ctx, train)
-        alpha = _selected_penalty(tuning[scope])
+        alpha = tuning[scope].selection.penalty
         if scope != "all":
             target = "even" if scope == "odd" else "odd"
             evaluation[f"{scope}_to_{target}"] = _evaluate(
@@ -560,7 +531,7 @@ def fit_cv_beta_series(
                 tuning[scope].provenance.analysis_fingerprint,
             )
         log.info("Ridge CV (%s, %s): %s", mode, scope, _describe(ctx, alpha))
-    final_penalty = _selected_penalty(tuning["all"])
+    final_penalty = tuning["all"].selection.penalty
     return CvBetaResult(
         tuning=tuning,
         evaluation=evaluation,
@@ -571,117 +542,21 @@ def fit_cv_beta_series(
             tuning["all"].provenance,
             encoding_mode=ctx.encoding_mode,
         ),
-        provenance=_cv_provenance(ctx, mode, final_penalty),
+        provenance=cv_provenance(
+            ctx.regularizer,
+            ctx.grid,
+            final_penalty,
+            encoding_mode=ctx.encoding_mode,
+            percentile=ctx.percentile,
+            library=ctx.library,
+        ),
     )
 
 
 def _describe(ctx, alpha):
-    if ctx.fractional:
+    if ctx.regularizer.per_feature:
         return f"selected fractions at {np.isfinite(alpha).sum()} grayordinates"
     return f"selected alpha={alpha:g}"
-
-
-def tuning_provenance(scores, selection, *, encoding_mode):
-    """Record a tuning decision with the explicitly supplied scoring mode."""
-    fractional = scores.regularization == "fractional_ridge"
-    if fractional:
-        activity: dict[str, object] = dict(
-            name="voxelwise_encoding_fraction_selection",
-            fractions=list(selection.fractions),
-            objective="maximum_encoding_r2_per_grayordinate",
-            validation_target="fixed_ols_betas",
-            fraction_norm_basis=NORM_BASIS,
-            selected_fraction_fingerprint=sha256(
-                np.asarray(selection.ridge_fraction, dtype="<f8").tobytes()
-            ).hexdigest(),
-            tie_rule="largest fraction within 1e-12 of the maximum score",
-        )
-    else:
-        activity = _alpha_activity(selection)
-    activity.update(encoding_metadata(encoding_mode))
-    if not fractional:
-        activity["objective"] = (
-            "percentile_of_" + encoding_metadata(encoding_mode)["score"]
-        )
-    activity.update(
-        run_labels=list(scores.run_labels),
-        scoring_mask_fingerprint=sha256(selection.scoring_mask.tobytes()).hexdigest(),
-        candidate_score_fingerprint=sha256(
-            np.asarray(scores.cv_r2, dtype="<f8").tobytes()
-        ).hexdigest(),
-    )
-    record = scores.provenance
-    identity = dict(scoring=_identity_activities(record), selection=activity)
-    return extend_provenance(
-        record,
-        execution_id=str(uuid4()),
-        activity=activity,
-        events=record.events,
-        warnings=(),
-        analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
-    )
-
-
-def _identity_activities(record):
-    """Embedded scoring activities without environment-only software keys."""
-    return [
-        {key: value for key, value in activity.items() if key != "software"}
-        for activity in record.activity_records()
-    ]
-
-
-def _alpha_activity(selection) -> dict[str, object]:
-    return dict(
-        name="global_encoding_ridge_selection",
-        alphas=list(selection.alphas),
-        percentile=selection.percentile,
-        objective="percentile_of_pooled_within_run_trial_encoding_r2",
-        validation_target="candidate_regularized_betas",
-        tie_rule="smallest alpha within 1e-12 of the maximum objective",
-        objective_scores=selection.objective_scores.tolist(),
-        selected_alpha=selection.ridge_alpha,
-    )
-
-
-def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
-    """Return a fit with new block records referencing the all-run decision.
-
-    Provenance is copied; numerical arrays are shared and are not modified.
-    Pass an unlinked fit: linking an already linked result raises ValueError.
-    """
-    blocks = deepcopy(list(result.provenance))
-    for block in blocks:
-        record = ProvenanceRecord.from_dict(block["record"])
-        if any(
-            activity.get("name") == "encoding_guided_ridge_refit"
-            for activity in record.activity_records()
-        ):
-            raise ValueError("final fit provenance is already linked")
-        identity = dict(
-            fitting_analysis_fingerprint=record.analysis_fingerprint,
-            tuning_analysis_fingerprint=decision.analysis_fingerprint,
-        )
-        activity = dict(
-            name="encoding_guided_ridge_refit",
-            **encoding_metadata(encoding_mode),
-            tuning_scope="all",
-            selected_alpha=result.ridge_alpha,
-            tuning_execution_id=decision.execution_id,
-            **identity,
-        )
-        if result.fractional:
-            activity.update(
-                regularization="fractional_ridge", fraction_norm_basis=NORM_BASIS
-            )
-        block["record"] = extend_provenance(
-            record,
-            execution_id=str(uuid4()),
-            activity=activity,
-            events=record.events,
-            warnings=(),
-            analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
-        ).to_dict()
-    return replace(result, provenance=tuple(blocks))
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -22,7 +22,7 @@ from boldtailor.model import Modulator, TaskModel
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.trial_encoding import evaluate_trial_encoding, trial_predictors
-from boldtailor.workflow import analysis, beta_series, inputs
+from boldtailor.workflow import analysis, beta_series, inputs, ridge_provenance
 from boldtailor.workflow.records import BetaFit
 from tests.oracles import glm_run_sources
 
@@ -502,11 +502,11 @@ def _tuning(fractional):
     data, predictors = _problem()
     if fractional:
         scores = score_fraction_candidates(data, predictors, fractions=[0.5, 1.0])
-        return beta_series.tuning_provenance(
+        return ridge_provenance.tuning_provenance(
             scores, select_ridge_fractions(scores), encoding_mode="within_run"
         )
     scores = score_ridge_candidates(data, predictors, alphas=[0.0, 1.0])
-    return beta_series.tuning_provenance(
+    return ridge_provenance.tuning_provenance(
         scores, select_ridge_penalty(scores), encoding_mode="within_run"
     )
 
@@ -644,10 +644,10 @@ def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fi
     decision = _tuning(False)
     before = deepcopy(unlinked_fit.provenance)
     decision_before = decision.to_dict()
-    linked = beta_series.link_final_provenance(
+    linked = ridge_provenance.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
-    repeated = beta_series.link_final_provenance(
+    repeated = ridge_provenance.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
     assert unlinked_fit.provenance == before
@@ -668,12 +668,14 @@ def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fi
 def test_final_provenance_rejects_already_linked_fit(unlinked_fit):
     """Verify final provenance rejects already linked fit."""
     decision = _tuning(False)
-    linked = beta_series.link_final_provenance(
+    linked = ridge_provenance.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
     before = deepcopy(linked.provenance)
     with pytest.raises(ValueError, match="already linked"):
-        beta_series.link_final_provenance(linked, decision, encoding_mode="within_run")
+        ridge_provenance.link_final_provenance(
+            linked, decision, encoding_mode="within_run"
+        )
     assert linked.provenance == before
 
 
@@ -687,13 +689,13 @@ def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
             activities=(*scores.provenance.activities, {"name": "audit_note"}),
         ),
     )
-    decision = beta_series.tuning_provenance(
+    decision = ridge_provenance.tuning_provenance(
         scores, select_ridge_penalty(scores), encoding_mode="within_run"
     )
     decision = decision.replace(
         activities=(*decision.activities, {"name": "audit_note"})
     )
-    linked = beta_series.link_final_provenance(
+    linked = ridge_provenance.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
     assert (

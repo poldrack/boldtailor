@@ -391,7 +391,7 @@ def _outer_artifacts(settings, brain, runs, mode, scope, outer, library):
         *_outer_maps(settings, brain, descriptor, scope, outer, ids),
         _outer_loss(base, outer),
         json_artifact(base + "_provenance.json", outer.provenance),
-        json_artifact(base + "_metadata.json", outer_metadata(runs, outer, fractional)),
+        json_artifact(base + "_metadata.json", outer_metadata(runs, outer)),
         parameter_artifact(
             brain, library, ids, _map_path(settings, descriptor, "hrfparameters")
         ),

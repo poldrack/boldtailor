@@ -29,6 +29,11 @@ class RidgeSelection:
         copy_array_fields_in_place(self, ("objective_scores",))
         copy_array_fields_in_place(self, ("scoring_mask",), dtype=bool)
 
+    @property
+    def penalty(self) -> float:
+        """The chosen shared alpha."""
+        return self.ridge_alpha
+
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class CandidateScores:
@@ -67,6 +72,11 @@ class FractionSelection:
         copy_array_fields_in_place(self, ("at_boundary", "scoring_mask"), dtype=bool)
         copy_array_fields_in_place(self, ("ridge_fraction", "selected_r2"))
         copy_array_fields_in_place(self, ("fraction_indices",), dtype=np.int64)
+
+    @property
+    def penalty(self) -> np.ndarray:
+        """The chosen fraction for each feature."""
+        return self.ridge_fraction
 
 
 def paired_scores(scores, grid, *, kind, grid_name):

@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._constants import TIE_TOLERANCE
+from boldtailor._regularizers import NORMALIZED_RIDGE, alpha_grid
 from boldtailor._ridge_cv import score_candidates
 from boldtailor._scalars import is_real
-from boldtailor._single_trial_fit import validate_alpha
 from boldtailor.data import AnalysisData
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_options import RemlHrfOptions
@@ -19,13 +19,6 @@ from boldtailor.ridge_results import (
     paired_scores,
     scoring_mask,
 )
-
-
-def alpha_grid(alphas):
-    grid = tuple(validate_alpha(a) for a in alphas)
-    if not grid or len(set(grid)) != len(grid):
-        raise ValueError("alphas must be a nonempty grid of distinct penalties")
-    return grid
 
 
 def _validate_percentile(percentile):
@@ -100,14 +93,14 @@ def score_ridge_candidates(
     SPM. This returns feature-level scores, without choosing a block-local
     penalty. Combine blocks before calling select_ridge_penalty.
     """
-    grid = tuple(sorted(alpha_grid(alphas)))
     return score_candidates(
         data,
         predictors,
-        grid,
+        NORMALIZED_RIDGE.grid(alphas),
         library,
         run_labels,
         feature_signature,
+        regularizer=NORMALIZED_RIDGE,
         encoding_mode=encoding_mode,
         hrf_method=hrf_method,
         reml_options=reml_options,

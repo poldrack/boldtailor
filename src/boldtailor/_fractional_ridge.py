@@ -64,12 +64,13 @@ def fraction_metadata(fractions):
 
 @dataclass(frozen=True, eq=False)
 class PreparedFractionBetas:
-    """Raw trial-coefficient basis and signal coordinates for fractional ridge."""
+    """Raw trial-coefficient basis and OLS coordinates for fractional ridge.
 
-    trial_design: np.ndarray
-    nuisance: np.ndarray
-    signals: np.ndarray
-    projected_signals: np.ndarray
+    Only the factorization is kept: a CV fold holds one of these per run and
+    HRF group, so it does not retain the run's signals.
+    """
+
+    shape: tuple[int, int]
     singular_values: np.ndarray
     right_vectors: np.ndarray
     ols_coordinates: np.ndarray
@@ -78,10 +79,10 @@ class PreparedFractionBetas:
 
     def solve(self, fractions):
         """Return trial betas and implied alpha for each feature's fraction."""
-        fractions = fraction_map(fractions, self.signals.shape[1])
+        fractions = fraction_map(fractions, self.shape[1])
         valid = self.valid & np.isfinite(fractions)
-        betas = np.full((self.trial_design.shape[1], self.signals.shape[1]), np.nan)
-        alphas = np.full(self.signals.shape[1], np.nan)
+        betas = np.full(self.shape, np.nan)
+        alphas = np.full(self.shape[1], np.nan)
         if valid.any():
             s, ols = self.singular_values, self.ols_coordinates[:, valid]
             alpha = fraction_alphas(s, ols, fractions[valid])
@@ -97,6 +98,11 @@ class PreparedFractionBetas:
 
 def prepare_fraction_betas(x, nuisance, signals):
     """Validate in normalized coordinates, then prepare the raw coefficient SVD."""
+    return _prepare(x, nuisance, signals)[0]
+
+
+def _prepare(x, nuisance, signals):
+    """The prepared path and the nuisance-projected signals it was built from."""
     x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
     q, nuisance_rank = nuisance_span(n)
     scale = residual_column_scale(x, q)
@@ -111,9 +117,11 @@ def prepare_fraction_betas(x, nuisance, signals):
     coordinates = u.T @ yr
     tolerance = max(x.shape) * np.finfo(float).eps * np.linalg.norm(y, axis=0)
     valid = (np.ptp(y, axis=0) > 0) & (np.linalg.norm(coordinates, axis=0) > tolerance)
-    return PreparedFractionBetas(
-        x, n, y, yr, s, vt, coordinates / s[:, None], valid, diagnostics
+    shape = (x.shape[1], y.shape[1])
+    prepared = PreparedFractionBetas(
+        shape, s, vt, coordinates / s[:, None], valid, diagnostics
     )
+    return prepared, yr
 
 
 def _normalized_singular_values(s, vt, scale):
@@ -146,8 +154,8 @@ def fraction_alphas(s, ols, fractions):
 
 
 def fit_fraction_run(x, nuisance, signals, *, fractions):
-    prepared = prepare_fraction_betas(x, nuisance, signals)
-    x, n, y = prepared.trial_design, prepared.nuisance, prepared.signals
+    x, n, y = (np.asarray(a, dtype=float) for a in (x, nuisance, signals))
+    prepared, projected = _prepare(x, n, y)
     betas, alphas = prepared.solve(fractions)
     valid = np.isfinite(alphas)
     gamma = np.full((n.shape[1], y.shape[1]), np.nan)
@@ -156,7 +164,7 @@ def fit_fraction_run(x, nuisance, signals, *, fractions):
         remainder = y[:, valid] - x @ betas[:, valid]
         gamma[:, valid] = np.linalg.lstsq(n, remainder, rcond=None)[0]
         full[valid] = np.sum((remainder - n @ gamma[:, valid]) ** 2, axis=0)
-        null[valid] = np.sum(prepared.projected_signals[:, valid] ** 2, axis=0)
+        null[valid] = np.sum(projected[:, valid] ** 2, axis=0)
         total[valid] = np.sum((y[:, valid] - y[:, valid].mean(0)) ** 2, axis=0)
     return TrialRunFit(
         betas,

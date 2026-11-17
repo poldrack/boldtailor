@@ -226,6 +226,136 @@ def _predict_run(beta, values, mask, means, coefficients, *, encoding_mode):
     return prediction, sse, sst, offsets
 
 
+def _beta_runs(beta_runs):
+    betas = tuple(np.asarray(b, dtype=float) for b in beta_runs)
+    if (
+        not betas
+        or any(b.ndim != 2 or not all(b.shape) for b in betas)
+        or len({b.shape[1] for b in betas}) != 1
+    ):
+        raise ValueError("beta runs must have trial rows and matching feature columns")
+    return betas
+
+
+def _run_means(arrays, masks, train):
+    # Absolute mode historically permits an empty individual training run.
+    width = arrays[0].shape[1]
+    return np.stack(
+        [
+            arrays[r][masks[r]].mean(0) if masks[r].any() else np.full(width, np.nan)
+            for r in train
+        ]
+    )
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
+class EncodingDesign:
+    """Everything about one train/test split that depends on predictors alone.
+
+    Prepare it once, then ``score`` any number of beta sets: the training
+    design, its rank check, the trial masks and the predictor means do not
+    depend on the betas.
+    """
+
+    encoding_mode: str
+    predictor_names: tuple[str, ...]
+    train_runs: tuple[int, ...]
+    test_runs: tuple[int, ...]
+    predictor_values: tuple[np.ndarray, ...]
+    trial_masks: tuple[np.ndarray, ...]
+    training_matrix: np.ndarray
+    predictor_means: np.ndarray
+    train_run_predictor_means: np.ndarray
+
+    @staticmethod
+    def prepare(
+        predictors,
+        *,
+        train_runs,
+        test_runs,
+        encoding_mode="within_run",
+        n_trials=None,
+    ) -> "EncodingDesign":
+        """Validate the split and predictors; ``n_trials`` defaults to their rows."""
+        validate_encoding_mode(encoding_mode)
+        counts = [len(p) for p in predictors] if n_trials is None else list(n_trials)
+        train = _run_indices(train_runs, len(counts), "train_runs")
+        test = _run_indices(test_runs, len(counts), "test_runs")
+        if set(train) & set(test):
+            raise ValueError("training and test runs must be disjoint")
+        arrays, columns = predictor_arrays(predictors, counts)
+        masks = tuple(np.isfinite(x).all(axis=1) for x in arrays)
+        matrix, means = training_design(
+            arrays, masks, train, encoding_mode=encoding_mode
+        )
+        return EncodingDesign(
+            encoding_mode=encoding_mode,
+            predictor_names=("task", *columns),
+            train_runs=train,
+            test_runs=test,
+            predictor_values=tuple(arrays),
+            trial_masks=masks,
+            training_matrix=matrix,
+            predictor_means=means,
+            train_run_predictor_means=_run_means(arrays, masks, train),
+        )
+
+    def _check_rows(self, betas):
+        if len(betas) != len(self.predictor_values):
+            raise ValueError("predictor and beta run counts must agree")
+        if [len(b) for b in betas] != [len(x) for x in self.predictor_values]:
+            raise ValueError("predictor rows and ordered columns must match all runs")
+
+    def _fit(self, betas):
+        """Training coefficients and one intercept per training run."""
+        train, masks = self.train_runs, self.trial_masks
+        if self.encoding_mode == "within_run":
+            return _fit_within_coefficients(
+                self.training_matrix,
+                betas,
+                masks,
+                train,
+                self.train_run_predictor_means,
+            )
+        coefficients = _fit_coefficients(self.training_matrix, betas, masks, train)
+        shared = coefficients[0] - self.predictor_means @ coefficients[1:]
+        return coefficients, np.repeat(shared[None], len(train), axis=0)
+
+    def score(self, beta_runs) -> TrialEncodingResult:
+        """Fit training slopes to these betas and score the test runs."""
+        betas = _beta_runs(beta_runs)
+        self._check_rows(betas)
+        coefficients, intercepts = self._fit(betas)
+        fits = [
+            _predict_run(
+                betas[r],
+                self.predictor_values[r],
+                self.trial_masks[r],
+                self.predictor_means,
+                coefficients,
+                encoding_mode=self.encoding_mode,
+            )
+            for r in self.test_runs
+        ]
+        sse, sst = np.stack([f[1] for f in fits]), np.stack([f[2] for f in fits])
+        return TrialEncodingResult(
+            coefficients=coefficients,
+            predictor_means=self.predictor_means,
+            predictor_names=self.predictor_names,
+            train_runs=self.train_runs,
+            test_runs=self.test_runs,
+            trial_masks=self.trial_masks,
+            predictions=tuple(f[0] for f in fits),
+            run_sse=sse,
+            run_sst=sst,
+            r2=r_squared(sse.sum(axis=0), sst.sum(axis=0)),
+            encoding_mode=self.encoding_mode,
+            train_run_predictor_means=self.train_run_predictor_means,
+            train_run_intercepts=intercepts,
+            scoring_offsets=np.stack([f[3] for f in fits]),
+        )
+
+
 def evaluate_trial_encoding(
     beta_runs, predictors, *, train_runs, test_runs, encoding_mode="within_run"
 ):
@@ -237,70 +367,18 @@ def evaluate_trial_encoding(
     for scoring only. Returned predictions use a training-derived reference;
     scoring offsets never alter predictions. Absolute mode preserves the shared
     intercept and uncentered loss. Scores pool SSE/SST, retaining undefined R².
+    To score several beta sets on one split, prepare an ``EncodingDesign`` once.
     """
     validate_encoding_mode(encoding_mode)
-    betas = tuple(np.asarray(b, dtype=float) for b in beta_runs)
-    if (
-        not betas
-        or any(b.ndim != 2 or not all(b.shape) for b in betas)
-        or len({b.shape[1] for b in betas}) != 1
-    ):
-        raise ValueError("beta runs must have trial rows and matching feature columns")
-    train = _run_indices(train_runs, len(betas), "train_runs")
-    test = _run_indices(test_runs, len(betas), "test_runs")
-    if set(train) & set(test):
-        raise ValueError("training and test runs must be disjoint")
-    arrays, columns = predictor_arrays(predictors, [len(b) for b in betas])
-    masks = tuple(np.isfinite(x).all(axis=1) for x in arrays)
-    design, means = training_design(arrays, masks, train, encoding_mode=encoding_mode)
-    # Absolute mode historically permits an empty individual training run.
-    run_means = np.stack(
-        [
-            (
-                arrays[r][masks[r]].mean(0)
-                if masks[r].any()
-                else np.full(len(columns), np.nan)
-            )
-            for r in train
-        ]
-    )
-    if encoding_mode == "within_run":
-        coefficients, intercepts = _fit_within_coefficients(
-            design, betas, masks, train, run_means
-        )
-    else:
-        coefficients = _fit_coefficients(design, betas, masks, train)
-        intercepts = np.repeat(
-            (coefficients[0] - means @ coefficients[1:])[None], len(train), axis=0
-        )
-    fits = [
-        _predict_run(
-            betas[r],
-            arrays[r],
-            masks[r],
-            means,
-            coefficients,
-            encoding_mode=encoding_mode,
-        )
-        for r in test
-    ]
-    sse, sst = np.stack([f[1] for f in fits]), np.stack([f[2] for f in fits])
-    return TrialEncodingResult(
-        coefficients=coefficients,
-        predictor_means=means,
-        predictor_names=("task", *columns),
-        train_runs=train,
-        test_runs=test,
-        trial_masks=masks,
-        predictions=tuple(f[0] for f in fits),
-        run_sse=sse,
-        run_sst=sst,
-        r2=r_squared(sse.sum(axis=0), sst.sum(axis=0)),
+    betas = _beta_runs(beta_runs)
+    design = EncodingDesign.prepare(
+        predictors,
+        train_runs=train_runs,
+        test_runs=test_runs,
         encoding_mode=encoding_mode,
-        train_run_predictor_means=run_means,
-        train_run_intercepts=intercepts,
-        scoring_offsets=np.stack([f[3] for f in fits]),
+        n_trials=[len(b) for b in betas],
     )
+    return design.score(betas)
 
 
 def _indicator_frame(values, modulator, label):

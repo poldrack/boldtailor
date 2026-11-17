@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._constants import TIE_TOLERANCE
+from boldtailor._regularizers import FRACTIONAL_RIDGE
 from boldtailor._ridge_cv import score_candidates
 from boldtailor._fractional_ridge import (  # public re-exports
     NORM_BASIS,
@@ -98,15 +99,14 @@ def score_fraction_candidates(
     unpenalized. Only training betas use each candidate fraction; held-out OLS
     targets use the same training-selected HRF for all candidates.
     """
-    grid = tuple(sorted(fraction_grid(fractions), reverse=True))
     return score_candidates(
         data,
         predictors,
-        grid,
+        FRACTIONAL_RIDGE.grid(fractions),
         library,
         run_labels,
         feature_signature,
-        fractional=True,
+        regularizer=FRACTIONAL_RIDGE,
         encoding_mode=encoding_mode,
         hrf_method=hrf_method,
         reml_options=reml_options,

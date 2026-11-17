@@ -3,6 +3,7 @@
 import numpy as np
 
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_MAP_NAMES
+from boldtailor._regularizers import FRACTIONAL_RIDGE, NORMALIZED_RIDGE
 from boldtailor.fractional_ridge import NORM_BASIS
 from boldtailor.model import HRF_NORMALIZATION
 from boldtailor.reliability import CORRELATION_NAMES
@@ -63,8 +64,8 @@ def alpha_tuning_metadata(tuned):
         percentile=selected.percentile,
         objective_scores=selected.objective_scores.tolist(),
         spatial_reduction="linear percentile over the common finite scoring mask",
-        tie_rule="smallest alpha within 1e-12 of the maximum objective",
-        validation_target="candidate_regularized_betas",
+        tie_rule=NORMALIZED_RIDGE.tie_rule,
+        validation_target=NORMALIZED_RIDGE.validation_target,
     )
 
 
@@ -73,11 +74,11 @@ def fraction_tuning_metadata(tuned):
         **_shared_tuning_metadata(tuned),
         fractions=list(tuned.scores.grid),
         selection_rule="maximum_encoding_r2_per_grayordinate",
-        validation_target="fixed_ols_betas",
+        validation_target=FRACTIONAL_RIDGE.validation_target,
         fraction_norm_basis=NORM_BASIS,
         percentile_role="descriptive_only",
         summary_percentile=tuned.summary_percentile,
-        tie_rule="largest fraction within 1e-12 of the maximum score",
+        tie_rule=FRACTIONAL_RIDGE.tie_rule,
     )
 
 
@@ -89,7 +90,8 @@ def _fraction_outer_metadata(runs):
     )
 
 
-def outer_metadata(runs, outer, fractional):
+def outer_metadata(runs, outer):
+    fractional = outer.fractional
     within = outer.encoding_mode == "within_run"
     return dict(
         **encoding_metadata(outer.encoding_mode),
