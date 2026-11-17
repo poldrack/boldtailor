@@ -276,7 +276,7 @@ def test_run_components_span_the_independent_oracle_pcs(fixture, result):
 
 def test_final_pca_diagnostics_report_rank_and_singular_values(fixture, result):
     """Verify final PCA diagnostics report rank and singular values."""
-    diagnostics = result.components
+    diagnostics = result.pca_diagnostics
     assert diagnostics.run_labels == result.run_labels
     assert diagnostics.pool_size == int(result.noise_pool.sum())
     for run in range(fixture.data.n_runs):
@@ -485,7 +485,7 @@ def test_result_arrays_are_read_only_and_tables_are_copies(result):
     arrays = [result.noise_pool, result.scoring_mask, result.onoff_r2, result.scored]
     arrays += [result.selection_cv_r2, result.initial_hrf_indices]
     arrays += [result.perf, result.curve]
-    arrays += list(result.run_components) + list(result.components.singular_values)
+    arrays += list(result.run_components) + list(result.pca_diagnostics.singular_values)
     fold = result.folds[0]
     arrays += [fold.zero_target, fold.target_energy]
     for array in arrays:
@@ -518,8 +518,9 @@ def test_result_rejects_inconsistent_components(result):
 
     with pytest.raises(ValueError, match="run_components"):
         replace(result, run_components=result.run_components[:2])
+    gate = replace(result.significance_gate, n_components=result.n_components + 1)
     with pytest.raises(ValueError, match="n_components"):
-        replace(result, n_components=result.n_components + 1)
+        replace(result, significance_gate=gate)
     with pytest.raises(ValueError, match="rows"):
         replace(result, run_components=tuple(c[:-1] for c in result.run_components))
 
@@ -1022,3 +1023,34 @@ def test_gate_settings_are_validated_when_selection_settings_are_built(
             gate=denoising._GateSettings(**{**values, **bad}),
             signature=None,
         )
+
+
+def test_result_stores_each_fact_once(result):
+    """Counts come from the gate and masks from one PoolMasks; nothing is duplicated."""
+    from dataclasses import fields
+
+    from boldtailor.denoising_results import DenoisingResult, PoolMasks
+
+    names = {f.name for f in fields(DenoisingResult)}
+    duplicated = {
+        "n_components",
+        "pcstop_count",
+        "noise_pool",
+        "scoring_mask",
+        "noise_pool_threshold",
+        "noise_pool_mixture",
+        "scoring_fallback",
+        "components",
+    }
+    assert not names & duplicated
+    assert {"significance_gate", "pool_masks", "pca_diagnostics"} <= names
+    gate, masks = result.significance_gate, result.pool_masks
+    assert isinstance(masks, PoolMasks)
+    assert result.n_components == gate.n_components
+    assert result.pcstop_count == gate.pcstop_count
+    assert result.noise_pool is masks.pool and result.scoring_mask is masks.scoring
+    assert result.noise_pool_threshold == masks.threshold
+    assert result.noise_pool_mixture is masks.mixture
+    assert result.scoring_fallback is masks.fallback
+    assert result.pca_diagnostics.pool_size == masks.pool_size
+    assert not hasattr(result, "components")

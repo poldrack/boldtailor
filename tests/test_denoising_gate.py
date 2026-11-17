@@ -855,5 +855,6 @@ def test_result_rejects_an_inconsistent_gate(result):
     """Verify result rejects an inconsistent gate."""
     from dataclasses import replace
 
+    gate = replace(result.significance_gate, pcstop_count=max(result.counts) + 1)
     with pytest.raises(ValueError, match="significance_gate"):
-        replace(result, pcstop_count=result.pcstop_count + 1)
+        replace(result, significance_gate=gate)
