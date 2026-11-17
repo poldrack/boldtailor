@@ -178,3 +178,21 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
             f"{name}_completed",
         ]
         assert record.events[-1]["execution_id"] == record.execution_id
+
+
+def test_finish_fit_identifies_the_operation_by_its_activity(parent_record):
+    """The shared epilogue sets the analysis identity, then builds the provenance."""
+    from boldtailor._fit_lifecycle import finish_fit, fit_operation
+    from boldtailor.provenance import analysis_fingerprint
+
+    parent = parent_record.replace(sources=())
+    activity = {"name": "fit", "alpha": 1.0}
+    with fit_operation("fit", parent) as operation:
+        provenance = finish_fit(operation, activity)
+    expected = analysis_fingerprint(parent.metadata_fingerprint, activity)
+    assert operation.analysis_id == expected
+    assert provenance.analysis_fingerprint == expected
+    assert provenance.execution_id == operation.execution_id
+    recorded = provenance.to_dict()["activities"][-1]
+    assert recorded["alpha"] == 1.0 and "software" in recorded
+    assert "software" not in activity
