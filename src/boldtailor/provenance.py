@@ -41,7 +41,7 @@ class SourceRef:
         annotations: Mapping[str, object] | None = None,
     ) -> None:
         self._role = _validate_role(role)
-        self._uri = _validate_uri(uri)
+        self._uri = _validate_source_uri(uri)
         self._media_type = _validate_optional_text(media_type)
         self._byte_size = _validate_byte_size(byte_size)
         self._modified_at = _validate_modified_at(modified_at)
@@ -133,7 +133,7 @@ class SourceRef:
     def from_dict(cls, data: Mapping[str, object]) -> SourceRef:
         return cls(
             role=_validate_role(data["role"]),
-            uri=_validate_uri(data.get("uri")),
+            uri=_validate_source_uri(data.get("uri")),
             media_type=_validate_optional_text(data.get("media_type")),
             byte_size=_validate_byte_size(data.get("byte_size")),
             modified_at=_validate_modified_at(data.get("modified_at")),
@@ -499,7 +499,8 @@ def _validate_modified_at(value: object) -> str | None:
     return value
 
 
-def _validate_uri(value: object) -> str | None:
+def _validate_source_uri(value: object) -> str | None:
+    """A source location: dataset-relative POSIX text or a BIDS URI, never another scheme."""
     if value is None:
         return None
     if not isinstance(value, str) or not value:

@@ -78,6 +78,39 @@ def loro_scores(a, b, c, energy):
     return scores
 
 
+def _best_candidates(scores, valid):
+    """Each scored feature's best candidate; near-ties keep the lowest ID."""
+    best = np.max(np.where(np.isfinite(scores), scores, -np.inf), axis=0)
+    chosen = valid & np.isfinite(best)
+    tolerance = 64 * np.finfo(float).eps * np.maximum(1, np.abs(best[chosen]))
+    indices = np.full(scores.shape[1], -1, dtype=int)
+    indices[chosen] = np.argmax(scores[:, chosen] >= best[chosen] - tolerance, axis=0)
+    return indices
+
+
+def _structural_eligibility(cid, runs):
+    """Whether every run can estimate this candidate, and why not."""
+    outcomes = [run.eligible(cid) for run in runs]
+    reasons = "; ".join(
+        f"run {r}: {reason}" for r, (ok, reason) in enumerate(outcomes) if not ok
+    )
+    return all(ok for ok, _ in outcomes), reasons
+
+
+def _eligibility_table(checked, n_candidates):
+    unchecked = (None, "unchecked")
+    return pd.DataFrame(
+        [
+            dict(
+                hrf_id=cid,
+                eligible=checked.get(cid, unchecked)[0],
+                reason=checked.get(cid, unchecked)[1],
+            )
+            for cid in range(n_candidates)
+        ]
+    )
+
+
 def choose_eligible(scores, runs):
     """Validate winners lazily; structural exclusions apply to every feature."""
     scores = scores.copy()
@@ -85,15 +118,7 @@ def choose_eligible(scores, runs):
 
     def check(cid):
         if cid not in checked:
-            outcomes = [r.eligible(cid) for r in runs]
-            checked[cid] = (
-                all(ok for ok, _ in outcomes),
-                "; ".join(
-                    f"run {r}: {reason}"
-                    for r, (ok, reason) in enumerate(outcomes)
-                    if not ok
-                ),
-            )
+            checked[cid] = _structural_eligibility(cid, runs)
             if not checked[cid][0]:
                 scores[cid] = -np.inf
         return checked[cid][0]
@@ -101,29 +126,13 @@ def choose_eligible(scores, runs):
     check(0)
     valid = np.any(np.isfinite(scores), axis=0)
     while True:
-        best = np.max(np.where(np.isfinite(scores), scores, -np.inf), axis=0)
-        indices = np.full(scores.shape[1], -1, dtype=int)
-        for v in np.flatnonzero(valid & np.isfinite(best)):
-            tolerance = 64 * np.finfo(float).eps * max(1, abs(best[v]))
-            indices[v] = np.flatnonzero(scores[:, v] >= best[v] - tolerance)[0]
+        indices = _best_candidates(scores, valid)
         if all([check(int(cid)) for cid in np.unique(indices[indices >= 0])]):
             break
-    if not any(ok for ok, _ in checked.values()):
-        for cid in range(len(scores)):
-            if check(cid):
-                break
-        else:
-            raise ValueError("no eligible, estimable HRF candidate across all runs")
+    if not any(ok for ok, _ in checked.values()) and not any(
+        check(cid) for cid in range(len(scores))
+    ):
+        raise ValueError("no eligible, estimable HRF candidate across all runs")
     if np.any(valid & (indices < 0)):
         raise ValueError("no eligible HRF with finite prediction score")
-    table = pd.DataFrame(
-        [
-            dict(
-                hrf_id=cid,
-                eligible=checked.get(cid, (None, "unchecked"))[0],
-                reason=checked.get(cid, (None, "unchecked"))[1],
-            )
-            for cid in range(len(scores))
-        ]
-    )
-    return indices, scores, table
+    return indices, scores, _eligibility_table(checked, len(scores))

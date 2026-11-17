@@ -310,7 +310,7 @@ def _generated_by(
         "Version": package_version("boldtailor"),
     }
     if code_url is not None:
-        generated["CodeURL"] = _validate_uri(code_url, "code_url")
+        generated["CodeURL"] = _validate_absolute_uri(code_url, "code_url")
     normalized_container = _normalize_container(container)
     if normalized_container:
         generated["Container"] = normalized_container
@@ -332,7 +332,7 @@ def _normalize_container(
         for key, value in container.items()
     }
     if "URI" in normalized:
-        normalized["URI"] = _validate_uri(normalized["URI"], "container URI")
+        normalized["URI"] = _validate_absolute_uri(normalized["URI"], "container URI")
     return dict(sorted(normalized.items()))
 
 
@@ -358,7 +358,9 @@ def _normalize_source_dataset(value: Mapping[str, str]) -> dict[str, str]:
     }
     for key in ("URL", "DOI"):
         if key in normalized:
-            normalized[key] = _validate_uri(normalized[key], f"source dataset {key}")
+            normalized[key] = _validate_absolute_uri(
+                normalized[key], f"source dataset {key}"
+            )
     return dict(sorted(normalized.items()))
 
 
@@ -380,7 +382,7 @@ def _normalize_dataset_links(
 def _validate_link_location(value: object) -> str:
     text = _validate_text(value, "dataset link location")
     if urlsplit(text).scheme:
-        return _validate_uri(text, "dataset link location")
+        return _validate_absolute_uri(text, "dataset link location")
     return validate_relative_path(text, name="dataset link location")
 
 
@@ -456,7 +458,8 @@ def _validate_text(value: object, name: str) -> str:
     return value
 
 
-def _validate_uri(value: object, name: str) -> str:
+def _validate_absolute_uri(value: object, name: str) -> str:
+    """An external reference: it must carry a scheme, unlike a source location."""
     text = _validate_text(value, name)
     if (
         not urlsplit(text).scheme

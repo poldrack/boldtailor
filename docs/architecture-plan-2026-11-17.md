@@ -85,7 +85,39 @@ provenance records, `WorkflowSettings`).
     is centered within each test run either way.
   - A few branches on `regularizer.per_feature` remain where the two families
     genuinely differ (which selector runs, per-feature buffers).
-- Phases 5 and 7: not started.
+- **Phase 7: partly done** (branch `refactor/phase7-consolidate`, on top of
+  phase 6). Done:
+  - Item 1: one `assemble_trial_result`; `TrialRunFit.ridge_alphas` field
+    (the diagnostics entry stays because it is user-visible).
+  - Item 2: `hrf_results.hrf_assignment_fingerprint`.
+  - Item 3: `finish_fit` replaces the eight pasted provenance epilogues.
+  - Item 4: `normalization(stage)` context manager used by `from_arrays` and
+    prepared designs.
+  - Item 5: `ProvenanceRecord.latest_activity`.
+  - Item 10: workflow `dataset_description` uses `STABLE_BIDS_VERSION`; the
+    two URI validators are named for what they accept.
+  - Item 11: `choose_eligible` split into best-candidate, eligibility and
+    table helpers, with direct tests.
+  Deliberately not done, with reasons:
+  - Item 1 (per-group design digests): would change `design_fingerprint`
+    values and so every downstream analysis ID.
+  - Item 3 (single training statistics pass in `evaluate_hrf_split`): saves
+    compute but raises peak memory, because sliced training statistics would
+    coexist with the all-run arrays.
+  - Item 4 (two completion-event protocols): the fit protocol is documented
+    and tested as deliberate.
+  - Item 5 (unifying `metadata_fingerprint` / `data_id` / `analysis_id`
+    names): API-visible renames.
+  - Item 6 (uncopied table reads inside the package): a mutation in any
+    internal reader would corrupt shared inputs; the copies are cheap.
+  - Item 7 (design rank once, reuse parent designs): the matrices are small,
+    and reusing a parent's designs is unsafe when identities are anonymous.
+  - Item 8 (one parent-validation policy): a behaviour choice for the owner.
+  - Item 9 (`residualise` everywhere): cosmetic; the inline form is clear.
+  - Item 10 (one canonical JSON dump): each form feeds a fingerprint.
+  - Items 12 and 13: API-visible changes and removals, left for a release
+    decision; the removal candidates are listed under item 13.
+- Phase 5: not started.
 
 ## Decisions already made
 
