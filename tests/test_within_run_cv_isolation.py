@@ -6,6 +6,7 @@ import pytest
 import boldtailor._ridge_cv as cv
 from boldtailor.fractional_ridge import score_fraction_candidates
 from boldtailor.ridge_selection import score_ridge_candidates
+from boldtailor.trial_encoding import EncodingDesign
 from tests.oracles import subset_runs as subset
 
 
@@ -39,14 +40,14 @@ def test_candidate_predictions_ignore_held_out_outcomes(
     """Verify candidate predictions ignore held out outcomes."""
     data, predictors, library = ridge_problem
     fits = []
-    evaluate = cv.evaluate_trial_encoding
+    evaluate = EncodingDesign.score
 
     def observe(*args, **kwargs):
         result = evaluate(*args, **kwargs)
         fits.append(result)
         return result
 
-    monkeypatch.setattr(cv, "evaluate_trial_encoding", observe)
+    monkeypatch.setattr(EncodingDesign, "score", observe)
     scorer = score_fraction_candidates if fractional else score_ridge_candidates
     grid = dict(fractions=[1, 0.5]) if fractional else dict(alphas=[0, 0.1])
     before = scorer(data, predictors, library=library, **grid)

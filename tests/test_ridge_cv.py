@@ -8,6 +8,7 @@ import pytest
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.data import from_arrays
 from boldtailor.hrf_selection import select_hrfs
+from boldtailor.trial_encoding import EncodingDesign
 from tests.oracles import subset_runs as subset
 
 
@@ -156,25 +157,24 @@ def test_validation_targets_use_candidate_penalty(ridge_problem):
     assert not np.allclose(result.cv_r2[1, :4], wrong[1, :4])
 
 
-def test_fold_record_takes_predictor_means_from_the_first_alpha_fit(
+def test_fold_record_takes_predictor_means_from_the_fold_design(
     ridge_problem, monkeypatch
 ):
-    """Verify fold record takes predictor means from the first alpha fit."""
+    """The fold record reports the design's training means, not a candidate fit's."""
     import dataclasses
 
     data, predictors, library = ridge_problem
-    module = importlib.import_module("boldtailor._ridge_cv")
-    original = module.evaluate_trial_encoding
+    original = EncodingDesign.score
     calls = []
 
-    def shifted(*args, **kwargs):
-        result = original(*args, **kwargs)
-        calls.append(result.predictor_means.copy())
+    def shifted(design, betas):
+        result = original(design, betas)
+        calls.append(design.predictor_means.copy())
         return dataclasses.replace(
             result, predictor_means=result.predictor_means + len(calls)
         )
 
-    monkeypatch.setattr(module, "evaluate_trial_encoding", shifted)
+    monkeypatch.setattr(EncodingDesign, "score", shifted)
     result = score(
         data,
         predictors,
@@ -184,7 +184,7 @@ def test_fold_record_takes_predictor_means_from_the_first_alpha_fit(
         feature_signature="fixture",
     )
     fold = result.provenance.to_dict()["activities"][-1]["folds"][0]
-    np.testing.assert_allclose(fold["predictor_means"], calls[0] + 1)
+    np.testing.assert_allclose(fold["predictor_means"], calls[0])
 
 
 def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatch):
@@ -192,10 +192,7 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
     data, predictors, library = ridge_problem
     score(data, predictors, alphas=[0.0], library=library)
     module = importlib.import_module("boldtailor._ridge_cv")
-    original_select, original_encoding = (
-        module.select_hrfs,
-        module.evaluate_trial_encoding,
-    )
+    original_select, original_encoding = module.select_hrfs, EncodingDesign.score
     seen_selections, seen_encodings = [], []
 
     def observe_selection(*args, **kwargs):
@@ -209,7 +206,7 @@ def test_inner_validation_cannot_train_hrf_or_encoding(ridge_problem, monkeypatc
         return result
 
     monkeypatch.setattr(module, "select_hrfs", observe_selection)
-    monkeypatch.setattr(module, "evaluate_trial_encoding", observe_encoding)
+    monkeypatch.setattr(EncodingDesign, "score", observe_encoding)
     options = dict(
         alphas=[0.0, 0.2],
         library=library,

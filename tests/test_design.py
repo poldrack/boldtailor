@@ -343,16 +343,18 @@ def test_per_run_loops_copy_run_tables_once(inputs, access_counts):
 
 
 @pytest.mark.parametrize("fractional", [False, True])
-def test_ridge_cv_fold_copies_run_tables_once(ridge_problem, access_counts, fractional):
-    """Verify ridge cross-validation fold copies run tables once."""
-    from boldtailor import _ridge_cv as cv
+def test_ridge_cv_copies_run_tables_once_for_all_folds(
+    ridge_problem, access_counts, fractional
+):
+    """Canonical ridge CV copies each run's tables once, not once per fold."""
+    from boldtailor.fractional_ridge import score_fraction_candidates
+    from boldtailor.ridge_selection import score_ridge_candidates
 
     data, predictors, _ = ridge_problem
-    labels = [f"run-{r}" for r in range(data.n_runs)]
-    grid = [0.5, 1.0] if fractional else [0.0, 1.0]
     access_counts.update(events=0, confounds=0)
-    cv._score_fold(
-        data, predictors, None, None, labels, None, grid, 0, fractional=fractional
-    )
+    if fractional:
+        score_fraction_candidates(data, predictors, fractions=[0.5, 1.0])
+    else:
+        score_ridge_candidates(data, predictors, alphas=[0.0, 1.0])
     assert access_counts["events"] <= 1
     assert access_counts["confounds"] <= 1
