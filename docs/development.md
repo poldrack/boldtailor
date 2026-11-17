@@ -518,8 +518,8 @@ does not install handlers. Applications choose the destination and log level.
 `emit_event()` creates a lifecycle record; `append_event_history()` retains
 the most recent eight events in provenance.
 
-Fit and comparison entry points use the private `fit_operation()` context
-manager. Their statistical steps remain explicit in each caller. The context
+Fit, comparison, HRF-selection and ridge-scoring entry points use the private
+`fit_operation()` context manager. Their statistical steps remain explicit in each caller. The context
 owns execution IDs and logging context. Normal exit logs completion; an exception
 logs failure and is re-raised. No call on the yielded metadata is required to
 complete the scope. Callers set `operation.analysis_id` explicitly when the model

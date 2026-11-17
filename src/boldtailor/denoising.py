@@ -1289,14 +1289,6 @@ class _PoolStage:
     components: tuple[RunComponents, ...]
 
 
-@dataclass(frozen=True, eq=False)
-class _CountStage:
-    """pcstop's count selection and the gate's decision on it."""
-
-    count: object
-    gate: SignificanceGate
-
-
 def _pool(data, labels, settings):
     """Frozen full-data HRFs, ON-OFF R², masks, and run-wise pool PCs."""
     selection = select_hrfs(
@@ -1337,7 +1329,7 @@ def _count_selection(data, labels, settings, pool):
         run_labels=labels,
     )
     gate = apply_gate(count.setup, count.n_components, **vars(settings.gate))
-    return _CountStage(count, gate)
+    return count, gate
 
 
 # ---- result parts ----------------------------------------------------------------------
@@ -1495,7 +1487,7 @@ def _count_records(settings, count):
 
 def _selection_activity(labels, settings, pool, selected, prefixes, identities):
     selection, statistic, masks = pool.selection, pool.statistic, pool.masks
-    count, gate = selected.count, selected.gate
+    count, gate = selected
     task_model, library = settings.task_model, settings.library
     return dict(
         name="denoising_selection",
@@ -1525,7 +1517,7 @@ def _selection_activity(labels, settings, pool, selected, prefixes, identities):
 def _assemble(labels, settings, pool, selected, *, prefixes, identities, provenance):
     """Construct a denoising result from completed calculations and provenance."""
     selection, statistic, masks = pool.selection, pool.statistic, pool.masks
-    count, gate = selected.count, selected.gate
+    count, gate = selected
     scores, fold_scores = _public_tables(count)
     return DenoisingResult(
         n_components=gate.n_components,
@@ -1611,7 +1603,7 @@ def select_denoising(
         pool = _pool(data, labels, settings)
         selected = _count_selection(data, labels, settings, pool)
         # Every run supports the chosen count because each trains some fold.
-        count = selected.gate.n_components
+        count = selected[1].n_components
         prefixes = tuple(c.prefix(count) for c in pool.components)
         identities = run_identities(data)  # hashes every run: compute once
         activity = _selection_activity(

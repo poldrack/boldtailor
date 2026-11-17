@@ -102,7 +102,7 @@ def score_fraction_candidates(
     return score_candidates(
         data,
         predictors,
-        FRACTIONAL_RIDGE.grid(fractions),
+        fractions,
         library,
         run_labels,
         feature_signature,

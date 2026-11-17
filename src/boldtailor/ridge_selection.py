@@ -96,7 +96,7 @@ def score_ridge_candidates(
     return score_candidates(
         data,
         predictors,
-        NORMALIZED_RIDGE.grid(alphas),
+        alphas,
         library,
         run_labels,
         feature_signature,

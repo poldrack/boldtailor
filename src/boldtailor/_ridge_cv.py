@@ -4,10 +4,10 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-from uuid import uuid4
 
 import numpy as np
 
+from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
 from boldtailor._run_design import prepare_runs
 from boldtailor.data import subset_runs
 from boldtailor._single_trial_design import compile_trial_run
@@ -20,7 +20,6 @@ from boldtailor.data import run_labels_for
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.provenance import (
     analysis_fingerprint,
-    extend_provenance,
     identity_activity,
 )
 from boldtailor.ridge_results import CandidateScores
@@ -245,19 +244,6 @@ def _activity(scoring, design, folds, ids, encoding_mode):
     return activity
 
 
-def _provenance(data, activity):
-    return extend_provenance(
-        data.provenance,
-        execution_id=str(uuid4()),
-        activity=activity,
-        events=data.provenance.events,
-        warnings=(),
-        analysis_id=analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        ),
-    )
-
-
 def _selection_options(library, hrf_method, reml_options, task_model):
     options = resolve_reml_options(hrf_method, reml_options)
     if library is None and hrf_method != "cv":
@@ -281,36 +267,48 @@ def score_candidates(
     reml_options=None,
     task_model=TaskModel(),
 ):
-    """Leave-one-run-out encoding scores of every candidate in ``grid``."""
-    selection_options = _selection_options(
-        library, hrf_method, reml_options, task_model
-    )
-    validate_encoding_mode(encoding_mode)
-    _check_inputs(data.n_runs, library, feature_signature, hrf_method)
-    tables = run_tables(data)
-    designs = _fold_designs(predictors, [len(t[0]) for t in tables], encoding_mode)
-    scoring = _Scoring(
-        tables=tables,
-        prepared=None if library is None else prepare_runs(data, library),
-        library=library,
-        labels=run_labels_for(data, run_labels),
-        signature=feature_signature,
-        grid=grid,
-        regularizer=regularizer,
-        selection_options=selection_options,
-    )
+    """Leave-one-run-out encoding scores of every candidate in ``grid``.
+
+    Runs as one logged operation, so invalid arguments and late failures are
+    reported like those of every other fit entry point.
+    """
+    with fit_operation(regularizer.cv_activity["name"], data.provenance) as operation:
+        grid = regularizer.grid(grid)
+        options = _selection_options(library, hrf_method, reml_options, task_model)
+        validate_encoding_mode(encoding_mode)
+        _check_inputs(data.n_runs, library, feature_signature, hrf_method)
+        tables = run_tables(data)
+        designs = _fold_designs(predictors, [len(t[0]) for t in tables], encoding_mode)
+        scoring = _Scoring(
+            tables=tables,
+            prepared=None if library is None else prepare_runs(data, library),
+            library=library,
+            labels=run_labels_for(data, run_labels),
+            signature=feature_signature,
+            grid=grid,
+            regularizer=regularizer,
+            selection_options=options,
+        )
+        return _scores(operation, data, scoring, designs, encoding_mode)
+
+
+def _scores(operation, data, scoring, designs, encoding_mode):
+    """Score every fold, then record the activity under the operation's identity."""
     folds = [_score_fold(data, scoring, design) for design in designs]
     losses, totals = np.array([f[0] for f in folds]), np.array([f[1] for f in folds])
     ids = np.array([f[2] for f in folds])
     activity = _activity(scoring, designs[0], [f[3] for f in folds], ids, encoding_mode)
+    operation.analysis_id = analysis_fingerprint(
+        data.provenance.metadata_fingerprint, activity
+    )
     return CandidateScores(
-        regularization=regularizer.name,
-        grid=grid,
+        regularization=scoring.regularizer.name,
+        grid=scoring.grid,
         cv_r2=r_squared(losses.sum(axis=0), totals.sum(axis=0)),
         fold_sse=losses,
         fold_sst=totals,
         fold_hrf_indices=ids,
         trial_masks=designs[0].trial_masks,
         run_labels=scoring.labels,
-        provenance=_provenance(data, activity),
+        provenance=build_fit_provenance(operation, activity),
     )

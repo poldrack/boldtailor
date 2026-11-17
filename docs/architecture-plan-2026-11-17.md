@@ -55,7 +55,8 @@ provenance records, `WorkflowSettings`).
     fields became tuples. Worker payloads (`GlmBlock`, `BetaBlock`,
     `OuterBlock`) stay `TypedDict`s: they are built once and never mutated.
     The arrays inside the records are not write-protected.
-  - 4.2: `_GateSettings`, `_GateArrays`, `_PoolStage`, `_CountStage`.
+  - 4.2: `_GateSettings`, `_GateArrays`, `_PoolStage`. The count stage
+    stays a plain `(count, gate)` pair (a two-field class was not worth it).
   - 4.3: `_FitBuffers`, `_SelectionBuffers`.
   - 4.4: applied to every dataclass with an array or table field (about 45
     classes, not only the ones listed below), enforced by
@@ -74,10 +75,11 @@ provenance records, `WorkflowSettings`).
     also copies the run tables once per call instead of once per fold.
   - Tuning provenance builders moved to `workflow/ridge_provenance.py`.
   - `PreparedFractionBetas` no longer retains the run's signals.
-  - Item 5, left unchanged and open: `score_candidates` is the only core
-    entry point that builds provenance without `fit_operation`, so scoring
-    emits no lifecycle log events. No document says this is deliberate;
-    aligning it would change logging output, so it needs a decision.
+  - Item 5, aligned at the user's direction: `score_candidates` now runs
+    inside `fit_operation`, so ridge scoring logs
+    `encoding_guided_ridge_cv_*` / `encoding_guided_fractional_ridge_cv_*`
+    started, completed and failed events, and its activity records the
+    software environment like every other entry point.
   - Item 6, no change needed: the tuning metadata's "within-run validation
     SST" is accurate in both encoding modes, because the total sum of squares
     is centered within each test run either way.
