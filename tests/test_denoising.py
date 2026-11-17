@@ -888,17 +888,26 @@ def test_denoising_assembly_accepts_finished_provenance(fixture, result):
     from boldtailor.data import run_labels_for
 
     data = fixture.data
-    grid = (COUNTS, "auto", 1.05, (True, 0.05, 0.05, "ar1"))
     settings = denoising._settings(
-        data, fixture.task_model, fixture.library, grid, None
+        data,
+        fixture.task_model,
+        fixture.library,
+        counts=COUNTS,
+        threshold="auto",
+        pcstop=1.05,
+        gate=denoising._GateSettings(
+            enabled=True, alpha=0.05, binomial_alpha=0.05, noise_model="ar1"
+        ),
+        signature=None,
     )
     labels = run_labels_for(data, None)
     pool = denoising._pool(data, labels, settings)
     selected = denoising._count_selection(data, labels, settings, pool)
-    prefixes = tuple(c.prefix(selected[1].n_components) for c in pool[3])
+    prefixes = tuple(c.prefix(selected.gate.n_components) for c in pool.components)
     before = result.provenance.to_dict()
     actual = denoising._assemble(
-        (data, labels, settings),
+        labels,
+        settings,
         pool,
         selected,
         prefixes=prefixes,
@@ -954,3 +963,61 @@ def test_selection_hashes_each_run_once(fixture, monkeypatch):
     assert [c["fingerprint"] for c in activity["baseline_confounds"]] == [
         i.confounds for i in selected.source_identity
     ]
+
+
+def test_selection_stages_are_named_records_not_positional_tuples(fixture):
+    """Settings, the pool stage and the count stage expose their parts by name."""
+    from boldtailor import denoising
+    from boldtailor.data import run_labels_for
+
+    gate = denoising._GateSettings(
+        enabled=True, alpha=0.01, binomial_alpha=0.2, noise_model="ols"
+    )
+    settings = denoising._settings(
+        fixture.data,
+        fixture.task_model,
+        fixture.library,
+        counts=COUNTS,
+        threshold="auto",
+        pcstop=1.05,
+        gate=gate,
+        signature=None,
+    )
+    assert settings.gate == gate
+    assert not isinstance(settings.gate, tuple)
+    labels = run_labels_for(fixture.data, None)
+    pool = denoising._pool(fixture.data, labels, settings)
+    assert pool.masks.pool_size == pool.components[0].pool_size
+    assert pool.selection.hrf_indices.shape == pool.statistic.shape
+    selected = denoising._count_selection(fixture.data, labels, settings, pool)
+    assert selected.gate.noise_model == "ols" and selected.gate.alpha == 0.01
+    assert selected.gate.pcstop_count == selected.count.n_components
+
+
+@pytest.mark.parametrize(
+    "bad,match",
+    [
+        (dict(enabled=1), "significance_gate"),
+        (dict(alpha=1.5), "gate_alpha"),
+        (dict(binomial_alpha=0.0), "gate_binomial_alpha"),
+        (dict(noise_model="arma"), "gate_noise_model"),
+    ],
+)
+def test_gate_settings_are_validated_when_selection_settings_are_built(
+    fixture, bad, match
+):
+    """Invalid gate fields are rejected by name before any fitting."""
+    from boldtailor import denoising
+
+    values = dict(enabled=True, alpha=0.05, binomial_alpha=0.05, noise_model="ar1")
+    with pytest.raises(ValueError, match=match):
+        denoising._settings(
+            fixture.data,
+            fixture.task_model,
+            fixture.library,
+            counts=COUNTS,
+            threshold="auto",
+            pcstop=1.05,
+            gate=denoising._GateSettings(**{**values, **bad}),
+            signature=None,
+        )
