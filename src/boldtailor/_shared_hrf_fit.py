@@ -15,7 +15,6 @@ from boldtailor._hrf_design import HRF_NORMALIZATION, hrf_metadata
 from boldtailor._constants import OVERSAMPLING
 from boldtailor._single_trial_fit import (
     fit_trial_run,
-    r_squared,
 )
 from boldtailor._fractional_ridge import (
     regularization,
@@ -24,9 +23,12 @@ from boldtailor._fractional_ridge import (
 )
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_library import HrfCandidate
-from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
-from boldtailor.provenance import analysis_fingerprint
-from boldtailor.single_trial_results import SingleTrialResult, SharedTrialDesign
+from boldtailor._fit_lifecycle import finish_fit, fit_operation
+from boldtailor.single_trial_results import (
+    SharedTrialDesign,
+    SingleTrialResult,
+    assemble_trial_result,
+)
 
 
 def fit_shared_hrf_trials(
@@ -46,12 +48,18 @@ def fit_shared_hrf_trials(
         activity = _model_metadata(compiled, data.frame_times, labels, alpha, hrf_model)
         if fractions is not None:
             activity.update(fraction_metadata(fractions))
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         trials = trial_table(data.events, labels)
-        return _assemble_result(compiled, trials, fits, alpha, provenance, fractions)
+        designs = tuple(pd.concat([x, n], axis=1) for x, n, _ in compiled)
+        return assemble_trial_result(
+            fits,
+            trial_table=trials,
+            design=SharedTrialDesign(_matrices=designs),
+            ridge_alpha=alpha,
+            ridge_fraction=fractions,
+            diagnostics=[f.diagnostics for f in fits],
+            provenance=provenance,
+        )
 
 
 def _compile_runs(data, labels, hrf_model):
@@ -94,30 +102,4 @@ def _model_metadata(compiled, times, labels, alpha, hrf="spm"):
         noise_model="ols",
         nuisance_columns=[list(n) for _, n, _ in compiled],
         design_fingerprint=digest.hexdigest(),
-    )
-
-
-def _assemble_result(compiled, trials, fits, alpha, provenance, fractions=None):
-    designs = tuple(pd.concat([x, n], axis=1) for x, n, _ in compiled)
-    total = np.sum([f.total_ss for f in fits], axis=0)
-    full = r_squared(np.sum([f.full_sse for f in fits], axis=0), total)
-    nuisance = r_squared(np.sum([f.nuisance_sse for f in fits], axis=0), total)
-    return SingleTrialResult(
-        run_betas=tuple(f.betas for f in fits),
-        _trial_table=trials,
-        design=SharedTrialDesign(_matrices=designs),
-        run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
-        run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
-        full_r2=full,
-        nuisance_r2=nuisance,
-        delta_r2=full - nuisance,
-        _diagnostics=tuple(f.diagnostics for f in fits),
-        ridge_alpha=alpha,
-        provenance=provenance,
-        ridge_fraction=fractions,
-        run_ridge_alphas=(
-            None
-            if fractions is None
-            else tuple(f.diagnostics["ridge_alphas"] for f in fits)
-        ),
     )

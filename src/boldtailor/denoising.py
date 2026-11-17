@@ -32,7 +32,7 @@ https://doi.org/10.7554/eLife.77599
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 import warnings
@@ -51,7 +51,7 @@ from boldtailor._arrays import (
     set_fields_in_place,
     sum_arrays,
 )
-from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
+from boldtailor._fit_lifecycle import finish_fit, fit_operation
 from boldtailor._hrf_cv import pooled_amplitude
 from boldtailor._run_design import check_task_rank, column_basis, prepare_runs
 from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
@@ -68,12 +68,12 @@ from boldtailor.denoising_results import (
     SignificanceGate,
 )
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
+from boldtailor.hrf_results import hrf_assignment_fingerprint
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.model import TaskModel
 from boldtailor.provenance import (
     RunSources,
     SourceRef,
-    analysis_fingerprint,
     identity_activity,
 )
 
@@ -1503,7 +1503,9 @@ def _selection_activity(labels, settings, pool, selected, prefixes, identities):
         **_pool_records(settings, statistic, masks, count.setup.scored),
         **_count_records(settings, count),
         significance_gate=_gate_record(gate, labels),
-        initial_hrf_assignment_fingerprint=_digest(selection.hrf_indices, "<i8"),
+        initial_hrf_assignment_fingerprint=hrf_assignment_fingerprint(
+            selection.hrf_indices
+        ),
         initial_selection=identity_activity(selection.provenance),
         component_fingerprints=[_digest(p, "<f8") for p in prefixes],
         baseline_confounds=_baseline_confounds(identities, labels),
@@ -1609,10 +1611,7 @@ def select_denoising(
         activity = _selection_activity(
             labels, settings, pool, selected, prefixes, identities
         )
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         return _assemble(
             labels,
             settings,
@@ -1731,10 +1730,7 @@ def with_denoising(
     with fit_operation(_AUGMENTATION, parent) as operation:
         confounds = _augmented_confounds(data, result)
         activity = _augmentation_activity(result)
-        operation.analysis_id = analysis_fingerprint(
-            parent.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         return AnalysisData(
             _signals=data.signals,
             _events=data.events,

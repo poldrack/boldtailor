@@ -13,17 +13,21 @@ from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._constants import OVERSAMPLING
 from boldtailor._single_trial_design import check_trial_ids, trial_table
 from boldtailor._design_inputs import validate_events
-from boldtailor._single_trial_fit import fit_trial_run, r_squared
+from boldtailor._single_trial_fit import fit_trial_run
 from boldtailor._fractional_ridge import (
     regularization,
     fit_fraction_run,
     fraction_metadata,
 )
-from boldtailor.single_trial_results import SingleTrialResult, SelectedTrialDesign
+from boldtailor.single_trial_results import (
+    SelectedTrialDesign,
+    SingleTrialResult,
+    assemble_trial_result,
+)
 from boldtailor.data import AnalysisData, run_labels_for
 from boldtailor.hrf_results import HrfSelectionResult
-from boldtailor.provenance import analysis_fingerprint, identity_activity
-from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
+from boldtailor.provenance import identity_activity
+from boldtailor._fit_lifecycle import finish_fit, fit_operation
 
 
 def _tables(data, labels):
@@ -58,7 +62,7 @@ class GroupRunFit:
     nuisance_sse: np.ndarray
     total_ss: np.ndarray
     diagnostics: list[dict]
-    alphas: np.ndarray
+    ridge_alphas: np.ndarray
 
 
 def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunFit:
@@ -73,7 +77,7 @@ def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunF
         part = None if fractions is None else fractions[features]
         fit = _fit_group(run, x, y[:, features], alpha, part)
         if fractions is not None:
-            alphas[features] = fit.diagnostics["ridge_alphas"]
+            alphas[features] = fit.ridge_alphas
         betas[:, features] = fit.betas
         full[features] = fit.full_sse
         null[features] = fit.nuisance_sse
@@ -93,7 +97,7 @@ def _fit_run(run, y, ids, alpha, run_index, digest, fractions=None) -> GroupRunF
         nuisance_sse=null,
         total_ss=total,
         diagnostics=diagnostics,
-        alphas=alphas,
+        ridge_alphas=alphas,
     )
 
 
@@ -169,35 +173,19 @@ def fit_selected_hrf_trials(
         activity = _fit_activity(
             data, selection, labels, alpha, assignment, digest, fractions
         )
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         design = SelectedTrialDesign(
             hrf_indices=selection.hrf_indices,
             design_fingerprint=activity["design_fingerprint"],
             selection_provenance=selection.provenance,
             _rebuild=_rebuilder(runs, selection.hrf_indices),
         )
-        return _result(fits, trials, design, alpha, fractions, provenance)
-
-
-def _result(fits, trials, design, alpha, fractions, provenance):
-    total = sum(f.total_ss for f in fits)
-    full = r_squared(sum(f.full_sse for f in fits), total)
-    null = r_squared(sum(f.nuisance_sse for f in fits), total)
-    return SingleTrialResult(
-        run_betas=tuple(f.betas for f in fits),
-        _trial_table=trials,
-        design=design,
-        run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
-        run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
-        full_r2=full,
-        nuisance_r2=null,
-        delta_r2=full - null,
-        _diagnostics=tuple(d for f in fits for d in f.diagnostics),
-        ridge_alpha=alpha,
-        provenance=provenance,
-        ridge_fraction=fractions,
-        run_ridge_alphas=(None if fractions is None else tuple(f.alphas for f in fits)),
-    )
+        return assemble_trial_result(
+            fits,
+            trial_table=trials,
+            design=design,
+            ridge_alpha=alpha,
+            ridge_fraction=fractions,
+            diagnostics=[d for f in fits for d in f.diagnostics],
+            provenance=provenance,
+        )

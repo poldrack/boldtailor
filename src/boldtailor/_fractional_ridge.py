@@ -173,4 +173,5 @@ def fit_fraction_run(x, nuisance, signals, *, fractions):
         null,
         total,
         dict(prepared.diagnostics, ridge_alphas=alphas, fraction_norm_basis=NORM_BASIS),
+        ridge_alphas=alphas,
     )

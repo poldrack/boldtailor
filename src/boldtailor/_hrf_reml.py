@@ -8,7 +8,7 @@ import pandas as pd
 from boldtailor._run_design import prepare_runs
 from boldtailor._single_trial_design import compile_trial_run
 from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
-from boldtailor.hrf_results import RemlHrfDiagnostics
+from boldtailor.hrf_results import RemlHrfDiagnostics, hrf_assignment_fingerprint
 from boldtailor._hrf_design import HRF_NORMALIZATION
 from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 
@@ -72,7 +72,7 @@ def _reml_activity(
         library_fingerprint=library.fingerprint,
         design_fingerprint=sha256("|".join(fixed).encode()).hexdigest(),
         fixed_design_fingerprints=fixed,
-        hrf_assignment_fingerprint=sha256(ids.astype("<i8").tobytes()).hexdigest(),
+        hrf_assignment_fingerprint=hrf_assignment_fingerprint(ids),
         run_labels=list(labels),
         feature_signature=signature,
         task_model=task_model.to_dict(),

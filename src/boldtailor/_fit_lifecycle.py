@@ -14,6 +14,7 @@ from boldtailor.logging import (
 )
 from boldtailor.provenance import (
     ProvenanceRecord,
+    analysis_fingerprint,
     extend_provenance,
     software_environment,
 )
@@ -61,6 +62,23 @@ def build_fit_provenance(
         warnings=warnings,
         analysis_id=operation.analysis_id,
     )
+
+
+def finish_fit(
+    operation: FitOperation,
+    activity: Mapping[str, object],
+    *,
+    warnings: Sequence[Mapping[str, object]] = (),
+) -> ProvenanceRecord:
+    """Identify the operation by its parent data and activity, then record it.
+
+    For operations whose analysis identity is the fingerprint of the activity
+    itself; callers with another identity set ``analysis_id`` themselves.
+    """
+    operation.analysis_id = analysis_fingerprint(
+        operation.parent.metadata_fingerprint, activity
+    )
+    return build_fit_provenance(operation, activity, warnings=warnings)
 
 
 @contextmanager

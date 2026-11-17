@@ -1,6 +1,7 @@
 """Owned results for HRF selection and independent evaluation."""
 
 from dataclasses import dataclass
+from hashlib import sha256
 import numpy as np
 import pandas as pd
 
@@ -15,6 +16,12 @@ from boldtailor.hrf_library import PARAMETER_NAMES, HrfLibrary
 from boldtailor.model import TaskModel
 from boldtailor.provenance import ProvenanceRecord
 from boldtailor.reml import RemlFit, RemlSelection
+
+
+def hrf_assignment_fingerprint(hrf_indices) -> str:
+    """Digest of an HRF assignment, shared by everything that records or checks one."""
+    ids = np.ascontiguousarray(hrf_indices, dtype="<i8")
+    return sha256(ids.tobytes()).hexdigest()
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
@@ -136,8 +143,6 @@ class HrfEvaluationResult:
 
 def validate_selection(data, selection, signature):
     """Validate an HrfSelectionResult against data, library, and signature."""
-    from hashlib import sha256
-
     if not isinstance(selection, HrfSelectionResult):
         raise ValueError("selection must be an HrfSelectionResult")
     if signature != selection.feature_signature:
@@ -146,7 +151,7 @@ def validate_selection(data, selection, signature):
     if ids.shape != (data.n_features,):
         raise ValueError("selection feature count must match data")
     activity = selection.provenance.activity_records()[-1]
-    assignment = sha256(ids.astype("<i8").tobytes()).hexdigest()
+    assignment = hrf_assignment_fingerprint(ids)
     if activity.get("library_fingerprint") != selection.library.fingerprint:
         raise ValueError("selection library fingerprint does not match identity")
     if np.any(ids < -1) or np.any(ids >= len(selection.library.candidates)):

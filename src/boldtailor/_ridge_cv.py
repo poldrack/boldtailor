@@ -7,7 +7,7 @@ import json
 
 import numpy as np
 
-from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
+from boldtailor._fit_lifecycle import finish_fit, fit_operation
 from boldtailor._run_design import prepare_runs
 from boldtailor.data import subset_runs
 from boldtailor._single_trial_design import compile_trial_run
@@ -17,9 +17,9 @@ from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_options import resolve_reml_options
 from boldtailor.model import TaskModel
 from boldtailor.data import run_labels_for
+from boldtailor.hrf_results import hrf_assignment_fingerprint
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.provenance import (
-    analysis_fingerprint,
     identity_activity,
 )
 from boldtailor.ridge_results import CandidateScores
@@ -226,9 +226,7 @@ def _activity(scoring, design, folds, ids, encoding_mode):
         predictor_names=list(design.predictor_names),
         predictor_fingerprint=_fingerprint(arrays, design.predictor_names[1:]),
         design_fingerprint=_design_fingerprint(scoring.tables),
-        hrf_assignment_fingerprint=sha256(
-            np.asarray(ids, dtype="<i8").tobytes()
-        ).hexdigest(),
+        hrf_assignment_fingerprint=hrf_assignment_fingerprint(ids),
         feature_signature=scoring.signature,
         library_fingerprint=None if library is None else library.fingerprint,
         hrf_model="spm" if library is None else "inner_training_selected",
@@ -298,9 +296,6 @@ def _scores(operation, data, scoring, designs, encoding_mode):
     losses, totals = np.array([f[0] for f in folds]), np.array([f[1] for f in folds])
     ids = np.array([f[2] for f in folds])
     activity = _activity(scoring, designs[0], [f[3] for f in folds], ids, encoding_mode)
-    operation.analysis_id = analysis_fingerprint(
-        data.provenance.metadata_fingerprint, activity
-    )
     return CandidateScores(
         regularization=scoring.regularizer.name,
         grid=scoring.grid,
@@ -310,5 +305,5 @@ def _scores(operation, data, scoring, designs, encoding_mode):
         fold_hrf_indices=ids,
         trial_masks=designs[0].trial_masks,
         run_labels=scoring.labels,
-        provenance=build_fit_provenance(operation, activity),
+        provenance=finish_fit(operation, activity),
     )

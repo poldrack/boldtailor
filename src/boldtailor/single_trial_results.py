@@ -14,6 +14,7 @@ from boldtailor._arrays import (
     readonly_array,
     set_fields_in_place,
 )
+from boldtailor._single_trial_fit import r_squared
 from boldtailor.provenance import ProvenanceRecord
 
 
@@ -107,3 +108,40 @@ class SingleTrialResult:
     @property
     def diagnostics(self):
         return deepcopy(self._diagnostics)
+
+
+def assemble_trial_result(
+    fits,
+    *,
+    trial_table,
+    design,
+    ridge_alpha,
+    ridge_fraction,
+    diagnostics,
+    provenance,
+) -> SingleTrialResult:
+    """Pool per-run fits; R² across runs uses summed sums of squares.
+
+    Each fit supplies ``betas``, ``full_sse``, ``nuisance_sse``, ``total_ss``
+    and, for fractional ridge, the implied ``ridge_alphas``.
+    """
+    total = sum(f.total_ss for f in fits)
+    full = r_squared(sum(f.full_sse for f in fits), total)
+    nuisance = r_squared(sum(f.nuisance_sse for f in fits), total)
+    return SingleTrialResult(
+        run_betas=tuple(f.betas for f in fits),
+        _trial_table=trial_table,
+        design=design,
+        run_full_r2=tuple(r_squared(f.full_sse, f.total_ss) for f in fits),
+        run_nuisance_r2=tuple(r_squared(f.nuisance_sse, f.total_ss) for f in fits),
+        full_r2=full,
+        nuisance_r2=nuisance,
+        delta_r2=full - nuisance,
+        _diagnostics=tuple(diagnostics),
+        ridge_alpha=ridge_alpha,
+        provenance=provenance,
+        ridge_fraction=ridge_fraction,
+        run_ridge_alphas=(
+            None if ridge_fraction is None else tuple(f.ridge_alphas for f in fits)
+        ),
+    )

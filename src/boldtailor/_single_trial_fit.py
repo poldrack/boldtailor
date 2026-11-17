@@ -15,6 +15,7 @@ class TrialRunFit:
     nuisance_sse: np.ndarray
     total_ss: np.ndarray
     diagnostics: dict
+    ridge_alphas: np.ndarray | None = None
 
 
 @dataclass(frozen=True, eq=False)

@@ -285,7 +285,7 @@ def test_fit_run_returns_a_named_group_run_fit(selected_fixture):
         "nuisance_sse",
         "total_ss",
         "diagnostics",
-        "alphas",
+        "ridge_alphas",
     ]
     assert fit.betas.shape == (len(data.events[0]), data.n_features)
     assert {d["run_index"] for d in fit.diagnostics} == {0}

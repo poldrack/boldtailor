@@ -6,7 +6,7 @@ from hashlib import sha256
 import numpy as np
 
 from boldtailor._deprecation import deprecated
-from boldtailor._fit_lifecycle import build_fit_provenance, fit_operation
+from boldtailor._fit_lifecycle import finish_fit, fit_operation
 from boldtailor._hrf_cv import (
     signal_statistics,
     loro_scores,
@@ -24,11 +24,15 @@ from boldtailor.data import (
     subset_runs,  # documented as importable here
 )
 from boldtailor.hrf_library import HrfLibrary, default_hrf_library
-from boldtailor.hrf_results import HrfSelectionResult, HrfEvaluationResult
+from boldtailor.hrf_results import (
+    HrfEvaluationResult,
+    HrfSelectionResult,
+    hrf_assignment_fingerprint,
+)
 from boldtailor.hrf_options import RemlHrfOptions, resolve_reml_options
 from boldtailor._hrf_reml import select_reml_hrfs
 from boldtailor.model import TaskModel
-from boldtailor.provenance import analysis_fingerprint, identity_activity
+from boldtailor.provenance import identity_activity
 
 
 def _validate(library, signature, batch, task_model):
@@ -108,7 +112,7 @@ def _selection_values(
             for i, label in enumerate(labels)
         ],
         selection_statistic=True,
-        hrf_assignment_fingerprint=sha256(indices.astype("<i8").tobytes()).hexdigest(),
+        hrf_assignment_fingerprint=hrf_assignment_fingerprint(indices),
     )
     return (
         dict(
@@ -170,10 +174,7 @@ def select_hrfs(
                 runs,
                 task_model,
             )
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         return HrfSelectionResult(**values, provenance=provenance)
 
 
@@ -272,10 +273,7 @@ def evaluate_hrf_split(
             split,
             candidate_batch_size,
         )
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         return HrfEvaluationResult(**values, provenance=provenance)
 
 
@@ -293,10 +291,7 @@ def _train_selection(data, runs, library, labels, signature, task_model, split, 
             tuple(runs[i] for i in (*train, *test)),
             task_model,
         )
-        operation.analysis_id = analysis_fingerprint(
-            data.provenance.metadata_fingerprint, activity
-        )
-        provenance = build_fit_provenance(operation, activity)
+        provenance = finish_fit(operation, activity)
         return HrfSelectionResult(**values, provenance=provenance)
 
 
