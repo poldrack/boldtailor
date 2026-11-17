@@ -17,6 +17,8 @@ logs
 experiments/hrf_simulations/*.h5
 experiments/hrf_simulations/*.h5.*
 experiments/hrf_simulations/reports
+experiments/hrf_estimation/references/
+experiments/hrf_simulations/claude-skills/
 
 # remove uv.lock since this conflicts across systems
 uv.lock
