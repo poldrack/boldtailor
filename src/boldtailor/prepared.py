@@ -20,7 +20,7 @@ from boldtailor.data import (
     _validate_run_count,
     _validate_feature_counts,
 )
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 from boldtailor.logging import (
     _emit_record,
     _make_event,

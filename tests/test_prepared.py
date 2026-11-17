@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.provenance import ProvenanceRecord, RunSources
 

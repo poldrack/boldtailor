@@ -315,7 +315,7 @@ def record_from_fit(complete_sources):
 @pytest.mark.integration
 def test_bids_activity_has_command_and_timestamps(record_from_fit):
     """Verify BIDS activity has command and timestamps."""
-    from boldtailor._software import software_environment
+    from boldtailor.provenance import software_environment
 
     projected = project_bids_provenance(record_from_fit)
     activity = _draft(projected, "act")["Activities"][-1]

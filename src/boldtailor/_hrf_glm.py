@@ -10,7 +10,7 @@ from boldtailor._fit_diagnostics import (
     delta_r2_identity,
     nested_ols_delta,
 )
-from boldtailor._hrf_assignment import validate_selection
+from boldtailor.hrf_results import validate_selection
 from boldtailor._hrf_design import HRF_NORMALIZATION, MIN_ONSET, OVERSAMPLING
 from boldtailor._hrf_glm_design import (
     compile_group_designs,

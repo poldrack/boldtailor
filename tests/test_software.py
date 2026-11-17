@@ -9,12 +9,12 @@ import pytest
 
 def test_source_checkout_version_is_explicitly_unknown(monkeypatch):
     """Verify source checkout version is explicitly unknown."""
-    software = importlib.import_module("boldtailor._software")
+    software = importlib.import_module("boldtailor.provenance")
 
     def missing(name):
         raise metadata.PackageNotFoundError(name)
 
-    monkeypatch.setattr(software.metadata, "version", missing)
+    monkeypatch.setattr(metadata, "version", missing)
     assert software.package_version("boldtailor") == "unknown"
     with pytest.raises(metadata.PackageNotFoundError):
         software.package_version("numpy")
@@ -71,7 +71,7 @@ def test_software_environment_lists_interpreter_platform_and_packages():
     import pandas
     import scipy
 
-    from boldtailor._software import software_environment
+    from boldtailor.provenance import software_environment
 
     env = software_environment()
     assert env["python"] == platform.python_version()

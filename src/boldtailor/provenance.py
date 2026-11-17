@@ -651,3 +651,27 @@ def _source_complete(source: SourceRef) -> bool:
 
 def _extra_fields(data: Mapping[str, object], known: set[str]) -> Mapping[str, object]:
     return {key: value for key, value in data.items() if key not in known}
+
+
+def package_version(name: str) -> str:
+    """Return installed distribution version, or 'unknown' for boldtailor checkouts."""
+    from importlib import metadata
+
+    try:
+        return metadata.version(name)
+    except metadata.PackageNotFoundError:
+        if name != "boldtailor":
+            raise
+        return "unknown"
+
+
+def software_environment() -> dict[str, str]:
+    """Interpreter, platform, and package versions, resolved at call time."""
+    import platform
+
+    packages = ("boldtailor", "numpy", "scipy", "pandas", "nilearn")
+    return {
+        "python": platform.python_version(),
+        "platform": platform.platform(),
+        **{name: package_version(name) for name in packages},
+    }

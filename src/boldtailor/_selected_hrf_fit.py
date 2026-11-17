@@ -8,7 +8,7 @@ import json
 import numpy as np
 
 from boldtailor._hrf_cv import prepare_runs
-from boldtailor._hrf_assignment import validate_selection
+from boldtailor.hrf_results import validate_selection
 from boldtailor._hrf_design import HRF_NORMALIZATION, OVERSAMPLING
 from boldtailor._single_trial_design import (
     _validate_events,

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 from boldtailor.data import from_arrays, run_labels_for
 
 

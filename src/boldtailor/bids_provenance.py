@@ -7,7 +7,7 @@ import re
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
-from boldtailor._software import package_version
+from boldtailor.provenance import package_version
 from boldtailor.provenance import ProvenanceRecord, validate_relative_path
 
 STABLE_BIDS_VERSION = "1.11.1"

@@ -12,7 +12,7 @@ from boldtailor.logging import (
     bind_context,
     emit_event,
 )
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 from boldtailor.provenance import ProvenanceRecord, extend_provenance
 
 

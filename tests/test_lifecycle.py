@@ -15,7 +15,7 @@ from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 
 ENTRY_POINTS = [
     "fit",

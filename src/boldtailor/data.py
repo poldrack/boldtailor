@@ -12,7 +12,7 @@ import pandas as pd
 
 from boldtailor._arrays import readonly_array
 from boldtailor._scalars import is_real
-from boldtailor._software import software_environment
+from boldtailor.provenance import software_environment
 from boldtailor.logging import (
     _emit_record,
     _make_event,

@@ -132,3 +132,25 @@ class HrfEvaluationResult:
         amplitudes = self.training_amplitudes
         if amplitudes.ndim != 2 or amplitudes.shape[0] != len(self.amplitude_names):
             raise ValueError("training_amplitudes needs one row per amplitude name")
+
+
+def validate_selection(data, selection, signature):
+    """Validate an HrfSelectionResult against data, library, and signature."""
+    from hashlib import sha256
+
+    if not isinstance(selection, HrfSelectionResult):
+        raise ValueError("selection must be an HrfSelectionResult")
+    if signature != selection.feature_signature:
+        raise ValueError("feature_signature must match selection")
+    ids = selection.hrf_indices
+    if ids.shape != (data.n_features,):
+        raise ValueError("selection feature count must match data")
+    activity = selection.provenance.activity_records()[-1]
+    assignment = sha256(ids.astype("<i8").tobytes()).hexdigest()
+    if activity.get("library_fingerprint") != selection.library.fingerprint:
+        raise ValueError("selection library fingerprint does not match identity")
+    if np.any(ids < -1) or np.any(ids >= len(selection.library.candidates)):
+        raise ValueError("selection contains invalid HRF IDs")
+    if activity.get("hrf_assignment_fingerprint") != assignment:
+        raise ValueError("selection HRF assignment identity does not match provenance")
+    return assignment
