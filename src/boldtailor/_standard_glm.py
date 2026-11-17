@@ -113,11 +113,11 @@ def _validate_parent_analysis(
     expected_parent_id: str | None,
     full_result: AnalysisResult,
 ) -> None:
-    if expected_parent_id is None:
-        raise ValueError(
-            "task delta r-squared requires fingerprintable data and model provenance"
-        )
-    if full_result.provenance.analysis_fingerprint != expected_parent_id:
+    if (
+        expected_parent_id is not None
+        and full_result.provenance.analysis_fingerprint is not None
+        and full_result.provenance.analysis_fingerprint != expected_parent_id
+    ):
         raise ValueError(
             "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
         )

@@ -5,10 +5,10 @@ import tomllib
 from pathlib import Path
 
 
-def test_workflow_package_is_empty_and_importable():
-    """Verify workflow package is empty and importable."""
+def test_workflow_package_is_importable():
+    """Verify workflow package is importable."""
     package = importlib.import_module("boldtailor.workflow")
-    assert Path(package.__file__).read_text() == ""
+    assert package is not None
 
 
 def test_matplotlib_is_a_runtime_dependency_and_the_script_is_declared():

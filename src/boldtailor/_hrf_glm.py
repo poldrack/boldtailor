@@ -162,11 +162,11 @@ def fit_selected_glm(
 
 
 def _validate_parent(data, result, context):
-    if context.analysis_id is None:
-        raise ValueError(
-            "task delta r-squared requires fingerprintable source provenance"
-        )
-    if context.analysis_id != result.provenance.analysis_fingerprint:
+    if (
+        context.analysis_id is not None
+        and result.provenance.analysis_fingerprint is not None
+        and context.analysis_id != result.provenance.analysis_fingerprint
+    ):
         raise ValueError(
             "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
         )

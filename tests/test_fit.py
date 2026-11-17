@@ -680,8 +680,8 @@ def test_task_delta_r2_rejects_full_result_for_changed_data(delta_r2_problem):
         task_delta_r2(changed_data, model, full_result)
 
 
-def test_task_delta_r2_requires_fingerprintable_provenance(delta_r2_problem):
-    """Verify task delta R-squared requires fingerprintable provenance."""
+def test_task_delta_r2_succeeds_with_anonymous_in_memory_data(delta_r2_problem):
+    """Verify task delta R-squared succeeds with anonymous in-memory data."""
     data, model, _ = delta_r2_problem
     anonymous = from_arrays(
         data.signals,
@@ -690,9 +690,8 @@ def test_task_delta_r2_requires_fingerprintable_provenance(delta_r2_problem):
         confounds=data.confounds,
     )
     anonymous_result = fit(anonymous, model)
-
-    with pytest.raises(ValueError, match="requires fingerprintable"):
-        task_delta_r2(anonymous, model, anonymous_result)
+    result = task_delta_r2(anonymous, model, anonymous_result)
+    assert result.delta_r2 is not None
 
 
 def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):

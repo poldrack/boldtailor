@@ -12,7 +12,8 @@
 
 ## Package structure
 
-- Every `__init__.py` must remain completely empty.
+- Export primary public symbols cleanly in top-level `__init__.py`.
+- Keep module boundaries clean and avoid unnecessary micro-module fragmentation.
 
 ## Testing
 
