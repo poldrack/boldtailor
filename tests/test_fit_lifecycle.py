@@ -196,3 +196,54 @@ def test_finish_fit_identifies_the_operation_by_its_activity(parent_record):
     recorded = provenance.to_dict()["activities"][-1]
     assert recorded["alpha"] == 1.0 and "software" in recorded
     assert "software" not in activity
+
+
+def test_normalization_logs_the_same_completion_event_it_records(caplog):
+    """Input normalization logs start and one completion, shared with provenance."""
+    from boldtailor._fit_lifecycle import normalization
+
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    with normalization("data") as operation:
+        operation.data_id = "d" * 64
+        provenance = operation.provenance((), {"name": "normalize"})
+    events = records(caplog)
+    assert [e["event"] for e in events] == [
+        "normalization_started",
+        "normalization_completed",
+    ]
+    assert {e["stage"] for e in events} == {"data"}
+    assert {e["execution_id"] for e in events} == {provenance.execution_id}
+    assert "data_id" not in events[0] and events[1]["data_id"] == "d" * 64
+    assert dict(provenance.events[-1]) == events[1]
+    assert [dict(e)["event"] for e in provenance.events] == [e["event"] for e in events]
+    assert provenance.to_dict()["activities"] == [{"name": "normalize"}]
+
+
+def test_normalization_failure_logs_failed_with_the_known_data_id(caplog):
+    """A failure after the sources are known still names the data."""
+    from boldtailor._fit_lifecycle import normalization
+
+    caplog.set_level(logging.INFO, logger="boldtailor")
+    with pytest.raises(ValueError, match="bad input"):
+        with normalization("prepared_design") as operation:
+            operation.data_id = "e" * 64
+            raise ValueError("bad input")
+    events = records(caplog)
+    assert [e["event"] for e in events] == [
+        "normalization_started",
+        "normalization_failed",
+    ]
+    assert events[1]["level"] == "ERROR" and events[1]["data_id"] == "e" * 64
+    assert events[1]["stage"] == "prepared_design"
+
+
+def test_latest_activity_is_an_owned_copy_of_the_last_activity(parent_record):
+    """The activity that describes a record is named, not indexed as [-1]."""
+    assert parent_record.latest_activity == {}
+    record = parent_record.replace(
+        activities=({"name": "normalize"}, {"name": "fit", "model": {"k": [1, 2]}})
+    )
+    latest = record.latest_activity
+    assert latest == {"name": "fit", "model": {"k": [1, 2]}}
+    latest["model"]["k"].append(3)
+    assert record.latest_activity["model"]["k"] == [1, 2]
