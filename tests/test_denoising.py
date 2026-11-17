@@ -903,7 +903,8 @@ def test_denoising_assembly_accepts_finished_provenance(fixture, result):
     labels = run_labels_for(data, None)
     pool = denoising._pool(data, labels, settings)
     selected = denoising._count_selection(data, labels, settings, pool)
-    prefixes = tuple(c.prefix(selected.gate.n_components) for c in pool.components)
+    count, gate = selected
+    prefixes = tuple(c.prefix(gate.n_components) for c in pool.components)
     before = result.provenance.to_dict()
     actual = denoising._assemble(
         labels,
@@ -965,8 +966,8 @@ def test_selection_hashes_each_run_once(fixture, monkeypatch):
     ]
 
 
-def test_selection_stages_are_named_records_not_positional_tuples(fixture):
-    """Settings, the pool stage and the count stage expose their parts by name."""
+def test_selection_settings_and_pool_stage_are_named_records(fixture):
+    """Settings and the pool stage expose their parts by name; the count stage is a pair."""
     from boldtailor import denoising
     from boldtailor.data import run_labels_for
 
@@ -989,9 +990,9 @@ def test_selection_stages_are_named_records_not_positional_tuples(fixture):
     pool = denoising._pool(fixture.data, labels, settings)
     assert pool.masks.pool_size == pool.components[0].pool_size
     assert pool.selection.hrf_indices.shape == pool.statistic.shape
-    selected = denoising._count_selection(fixture.data, labels, settings, pool)
-    assert selected.gate.noise_model == "ols" and selected.gate.alpha == 0.01
-    assert selected.gate.pcstop_count == selected.count.n_components
+    count, gate = denoising._count_selection(fixture.data, labels, settings, pool)
+    assert gate.noise_model == "ols" and gate.alpha == 0.01
+    assert gate.pcstop_count == count.n_components
 
 
 @pytest.mark.parametrize(

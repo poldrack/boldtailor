@@ -9,10 +9,12 @@ import pytest
 
 from boldtailor.data import from_arrays
 from boldtailor.fit import fit, task_delta_r2
+from boldtailor.fractional_ridge import score_fraction_candidates
 from boldtailor.hrf_selection import evaluate_hrf_split, select_hrfs
 from boldtailor.logging import emit_event
 from boldtailor.model import ModelSpec
 from boldtailor.prepared import PreparedDesignAnalysis
+from boldtailor.ridge_selection import score_ridge_candidates
 from boldtailor.prepared_fit import fit_prepared, task_delta_r2_prepared
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.provenance import software_environment
@@ -28,6 +30,8 @@ ENTRY_POINTS = [
     "selected_glm_task_delta_r2",
     "hrf_selection",
     "hrf_independent_evaluation",
+    "encoding_guided_ridge_cv",
+    "encoding_guided_fractional_ridge_cv",
 ]
 # Entry points whose lifecycle events are not named after the entry point.
 EVENT_PREFIX = {
@@ -203,9 +207,26 @@ def _selected_glm_calls(selected_glm_problem):
     }
 
 
-@pytest.fixture
-def entry_calls(glm_problem, selected_fixture, prepared_problem, selected_glm_problem):
+def _ridge_scoring_calls(ridge_problem):
+    data, predictors, _ = ridge_problem
     return {
+        "encoding_guided_ridge_cv": (
+            lambda: score_ridge_candidates(data, predictors, alphas=[0.0, 1.0]),
+            lambda: score_ridge_candidates(data, predictors, alphas=[-1.0]),
+        ),
+        "encoding_guided_fractional_ridge_cv": (
+            lambda: score_fraction_candidates(data, predictors, fractions=[0.5, 1.0]),
+            lambda: score_fraction_candidates(data, predictors, fractions=[2.0]),
+        ),
+    }
+
+
+@pytest.fixture
+def entry_calls(
+    glm_problem, selected_fixture, prepared_problem, selected_glm_problem, ridge_problem
+):
+    return {
+        **_ridge_scoring_calls(ridge_problem),
         **_glm_calls(glm_problem),
         **_single_trial_calls(selected_fixture),
         **_selection_calls(selected_fixture),
