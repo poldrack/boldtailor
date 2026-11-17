@@ -123,7 +123,6 @@ The latter records excluded-event counts, onset cutoffs, design ranks, and
 residual degrees of freedom. Additional members are `hrf_indices`,
 `hrf_selection`, and `selection_provenance`. Designs are returned as copies. `materialize_group_designs()` returns all
 fitted designs as a mapping from `(run, hrf_id)` to independent DataFrames.
-`group_design()` remains a compatibility alias that also reconstructs designs.
 Undefined HRF assignments produce NaN contrast/R² values.
 
 `TaskDeltaR2Result` provides `full_r2`, `nuisance_r2`, `raw_delta_r2`,
@@ -166,9 +165,7 @@ These return the same result types as their event-based counterparts. Neither
 function adds regressors or transforms the design. The R² comparison requires
 a complete task/nuisance/intercept partition and complete source metadata. It
 reads the contrasts, noise model, and model metadata from `full_result`'s
-provenance, so `full_result` must come from `fit_prepared`. Passing
-`contrasts=`, `noise_model=`, or `model_metadata=` again is deprecated (a
-`DeprecationWarning`), and supplied values must match the stored model.
+provenance, so `full_result` must come from `fit_prepared`.
 
 ## Single-trial fits
 
@@ -183,8 +180,7 @@ fit_selected_hrfs(data, *, hrf_selection, ridge_alpha=0.0, run_labels=None,
 
 `fit_single_trials` accepts `"spm"` or an `HrfCandidate` as `hrf_model`, its
 fixed HRF. `fit_selected_hrfs` takes an `HrfSelectionResult` as
-`hrf_selection`, the same keyword `fit()` uses. The earlier keywords `hrf=` and
-`selection=` still work for one release with a `DeprecationWarning`. The ridge
+`hrf_selection`, the same keyword `fit()` uses. The ridge
 penalty must be finite and nonnegative. All supplied confounds and a run intercept are included.
 
 Both fitting functions return `SingleTrialResult`, which exposes:
@@ -205,8 +201,7 @@ one fitted design on request (`KeyError` for an unfitted pair). The selected
 container also exposes `design.hrf_indices`, `design.design_fingerprint`, and
 `design.selection_provenance`. `result.materialize_designs()` returns all fitted
 designs as owned read-only arrays keyed by `(run, hrf_id)`; shared designs use
-HRF ID 0. This explicitly allocates memory for every design. `design.matrix()`
-remains a compatibility alias for `design.rebuild_matrix()`.
+HRF ID 0. This explicitly allocates memory for every design.
 Matrices include trial columns followed by nuisance columns; a selected design's
 `rebuild_matrix()` returns an unlabelled read-only NumPy array rather than a DataFrame. See the
 [result migration guide](result-migration.md) for the previous access paths.
@@ -548,7 +543,6 @@ evaluate_hrf_split(data, *, library=None, train_runs, test_runs,
                    method="cv", reml_options=None)
 ```
 
-`select_hrf` is a deprecated alias of `select_hrfs` for one release.
 `candidate_batch_size` bounds memory in both functions and never changes the
 result.
 

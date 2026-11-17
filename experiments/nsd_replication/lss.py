@@ -33,7 +33,7 @@ def _selected_run(result, run, y):
     betas = np.full((k, len(ids)), np.nan)
     for hrf in np.unique(ids[ids >= 0]):
         cols = np.flatnonzero(ids == hrf)
-        matrix = result.design.matrix(run, int(hrf))
+        matrix = result.design.rebuild_matrix(run, int(hrf))
         betas[:, cols] = lss_run(matrix[:, :k], matrix[:, k:], y[:, cols])
     return betas
 

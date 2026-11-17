@@ -165,7 +165,7 @@ Start with [test_denoising.py](../tests/test_denoising.py),
 | [provenance](api-review/provenance.md), [_software](api-review/_software.md), [bids_provenance](api-review/bids_provenance.md) | `SourceRef`, `RunSources`, fingerprints and `extend_provenance`; `project_bids_provenance` produces in-memory metadata bytes |
 | [logging](api-review/logging.md), [_fit_lifecycle](api-review/_fit_lifecycle.md) | Context binding and start/completion/failure events around computation |
 | [publication](api-review/publication.md) | `Artifact` holds an output; `publish_artifact_set` takes the writer lock, stages outputs, and rolls back failures |
-| [_constants](api-review/_constants.md), [_deprecation](api-review/_deprecation.md) | Shared numerical defaults and old-keyword handling |
+| [_constants](api-review/_constants.md) | Shared numerical defaults |
 
 **Review questions.** Do fingerprints change for scientifically meaningful
 changes? Does a table accessor expose mutable internal state? Does an exception

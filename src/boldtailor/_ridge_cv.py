@@ -81,14 +81,6 @@ def run_tables(data):
     )
 
 
-def prepare_run_beta_path(
-    data, run_index, prepared, ids, label, *, regularizer=NORMALIZED_RIDGE
-):
-    """Prepare each selected HRF group once for this run and fold."""
-    tables = run_tables(data)[run_index]
-    return _beta_path(tables, run_index, prepared, ids, label, regularizer)
-
-
 def _beta_path(tables, r, prepared, ids, label, regularizer):
     events, times, confounds, y = tables
     groups = []

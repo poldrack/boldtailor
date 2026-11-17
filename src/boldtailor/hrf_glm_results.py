@@ -66,10 +66,6 @@ class HrfAnalysisResult(AnalysisAccessors):
             for key in self._group_design_provenance
         }
 
-    def group_design(self, run: int, hrf_id: int) -> pd.DataFrame:
-        """Compatibility alias for rebuild_group_design; performs reconstruction."""
-        return self.rebuild_group_design(run, hrf_id)
-
     @property
     def group_design_provenance(self) -> dict:
         return deepcopy(dict(self._group_design_provenance))

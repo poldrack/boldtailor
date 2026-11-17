@@ -4,7 +4,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from boldtailor._deprecation import UNSET, Unset, renamed_keyword
 from boldtailor._single_trial_design import compile_trial_run  # public re-export
 from boldtailor._single_trial_fit import (  # public re-exports
     project_trial_design,
@@ -24,9 +23,8 @@ def fit_single_trials(
     *,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
-    hrf_model: str | HrfCandidate | Unset = UNSET,
+    hrf_model: str | HrfCandidate = "spm",
     ridge_fraction: float | np.ndarray | None = None,
-    hrf: str | HrfCandidate | Unset = UNSET,
 ) -> SingleTrialResult:
     """Estimate one native-unit beta per event row, independently in each run.
 
@@ -41,17 +39,14 @@ def fit_single_trials(
     cannot be combined with ridge_fraction. Fractional results include the
     selected fractions and implied alpha for each run and feature.
 
-    ``hrf_model`` defaults to 'spm', or can be one identified ``HrfCandidate`` used everywhere;
-    the old keyword ``hrf`` is a deprecated alias.
+    ``hrf_model`` defaults to 'spm', or can be one identified ``HrfCandidate``
+    used everywhere.
     """
-    resolved_hrf = renamed_keyword(
-        "fit_single_trials", "hrf", "hrf_model", hrf, hrf_model, default="spm"
-    )
     return fit_shared_hrf_trials(
         data,
         ridge_alpha=ridge_alpha,
         run_labels=run_labels,
-        hrf_model=resolved_hrf,
+        hrf_model=hrf_model,
         ridge_fraction=ridge_fraction,
     )
 
@@ -59,12 +54,11 @@ def fit_single_trials(
 def fit_selected_hrfs(
     data: AnalysisData,
     *,
-    hrf_selection: HrfSelectionResult | Unset = UNSET,
+    hrf_selection: HrfSelectionResult,
     ridge_alpha: float = 0.0,
     run_labels: Sequence[str] | None = None,
     feature_signature: str | None = None,
     ridge_fraction: float | np.ndarray | None = None,
-    selection: HrfSelectionResult | Unset = UNSET,
 ) -> SingleTrialResult:
     """Fit unrestricted trial betas using each feature's previously selected HRF.
 
@@ -73,14 +67,10 @@ def fit_selected_hrfs(
     OLS, fixed-alpha ridge, and fractional ridge use the identical selection
     and peak-normalized HRFs. ridge_fraction follows fit_single_trials semantics;
     its implied alpha is computed separately for each run and feature.
-    The old keyword ``selection`` is a deprecated alias of ``hrf_selection``.
     """
-    resolved_selection = renamed_keyword(
-        "fit_selected_hrfs", "selection", "hrf_selection", selection, hrf_selection
-    )
     return fit_selected_hrf_trials(
         data,
-        selection=resolved_selection,
+        selection=hrf_selection,
         ridge_alpha=ridge_alpha,
         run_labels=run_labels,
         feature_signature=feature_signature,

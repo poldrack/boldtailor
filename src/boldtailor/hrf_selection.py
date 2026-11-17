@@ -5,7 +5,6 @@ from hashlib import sha256
 
 import numpy as np
 
-from boldtailor._deprecation import deprecated
 from boldtailor._fit_lifecycle import finish_fit, fit_operation
 from boldtailor._hrf_cv import (
     signal_statistics,
@@ -176,12 +175,6 @@ def select_hrfs(
             )
         provenance = finish_fit(operation, activity)
         return HrfSelectionResult(**values, provenance=provenance)
-
-
-def select_hrf(data: AnalysisData, **options) -> HrfSelectionResult:
-    """Deprecated alias of :func:`select_hrfs`, kept for one release."""
-    deprecated("select_hrf is deprecated; use select_hrfs", stacklevel=3)
-    return select_hrfs(data, **options)
 
 
 def _fold_indices(values, n_runs, minimum, name):

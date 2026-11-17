@@ -16,7 +16,6 @@ from boldtailor._design_inputs import (
     validate_events,
     validate_onsets,
 )
-from boldtailor._single_trial_fit import project_trial_design
 from boldtailor._task_design import expand_events, task_columns
 from boldtailor.model import TaskModel
 
@@ -76,7 +75,7 @@ class RunDesign:
         self.task_model, self.fingerprint = task_model, fingerprint
         self.q = _sealed(column_basis(nuisance))
         self.k = len(task_model.regressor_names)
-        self._eligibility, self._trial_eligibility = {}, {}
+        self._eligibility = {}
         self._blocks, self._trial_matrices = {}, {}
 
     def task_design(self, candidate_id):
@@ -139,16 +138,6 @@ class RunDesign:
         values = x.to_numpy()
         values.setflags(write=False)
         return values
-
-    def trial_eligible(self, candidate_id):
-        """Estimability of the single-trial design; not used by selection."""
-        if candidate_id not in self._trial_eligibility:
-            try:
-                project_trial_design(self.trial_matrix(candidate_id), self.nuisance)
-                self._trial_eligibility[candidate_id] = (True, "")
-            except ValueError as error:
-                self._trial_eligibility[candidate_id] = (False, str(error))
-        return self._trial_eligibility[candidate_id]
 
 
 @lru_cache(maxsize=32)

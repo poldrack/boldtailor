@@ -84,7 +84,7 @@ implementation details. Repository-specific rules are in [AGENTS.md](../AGENTS.m
 | Scalar REML of one random-effect variance, AR(1) whitening and noise autocorrelation | `reml`, `ar1`, `_ar1_moments`, `_numerics` |
 | Task-guided (GLMdenoise-style) denoising | `denoising`, `denoising_results`, `_mixture_threshold` |
 | Records, log events, and file publication | `provenance`, `logging`, `bids_provenance`, `publication`, `_software` |
-| Shared constants and deprecation shims | `_constants`, `_deprecation` |
+| Shared constants | `_constants` |
 | CIFTI scalar I/O, descriptive diagnostics, HRF agreement, process batches | `cifti`, `diagnostics`, `reliability`, `parallel` |
 | Session workflow and `boldtailor run` | `workflow` (`settings`, `inputs`, `analysis`, `beta_series`, `run`, `outputs`, `export_cifti`, `figures`, `tables`, `manifest`, `artifacts`, `files`, `summaries`, `plots`, `surfaces`, `report`), `cli` |
 | Notebook-only BIDS workflow helpers | `examples/bids_workflow` |

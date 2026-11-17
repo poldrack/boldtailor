@@ -370,7 +370,7 @@ original trial IDs and excluded rows. `desc-RidgeTuning_plot.png` saves the
 descriptive score curves. The complete HRF library is saved with the outputs.
 In Python,
 candidate scores expose `grid` and `regularization`; beta results expose
-designs through `design.matrices` (canonical) or `design.matrix(run, hrf)`
+designs through `design.matrices` (canonical) or `design.rebuild_matrix(run, hrf)`
 (selected HRFs). Saved artifact keys remain unchanged; see
 the [result migration guide](../../docs/result-migration.md).
 

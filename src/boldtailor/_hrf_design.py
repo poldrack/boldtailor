@@ -10,7 +10,6 @@ presentation in signal units.
 import hashlib
 from functools import lru_cache
 import numpy as np
-from nilearn.glm.first_level import compute_regressor
 
 # _sample_condition is private to Nilearn. We rely on it returning the
 # oversampled boxcar and its time grid for an event table (onset, duration,
@@ -19,7 +18,6 @@ from nilearn.glm.first_level import compute_regressor
 # against the next release (see docs/development.md).
 from nilearn.glm.first_level.hemodynamic_models import _sample_condition, glover_hrf
 
-from boldtailor._arrays import readonly_array
 from boldtailor._constants import MIN_ONSET, OVERSAMPLING
 from boldtailor._design_inputs import validate_events, validate_onsets
 from boldtailor.hrf_library import CANONICAL_PARAMETERS, HrfCandidate, peak_normalized
@@ -141,29 +139,6 @@ def scale_event_amplitudes(events, kernel_fn, frame_times, oversampling, min_ons
     )
     modulation = events["modulation"] if "modulation" in events else 1.0
     return events.assign(modulation=modulation * scales)
-
-
-def convolve_events(onsets, durations, times, candidate, name="stimulus"):
-    validate_onsets(onsets, times, f"{name}: onset")
-    kernel_fn = hrf_model(candidate)
-    scales = event_response_scales(kernel_fn, onsets, durations, times)
-    column, _ = compute_regressor(
-        np.array([onsets, durations, scales]),
-        kernel_fn,
-        times,
-        con_id=name,
-        oversampling=OVERSAMPLING,
-    )
-    if not np.isfinite(column).all() or not np.any(column):
-        raise ValueError(f"{name}: no supported sampled response")
-    return column[:, 0]
-
-
-def stimulus_regressor(events, frame_times, candidate):
-    """Convolve unit-amplitude presentations on the actual run sampling grid."""
-    times = np.asarray(frame_times, dtype=float)
-    validate_events(events, times, "stimulus")
-    return convolve_events(events.onset, events.duration, times, candidate)
 
 
 @lru_cache(maxsize=64)

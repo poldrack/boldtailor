@@ -348,11 +348,6 @@ def criterion(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
     return pooled_criterion(np.asarray(ratios, dtype=float), pool_terms(terms))
 
 
-def criterion_slope(ratios, terms: Sequence[RemlTerms]) -> np.ndarray:
-    """Derivative of ``criterion`` with respect to log(lambda)."""
-    return pooled_slope(np.asarray(ratios, dtype=float), pool_terms(terms))
-
-
 # ---------------------------------------------------------------- search
 
 
@@ -396,11 +391,6 @@ def _search_grid(singular2, size):
     high = np.log(_RELATIVE_SPAN / singular2.min())
     step = 2.0 * np.log(_RELATIVE_SPAN) / (size - 1)
     return np.linspace(low, high, max(size, int(np.ceil((high - low) / step)) + 1))
-
-
-def _log_grid(terms: Sequence[RemlTerms], size: int) -> np.ndarray:
-    """The search grid of the pooled singular values."""
-    return _search_grid(np.concatenate([t.singular2 for t in terms]), size)
 
 
 def _chunk_rows(pooled: PooledTerms) -> int:

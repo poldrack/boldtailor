@@ -66,7 +66,7 @@ def _expected_column(result, signals, feature):
     hrf = int(result.design.hrf_indices[feature])
     parts = []
     for run, y in enumerate(signals):
-        m = result.design.matrix(run, hrf)
+        m = result.design.rebuild_matrix(run, hrf)
         k = n_trials(result, run)
         parts.append(lss_run(m[:, :k], m[:, k:], np.asarray(y, float)[:, [feature]]))
     return np.vstack(parts)[:, 0]

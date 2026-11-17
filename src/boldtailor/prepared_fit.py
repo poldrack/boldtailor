@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 from boldtailor._conventional import fit_designs
-from boldtailor._deprecation import UNSET, Unset, deprecated
 from boldtailor._fit_diagnostics import (
     DIAGNOSTIC_NOISE_MODEL,
     NESTED_OLS_TOLERANCE,
@@ -74,19 +73,14 @@ def fit_prepared(
 def task_delta_r2_prepared(
     prepared: PreparedDesignAnalysis,
     full_result: AnalysisResult,
-    *,
-    contrasts: Mapping[str, ContrastValue] | Unset = UNSET,
-    noise_model: str | Unset = UNSET,
-    model_metadata: Mapping[str, object] | None | Unset = UNSET,
 ) -> TaskDeltaR2Result:
     """Nested-OLS task delta r-squared for a :func:`fit_prepared` result.
 
     The contrasts, noise model, and model metadata are read from
-    ``full_result``'s provenance. Passing them again is deprecated; supplied
-    values must match the stored model.
+    ``full_result``'s provenance.
     """
     with fit_operation("task_delta_r2_prepared", full_result.provenance) as operation:
-        fit_spec = _parent_fit_spec(full_result, contrasts, noise_model, model_metadata)
+        fit_spec = _stored_fit_spec(full_result)
         parent_fingerprint, comparison_fingerprint = _prepare_comparison_identity(
             prepared, fit_spec, prepared.provenance.data_fingerprint
         )
@@ -114,33 +108,6 @@ def task_delta_r2_prepared(
         )
         provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
-
-
-def _parent_fit_spec(
-    full_result: AnalysisResult,
-    contrasts: object,
-    noise_model: object,
-    model_metadata: object,
-) -> _PreparedFitSpec:
-    stored = _stored_fit_spec(full_result)
-    if all(value is UNSET for value in (contrasts, noise_model, model_metadata)):
-        return stored
-    deprecated(
-        "task_delta_r2_prepared(contrasts=, noise_model=, model_metadata=) is "
-        "deprecated; the model is read from full_result's provenance",
-        stacklevel=4,
-    )
-    supplied = _prepare_fit_spec(
-        stored.contrasts if contrasts is UNSET else contrasts,
-        "ar1" if noise_model is UNSET else noise_model,
-        None if model_metadata is UNSET else model_metadata,
-    )
-    if supplied != stored:
-        raise ValueError(
-            "supplied contrasts, noise_model, or model_metadata disagree with the "
-            "full result's provenance identity"
-        )
-    return stored
 
 
 def _stored_fit_spec(full_result: AnalysisResult) -> _PreparedFitSpec:

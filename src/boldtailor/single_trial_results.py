@@ -48,10 +48,6 @@ class SelectedTrialDesign:
         """Trial columns then nuisance columns; KeyError for unfitted pairs."""
         return readonly_array(self._rebuild(run, hrf_id))
 
-    def matrix(self, run: int, hrf_id: int) -> np.ndarray:
-        """Compatibility alias for rebuild_matrix; performs reconstruction."""
-        return self.rebuild_matrix(run, hrf_id)
-
 
 @dataclass(frozen=True, kw_only=True, eq=False)
 class SingleTrialResult:
