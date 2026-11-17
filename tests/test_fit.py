@@ -704,7 +704,10 @@ def test_task_delta_r2_records_parent_model_and_diagnostics(delta_r2_problem):
     assert set(activity) >= SHARED_DELTA_ACTIVITY_KEYS
     assert activity["undefined_features"] == 0
     assert activity["name"] == "task_delta_r2"
-    assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
+    assert (
+        activity["parent_analysis_fingerprint"]
+        == full_result.provenance.analysis_fingerprint
+    )
     assert activity["definition"] == "full_r2 - nuisance_r2"
     assert activity["clip_below_zero"] is True
     assert activity["diagnostic_noise_model"] == "ols"

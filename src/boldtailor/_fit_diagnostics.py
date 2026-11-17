@@ -42,13 +42,18 @@ def validate_result_dimensions(data, result, *, input_label):
 
 
 def delta_r2_activity(
-    *, name, parent_id, inferential_noise_model, nuisance_model, undefined_features
+    *,
+    name,
+    parent_fingerprint,
+    inferential_noise_model,
+    nuisance_model,
+    undefined_features,
 ):
     """Provenance activity shared by every task delta-R2 entry point."""
     return {
         "name": name,
         "stage": "fit",
-        "parent_analysis_id": parent_id,
+        "parent_analysis_fingerprint": parent_fingerprint,
         "definition": TASK_DELTA_R2_DEFINITION,
         "clip_below_zero": True,
         "clip_policy": "numerical_roundoff_guard",
@@ -63,11 +68,11 @@ def delta_r2_identity(*, name, inferential_noise_model, nuisance_model):
     """Hashed identity of a delta-R2 comparison (activity minus run-specific keys)."""
     activity = delta_r2_activity(
         name=name,
-        parent_id=None,
+        parent_fingerprint=None,
         inferential_noise_model=inferential_noise_model,
         nuisance_model=nuisance_model,
         undefined_features=0,
     )
-    for key in ("stage", "parent_analysis_id", "undefined_features"):
+    for key in ("stage", "parent_analysis_fingerprint", "undefined_features"):
         del activity[key]
     return activity

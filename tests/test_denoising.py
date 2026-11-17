@@ -862,7 +862,7 @@ def test_distinct_augmentations_of_sourced_data_have_distinct_analysis_ids(
         confounds=list(typed.confounds),
         sources=complete_sources(typed.n_runs),
     )
-    assert data.provenance.metadata_fingerprint is not None
+    assert data.provenance.data_fingerprint is not None
     # Different pool thresholds give different pools and components.
     first = run_selection(fixture, data, counts=(0, 1))
     second = run_selection(fixture, data, counts=(0, 1), pool_r2_threshold=0.01)

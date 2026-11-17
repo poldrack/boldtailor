@@ -24,7 +24,7 @@ from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
     freeze_mapping,
-    sources_fingerprint,
+    fingerprint_sources,
     thaw,
 )
 
@@ -142,7 +142,7 @@ def _prepare_analysis(
             sources=sources,
             include_confounds=False,
         )
-        operation.data_id = sources_fingerprint(prepared_sources)
+        operation.data_fingerprint = fingerprint_sources(prepared_sources)
         prepared_signals = tuple(
             prepare_signal(values, run) for run, values in enumerate(signal_runs)
         )

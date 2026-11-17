@@ -351,9 +351,7 @@ def test_prepared_design_normalization_records_lifecycle_and_provenance(
         "software": software_environment(),
     }
     assert first.provenance.execution_id != second.provenance.execution_id
-    assert (
-        first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
-    )
+    assert first.provenance.data_fingerprint == second.provenance.data_fingerprint
     assert first.design_fingerprint == second.design_fingerprint
 
 
@@ -418,7 +416,7 @@ def test_prepared_design_provenance_is_private_and_warns_for_anonymous_sources(
     assert "712345.5" not in canonical
     assert "9274.25" not in canonical
     assert str(private_inputs[3][0]) not in canonical
-    assert anonymous.provenance.metadata_fingerprint is None
+    assert anonymous.provenance.data_fingerprint is None
     assert any(
         warning["code"] == "provenance_quality"
         for warning in anonymous.provenance.warnings
@@ -461,10 +459,10 @@ def test_normalization_builds_one_record(
         expected = hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        assert result.provenance.metadata_fingerprint == expected
+        assert result.provenance.data_fingerprint == expected
         assert not result.provenance.warnings
     else:
-        assert result.provenance.metadata_fingerprint is None
+        assert result.provenance.data_fingerprint is None
         assert [w["code"] for w in result.provenance.warnings] == ["provenance_quality"]
 
 
@@ -491,8 +489,8 @@ def test_normalization_catches_final_failures_and_isolates_context(
         monkeypatch.setattr(module.PreparedDesignAnalysis, "__init__", reject)
     outer = dict(
         execution_id="outer",
-        data_id="outer-data",
-        analysis_id="outer-analysis",
+        data_fingerprint="outer-data",
+        analysis_fingerprint="outer-analysis",
         run_index=2,
     )
     with bind_context(**outer):
@@ -517,7 +515,10 @@ def test_normalization_catches_final_failures_and_isolates_context(
         f"normalization_{ending}",
     ]
     for record in records:
-        assert not {"data_id", "analysis_id", "run_index"} & record.keys()
+        assert (
+            not {"data_fingerprint", "analysis_fingerprint", "run_index"}
+            & record.keys()
+        )
         assert record["execution_id"] != "outer"
     if outcome != "success":
         assert records[-1]["error_code"] == (

@@ -496,18 +496,21 @@ def test_fit_prepared_logs_lifecycle_and_resets_context(
         record["execution_id"] == result.provenance.execution_id
         for record in fit_records
     )
-    assert prepared.provenance.metadata_fingerprint is not None
+    assert prepared.provenance.data_fingerprint is not None
     assert result.provenance.analysis_fingerprint is not None
     assert all(
-        record["data_id"] == prepared.provenance.metadata_fingerprint
+        record["data_fingerprint"] == prepared.provenance.data_fingerprint
         for record in fit_records
     )
-    assert "analysis_id" not in fit_records[0]
-    assert fit_records[-1]["analysis_id"] == result.provenance.analysis_fingerprint
+    assert "analysis_fingerprint" not in fit_records[0]
+    assert (
+        fit_records[-1]["analysis_fingerprint"]
+        == result.provenance.analysis_fingerprint
+    )
     assert records[-1]["event"] == "after_prepared_fit"
     assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
+    assert records[-1].get("data_fingerprint") is None
+    assert records[-1].get("analysis_fingerprint") is None
 
 
 def test_fit_prepared_preserves_privacy_in_failure_logs_and_provenance(
@@ -906,7 +909,10 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
     assert activity["undefined_features"] == 0
     assert activity["clip_below_zero"] is True
     assert activity["name"] == "task_delta_r2_prepared"
-    assert activity["parent_analysis_id"] == full_result.provenance.analysis_fingerprint
+    assert (
+        activity["parent_analysis_fingerprint"]
+        == full_result.provenance.analysis_fingerprint
+    )
     assert activity["definition"] == "full_r2 - nuisance_r2"
     assert activity["diagnostic_noise_model"] == "ols"
     assert activity["inferential_noise_model"] == "ar1"
@@ -934,18 +940,21 @@ def test_task_delta_r2_prepared_records_lifecycle_and_diagnostic_provenance(
         for record in fit_records
     )
     assert all(
-        record["data_id"] == prepared.provenance.metadata_fingerprint
+        record["data_fingerprint"] == prepared.provenance.data_fingerprint
         for record in fit_records
     )
-    assert "analysis_id" not in fit_records[0]
-    assert fit_records[-1]["analysis_id"] == comparison.provenance.analysis_fingerprint
+    assert "analysis_fingerprint" not in fit_records[0]
+    assert (
+        fit_records[-1]["analysis_fingerprint"]
+        == comparison.provenance.analysis_fingerprint
+    )
     assert records[-1]["event"] == "after_prepared_comparison"
     assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
+    assert records[-1].get("data_fingerprint") is None
+    assert records[-1].get("analysis_fingerprint") is None
 
 
-def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
+def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_fingerprint(
     caplog,
     monkeypatch,
     prepared_delta_problem,
@@ -954,7 +963,7 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
     caplog.set_level(logging.INFO, logger="boldtailor")
     prepared, contrasts, metadata, full_result = prepared_delta_problem
     successful = task_delta_r2_prepared(prepared, full_result)
-    comparison_id = successful.provenance.analysis_fingerprint
+    comparison_fingerprint = successful.provenance.analysis_fingerprint
     caplog.clear()
 
     def fail_diagnostic(*args, **kwargs):
@@ -977,21 +986,21 @@ def test_task_delta_r2_prepared_logs_downstream_failure_with_comparison_id(
         "task_delta_r2_prepared_started",
         "task_delta_r2_prepared_failed",
     ]
-    assert comparison_id is not None
-    assert "analysis_id" not in fit_records[0]
-    assert fit_records[-1]["analysis_id"] == comparison_id
+    assert comparison_fingerprint is not None
+    assert "analysis_fingerprint" not in fit_records[0]
+    assert fit_records[-1]["analysis_fingerprint"] == comparison_fingerprint
     assert all(
-        record["data_id"] == prepared.provenance.metadata_fingerprint
+        record["data_fingerprint"] == prepared.provenance.data_fingerprint
         for record in fit_records
     )
     assert len({record["execution_id"] for record in fit_records}) == 1
     assert records[-1]["event"] == "after_prepared_comparison_failure"
     assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
+    assert records[-1].get("data_fingerprint") is None
+    assert records[-1].get("analysis_fingerprint") is None
 
 
-def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
+def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_fingerprint(
     caplog,
     prepared_delta_problem,
 ):
@@ -1021,14 +1030,14 @@ def test_task_delta_r2_prepared_logs_preidentity_failure_without_analysis_id(
         "task_delta_r2_prepared_started",
         "task_delta_r2_prepared_failed",
     ]
-    assert all(record.get("analysis_id") is None for record in fit_records)
+    assert all(record.get("analysis_fingerprint") is None for record in fit_records)
     assert private_key not in "\n".join(
         record.getMessage() for record in caplog.records
     )
     assert records[-1]["event"] == "after_preidentity_comparison_failure"
     assert records[-1].get("execution_id") is None
-    assert records[-1].get("data_id") is None
-    assert records[-1].get("analysis_id") is None
+    assert records[-1].get("data_fingerprint") is None
+    assert records[-1].get("analysis_fingerprint") is None
 
 
 def _same_comparison(left, right):

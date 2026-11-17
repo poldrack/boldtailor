@@ -53,8 +53,8 @@ def fit_prepared(
     with fit_operation("fit", prepared.provenance) as operation:
         fit_spec = _prepare_fit_spec(contrasts, noise_model, model_metadata)
         model = _model_identity(prepared, fit_spec)
-        operation.analysis_id = analysis_fingerprint(
-            prepared.provenance.metadata_fingerprint, model
+        operation.analysis_fingerprint = analysis_fingerprint(
+            prepared.provenance.data_fingerprint, model
         )
         designs = prepared._design_matrices
         numerical = fit_designs(
@@ -87,11 +87,11 @@ def task_delta_r2_prepared(
     """
     with fit_operation("task_delta_r2_prepared", full_result.provenance) as operation:
         fit_spec = _parent_fit_spec(full_result, contrasts, noise_model, model_metadata)
-        parent_id, comparison_id = _prepare_comparison_identity(
-            prepared, fit_spec, prepared.provenance.metadata_fingerprint
+        parent_fingerprint, comparison_fingerprint = _prepare_comparison_identity(
+            prepared, fit_spec, prepared.provenance.data_fingerprint
         )
-        operation.analysis_id = comparison_id
-        _validate_prepared_parent(prepared, full_result, parent_id)
+        operation.analysis_fingerprint = comparison_fingerprint
+        _validate_prepared_parent(prepared, full_result, parent_fingerprint)
         nuisance_designs = _nuisance_designs(prepared)
         full_r2, nuisance_r2 = nested_ols_delta(
             prepared.signals,
@@ -110,7 +110,7 @@ def task_delta_r2_prepared(
             fit_spec,
             nuisance_designs,
             comparison,
-            parent_id,
+            parent_fingerprint,
         )
         provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
@@ -157,16 +157,20 @@ def _stored_fit_spec(full_result: AnalysisResult) -> _PreparedFitSpec:
 def _prepare_comparison_identity(
     prepared: PreparedDesignAnalysis,
     fit_spec: _PreparedFitSpec,
-    data_id: str | None,
+    data_fingerprint: str | None,
 ) -> tuple[str | None, str | None]:
-    parent_id = analysis_fingerprint(data_id, _model_identity(prepared, fit_spec))
-    comparison_id = _prepared_comparison_id(data_id, parent_id, fit_spec)
-    return parent_id, comparison_id
+    parent_fingerprint = analysis_fingerprint(
+        data_fingerprint, _model_identity(prepared, fit_spec)
+    )
+    comparison_fingerprint = _prepared_comparison_fingerprint(
+        data_fingerprint, parent_fingerprint, fit_spec
+    )
+    return parent_fingerprint, comparison_fingerprint
 
 
-def _prepared_comparison_id(
-    data_id: str | None,
-    parent_id: str | None,
+def _prepared_comparison_fingerprint(
+    data_fingerprint: str | None,
+    parent_fingerprint: str | None,
     fit_spec: _PreparedFitSpec,
 ) -> str | None:
     identity = delta_r2_identity(
@@ -174,19 +178,19 @@ def _prepared_comparison_id(
         inferential_noise_model=fit_spec.noise_model,
         nuisance_model=_PREPARED_NUISANCE_MODEL,
     )
-    return analysis_fingerprint(parent_id, identity)
+    return analysis_fingerprint(parent_fingerprint, identity)
 
 
 def _validate_prepared_parent(
     prepared: PreparedDesignAnalysis,
     full_result: AnalysisResult,
-    parent_id: str | None,
+    parent_fingerprint: str | None,
 ) -> None:
-    if parent_id is None:
+    if parent_fingerprint is None:
         raise ValueError(
             "task delta r-squared requires fingerprintable prepared sources"
         )
-    if full_result.provenance.analysis_fingerprint != parent_id:
+    if full_result.provenance.analysis_fingerprint != parent_fingerprint:
         raise ValueError(
             "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
         )
@@ -226,12 +230,12 @@ def _prepared_delta_activity(
     fit_spec: _PreparedFitSpec,
     nuisance_designs: tuple[pd.DataFrame, ...],
     comparison: TaskDeltaR2Result,
-    parent_id: str | None,
+    parent_fingerprint: str | None,
 ) -> dict[str, object]:
     return {
         **delta_r2_activity(
             name="task_delta_r2_prepared",
-            parent_id=parent_id,
+            parent_fingerprint=parent_fingerprint,
             inferential_noise_model=fit_spec.noise_model,
             nuisance_model=dict(_PREPARED_NUISANCE_MODEL),
             undefined_features=0,

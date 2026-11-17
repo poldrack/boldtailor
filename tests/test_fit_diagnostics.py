@@ -44,7 +44,7 @@ def test_delta_activity_schema_is_shared():
 
     activity = delta_r2_activity(
         name="task_delta_r2",
-        parent_id="p",
+        parent_fingerprint="p",
         inferential_noise_model="ar1",
         nuisance_model={"events": False},
         undefined_features=0,
@@ -52,7 +52,7 @@ def test_delta_activity_schema_is_shared():
     assert set(activity) == {
         "name",
         "stage",
-        "parent_analysis_id",
+        "parent_analysis_fingerprint",
         "definition",
         "clip_below_zero",
         "clip_policy",
@@ -88,7 +88,9 @@ def test_delta_identity_is_activity_minus_run_specific_keys():
         nuisance_model={"events": False},
     )
     identity = delta_r2_identity(**kwargs)
-    activity = delta_r2_activity(parent_id=None, undefined_features=0, **kwargs)
-    removed = {"stage", "parent_analysis_id", "undefined_features"}
+    activity = delta_r2_activity(
+        parent_fingerprint=None, undefined_features=0, **kwargs
+    )
+    removed = {"stage", "parent_analysis_fingerprint", "undefined_features"}
     assert not removed & set(identity)
     assert identity == {k: v for k, v in activity.items() if k not in removed}

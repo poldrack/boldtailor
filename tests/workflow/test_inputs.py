@@ -155,7 +155,7 @@ def test_trimming_keeps_acquisition_times_and_matches_confounds(
         assert run.events.onset.iloc[0] == 8.0
     assert len({tuple(r.confounds.columns) for r in runs}) == 1
     assert sum(c.startswith("a_comp_cor") for c in runs[0].confounds) == 6
-    assert data.provenance.metadata_fingerprint is not None
+    assert data.provenance.data_fingerprint is not None
     assert (
         data.provenance.sources[2].signal.annotations["retained_frame_indices"][0] == 3
     )

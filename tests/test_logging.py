@@ -21,8 +21,8 @@ def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
     with bind_context(execution_id="123e4567-e89b-12d3-a456-426614174000"):
         emit_event("outer", stage="test")
         with bind_context(
-            data_id="stable-data-id",
-            analysis_id="analysis-001",
+            data_fingerprint="stable-data-id",
+            analysis_fingerprint="analysis-001",
             run_index=2,
         ):
             emit_event("inner", stage="test")
@@ -45,11 +45,11 @@ def test_bind_context_nests_optional_ids_and_resets_after_success(caplog):
     assert records[0].get("execution_id") is None
     assert records[1]["execution_id"] == "123e4567-e89b-12d3-a456-426614174000"
     assert records[2]["execution_id"] == "123e4567-e89b-12d3-a456-426614174000"
-    assert records[2]["data_id"] == "stable-data-id"
-    assert records[2]["analysis_id"] == "analysis-001"
+    assert records[2]["data_fingerprint"] == "stable-data-id"
+    assert records[2]["analysis_fingerprint"] == "analysis-001"
     assert records[2]["run_index"] == 2
     assert records[3]["execution_id"] == "123e4567-e89b-12d3-a456-426614174000"
-    assert records[3].get("data_id") is None
+    assert records[3].get("data_fingerprint") is None
     assert records[4].get("execution_id") is None
 
 
@@ -103,8 +103,8 @@ def test_from_arrays_logs_structured_records_without_mutating_loggers(
     assert all(
         record["execution_id"] == data.provenance.execution_id for record in records
     )
-    assert data.provenance.metadata_fingerprint is not None
-    assert records[1]["data_id"] == data.provenance.metadata_fingerprint
+    assert data.provenance.data_fingerprint is not None
+    assert records[1]["data_fingerprint"] == data.provenance.data_fingerprint
     assert (root.level, tuple(root.handlers)) == root_state
     assert (logger.level, tuple(logger.handlers), logger.propagate) == logger_state
     assert "raw-secret-event" not in combined
@@ -142,12 +142,12 @@ def test_from_arrays_logs_failure_and_resets_context_after_exception(
         "after_failure",
     ]
     assert records[0]["execution_id"] == records[1]["execution_id"]
-    assert records[1]["data_id"] is not None
+    assert records[1]["data_fingerprint"] is not None
     assert records[1]["level"] == "ERROR"
     assert records[1]["stage"] == "data"
     assert records[1]["error_code"] == "invalid_input"
     assert records[2].get("execution_id") is None
-    assert records[2].get("data_id") is None
+    assert records[2].get("data_fingerprint") is None
 
 
 @pytest.mark.parametrize(
@@ -184,12 +184,15 @@ def test_failure_logging_does_not_stringify_exceptions(caplog):
 
 
 @pytest.mark.parametrize(
-    "field", ["execution_id", "data_id", "analysis_id", "run_index"]
+    "field", ["execution_id", "data_fingerprint", "analysis_fingerprint", "run_index"]
 )
 def test_explicit_none_clears_one_context_field_and_restores_parent(field):
     """Verify explicit none clears one context field and restores parent."""
     parent = dict(
-        execution_id="execution", data_id="data", analysis_id="analysis", run_index=2
+        execution_id="execution",
+        data_fingerprint="data",
+        analysis_fingerprint="analysis",
+        run_index=2,
     )
     with bind_context(**parent):
         with bind_context(**{field: None}):
@@ -206,9 +209,9 @@ def test_explicit_none_clears_one_context_field_and_restores_parent(field):
 
 def test_context_clear_is_restored_after_exception():
     """Verify context clear is restored after exception."""
-    with bind_context(analysis_id="parent"):
+    with bind_context(analysis_fingerprint="parent"):
         with pytest.raises(RuntimeError):
-            with bind_context(analysis_id=None):
-                assert "analysis_id" not in emit_event("inner", stage="test")
+            with bind_context(analysis_fingerprint=None):
+                assert "analysis_fingerprint" not in emit_event("inner", stage="test")
                 raise RuntimeError("failure")
-        assert emit_event("outer", stage="test")["analysis_id"] == "parent"
+        assert emit_event("outer", stage="test")["analysis_fingerprint"] == "parent"

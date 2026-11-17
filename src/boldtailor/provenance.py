@@ -15,7 +15,7 @@ SCHEMA_ID = "boldtailor.provenance/1"
 _PATH_COMPONENT = re.compile(r"[A-Za-z0-9+_.-]+")
 _QUALITY_WARNING = {
     "code": "provenance_quality",
-    "message": "source metadata incomplete or anonymous; metadata fingerprint unavailable",
+    "message": "source metadata incomplete or anonymous; data fingerprint unavailable",
 }
 
 
@@ -223,7 +223,8 @@ class ProvenanceRecord:
         "_warnings",
         "_schema",
         "_extra",
-        "sources_fingerprint",
+        "_data_fingerprint",
+        "_analysis_fingerprint",
     )
 
     def __init__(
@@ -234,6 +235,7 @@ class ProvenanceRecord:
         events: Sequence[Mapping[str, object]] = (),
         warnings: Sequence[Mapping[str, object]] = (),
         schema: str = SCHEMA_ID,
+        analysis_fingerprint: str | None = None,
         _extra: Mapping[str, object] | None = None,
     ) -> None:
         self._schema = _validate_schema(schema)
@@ -241,12 +243,13 @@ class ProvenanceRecord:
         self._sources = tuple(_copy_run_sources(source) for source in sources)
         self._activities = _freeze_mapping_sequence(activities)
         self._events = _freeze_mapping_sequence(events)
-        fingerprint = sources_fingerprint(self._sources)
+        fingerprint = fingerprint_sources(self._sources)
         self._warnings = _augment_warnings(
             _freeze_mapping_sequence(warnings), fingerprint
         )
         self._extra = freeze_mapping({} if _extra is None else _extra)
-        self.sources_fingerprint = fingerprint
+        self._data_fingerprint = fingerprint
+        self._analysis_fingerprint = _validate_fingerprint(analysis_fingerprint)
 
     @property
     def execution_id(self) -> str:
@@ -280,6 +283,7 @@ class ProvenanceRecord:
             "events": self._events,
             "warnings": self._warnings,
             "schema": self._schema,
+            "analysis_fingerprint": self._analysis_fingerprint,
             "_extra": self._extra,
         }
         unknown = set(changes) - set(values)
@@ -298,6 +302,7 @@ class ProvenanceRecord:
             and self._events == other._events
             and self._warnings == other._warnings
             and self._schema == other._schema
+            and self._analysis_fingerprint == other._analysis_fingerprint
             and self._extra == other._extra
         )
 
@@ -310,13 +315,14 @@ class ProvenanceRecord:
         )
 
     @property
-    def metadata_fingerprint(self) -> str | None:
-        return self.sources_fingerprint
+    def data_fingerprint(self) -> str | None:
+        """Identity of the inputs, from their source metadata; None if anonymous."""
+        return self._data_fingerprint
 
     @property
     def analysis_fingerprint(self) -> str | None:
-        value = self._extra.get("analysis_fingerprint")
-        return value if isinstance(value, str) else None
+        """Identity of the data and model that produced this record, if any."""
+        return self._analysis_fingerprint
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = {
@@ -326,7 +332,8 @@ class ProvenanceRecord:
             "activities": self.activity_records(),
             "events": [thaw(event) for event in self._events],
             "warnings": [thaw(warning) for warning in self._warnings],
-            "metadata_fingerprint": self.sources_fingerprint,
+            "data_fingerprint": self._data_fingerprint,
+            "analysis_fingerprint": self._analysis_fingerprint,
         }
         data.update(thaw(self._extra))
         return data
@@ -357,7 +364,8 @@ class ProvenanceRecord:
             "activities",
             "events",
             "warnings",
-            "metadata_fingerprint",
+            "data_fingerprint",
+            "analysis_fingerprint",
         }
         return cls(
             schema=_validate_schema(data.get("schema", SCHEMA_ID)),
@@ -369,18 +377,21 @@ class ProvenanceRecord:
             activities=_mapping_items(data.get("activities", ()), "activities"),
             events=_mapping_items(data.get("events", ()), "events"),
             warnings=_mapping_items(data.get("warnings", ()), "warnings"),
+            analysis_fingerprint=_validate_fingerprint(
+                data.get("analysis_fingerprint")
+            ),
             _extra=_extra_fields(data, known),
         )
 
 
 def analysis_fingerprint(
-    metadata_fingerprint: str | None,
+    data_fingerprint: str | None,
     model: Mapping[str, object],
 ) -> str | None:
-    if metadata_fingerprint is None:
+    if data_fingerprint is None:
         return None
     payload = {
-        "data_fingerprint": metadata_fingerprint,
+        "data_fingerprint": data_fingerprint,
         "model": thaw(freeze_mapping(model)),
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -401,14 +412,14 @@ def extend_provenance(
     activity: Mapping[str, object],
     events: Sequence[Mapping[str, object]],
     warnings: Sequence[Mapping[str, object]],
-    analysis_id: str | None,
+    analysis_fingerprint: str | None,
 ) -> ProvenanceRecord:
     return record.replace(
         execution_id=execution_id,
         activities=(*record.activities, activity),
         events=tuple(events),
         warnings=(*record.warnings, *warnings),
-        _extra={**record._extra, "analysis_fingerprint": analysis_id},
+        analysis_fingerprint=analysis_fingerprint,
     )
 
 
@@ -463,6 +474,12 @@ def _validate_optional_text(value: object) -> str | None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError("media_type must be a non-empty string")
+    return value
+
+
+def _validate_fingerprint(value: object) -> str | None:
+    if value is not None and not isinstance(value, str):
+        raise ValueError("analysis_fingerprint must be a string or None")
     return value
 
 
@@ -616,16 +633,16 @@ def thaw(value: object) -> object:
 
 def _augment_warnings(
     warnings: tuple[Mapping[str, object], ...],
-    metadata_fingerprint: str | None,
+    data_fingerprint: str | None,
 ) -> tuple[Mapping[str, object], ...]:
-    if metadata_fingerprint is not None:
+    if data_fingerprint is not None:
         return warnings
     if any(warning.get("code") == _QUALITY_WARNING["code"] for warning in warnings):
         return warnings
     return warnings + (freeze_mapping(_QUALITY_WARNING),)
 
 
-def sources_fingerprint(sources: Sequence[RunSources]) -> str | None:
+def fingerprint_sources(sources: Sequence[RunSources]) -> str | None:
     if not _sources_complete(sources):
         return None
     payload = {

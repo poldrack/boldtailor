@@ -39,8 +39,8 @@ def _merge_context(parent, updates):
 def bind_context(
     *,
     execution_id: str | None | _Inherited = _INHERIT,
-    data_id: str | None | _Inherited = _INHERIT,
-    analysis_id: str | None | _Inherited = _INHERIT,
+    data_fingerprint: str | None | _Inherited = _INHERIT,
+    analysis_fingerprint: str | None | _Inherited = _INHERIT,
     run_index: int | None | _Inherited = _INHERIT,
     inherit: bool = True,
 ) -> Iterator[None]:
@@ -51,8 +51,8 @@ def bind_context(
     """
     updates = _context_updates(
         execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=analysis_id,
+        data_fingerprint=data_fingerprint,
+        analysis_fingerprint=analysis_fingerprint,
         run_index=run_index,
     )
     parent = _LOG_CONTEXT.get() if inherit else {}
@@ -70,8 +70,8 @@ def emit_event(
     level: int = logging.INFO,
     error: Exception | str | None = None,
     execution_id: str | None | _Inherited = _INHERIT,
-    data_id: str | None | _Inherited = _INHERIT,
-    analysis_id: str | None | _Inherited = _INHERIT,
+    data_fingerprint: str | None | _Inherited = _INHERIT,
+    analysis_fingerprint: str | None | _Inherited = _INHERIT,
     run_index: int | None | _Inherited = _INHERIT,
 ) -> Mapping[str, object]:
     """Emit an event with inherited context and explicit per-event overrides.
@@ -84,8 +84,8 @@ def emit_event(
         level=level,
         error=error,
         execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=analysis_id,
+        data_fingerprint=data_fingerprint,
+        analysis_fingerprint=analysis_fingerprint,
         run_index=run_index,
     )
     emit_record(payload, level=level)
@@ -114,14 +114,14 @@ def append_event_history(
 def _context_updates(
     *,
     execution_id: str | None | _Inherited,
-    data_id: str | None | _Inherited,
-    analysis_id: str | None | _Inherited,
+    data_fingerprint: str | None | _Inherited,
+    analysis_fingerprint: str | None | _Inherited,
     run_index: int | None | _Inherited,
 ) -> dict[str, object]:
     values = dict(
         execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=analysis_id,
+        data_fingerprint=data_fingerprint,
+        analysis_fingerprint=analysis_fingerprint,
         run_index=run_index,
     )
     return {key: value for key, value in values.items() if value is not _INHERIT}
@@ -134,8 +134,8 @@ def make_event(
     level: int = logging.INFO,
     error: Exception | str | None = None,
     execution_id: str | None | _Inherited = _INHERIT,
-    data_id: str | None | _Inherited = _INHERIT,
-    analysis_id: str | None | _Inherited = _INHERIT,
+    data_fingerprint: str | None | _Inherited = _INHERIT,
+    analysis_fingerprint: str | None | _Inherited = _INHERIT,
     run_index: int | None | _Inherited = _INHERIT,
 ) -> Mapping[str, object]:
     payload: dict[str, object] = {
@@ -147,8 +147,8 @@ def make_event(
     }
     updates = _context_updates(
         execution_id=execution_id,
-        data_id=data_id,
-        analysis_id=analysis_id,
+        data_fingerprint=data_fingerprint,
+        analysis_fingerprint=analysis_fingerprint,
         run_index=run_index,
     )
     payload.update(_merge_context(_LOG_CONTEXT.get(), updates))
@@ -165,8 +165,8 @@ def _history_entry(event: Mapping[str, object]) -> Mapping[str, object]:
         "event",
         "stage",
         "execution_id",
-        "data_id",
-        "analysis_id",
+        "data_fingerprint",
+        "analysis_fingerprint",
         "run_index",
         "error_code",
     )

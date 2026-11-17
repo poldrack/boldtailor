@@ -18,7 +18,7 @@ from boldtailor._run_inputs import (
     validate_run_count,
 )
 from boldtailor.provenance import software_environment
-from boldtailor.provenance import ProvenanceRecord, RunSources, sources_fingerprint
+from boldtailor.provenance import ProvenanceRecord, RunSources, fingerprint_sources
 
 _EVENT_COLUMNS = ("onset", "duration")
 
@@ -84,7 +84,7 @@ def from_arrays(
             sources=sources,
             include_confounds=confounds is not None,
         )
-        operation.data_id = sources_fingerprint(prepared_sources)
+        operation.data_fingerprint = fingerprint_sources(prepared_sources)
         prepared_signals = tuple(
             prepare_signal(values, run) for run, values in enumerate(run_signals)
         )

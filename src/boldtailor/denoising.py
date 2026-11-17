@@ -1669,7 +1669,7 @@ def _augmentation_activity(result):
     return dict(
         name=_AUGMENTATION,
         denoising_execution_id=result.provenance.execution_id,
-        denoising_analysis_id=result.provenance.analysis_fingerprint,
+        denoising_analysis_fingerprint=result.provenance.analysis_fingerprint,
         n_components=result.n_components,
         added_columns=list(result.component_names),
         component_fingerprints=[_digest(c, "<f8") for c in result.run_components],

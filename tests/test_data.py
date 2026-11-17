@@ -32,7 +32,7 @@ def test_from_arrays_normalizes_one_run_from_tr(events):
     np.testing.assert_array_equal(data.frame_times[0], np.arange(10) * 2.0)
     assert list(data.confounds[0].columns) == []
     assert data.provenance.execution_id
-    assert data.provenance.metadata_fingerprint is None
+    assert data.provenance.data_fingerprint is None
     assert data.provenance.sources[0].signal.role == "signal"
     assert data.provenance.sources[0].signal.uri is None
     assert tuple(event["event"] for event in data.provenance.events) == (
@@ -210,10 +210,8 @@ def test_from_arrays_accepts_run_wise_sources_and_stable_fingerprint(
     metadata["details"]["task"] = "mutated"
 
     assert first.provenance.execution_id != second.provenance.execution_id
-    assert (
-        first.provenance.metadata_fingerprint == second.provenance.metadata_fingerprint
-    )
-    assert first.provenance.metadata_fingerprint is not None
+    assert first.provenance.data_fingerprint == second.provenance.data_fingerprint
+    assert first.provenance.data_fingerprint is not None
     assert len(first.provenance.sources) == 2
     assert (
         first.provenance.sources[0].signal.uri
@@ -270,10 +268,10 @@ def test_normalization_builds_one_record(
         expected = hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        assert result.provenance.metadata_fingerprint == expected
+        assert result.provenance.data_fingerprint == expected
         assert not result.provenance.warnings
     else:
-        assert result.provenance.metadata_fingerprint is None
+        assert result.provenance.data_fingerprint is None
         assert [w["code"] for w in result.provenance.warnings] == ["provenance_quality"]
 
 
@@ -300,8 +298,8 @@ def test_normalization_catches_final_failures_and_isolates_context(
         monkeypatch.setattr(module.AnalysisData, "__init__", reject)
     outer = dict(
         execution_id="outer",
-        data_id="outer-data",
-        analysis_id="outer-analysis",
+        data_fingerprint="outer-data",
+        analysis_fingerprint="outer-analysis",
         run_index=2,
     )
     with bind_context(**outer):
@@ -334,7 +332,10 @@ def test_normalization_catches_final_failures_and_isolates_context(
         f"normalization_{ending}",
     ]
     for record in records:
-        assert not {"data_id", "analysis_id", "run_index"} & record.keys()
+        assert (
+            not {"data_fingerprint", "analysis_fingerprint", "run_index"}
+            & record.keys()
+        )
         assert record["execution_id"] != "outer"
     if outcome != "success":
         assert records[-1]["error_code"] == (

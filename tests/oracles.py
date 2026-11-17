@@ -266,7 +266,7 @@ def nilearn_pooled_ols_r2(signals, designs):
 SHARED_DELTA_ACTIVITY_KEYS = {
     "name",
     "stage",
-    "parent_analysis_id",
+    "parent_analysis_fingerprint",
     "definition",
     "clip_below_zero",
     "clip_policy",

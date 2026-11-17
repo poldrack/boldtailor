@@ -826,19 +826,19 @@ From `boldtailor.provenance`:
   execution ID, and available source/analysis fingerprints.
 - All three types support `to_dict()` and `from_dict()`;
   `ProvenanceRecord.canonical_json()` serializes a record deterministically.
-- `ProvenanceRecord.metadata_fingerprint` is the SHA-256 of the run sources
+- `ProvenanceRecord.data_fingerprint` is the SHA-256 of the run sources
   when every source has a complete identity, else `None`;
   `ProvenanceRecord.analysis_fingerprint` is the stored analysis fingerprint,
   or `None`. `SCHEMA_ID` (`"boldtailor.provenance/1"`) is the default `schema`.
-- `analysis_fingerprint(metadata_fingerprint, model)` returns the SHA-256 of
+- `analysis_fingerprint(data_fingerprint, model)` returns the SHA-256 of
   the source fingerprint together with the model settings, or `None` when
-  `metadata_fingerprint` is `None`.
+  `data_fingerprint` is `None`.
 - `identity_activity(record)` returns the record's last activity without its
   environment-only `software` key, for embedding in other identities.
 - `extend_provenance(record, *, execution_id, activity, events, warnings,
-  analysis_id)` returns a copy with the new execution ID, `activity` appended,
+  analysis_fingerprint)` returns a copy with the new execution ID, `activity` appended,
   `events` replacing the event history, `warnings` appended, and
-  `analysis_fingerprint` set to `analysis_id`.
+  `analysis_fingerprint` set to `analysis_fingerprint`.
 - `validate_relative_path(text, *, name="path")` returns `text` if it is a
   non-empty dataset-relative POSIX path of `[A-Za-z0-9+_.-]` components (no
   leading `/`, empty, `.`, or `..` components); otherwise it raises
@@ -916,8 +916,8 @@ and [developer guide](development.md) for event names and identity rules.
 
 | Function | Use |
 | --- | --- |
-| `bind_context(*, execution_id=<inherit>, data_id=<inherit>, analysis_id=<inherit>, run_index=<inherit>, inherit=True)` | Omitted fields inherit; explicit `None` clears a field for the scope; `inherit=False` starts from an empty context |
-| `emit_event(event, *, stage, level=logging.INFO, error=None, execution_id=<inherit>, data_id=<inherit>, analysis_id=<inherit>, run_index=<inherit>)` | Omitted identity fields inherit; explicit `None` clears a field for this event only. Log one compact sorted-key JSON record (`timestamp`, `sequence`, `level`, `event`, `stage`, bound and explicit identity fields, and `error_code` when `error` is given) and return it as a read-only mapping |
+| `bind_context(*, execution_id=<inherit>, data_fingerprint=<inherit>, analysis_fingerprint=<inherit>, run_index=<inherit>, inherit=True)` | Omitted fields inherit; explicit `None` clears a field for the scope; `inherit=False` starts from an empty context |
+| `emit_event(event, *, stage, level=logging.INFO, error=None, execution_id=<inherit>, data_fingerprint=<inherit>, analysis_fingerprint=<inherit>, run_index=<inherit>)` | Omitted identity fields inherit; explicit `None` clears a field for this event only. Log one compact sorted-key JSON record (`timestamp`, `sequence`, `level`, `event`, `stage`, bound and explicit identity fields, and `error_code` when `error` is given) and return it as a read-only mapping |
 | `append_event_history(history, event)` | Return `history` plus the event's standard fields (those listed for `emit_event`), keeping the last 8 entries |
 
 ## Imaging, diagnostics, and parallel helpers

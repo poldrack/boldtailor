@@ -82,7 +82,7 @@ def tuning_provenance(scores, selection, *, encoding_mode):
         activity=activity,
         events=record.events,
         warnings=(),
-        analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
+        analysis_fingerprint=analysis_fingerprint(record.data_fingerprint, identity),
     )
 
 
@@ -143,6 +143,8 @@ def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
             activity=activity,
             events=record.events,
             warnings=(),
-            analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
+            analysis_fingerprint=analysis_fingerprint(
+                record.data_fingerprint, identity
+            ),
         ).to_dict()
     return replace(result, provenance=tuple(blocks))

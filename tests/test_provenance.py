@@ -10,7 +10,7 @@ from boldtailor.provenance import (
     ProvenanceRecord,
     RunSources,
     SourceRef,
-    sources_fingerprint,
+    fingerprint_sources,
 )
 
 
@@ -236,7 +236,7 @@ def test_provenance_record_accepts_additive_version_one_fields():
 
 
 def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order():
-    """Verify canonical JSON and metadata fingerprint are stable across mapping order."""
+    """Verify canonical JSON and data fingerprint are stable across mapping order."""
     record_a = ProvenanceRecord(
         execution_id="123e4567-e89b-12d3-a456-426614174000",
         sources=(
@@ -296,12 +296,12 @@ def test_canonical_json_and_metadata_fingerprint_are_stable_across_mapping_order
     )
 
     assert record_a.canonical_json() == record_b.canonical_json()
-    assert record_a.metadata_fingerprint == record_b.metadata_fingerprint
-    assert re.fullmatch(r"[0-9a-f]{64}", record_a.metadata_fingerprint or "")
+    assert record_a.data_fingerprint == record_b.data_fingerprint
+    assert re.fullmatch(r"[0-9a-f]{64}", record_a.data_fingerprint or "")
 
 
 def test_incomplete_sources_clear_metadata_fingerprint_and_add_quality_warning():
-    """Verify incomplete sources clear metadata fingerprint and add quality warning."""
+    """Verify incomplete sources clear data fingerprint and add quality warning."""
     record = ProvenanceRecord(
         execution_id="123e4567-e89b-12d3-a456-426614174000",
         sources=(
@@ -314,7 +314,7 @@ def test_incomplete_sources_clear_metadata_fingerprint_and_add_quality_warning()
         ),
     )
 
-    assert record.metadata_fingerprint is None
+    assert record.data_fingerprint is None
     assert any("incomplete" in warning["message"] for warning in record.warnings)
 
 
@@ -370,24 +370,24 @@ def test_extension_preserves_fields_without_parent_serialization(monkeypatch):
             parent,
             execution_id=execution_id,
             activity=activity,
-            analysis_id="a" * 64,
+            analysis_fingerprint="a" * 64,
             events=[],
             warnings=(),
         )
     assert extended.to_dict() == expected
-    assert extended.metadata_fingerprint == parent.metadata_fingerprint
+    assert extended.data_fingerprint == parent.data_fingerprint
     activity["settings"]["alpha"] = 99
     payload["extra_note"]["labels"].append("changed")
     assert extended.to_dict() == expected
 
 
 def test_sha256_changes_the_metadata_fingerprint(complete_sources):
-    """Verify sha256 changes the metadata fingerprint."""
+    """Verify sha256 changes the data fingerprint."""
     a = complete_sources(1)
     b = complete_sources(1)
     with_digest = b[0].signal.replace(sha256="a" * 64)
     b = [b[0].replace(signal=with_digest)]
-    assert sources_fingerprint(a) != sources_fingerprint(b)
+    assert fingerprint_sources(a) != fingerprint_sources(b)
     assert SourceRef.from_dict(with_digest.to_dict()) == with_digest
     assert with_digest.to_dict()["sha256"] == "a" * 64
 

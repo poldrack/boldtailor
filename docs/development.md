@@ -506,7 +506,7 @@ rule, `provenance.validate_relative_path`, governs URIs and BIDS projection
 paths: POSIX, no traversal or empty parts, components `[A-Za-z0-9+_.-]+`.
 Annotation, metadata, and model-key text is stored as given, even if it looks
 like a path: callers must not put secrets or environment details in
-annotations or metadata; they are written verbatim. `metadata_fingerprint`
+annotations or metadata; they are written verbatim. `data_fingerprint`
 hashes source metadata (not file contents) and is absent for incomplete sources. Each activity records `software`, which
 analysis identities exclude. Execution IDs are fresh UUIDs per attempt.
 
@@ -522,7 +522,7 @@ Fit, comparison, HRF-selection and ridge-scoring entry points use the private
 `fit_operation()` context manager. Their statistical steps remain explicit in each caller. The context
 owns execution IDs and logging context. Normal exit logs completion; an exception
 logs failure and is re-raised. No call on the yielded metadata is required to
-complete the scope. Callers set `operation.analysis_id` explicitly when the model
+complete the scope. Callers set `operation.analysis_fingerprint` explicitly when the model
 identity becomes available.
 
 `build_fit_provenance(operation, activity, warnings=...)` independently constructs
@@ -532,7 +532,7 @@ Fit entry points build provenance and construct the result inside the scope, so
 errors in either still produce a failure log. The provenance completion snapshot
 and the completion log share event names and identities but have separate
 timestamps and sequence numbers: the log is generated only on successful exit.
-Start records omit `analysis_id`; completion includes it when metadata identity
+Start records omit `analysis_fingerprint`; completion includes it when metadata identity
 is available.
 Each nested fit or normalization starts a fresh ID scope and restores its
 caller’s context on exit. Omitted `bind_context()` fields inherit the parent value; explicitly passing
@@ -616,7 +616,7 @@ provenance through its dedicated cache/import helpers.
 ## Provenance digests
 
 `SourceRef` accepts an optional caller-supplied `sha256` (64 lowercase hex
-characters). It enters the metadata fingerprint and is emitted as the BEP028
+characters). It enters the data fingerprint and is emitted as the BEP028
 `Digest` of the file entity. The earlier ban on a `digest` key was removed on
 2026-10-02: a content digest of imaging data is not identifying, and BEP028
 defines `Digest`.

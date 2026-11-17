@@ -41,7 +41,7 @@ class _FitContext:
     groups: dict
     nuisance: tuple
     activity: dict
-    analysis_id: str | None
+    analysis_fingerprint: str | None
 
 
 def _check_task_model(model, selection):
@@ -82,7 +82,7 @@ def _prepare(data, model, selection, signature, model_settings):
         n_runs=data.n_runs,
         hrf_normalization=HRF_NORMALIZATION,
         selection=identity_activity(selection.provenance),
-        selection_analysis_id=selection.provenance.analysis_fingerprint,
+        selection_analysis_fingerprint=selection.provenance.analysis_fingerprint,
         inference="conditional_on_selected_hrfs",
     )
     if model.task_model is not None:
@@ -93,7 +93,7 @@ def _prepare(data, model, selection, signature, model_settings):
         groups,
         nuisance,
         activity,
-        analysis_fingerprint(data.provenance.metadata_fingerprint, activity),
+        analysis_fingerprint(data.provenance.data_fingerprint, activity),
     )
 
 
@@ -153,7 +153,7 @@ def fit_selected_glm(
     with fit_operation("fit", data.provenance) as operation:
         settings = model_identity(model, hrf_model=SELECTED_HRF).activity
         context = _prepare(data, model, selection, signature, settings)
-        operation.analysis_id = context.analysis_id
+        operation.analysis_fingerprint = context.analysis_fingerprint
         fits = _group_fits(data, model, selection, context)
         provenance = build_fit_provenance(operation, context.activity)
         return _assemble(data, model, selection, context, fits, provenance)
@@ -161,9 +161,9 @@ def fit_selected_glm(
 
 def _validate_parent(data, result, context):
     if (
-        context.analysis_id is not None
+        context.analysis_fingerprint is not None
         and result.provenance.analysis_fingerprint is not None
-        and context.analysis_id != result.provenance.analysis_fingerprint
+        and context.analysis_fingerprint != result.provenance.analysis_fingerprint
     ):
         raise ValueError(
             "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
@@ -203,8 +203,8 @@ def selected_task_delta_r2(
             allow_undefined=True,
         )
         activity = _comparison_activity(model, comparison, context)
-        operation.analysis_id = analysis_fingerprint(
-            context.analysis_id, _comparison_identity(model)
+        operation.analysis_fingerprint = analysis_fingerprint(
+            context.analysis_fingerprint, _comparison_identity(model)
         )
         provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
@@ -213,7 +213,7 @@ def selected_task_delta_r2(
 def _comparison_activity(model, comparison, context):
     return delta_r2_activity(
         name="task_delta_r2",
-        parent_id=context.analysis_id,
+        parent_fingerprint=context.analysis_fingerprint,
         inferential_noise_model=model.noise_model,
         nuisance_model=nuisance_model_settings(model),
         undefined_features=int(np.count_nonzero(~np.isfinite(comparison.delta_r2))),

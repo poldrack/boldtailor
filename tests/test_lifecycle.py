@@ -264,7 +264,10 @@ def break_late(monkeypatch):
 
 def _assert_context_reset():
     after = emit_event("after_entry_point", stage="test")
-    assert not {"execution_id", "data_id", "analysis_id", "run_index"} & after.keys()
+    assert (
+        not {"execution_id", "data_fingerprint", "analysis_fingerprint", "run_index"}
+        & after.keys()
+    )
 
 
 @pytest.mark.parametrize("name", ENTRY_POINTS)
@@ -279,8 +282,8 @@ def test_success_logs_started_then_completed_with_one_execution_id(
     prefix = EVENT_PREFIX.get(name, name)
     assert [e["event"] for e in events] == [f"{prefix}_started", f"{prefix}_completed"]
     assert len({e["execution_id"] for e in events}) == 1
-    assert "analysis_id" not in events[0]
-    assert len({e.get("data_id") for e in events}) == 1
+    assert "analysis_fingerprint" not in events[0]
+    assert len({e.get("data_fingerprint") for e in events}) == 1
     _assert_context_reset()
 
 
@@ -301,8 +304,8 @@ def test_completion_log_and_provenance_share_operation_identity(
         k: v for k, v in completed.items() if k not in timing
     }
     assert completed["execution_id"] == provenance.execution_id
-    assert completed.get("analysis_id") == provenance.analysis_fingerprint
-    assert completed.get("data_id") == provenance.metadata_fingerprint
+    assert completed.get("analysis_fingerprint") == provenance.analysis_fingerprint
+    assert completed.get("data_fingerprint") == provenance.data_fingerprint
     assert len(provenance.events) <= 8
 
 
@@ -321,8 +324,8 @@ def test_late_failure_logs_failed_and_never_completed(
     prefix = EVENT_PREFIX.get(name, name)
     assert [e["event"] for e in events] == [f"{prefix}_started", f"{prefix}_failed"]
     assert len({e["execution_id"] for e in events}) == 1
-    assert "analysis_id" not in events[0]
-    assert events[0].get("data_id") == events[-1].get("data_id")
+    assert "analysis_fingerprint" not in events[0]
+    assert events[0].get("data_fingerprint") == events[-1].get("data_fingerprint")
     assert events[-1]["level"] == "ERROR"
     assert events[-1]["error_code"] == "operation_failed"
     _assert_context_reset()
@@ -341,8 +344,8 @@ def test_early_argument_failure_logs_failed_and_never_completed(
     prefix = EVENT_PREFIX.get(name, name)
     assert [e["event"] for e in events] == [f"{prefix}_started", f"{prefix}_failed"]
     assert len({e["execution_id"] for e in events}) == 1
-    assert "analysis_id" not in events[0]
-    assert events[0].get("data_id") == events[-1].get("data_id")
+    assert "analysis_fingerprint" not in events[0]
+    assert events[0].get("data_fingerprint") == events[-1].get("data_fingerprint")
     assert events[-1]["level"] == "ERROR"
     assert events[-1]["error_code"] == "invalid_input"
     assert "private" not in caplog.text

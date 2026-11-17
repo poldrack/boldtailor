@@ -39,8 +39,8 @@ def fit_standard_glm(
         if feature_signature is not None:
             raise ValueError("feature_signature requires hrf_selection")
         model_provenance = model_identity(model)
-        operation.analysis_id = _analysis_id(
-            data.provenance.metadata_fingerprint, model_provenance.fingerprint
+        operation.analysis_fingerprint = _analysis_fingerprint(
+            data.provenance.data_fingerprint, model_provenance.fingerprint
         )
         compiled, numerical = _fit_analysis(data, model)
         provenance = build_fit_provenance(
@@ -65,10 +65,14 @@ def standard_task_delta_r2(
 ) -> TaskDeltaR2Result:
     with fit_operation("task_delta_r2", full_result.provenance) as operation:
         model_provenance = model_identity(model)
-        data_id = data.provenance.metadata_fingerprint
-        expected_parent_id = _analysis_id(data_id, model_provenance.fingerprint)
-        operation.analysis_id = _comparison_id(expected_parent_id, model)
-        _validate_parent_analysis(expected_parent_id, full_result)
+        data_fingerprint = data.provenance.data_fingerprint
+        expected_parent_fingerprint = _analysis_fingerprint(
+            data_fingerprint, model_provenance.fingerprint
+        )
+        operation.analysis_fingerprint = _comparison_fingerprint(
+            expected_parent_fingerprint, model
+        )
+        _validate_parent_analysis(expected_parent_fingerprint, full_result)
         validate_result_dimensions(data, full_result, input_label="data")
         full_designs = compile_designs(data, model)
         nuisance_designs = compile_nuisance_designs(data, model)
@@ -89,7 +93,7 @@ def standard_task_delta_r2(
             model,
             nuisance_designs,
             comparison,
-            expected_parent_id,
+            expected_parent_fingerprint,
         )
         provenance = build_fit_provenance(operation, activity)
         return replace(comparison, _provenance=provenance)
@@ -110,35 +114,37 @@ def _fit_analysis(
 
 
 def _validate_parent_analysis(
-    expected_parent_id: str | None,
+    expected_parent_fingerprint: str | None,
     full_result: AnalysisResult,
 ) -> None:
     if (
-        expected_parent_id is not None
+        expected_parent_fingerprint is not None
         and full_result.provenance.analysis_fingerprint is not None
-        and full_result.provenance.analysis_fingerprint != expected_parent_id
+        and full_result.provenance.analysis_fingerprint != expected_parent_fingerprint
     ):
         raise ValueError(
             "full result provenance identity does not match this data and model (identity uses source metadata and sha256 when supplied)"
         )
 
 
-def _comparison_id(parent_id: str | None, model: ModelSpec) -> str | None:
+def _comparison_fingerprint(
+    parent_fingerprint: str | None, model: ModelSpec
+) -> str | None:
     identity = delta_r2_identity(
         name="task_delta_r2",
         inferential_noise_model=model.noise_model,
         nuisance_model=nuisance_model_settings(model),
     )
-    return _analysis_id(parent_id, identity)
+    return _analysis_fingerprint(parent_fingerprint, identity)
 
 
-def _analysis_id(
-    data_id: str | None,
+def _analysis_fingerprint(
+    data_fingerprint: str | None,
     model: Mapping[str, object] | None,
 ) -> str | None:
     if model is None:
         return None
-    return analysis_fingerprint(data_id, model)
+    return analysis_fingerprint(data_fingerprint, model)
 
 
 def _fit_activity(
@@ -157,7 +163,7 @@ def _task_delta_r2_activity(
     model: ModelSpec,
     compiled: tuple[CompiledDesign, ...],
     comparison: TaskDeltaR2Result,
-    parent_id: str | None,
+    parent_fingerprint: str | None,
 ) -> dict[str, object]:
     runs = tuple(
         _run_diagnostic(data, design, run) for run, design in enumerate(compiled)
@@ -165,7 +171,7 @@ def _task_delta_r2_activity(
     return {
         **delta_r2_activity(
             name="task_delta_r2",
-            parent_id=parent_id,
+            parent_fingerprint=parent_fingerprint,
             inferential_noise_model=model.noise_model,
             nuisance_model=nuisance_model_settings(model),
             undefined_features=0,

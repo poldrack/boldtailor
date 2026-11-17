@@ -65,7 +65,7 @@ def provenance_record():
                     "event": "fit_completed",
                     "stage": "fit",
                     "execution_id": "12345678-1234-5678-1234-567812345678",
-                    "analysis_id": "analysis-abc",
+                    "analysis_fingerprint": "analysis-abc",
                 },
             ],
             "analysis_fingerprint": "analysis-abc",

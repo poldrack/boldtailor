@@ -23,12 +23,12 @@ from boldtailor.provenance import (
 
 @dataclass
 class FitOperation:
-    """Execution metadata; analysis_id may be set when the model identity is known."""
+    """Execution metadata; analysis_fingerprint may be set when the model identity is known."""
 
     name: str
     parent: ProvenanceRecord
     execution_id: str = field(default_factory=lambda: str(uuid4()))
-    analysis_id: str | None = None
+    analysis_fingerprint: str | None = None
     history: tuple[Mapping[str, object], ...] = ()
 
 
@@ -47,13 +47,13 @@ def build_fit_provenance(
     """
     with bind_context(
         execution_id=operation.execution_id,
-        data_id=operation.parent.metadata_fingerprint,
+        data_fingerprint=operation.parent.data_fingerprint,
         inherit=False,
     ):
         completion = make_event(
             f"{operation.name}_completed",
             stage="fit",
-            analysis_id=operation.analysis_id,
+            analysis_fingerprint=operation.analysis_fingerprint,
         )
     return extend_provenance(
         operation.parent,
@@ -61,7 +61,7 @@ def build_fit_provenance(
         activity={**activity, "software": software_environment()},
         events=append_event_history(operation.history, completion),
         warnings=warnings,
-        analysis_id=operation.analysis_id,
+        analysis_fingerprint=operation.analysis_fingerprint,
     )
 
 
@@ -74,10 +74,10 @@ def finish_fit(
     """Identify the operation by its parent data and activity, then record it.
 
     For operations whose analysis identity is the fingerprint of the activity
-    itself; callers with another identity set ``analysis_id`` themselves.
+    itself; callers with another identity set ``analysis_fingerprint`` themselves.
     """
-    operation.analysis_id = analysis_fingerprint(
-        operation.parent.metadata_fingerprint, activity
+    operation.analysis_fingerprint = analysis_fingerprint(
+        operation.parent.data_fingerprint, activity
     )
     return build_fit_provenance(operation, activity, warnings=warnings)
 
@@ -92,7 +92,7 @@ def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]
     operation = FitOperation(name, parent)
     with bind_context(
         execution_id=operation.execution_id,
-        data_id=parent.metadata_fingerprint,
+        data_fingerprint=parent.data_fingerprint,
         inherit=False,
     ):
         operation.history = append_event_history(
@@ -106,29 +106,33 @@ def fit_operation(name: str, parent: ProvenanceRecord) -> Iterator[FitOperation]
                 stage="fit",
                 level=logging.ERROR,
                 error=error,
-                analysis_id=operation.analysis_id,
+                analysis_fingerprint=operation.analysis_fingerprint,
             )
             raise
         else:
             emit_event(
-                f"{name}_completed", stage="fit", analysis_id=operation.analysis_id
+                f"{name}_completed",
+                stage="fit",
+                analysis_fingerprint=operation.analysis_fingerprint,
             )
 
 
 @dataclass
 class Normalization:
-    """Execution metadata of one input normalization; set ``data_id`` once known."""
+    """Execution metadata of one input normalization; set ``data_fingerprint`` once known."""
 
     stage: str
     execution_id: str = field(default_factory=lambda: str(uuid4()))
-    data_id: str | None = None
+    data_fingerprint: str | None = None
     history: tuple[Mapping[str, object], ...] = ()
     completed: Mapping[str, object] | None = None
 
     def provenance(self, sources, activity) -> ProvenanceRecord:
         """The record of the normalized inputs; its last event is the logged completion."""
         self.completed = make_event(
-            "normalization_completed", stage=self.stage, data_id=self.data_id
+            "normalization_completed",
+            stage=self.stage,
+            data_fingerprint=self.data_fingerprint,
         )
         return ProvenanceRecord(
             execution_id=self.execution_id,
@@ -158,12 +162,14 @@ def normalization(stage: str) -> Iterator[Normalization]:
                 stage=stage,
                 level=logging.ERROR,
                 error=error,
-                data_id=operation.data_id,
+                data_fingerprint=operation.data_fingerprint,
             )
             raise
         emit_record(
             operation.completed
             or make_event(
-                "normalization_completed", stage=stage, data_id=operation.data_id
+                "normalization_completed",
+                stage=stage,
+                data_fingerprint=operation.data_fingerprint,
             )
         )

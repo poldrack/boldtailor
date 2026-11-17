@@ -25,10 +25,10 @@ def test_normal_exit_logs_completion_without_building_provenance(caplog, parent_
 
     caplog.set_level(logging.INFO, logger="boldtailor")
     with fit_operation("fit", parent_record) as operation:
-        operation.analysis_id = "a" * 64
+        operation.analysis_fingerprint = "a" * 64
     events = records(caplog)
     assert [event["event"] for event in events] == ["fit_started", "fit_completed"]
-    assert events[-1]["analysis_id"] == "a" * 64
+    assert events[-1]["analysis_fingerprint"] == "a" * 64
     assert events[-1]["execution_id"] == operation.execution_id
 
 
@@ -40,14 +40,14 @@ def test_late_constructor_failure_never_logs_completion(caplog, parent_record):
     failure = ValueError("private constructor detail")
     with pytest.raises(ValueError) as caught:
         with fit_operation("fit", parent_record) as operation:
-            operation.analysis_id = "a" * 64
+            operation.analysis_fingerprint = "a" * 64
             build_fit_provenance(operation, {"name": "fit"})
             raise failure
     assert caught.value is failure
     events = records(caplog)
     assert [event["event"] for event in events] == ["fit_started", "fit_failed"]
     assert events[-1]["error_code"] == "invalid_input"
-    assert events[-1]["analysis_id"] == "a" * 64
+    assert events[-1]["analysis_fingerprint"] == "a" * 64
     assert "private" not in caplog.text
 
 
@@ -57,7 +57,7 @@ def test_provenance_builder_does_not_mutate_operation_or_log(caplog, parent_reco
 
     caplog.set_level(logging.INFO, logger="boldtailor")
     with fit_operation("fit", parent_record) as operation:
-        operation.analysis_id = "a" * 64
+        operation.analysis_fingerprint = "a" * 64
         before = vars(operation).copy()
         first = build_fit_provenance(operation, {"name": "fit"})
         second = build_fit_provenance(operation, {"name": "fit"})
@@ -66,7 +66,7 @@ def test_provenance_builder_does_not_mutate_operation_or_log(caplog, parent_reco
     completed = records(caplog)[-1]
     for record in (first, second):
         assert record.execution_id == completed["execution_id"]
-        assert record.analysis_fingerprint == completed["analysis_id"]
+        assert record.analysis_fingerprint == completed["analysis_fingerprint"]
         snapshot = dict(record.events[-1])
         assert snapshot["event"] == completed["event"] == "fit_completed"
         assert snapshot["sequence"] < completed["sequence"]
@@ -85,8 +85,8 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
     caplog.set_level(logging.INFO, logger="boldtailor")
     outer = dict(
         execution_id="outer",
-        data_id="outer-data",
-        analysis_id="outer-analysis",
+        data_fingerprint="outer-data",
+        analysis_fingerprint="outer-analysis",
         run_index=9,
     )
     failure = ValueError("private child detail")
@@ -105,7 +105,9 @@ def test_anonymous_child_restores_outer_context(caplog, parent_record, fail):
     ]
     for event in events:
         assert event["execution_id"] != "outer"
-        assert not {"data_id", "analysis_id", "run_index"} & event.keys()
+        assert (
+            not {"data_fingerprint", "analysis_fingerprint", "run_index"} & event.keys()
+        )
     assert all(restored[key] == value for key, value in outer.items())
 
 
@@ -140,14 +142,14 @@ def test_builder_can_run_after_scope_without_inheriting_unrelated_context(
 
     caplog.set_level(logging.INFO, logger="boldtailor")
     with fit_operation("fit", parent_record) as operation:
-        operation.analysis_id = "a" * 64
+        operation.analysis_fingerprint = "a" * 64
     before = len(caplog.records)
     with bind_context(execution_id="unrelated", run_index=9):
         record = build_fit_provenance(operation, {"name": "fit"})
         assert len(caplog.records) == before
         restored = emit_event("restored", stage="test")
     assert record.events[-1]["execution_id"] == operation.execution_id
-    assert record.events[-1]["analysis_id"] == "a" * 64
+    assert record.events[-1]["analysis_fingerprint"] == "a" * 64
     assert "run_index" not in record.events[-1]
     assert restored["execution_id"] == "unrelated" and restored["run_index"] == 9
 
@@ -163,13 +165,13 @@ def test_nested_operations_restore_context_and_bound_history(caplog, parent_reco
     )
     with fit_operation("outer", parent) as outer:
         with fit_operation("inner", parent) as inner:
-            inner.analysis_id = "b" * 64
+            inner.analysis_fingerprint = "b" * 64
             inner_record = build_fit_provenance(inner, {"name": "inner"})
         restored = emit_event("restored", stage="fit")
-        outer.analysis_id = "a" * 64
+        outer.analysis_fingerprint = "a" * 64
         outer_record = build_fit_provenance(outer, {"name": "outer"})
     assert restored["execution_id"] == outer.execution_id
-    assert "analysis_id" not in restored
+    assert "analysis_fingerprint" not in restored
     assert inner.execution_id != outer.execution_id
     for record, name in [(inner_record, "inner"), (outer_record, "outer")]:
         assert [event["event"] for event in record.events] == [
@@ -189,8 +191,8 @@ def test_finish_fit_identifies_the_operation_by_its_activity(parent_record):
     activity = {"name": "fit", "alpha": 1.0}
     with fit_operation("fit", parent) as operation:
         provenance = finish_fit(operation, activity)
-    expected = analysis_fingerprint(parent.metadata_fingerprint, activity)
-    assert operation.analysis_id == expected
+    expected = analysis_fingerprint(parent.data_fingerprint, activity)
+    assert operation.analysis_fingerprint == expected
     assert provenance.analysis_fingerprint == expected
     assert provenance.execution_id == operation.execution_id
     recorded = provenance.to_dict()["activities"][-1]
@@ -204,7 +206,7 @@ def test_normalization_logs_the_same_completion_event_it_records(caplog):
 
     caplog.set_level(logging.INFO, logger="boldtailor")
     with normalization("data") as operation:
-        operation.data_id = "d" * 64
+        operation.data_fingerprint = "d" * 64
         provenance = operation.provenance((), {"name": "normalize"})
     events = records(caplog)
     assert [e["event"] for e in events] == [
@@ -213,27 +215,30 @@ def test_normalization_logs_the_same_completion_event_it_records(caplog):
     ]
     assert {e["stage"] for e in events} == {"data"}
     assert {e["execution_id"] for e in events} == {provenance.execution_id}
-    assert "data_id" not in events[0] and events[1]["data_id"] == "d" * 64
+    assert (
+        "data_fingerprint" not in events[0]
+        and events[1]["data_fingerprint"] == "d" * 64
+    )
     assert dict(provenance.events[-1]) == events[1]
     assert [dict(e)["event"] for e in provenance.events] == [e["event"] for e in events]
     assert provenance.to_dict()["activities"] == [{"name": "normalize"}]
 
 
-def test_normalization_failure_logs_failed_with_the_known_data_id(caplog):
+def test_normalization_failure_logs_failed_with_the_known_data_fingerprint(caplog):
     """A failure after the sources are known still names the data."""
     from boldtailor._fit_lifecycle import normalization
 
     caplog.set_level(logging.INFO, logger="boldtailor")
     with pytest.raises(ValueError, match="bad input"):
         with normalization("prepared_design") as operation:
-            operation.data_id = "e" * 64
+            operation.data_fingerprint = "e" * 64
             raise ValueError("bad input")
     events = records(caplog)
     assert [e["event"] for e in events] == [
         "normalization_started",
         "normalization_failed",
     ]
-    assert events[1]["level"] == "ERROR" and events[1]["data_id"] == "e" * 64
+    assert events[1]["level"] == "ERROR" and events[1]["data_fingerprint"] == "e" * 64
     assert events[1]["stage"] == "prepared_design"
 
 
