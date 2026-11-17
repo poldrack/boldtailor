@@ -271,6 +271,7 @@ def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
             trial_predictors([r.events for r in subset], model),
             library=library,
             fractions=[0.3, 0.7, 1],
+            task_model=model,  # inner folds select HRFs with the selection model
         )
         expected = select_ridge_fractions(scores.cv_r2, scores.grid)
         actual = result["tuning"][scope]["selection"]

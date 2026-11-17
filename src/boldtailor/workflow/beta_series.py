@@ -15,7 +15,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
 import logging
-from numbers import Integral, Real
+from numbers import Real
 from uuid import uuid4
 
 import numpy as np
@@ -52,17 +52,13 @@ from boldtailor.parallel import map_blocks, validate_n_jobs
 from boldtailor.model import TaskModel
 from boldtailor.workflow import inputs
 from boldtailor.workflow.analysis import fit_beta_series
-from boldtailor.workflow.files import odd_even_parity
+from boldtailor.workflow.files import min_runs_per_half, odd_even_parity
 from boldtailor.workflow.inputs import _trimmed_sources, load_block
 
 log = logging.getLogger("boldtailor.workflow")
 
 
-def _settings(
-    runs, library, alphas, percentile, block_size, maximum, n_jobs, hrf_method="cv"
-):
-    validate_n_jobs(n_jobs)
-    grid = tuple(sorted(_alpha_grid(alphas)))
+def _validate_percentile(percentile):
     if (
         isinstance(percentile, (bool, np.bool_))
         or not isinstance(percentile, Real)
@@ -70,15 +66,10 @@ def _settings(
         or not 0 <= percentile <= 100
     ):
         raise ValueError("percentile must be between 0 and 100")
-    for name, value in (("block_size", block_size), ("max_grayordinates", maximum)):
-        if value is None and name == "max_grayordinates":
-            continue
-        if (
-            isinstance(value, (bool, np.bool_))
-            or not isinstance(value, Integral)
-            or value < 1
-        ):
-            raise ValueError(f"{name} must be a positive integer")
+
+
+def _halves(runs, library, hrf_method):
+    """Odd/even run positions of a session whose runs share one spatial axis."""
     if (
         not runs
         or len({r.label for r in runs}) != len(runs)
@@ -89,28 +80,23 @@ def _settings(
     if any(r.image.header.get_axis(1) != brain for r in runs):
         raise ValueError("runs must have identical CIFTI BrainModel axes")
     halves = odd_even_parity(runs)
-    minimum = 2 if library is None or hrf_method == "reml" else 3
+    minimum = min_runs_per_half(
+        hrf_method, ridge_cv=True, optimized=library is not None
+    )
     if any(len(indices) < minimum for indices in halves.values()):
         raise ValueError(f"Ridge CV needs at least {minimum} odd and even runs")
-    limit = len(brain) if maximum is None else min(maximum, len(brain))
-    blocks = [
-        np.arange(start, min(start + block_size, limit))
-        for start in range(0, limit, block_size)
-    ]
-    return grid, halves, blocks
+    return halves
 
 
 def _signature(runs, indices):
     return spatial_signature(runs[0].image.header.get_axis(1), indices)
 
 
-def _block_selection_options(options, indices, *, include_model=True):
-    """Subset supplied feature correlations without changing the selection model."""
-    result = dict(options or {})
-    if result.get("reml_options") is not None:
+def _block_selection_options(options, indices):
+    """The HRF method, with supplied feature correlations subset to one block."""
+    result = dict(options)
+    if result["reml_options"] is not None:
         result["reml_options"] = result["reml_options"].subset(indices)
-    if not include_model:
-        result.pop("task_model", None)
     return result
 
 
@@ -135,7 +121,6 @@ class _CvContext:
 
 def _score_block(indices, ctx, scope_runs, scope_predictors):
     options = _block_selection_options(ctx.selection_options, indices)
-    options["hrf_method"] = options.pop("method", "cv")
     scorer = score_fraction_candidates if ctx.fractional else score_ridge_candidates
     return scorer(
         load_block(scope_runs, ctx.root, indices, ctx.task_model),
@@ -145,7 +130,9 @@ def _score_block(indices, ctx, scope_runs, scope_predictors):
         run_labels=[r.label for r in scope_runs],
         feature_signature=_signature(scope_runs, indices),
         encoding_mode=ctx.encoding_mode,
-        **options,
+        hrf_method=options["method"],
+        reml_options=options["reml_options"],
+        task_model=ctx.selection_model,
     )
 
 
@@ -249,9 +236,7 @@ def _outer_block(indices, ctx, alpha, train, test):
             run_labels=[labels[i] for i in train],
             feature_signature=signature,
             task_model=ctx.selection_model,
-            **_block_selection_options(
-                ctx.selection_options, indices, include_model=False
-            ),
+            **_block_selection_options(ctx.selection_options, indices),
         )
     )
     options = (
@@ -379,9 +364,7 @@ def _final_selection(indices, ctx):
             run_labels=[r.label for r in ctx.runs],
             feature_signature=_signature(ctx.runs, indices),
             task_model=ctx.selection_model,
-            **_block_selection_options(
-                ctx.selection_options, indices, include_model=False
-            ),
+            **_block_selection_options(ctx.selection_options, indices),
         )
     )
 
@@ -421,6 +404,7 @@ def _build_cv_context(
     alphas,
     fractions,
     percentile,
+    blocks,
     block_size,
     max_grayordinates,
     n_jobs,
@@ -430,6 +414,8 @@ def _build_cv_context(
     reml_options,
 ):
     validate_encoding_mode(encoding_mode)
+    validate_n_jobs(n_jobs)
+    _validate_percentile(percentile)
     if not isinstance(task_model, TaskModel):
         raise ValueError("task_model must be a TaskModel")
     selection_model = task_model if selection_model is None else selection_model
@@ -441,22 +427,17 @@ def _build_cv_context(
     if library is None and hrf_method != "cv":
         raise ValueError("HRF method requires a library")
     selection_options = HrfOptions(method=hrf_method, reml_options=reml_options)
-    if hrf_method == "reml":
-        selection_options["task_model"] = selection_model
     fractional = fractions is not None
-    candidates = fraction_grid(fractions) if fractional else alphas
-    grid, halves, blocks = _settings(
-        runs,
-        library,
-        candidates,
-        percentile,
-        block_size,
-        max_grayordinates,
-        n_jobs,
-        hrf_method,
+    grid = tuple(
+        sorted(_alpha_grid(fraction_grid(fractions) if fractional else alphas))
     )
     if fractional:
         grid = tuple(reversed(grid))
+    halves = _halves(runs, library, hrf_method)
+    if blocks is None:
+        blocks = inputs.make_blocks(
+            runs, block_size=block_size, max_grayordinates=max_grayordinates
+        )
     predictors = trial_predictors(
         [r.events for r in runs], task_model, [r.label for r in runs]
     )
@@ -518,6 +499,7 @@ def fit_cv_beta_series(
     alphas=None,
     fractions=None,
     percentile=90.0,
+    blocks=None,
     block_size=4096,
     max_grayordinates=None,
     n_jobs=1,
@@ -534,7 +516,10 @@ def fit_cv_beta_series(
     Betas retain the selected regularization. Fractional targets are OLS fits
     under training-selected HRFs; shared-alpha targets equal the fitted betas.
     The task model drives fits and encoding predictors; selection_model (default
-    the task model) scores HRFs, for example without RT.
+    the task model) scores HRFs in every inner fold, outer split and the final
+    fit, for example without RT. Supply the session's blocks to share them with
+    other fits; otherwise nonconstant blocks are built from block_size and
+    max_grayordinates. Grayordinates outside the blocks stay undefined.
     """
     ctx, halves = _build_cv_context(
         runs,
@@ -544,6 +529,7 @@ def fit_cv_beta_series(
         alphas=alphas,
         fractions=fractions,
         percentile=percentile,
+        blocks=blocks,
         block_size=block_size,
         max_grayordinates=max_grayordinates,
         n_jobs=n_jobs,
@@ -738,7 +724,7 @@ def _fixed_models(runs, root, blocks, settings, task_model, hrf, selected):
     }
 
 
-def _cv_model(runs, root, settings, library, task_model, hrf):
+def _cv_model(runs, root, blocks, settings, library, task_model, hrf):
     fractional = settings.ridge_mode == "fractional_cv"
     grid = (
         dict(fractions=settings.ridge_fractions)
@@ -762,8 +748,7 @@ def _cv_model(runs, root, settings, library, task_model, hrf):
         **grid,
         encoding_mode=settings.encoding_mode,
         percentile=settings.ridge_percentile,
-        block_size=settings.block_size,
-        max_grayordinates=settings.max_grayordinates,
+        blocks=blocks,
         n_jobs=settings.n_jobs,
     )
     estimator = _ESTIMATOR[settings.ridge_mode]
@@ -790,6 +775,6 @@ def fit_beta_models(runs, root, blocks, settings, library, selections, task_mode
             _fixed_models(runs, root, blocks, settings, task_model, hrf, selected)
         )
         if settings.ridge_mode in ("cv", "fractional_cv"):
-            model = _cv_model(runs, root, settings, candidates, task_model, hrf)
+            model = _cv_model(runs, root, blocks, settings, candidates, task_model, hrf)
             models[model.name] = model
     return models

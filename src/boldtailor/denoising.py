@@ -35,6 +35,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
 import json
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -279,12 +280,26 @@ def _validate_statistic(statistic, n_features):
 
 def _mixture(values, context):
     try:
-        return mixture_threshold(values)
+        mixture = mixture_threshold(values)
     except ValueError as error:
         raise ValueError(
             f"{context}: automatic pool_r2_threshold failed: {error}; "
             "pass a fixed pool_r2_threshold instead"
         ) from error
+    if not mixture.converged:
+        _warn_unconverged(mixture, context)
+    return mixture
+
+
+def _warn_unconverged(mixture, context):
+    warnings.warn(
+        f"{context}: the Gaussian mixture for the automatic pool_r2_threshold "
+        f"did not converge after {mixture.n_iter} iterations; its threshold "
+        f"{mixture.threshold:g} is used. Pass a fixed pool_r2_threshold to "
+        "avoid relying on it",
+        RuntimeWarning,
+        stacklevel=4,
+    )
 
 
 def _best_features(scores, candidates):

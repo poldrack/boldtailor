@@ -23,7 +23,7 @@ from boldtailor.workflow import (
     summaries,
     surfaces,
 )
-from boldtailor.workflow.files import odd_even_parity
+from boldtailor.workflow.files import min_runs_per_half, odd_even_parity
 from boldtailor.workflow.settings import STAGES, WorkflowSettings
 
 log = logging.getLogger("boldtailor.workflow")
@@ -197,7 +197,7 @@ def _check_ridge_cv(settings, runs, task_model):
     cv = settings.ridge_mode in ("cv", "fractional_cv")
     if "betas" not in settings.stages or not cv:
         return
-    minimum = 2 if settings.hrf_method == "reml" else 3
+    minimum = min_runs_per_half(settings.hrf_method, ridge_cv=True)
     if not _splits_possible(runs, minimum):
         message = (
             RIDGE_CV_PARITY if minimum == 3 else RIDGE_CV_PARITY.replace("three", "two")
@@ -208,7 +208,7 @@ def _check_ridge_cv(settings, runs, task_model):
 
 
 def _reliability_runs(session):
-    minimum = 1 if session.settings.hrf_method == "reml" else 2
+    minimum = min_runs_per_half(session.settings.hrf_method)
     return session.enabled("reliability") and _splits_possible(session.runs, minimum)
 
 

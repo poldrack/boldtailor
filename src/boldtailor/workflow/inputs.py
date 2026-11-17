@@ -14,6 +14,7 @@ from boldtailor.task_detection import detect_task_model
 from boldtailor.workflow.files import (
     discover_runs,
     load_runs,
+    min_runs_per_half,
     odd_even_parity,
     run_sources,
 )
@@ -166,7 +167,7 @@ def load_session(settings, *, hrf_only=False):
     runs = [_trim(run, task_model, automatic) for run in raw_runs]
     if len({tuple(r.confounds.columns) for r in runs}) != 1:
         raise InputError("Retained confound names must match across runs")
-    minimum = 1 if settings.hrf_method == "reml" else 2
+    minimum = min_runs_per_half(settings.hrf_method)
     if len(runs) < minimum:
         raise InputError("HRF selection needs at least two runs")
     if not hrf_only and any(

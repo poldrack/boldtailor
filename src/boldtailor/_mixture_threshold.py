@@ -131,7 +131,7 @@ def _fit(fitted):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ConvergenceWarning)
             return GaussianMixture(**SETTINGS).fit(fitted[:, None])
-    except Exception as error:  # e.g. singular covariance with reg_covar=0
+    except ValueError as error:  # e.g. singular covariance with reg_covar=0
         raise ValueError(f"the Gaussian mixture fit failed: {error}") from error
 
 

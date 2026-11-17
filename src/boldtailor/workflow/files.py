@@ -219,6 +219,18 @@ def odd_even_parity(runs):
     )
 
 
+def min_runs_per_half(hrf_method, *, ridge_cv=False, optimized=True):
+    """Runs each odd/even half needs for split HRF selection or nested ridge CV.
+
+    CV selection needs two runs and REML one. Ridge CV nests that selection in
+    leave-one-run-out tuning, adding a run; canonical HRFs need two for tuning.
+    """
+    selection = 1 if hrf_method == "reml" else 2
+    if not ridge_cv:
+        return selection
+    return selection + 1 if optimized else 2
+
+
 def reaction_times(runs, *, missing_ok=False):
     """Per-run RT arrays; unavailable (nonpositive or missing) RTs are NaN.
 
