@@ -36,14 +36,36 @@ from boldtailor._arrays import (
     freeze_sequence_fields_in_place,
 )
 from boldtailor._reml_inputs import checked_random, feature_rho, validate_groups
-from boldtailor._reml_criterion import pool_terms, pooled_quadratic
-from boldtailor._reml_search import minimize_ratio
+from boldtailor._reml_criterion import (
+    criterion,
+    pool_terms,
+    pooled_quadratic,
+    profiled_variance,
+)
+from boldtailor._reml_search import RatioOptimum, minimize_ratio
 from boldtailor._reml_terms import (
     FixedProjection,
+    RemlTerms,
     project_fixed,
     reml_terms,
     reproject_signals,
 )
+
+__all__ = [
+    "FixedProjection",
+    "RatioOptimum",
+    "RemlFit",
+    "RemlGroup",
+    "RemlSelection",
+    "RemlTerms",
+    "criterion",
+    "fit_reml",
+    "minimize_ratio",
+    "profiled_variance",
+    "project_fixed",
+    "reml_terms",
+    "select_random_effects_design",
+]
 
 
 @dataclass(frozen=True)

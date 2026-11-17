@@ -77,6 +77,14 @@ from boldtailor.provenance import (
 
 _AUGMENTATION = "denoising_augmentation"
 
+__all__ = [
+    "DenoisingFold",
+    "DenoisingResult",
+    "PcaDiagnostics",
+    "select_denoising",
+    "with_denoising",
+]
+
 
 # ---- validation and labels --------------------------------------------------------
 
