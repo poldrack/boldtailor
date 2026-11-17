@@ -24,9 +24,9 @@ def rt_summary(activation, beta_models):
     if activation is None:
         return None
     rows = [
-        dict(model=k, scope=s, median_r=median(m.fit["rt"][s]))
+        dict(model=k, scope=s, median_r=median(m.fit.rt[s]))
         for k, m in beta_models.items()
-        if m.fit["rt"] is not None
+        if m.fit.rt is not None
         for s in ("all", "odd", "even")
     ]
     return pd.DataFrame(rows) if rows else None
@@ -63,8 +63,8 @@ def encoding_scores(beta_models):
         dict(
             model=model.name,
             split=split,
-            median_encoding_r2=median(outer["encoding_r2"]),
-            grayordinates=int(np.isfinite(outer["encoding_r2"]).sum()),
+            median_encoding_r2=median(outer.encoding_r2),
+            grayordinates=int(np.isfinite(outer.encoding_r2).sum()),
         )
         for model in tuned_models(beta_models)
         for split, outer in model.evaluation.items()

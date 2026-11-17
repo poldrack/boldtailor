@@ -96,12 +96,12 @@ def test_both_glms_match_independent_ols_and_keep_spatial_order(
             else hrf_maps.selection_maps(selected, 4)["all"][0, :3].astype(int)
         )
         effects, scores = independent_ols(runs, [0, 1, 2], small_library, ids)
-        np.testing.assert_allclose(result["effects"][:, :3], effects, atol=1e-8)
-        np.testing.assert_allclose(result["r2"][:, :3], scores, atol=1e-10)
-        assert np.isnan(result["r2"][:, 3]).all()
-        assert np.isnan(result["effects"][:, 3]).all()
-        assert result["designs"] and result["provenance"]
-        for (run_index, _), design in result["designs"].items():
+        np.testing.assert_allclose(result.effects[:, :3], effects, atol=1e-8)
+        np.testing.assert_allclose(result.r2[:, :3], scores, atol=1e-10)
+        assert np.isnan(result.r2[:, 3]).all()
+        assert np.isnan(result.effects[:, 3]).all()
+        assert result.designs and result.provenance
+        for (run_index, _), design in result.designs.items():
             assert ("missing_response_time" in design) == (
                 missing_rt and run_index == 0
             )
@@ -125,8 +125,8 @@ def test_glm_model_and_selection_share_the_detected_task_model(
     for bundle in selections.values():
         assert bundle["all"].task_model == model_task
     fitted = analysis.fit_glms(runs, root, blocks, model, selections=selections)
-    assert fitted["designs"]
-    for (run, cid), design in fitted["designs"].items():
+    assert fitted.designs
+    for (run, cid), design in fitted.designs.items():
         expected = task_columns(
             expand_events(runs[run].events, model_task, run),
             runs[run].frame_times,
@@ -160,12 +160,10 @@ def test_select_hrfs_without_rt_still_feeds_the_full_glm(
         inputs.glm_model(runs, model_task),
         selections=selections,
     )
-    assert all(
-        "response_time" in design.columns for design in fitted["designs"].values()
-    )
-    assigned = np.isfinite(fitted["effects"][0, :4])
+    assert all("response_time" in design.columns for design in fitted.designs.values())
+    assigned = np.isfinite(fitted.effects[0, :4])
     assert assigned.any()
-    assert np.isfinite(fitted["effects"][1, :4][assigned]).all()
+    assert np.isfinite(fitted.effects[1, :4][assigned]).all()
 
 
 def test_beta_series_without_response_time_has_no_rt_correlations(
@@ -181,7 +179,7 @@ def test_beta_series_without_response_time_has_no_rt_correlations(
     model = detect_task_model([r.events for r in runs])
     blocks = inputs.make_blocks(runs, block_size=2)
     result = analysis.fit_beta_series(runs, root, blocks, task_model=model)
-    assert result["rt"] is None and len(result["betas"]) == 4
+    assert result.rt is None and len(result.betas) == 4
 
 
 def test_select_hrfs_without_splits_selects_on_all_runs_only(

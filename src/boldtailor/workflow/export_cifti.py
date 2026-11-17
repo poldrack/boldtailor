@@ -8,7 +8,6 @@ from boldtailor.cifti import scalar_artifact
 from boldtailor.design import expand_events
 from boldtailor.diagnostics import ONE_SAMPLE_T_NAMES as ACTIVATION_MAP_NAMES
 from boldtailor.reliability import CORRELATION_NAMES, curve_correlations
-from boldtailor.ridge_results import FractionSelection
 from boldtailor.workflow.artifacts import (
     figure_artifact,
     json_artifact,
@@ -62,7 +61,7 @@ def _title(name):
 
 def _design_artifact(settings, descriptor, result, runs):
     arrays = {}
-    for (i, hrf), frame in sorted(result["designs"].items()):
+    for (i, hrf), frame in sorted(result.designs.items()):
         key = f"{runs[i].label}_hrf-{hrf:04d}"
         arrays[key] = frame.to_numpy(dtype=float)
         arrays[key + "_columns"] = np.asarray(frame.columns, dtype=str)
@@ -72,10 +71,10 @@ def _design_artifact(settings, descriptor, result, runs):
 
 def _fit_artifacts(settings, brain, descriptor, result, runs):
     return [
-        _map(settings, brain, descriptor, "rsquared", result["r2"], R2_NAMES),
+        _map(settings, brain, descriptor, "rsquared", result.r2, R2_NAMES),
         _design_artifact(settings, descriptor, result, runs),
         json_artifact(
-            f"{settings.stem}_desc-{descriptor}_provenance.json", result["provenance"]
+            f"{settings.stem}_desc-{descriptor}_provenance.json", result.provenance
         ),
     ]
 
@@ -88,10 +87,10 @@ def glm_artifacts(settings, brain, glms, runs, task_model):
         artifacts.extend(_fit_artifacts(settings, brain, descriptor, result, runs))
         for stat in ("effects", "variances", "t", "z"):
             artifacts.append(
-                _map(settings, brain, descriptor, stat, result[stat], names)
+                _map(settings, brain, descriptor, stat, getattr(result, stat), names)
             )
     if {"CanonicalGLM", "OptimizedGLM"} <= set(glms):
-        difference = glms["OptimizedGLM"]["r2"][0] - glms["CanonicalGLM"]["r2"][0]
+        difference = glms["OptimizedGLM"].r2[0] - glms["CanonicalGLM"].r2[0]
         artifacts.append(
             _map(
                 settings,
@@ -187,9 +186,9 @@ def hrf_artifacts(settings, brain, selections, library, *, include_splits=True):
 def _beta_maps(settings, brain, descriptor, result, runs):
     artifacts = []
     for i, run in enumerate(runs):
-        ids = result["trial_table"].query("run_index == @i").trial_id.tolist()
+        ids = result.trial_table.query("run_index == @i").trial_id.tolist()
         path = _run_path(settings, run, descriptor, "betas")
-        artifacts.append(scalar_artifact(path, brain, result["betas"][i], ids))
+        artifacts.append(scalar_artifact(path, brain, result.betas[i], ids))
     return artifacts
 
 
@@ -206,7 +205,7 @@ def fraction_fit_artifacts(settings, brain, descriptor, result, runs):
             brain,
             descriptor,
             "ridgefraction",
-            result["ridge_fraction"][None],
+            result.ridge_fraction[None],
             ["selected_ridge_fraction"],
         ),
         _map(
@@ -214,7 +213,7 @@ def fraction_fit_artifacts(settings, brain, descriptor, result, runs):
             brain,
             descriptor,
             "ridgealpha",
-            result["run_ridge_alphas"],
+            result.run_ridge_alphas,
             [r.label for r in runs],
         ),
     ]
@@ -227,11 +226,11 @@ def beta_model_artifacts(settings, brain, runs, model, library):
     if model.fractional:
         artifacts.extend(fraction_fit_artifacts(settings, brain, name, fit, runs))
     artifacts.append(
-        table_artifact(f"{settings.stem}_desc-{name}_trials.tsv", fit["trial_table"])
+        table_artifact(f"{settings.stem}_desc-{name}_trials.tsv", fit.trial_table)
     )
     artifacts.extend(_beta_maps(settings, brain, name, fit, runs))
-    if fit["rt"] is not None:
-        artifacts.append(_rt_map(settings, brain, name, fit["rt"]))
+    if fit.rt is not None:
+        artifacts.append(_rt_map(settings, brain, name, fit.rt))
     if model.tuning:
         artifacts.extend(_tuned_artifacts(settings, brain, runs, model, library))
     return artifacts
@@ -257,7 +256,7 @@ def _tuned_artifacts(settings, brain, runs, model, library):
 
 
 def _tuning_maps(settings, brain, descriptor, tuned, grid_names):
-    scores, selected = tuned["scores"], tuned["selection"]
+    scores, selected = tuned.scores, tuned.selection
     ids = np.where(scores.fold_hrf_indices >= 0, scores.fold_hrf_indices, np.nan)
     return [
         _map(settings, brain, descriptor, "encodingcvr2", scores.cv_r2, grid_names),
@@ -282,14 +281,14 @@ def _tuning_maps(settings, brain, descriptor, tuned, grid_names):
 
 def _tuning_files(settings, descriptor, mode, scope, tuned, table, meta):
     base = f"{settings.stem}_desc-{descriptor}"
-    scores = tuned["scores"]
+    scores = tuned.scores
     return [
         npz_artifact(base + "_folds.npz", sse=scores.fold_sse, sst=scores.fold_sst),
         table_artifact(
             base + "_scores.tsv",
             table.loc[(table["mode"] == mode) & (table.scope == scope)],
         ),
-        json_artifact(base + "_provenance.json", tuned["provenance"].to_dict()),
+        json_artifact(base + "_provenance.json", tuned.provenance.to_dict()),
         json_artifact(base + "_metadata.json", meta),
     ]
 
@@ -316,14 +315,14 @@ def _fraction_selection_maps(settings, brain, descriptor, selected):
 
 
 def _tuning_artifacts(settings, brain, mode, scope, tuned, table):
-    fractional = isinstance(tuned["selection"], FractionSelection)
+    fractional = tuned.fractional
     kind, unit = ("FractionalCV", "fraction") if fractional else ("RidgeCV", "alpha")
     descriptor = f"{mode}{kind}{scope.title()}"
-    grid = [f"encoding_inner_cv_r2_{unit}-{v:g}" for v in tuned["scores"].grid]
+    grid = [f"encoding_inner_cv_r2_{unit}-{v:g}" for v in tuned.scores.grid]
     artifacts = _tuning_maps(settings, brain, descriptor, tuned, grid)
     if fractional:
         artifacts.extend(
-            _fraction_selection_maps(settings, brain, descriptor, tuned["selection"])
+            _fraction_selection_maps(settings, brain, descriptor, tuned.selection)
         )
     meta = (
         fraction_tuning_metadata(tuned) if fractional else alpha_tuning_metadata(tuned)
@@ -336,12 +335,14 @@ def _tuning_artifacts(settings, brain, mode, scope, tuned, table):
 def _prediction_artifacts(settings, brain, descriptor, runs, outer):
     by_label = {r.label: r for r in runs}
     artifacts = []
-    for i, label in enumerate(outer["test_run_labels"]):
+    for i, label in enumerate(outer.test_run_labels):
         run = by_label[label]
         names = [f"{label}_trial-{j + 1:04d}" for j in range(len(run.events))]
         for suffix in ("predictions", "targets"):
             path = _run_path(settings, run, descriptor, suffix)
-            artifacts.append(scalar_artifact(path, brain, outer[suffix][i], names))
+            artifacts.append(
+                scalar_artifact(path, brain, getattr(outer, suffix)[i], names)
+            )
     return artifacts
 
 
@@ -352,7 +353,7 @@ def _outer_maps(settings, brain, descriptor, scope, outer, ids):
             brain,
             descriptor,
             "encodingpredictionr2",
-            outer["encoding_r2"][None],
+            outer.encoding_r2[None],
             [f"encoding_outer_r2_{scope}"],
         ),
         _map(
@@ -360,8 +361,8 @@ def _outer_maps(settings, brain, descriptor, scope, outer, ids):
             brain,
             descriptor,
             "coefficients",
-            outer["coefficients"],
-            list(outer["coefficient_names"]),
+            outer.coefficients,
+            list(outer.coefficient_names),
         ),
         _map(settings, brain, descriptor, "hrfindex", ids[None], ["training_hrf_id"]),
     ]
@@ -370,26 +371,26 @@ def _outer_maps(settings, brain, descriptor, scope, outer, ids):
 def _outer_loss(base, outer):
     return npz_artifact(
         base + "_loss.npz",
-        sse=outer["run_sse"],
-        sst=outer["run_sst"],
-        train_run_intercepts=outer["train_run_intercepts"],
-        train_run_predictor_means=outer["train_run_predictor_means"],
-        scoring_offsets=outer["scoring_offsets"],
-        train_run_labels=np.asarray(outer["train_run_labels"]),
-        test_run_labels=np.asarray(outer["test_run_labels"]),
+        sse=outer.run_sse,
+        sst=outer.run_sst,
+        train_run_intercepts=outer.train_run_intercepts,
+        train_run_predictor_means=outer.train_run_predictor_means,
+        scoring_offsets=outer.scoring_offsets,
+        train_run_labels=np.asarray(outer.train_run_labels),
+        test_run_labels=np.asarray(outer.test_run_labels),
     )
 
 
 def _outer_artifacts(settings, brain, runs, mode, scope, outer, library):
-    fractional = "ridge_fraction" in outer
+    fractional = outer.fractional
     kind = "FractionalCV" if fractional else "RidgeCV"
     descriptor = mode + kind + _title(scope)
     base = f"{settings.stem}_desc-{descriptor}"
-    ids = np.where(outer["hrf_indices"] >= 0, outer["hrf_indices"], np.nan)
+    ids = np.where(outer.hrf_indices >= 0, outer.hrf_indices, np.nan)
     artifacts = [
         *_outer_maps(settings, brain, descriptor, scope, outer, ids),
         _outer_loss(base, outer),
-        json_artifact(base + "_provenance.json", outer["provenance"]),
+        json_artifact(base + "_provenance.json", outer.provenance),
         json_artifact(base + "_metadata.json", outer_metadata(runs, outer, fractional)),
         parameter_artifact(
             brain, library, ids, _map_path(settings, descriptor, "hrfparameters")

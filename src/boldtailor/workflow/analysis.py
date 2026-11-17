@@ -7,10 +7,9 @@ import pandas as pd
 
 from boldtailor.results import AnalysisResult
 from boldtailor.single_trial_results import SharedTrialDesign
-from boldtailor.workflow._records import (
+from boldtailor.workflow.records import (
     BetaFit,
     GlmFit,
-    FitMetadata,
     BetaBlock,
     GlmBlock,
     SelectionBundle,
@@ -131,37 +130,31 @@ def _jobs(blocks, selections):
     ]
 
 
+_GLM_MAPS = ("effects", "variances", "t", "z", "r2")
+
+
 def fit_glms(runs, root, blocks, model, *, selections=None, n_jobs=1) -> GlmFit:
     """Fit one contrast per task regressor using SPM or the selected HRF per feature."""
     n = runs[0].image.shape[1]
     rows = len(model.task_model.regressor_names)
-    result = GlmFit(
-        effects=np.full((rows, n), np.nan),
-        variances=np.full((rows, n), np.nan),
-        t=np.full((rows, n), np.nan),
-        z=np.full((rows, n), np.nan),
-        r2=np.full((3, n), np.nan),
-        designs={},
-        provenance=[],
-    )
+    maps = {key: np.full((3 if key == "r2" else rows, n), np.nan) for key in _GLM_MAPS}
+    designs, provenance = {}, []
     for (indices, _), block in map_blocks(
         _glm_block, _jobs(blocks, selections), args=(runs, root, model), n_jobs=n_jobs
     ):
-        for key in ("effects", "variances", "t", "z", "r2"):
-            result[key][:, indices] = block[key]
-        _update_result_metadata(result, block, indices)
+        for key in _GLM_MAPS:
+            maps[key][:, indices] = block[key]
+        designs.update(block["designs"])
+        provenance.append(_block_record(block, indices))
         log.info("GLM: %s–%s", indices[0], indices[-1])
-    return result
+    return GlmFit(**maps, designs=designs, provenance=tuple(provenance))
 
 
-def _update_result_metadata(result: FitMetadata, block, indices):
-    """Update result designs and append the block provenance in place."""
-    result["designs"].update(block["designs"])
-    result["provenance"].append(
-        dict(
-            grayordinate_indices=np.asarray(indices).tolist(),
-            record=block["provenance"],
-        )
+def _block_record(block, indices):
+    """One block's provenance, labeled with the grayordinates it covers."""
+    return dict(
+        grayordinate_indices=np.asarray(indices).tolist(),
+        record=block["provenance"],
     )
 
 
@@ -230,43 +223,58 @@ def fit_beta_series(
         f"alpha={alpha:g})" if fractions is None else "fractional ridge)"
     )
     log.info("%s: fitting %d runs in %d blocks", label, len(runs), len(blocks))
-    n = runs[0].image.shape[1]
-    result = BetaFit(
-        betas=[np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs],
-        r2=np.full((3, n), np.nan),
-        designs={},
-        provenance=[],
-        ridge_alpha=alpha,
+    fitted = _assemble_beta_blocks(
+        map_blocks(
+            _beta_block,
+            _jobs(blocks, selections),
+            args=(runs, root, ridge_alpha, task_model, fractions),
+            n_jobs=n_jobs,
+        ),
+        runs,
+        fractional=fractions is not None,
     )
-    if fractions is not None:
-        result.update(
-            ridge_fraction=fractions, run_ridge_alphas=np.full((len(runs), n), np.nan)
-        )
-    for (indices, _), block in map_blocks(
-        _beta_block,
-        _jobs(blocks, selections),
-        args=(runs, root, ridge_alpha, task_model, fractions),
-        n_jobs=n_jobs,
-    ):
-        for target, values in zip(result["betas"], block["betas"], strict=True):
-            target[:, indices] = values
-        result["r2"][:, indices] = block["r2"]
-        if "run_ridge_alphas" in result:
-            result["run_ridge_alphas"][:, indices] = np.asarray(
-                block["run_ridge_alphas"]
-            )
-        result["trial_table"] = block["trial_table"]
-        _update_result_metadata(result, block, indices)
-    result["rt"] = _rt_correlations(result, runs, task_model)
     log.info("%s: complete", label)
-    return result
+    return BetaFit(
+        **fitted,
+        regularization="normalized_ridge" if fractions is None else "fractional_ridge",
+        ridge_alpha=alpha,
+        ridge_fraction=fractions,
+        rt=_rt_correlations(fitted["betas"], runs, task_model),
+        hrf_selections=selections,
+    )
 
 
-def _rt_correlations(result, runs, task_model):
+def _assemble_beta_blocks(fitted_blocks, runs, *, fractional):
+    """Session-wide arrays filled block by block; the trial table is block-invariant."""
+    n = runs[0].image.shape[1]
+    betas = [np.full((len(r.events), n), np.nan, dtype=np.float32) for r in runs]
+    r2 = np.full((3, n), np.nan)
+    run_alphas = np.full((len(runs), n), np.nan) if fractional else None
+    designs, provenance, trial_table = {}, [], None
+    for (indices, _), block in fitted_blocks:
+        for target, values in zip(betas, block["betas"], strict=True):
+            target[:, indices] = values
+        r2[:, indices] = block["r2"]
+        if run_alphas is not None:
+            run_alphas[:, indices] = np.asarray(block["run_ridge_alphas"])
+        trial_table = block["trial_table"] if trial_table is None else trial_table
+        designs.update(block["designs"])
+        provenance.append(_block_record(block, indices))
+    return dict(
+        betas=tuple(betas),
+        r2=r2,
+        run_ridge_alphas=run_alphas,
+        designs=designs,
+        provenance=tuple(provenance),
+        trial_table=trial_table,
+    )
+
+
+def _rt_correlations(betas, runs, task_model):
     if "response_time" not in task_model.regressor_names:
         return None
     return correlate_rt(
-        result["betas"],
+        betas,
         reaction_times(runs),
         run_numbers=[r.number for r in runs],
     )

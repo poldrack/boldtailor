@@ -43,7 +43,7 @@ def _scope_record(bundle, name):
 
 
 def _shared_tuning_metadata(tuned):
-    scores, selected = tuned["scores"], tuned["selection"]
+    scores, selected = tuned.scores, tuned.selection
     return dict(
         run_labels=list(scores.run_labels),
         scoring_grayordinates=int(selected.scoring_mask.sum()),
@@ -55,7 +55,7 @@ def _shared_tuning_metadata(tuned):
 
 
 def alpha_tuning_metadata(tuned):
-    scores, selected = tuned["scores"], tuned["selection"]
+    scores, selected = tuned.scores, tuned.selection
     return dict(
         **_shared_tuning_metadata(tuned),
         alphas=list(scores.grid),
@@ -71,12 +71,12 @@ def alpha_tuning_metadata(tuned):
 def fraction_tuning_metadata(tuned):
     return dict(
         **_shared_tuning_metadata(tuned),
-        fractions=list(tuned["scores"].grid),
+        fractions=list(tuned.scores.grid),
         selection_rule="maximum_encoding_r2_per_grayordinate",
         validation_target="fixed_ols_betas",
         fraction_norm_basis=NORM_BASIS,
         percentile_role="descriptive_only",
-        summary_percentile=tuned["summary_percentile"],
+        summary_percentile=tuned.summary_percentile,
         tie_rule="largest fraction within 1e-12 of the maximum score",
     )
 
@@ -90,23 +90,23 @@ def _fraction_outer_metadata(runs):
 
 
 def outer_metadata(runs, outer, fractional):
-    within = outer["encoding_mode"] == "within_run"
+    within = outer.encoding_mode == "within_run"
     return dict(
-        **encoding_metadata(outer["encoding_mode"]),
+        **encoding_metadata(outer.encoding_mode),
         task_coefficient="pooled_training_beta_mean",
         train_run_intercept_coordinates="raw_predictors",
         predictions_include_scoring_offsets=False,
-        train_run_labels=outer["train_run_labels"],
-        test_run_labels=outer["test_run_labels"],
-        ridge_alpha=outer["ridge_alpha"],
-        predictor_names=list(outer["coefficient_names"]),
-        predictor_means=outer["predictor_means"].tolist(),
-        trial_masks=[m.tolist() for m in outer["trial_masks"]],
+        train_run_labels=outer.train_run_labels,
+        test_run_labels=outer.test_run_labels,
+        ridge_alpha=outer.ridge_alpha,
+        predictor_names=list(outer.coefficient_names),
+        predictor_means=outer.predictor_means.tolist(),
+        trial_masks=[m.tolist() for m in outer.trial_masks],
         trial_mask_run_labels=[r.label for r in runs],
         validation_target=(
             "fixed_ols_betas" if fractional else "selected_penalty_regularized_betas"
         ),
-        tuning_analysis_fingerprint=outer.get("tuning_analysis_fingerprint"),
+        tuning_analysis_fingerprint=outer.tuning_analysis_fingerprint,
         **(_fraction_outer_metadata(runs) if fractional else {}),
         interpretation=(
             "Within-run prediction of target beta variation; held-out means removed for scoring only"

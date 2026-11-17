@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from boldtailor.task_detection import detect_task_model
-from boldtailor.workflow import _records, analysis, beta_series, inputs
+from boldtailor.workflow import records, analysis, beta_series, inputs
 
 RECORDS = ("GlmFit", "BetaFit", "OuterEvaluation", "TuningResult", "CvBetaResult")
 
@@ -43,7 +43,7 @@ def assert_frozen(record, field):
 @pytest.mark.parametrize("name", RECORDS)
 def test_assembled_results_are_frozen_dataclasses(name):
     """Every assembled workflow result is a frozen dataclass, not a mutable mapping."""
-    record = getattr(_records, name)
+    record = getattr(records, name)
     assert is_dataclass(record) and record.__dataclass_params__.frozen
     assert not record.__dataclass_params__.eq  # arrays have no scalar equality
 
@@ -52,7 +52,7 @@ def test_glm_fit_is_assembled_once_and_cannot_be_rebound(session):
     """A GLM fit exposes its maps, designs and block provenance as fixed fields."""
     root, runs, model, blocks = session
     fitted = analysis.fit_glms(runs, root, blocks, inputs.glm_model(runs, model))
-    assert isinstance(fitted, _records.GlmFit)
+    assert isinstance(fitted, records.GlmFit)
     assert fitted.effects.shape == fitted.t.shape == (3, 4)
     assert fitted.r2.shape == (3, 4) and len(fitted.provenance) == len(blocks)
     assert set(fitted.designs) == {(run, 0) for run in range(len(runs))}
@@ -69,7 +69,7 @@ def test_beta_fit_states_its_regularization_explicitly(session):
     fractional = analysis.fit_beta_series(
         runs, root, blocks, task_model=model, ridge_fraction=fractions
     )
-    assert isinstance(ridge, _records.BetaFit)
+    assert isinstance(ridge, records.BetaFit)
     assert ridge.regularization == "normalized_ridge" and not ridge.fractional
     assert ridge.ridge_alpha == 0.5
     assert ridge.ridge_fraction is None and ridge.run_ridge_alphas is None
@@ -96,14 +96,14 @@ def test_cv_result_carries_one_regularization_through_every_record(
     """Tuning, outer evaluations and the final fit agree on the regularization."""
     result = cv_fit(cv_session, **grid)
     fractional = kind == "fractional_ridge"
-    assert isinstance(result, _records.CvBetaResult)
+    assert isinstance(result, records.CvBetaResult)
     assert set(result.tuning) == {"odd", "even", "all"}
     assert set(result.evaluation) == {"odd_to_even", "even_to_odd"}
     for tuned in result.tuning.values():
-        assert isinstance(tuned, _records.TuningResult)
+        assert isinstance(tuned, records.TuningResult)
         assert tuned.regularization == kind and tuned.fractional is fractional
     for outer in result.evaluation.values():
-        assert isinstance(outer, _records.OuterEvaluation)
+        assert isinstance(outer, records.OuterEvaluation)
         assert outer.regularization == kind and outer.fractional is fractional
         assert (outer.ridge_alpha is None) is fractional
         assert (outer.ridge_fraction is None) is not fractional

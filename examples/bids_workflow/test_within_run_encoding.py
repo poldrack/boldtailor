@@ -61,12 +61,12 @@ def test_outer_losses_and_maps_are_published_consistently(
     outer = model.evaluation["odd_to_even"]
     with np.load(next(p for p in paths if base + "_loss.npz" in p.name)) as saved:
         np.testing.assert_allclose(
-            saved["train_run_intercepts"], outer["train_run_intercepts"]
+            saved["train_run_intercepts"], outer.train_run_intercepts
         )
-        np.testing.assert_allclose(saved["scoring_offsets"], outer["scoring_offsets"])
-        assert saved["train_run_labels"].tolist() == outer["train_run_labels"]
-        assert saved["test_run_labels"].tolist() == outer["test_run_labels"]
-        for j, label in enumerate(outer["test_run_labels"]):
+        np.testing.assert_allclose(saved["scoring_offsets"], outer.scoring_offsets)
+        assert saved["train_run_labels"].tolist() == list(outer.train_run_labels)
+        assert saved["test_run_labels"].tolist() == list(outer.test_run_labels)
+        for j, label in enumerate(outer.test_run_labels):
             run = next(r for r in runs if r.label == label)
             prefix = f"{run.inputs.stem}_{settings.space_entity}_desc-{base}"
             observed, predicted = (

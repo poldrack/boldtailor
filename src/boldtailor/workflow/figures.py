@@ -25,7 +25,7 @@ def plot_tuning(axis, mode, tuning):
 def _plot_alpha_tuning(axis, mode, tuning):
     positive = []
     for scope, tuned in tuning.items():
-        selected = tuned["selection"]
+        selected = tuned.selection
         axis.plot(
             selected.alphas,
             selected.objective_scores,

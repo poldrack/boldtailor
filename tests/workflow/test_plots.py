@@ -28,7 +28,10 @@ def library():
 
 def make_model(name, rt, betas):
     return BetaModel(
-        name=name, hrf="canonical", estimator="OLS", fit={"rt": rt, "betas": betas}
+        name=name,
+        hrf="canonical",
+        estimator="OLS",
+        fit=SimpleNamespace(rt=rt, betas=betas),
     )
 
 
@@ -78,10 +81,12 @@ def test_library_figure_has_one_black_canonical_curve_and_colorbar(library):
 
 def test_glm_comparison_uses_paired_values_and_signed_difference():
     """Verify GLM comparison uses paired values and signed difference."""
-    canonical = {
-        "r2": np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])
-    }
-    optimized = {"r2": np.array([[0.4, 0.5, 0.6], [0.1, 0.1, 0.1], [0.3, 0.4, 0.5]])}
+    canonical = SimpleNamespace(
+        r2=np.array([[0.2, np.nan, 0.8], [0.1, 0.1, 0.1], [0.1, np.nan, 0.7]])
+    )
+    optimized = SimpleNamespace(
+        r2=np.array([[0.4, 0.5, 0.6], [0.1, 0.1, 0.1], [0.3, 0.4, 0.5]])
+    )
     table, fig = plots.glm_comparison(
         {"CanonicalGLM": canonical, "OptimizedGLM": optimized}
     )

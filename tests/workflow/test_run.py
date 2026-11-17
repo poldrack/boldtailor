@@ -561,7 +561,7 @@ def test_glm_stage_returns_results_without_populating_session(loaded_session):
     )
     fitted = workflow_run._fit_glms(session, selections=selections)
     assert set(fitted) == {"CanonicalGLM", "OptimizedGLM"}
-    assert fitted["OptimizedGLM"]["provenance"]
+    assert fitted["OptimizedGLM"].provenance
     assert set(vars(session)) == before
     assert "glms" not in vars(session)
     assert "selections" not in vars(session)

@@ -72,12 +72,12 @@ def test_walkthrough_reads_maps_and_matches_trials_to_beta_rows(
     for bundle in ns["selections"].values():
         assert set(bundle) == {"all", "odd", "even"}
     for tuned in ns["cv_results"].values():
-        assert set(tuned["tuning"]) == {"all", "odd", "even"}
-        assert set(tuned["evaluation"]) == {"odd_to_even", "even_to_odd"}
+        assert set(tuned.tuning) == {"all", "odd", "even"}
+        assert set(tuned.evaluation) == {"odd_to_even", "even_to_odd"}
     assert set(ns["activation"]) == set(ns["beta_models"])
     # The example's visible fit agrees with the saved optimized-GLM maps.
     np.testing.assert_allclose(
-        ns["glms"]["OptimizedGLM"]["r2"],
+        ns["glms"]["OptimizedGLM"].r2,
         ns["glm_values"],
         rtol=1e-6,
         atol=1e-7,
@@ -131,14 +131,14 @@ def test_parallel_walkthrough_fits_hrfs_and_glms_in_workers(
     for name, maps in concurrent["glms"].items():
         for key in ("effects", "variances", "t", "z", "r2"):
             np.testing.assert_allclose(
-                maps[key],
-                serial["glms"][name][key],
+                getattr(maps, key),
+                getattr(serial["glms"][name], key),
                 rtol=1e-7,
                 atol=1e-9,
                 equal_nan=True,
             )
-        assert [p["grayordinate_indices"] for p in maps["provenance"]] == [
-            p["grayordinate_indices"] for p in serial["glms"][name]["provenance"]
+        assert [p["grayordinate_indices"] for p in maps.provenance] == [
+            p["grayordinate_indices"] for p in serial["glms"][name].provenance
         ]
     for indices, bundle in concurrent["selections"].items():
         for split in ("all", "odd", "even"):

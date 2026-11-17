@@ -92,6 +92,7 @@ from boldtailor.workflow import (
     surfaces,
 )
 from boldtailor.workflow.beta_series import BetaModel, fit_cv_beta_series
+from boldtailor.workflow.records import GlmFit
 from boldtailor.workflow.export_cifti import figure_name
 from boldtailor.workflow.figures import tuning_figure
 from boldtailor.workflow.files import odd_even_parity
@@ -364,7 +365,8 @@ for model_name in ("CanonicalGLM", "OptimizedGLM"):
         key: np.full((len(task_model.regressor_names), len(brain)), np.nan)
         for key in ("effects", "variances", "t", "z")
     }
-    maps.update(r2=np.full((3, len(brain)), np.nan), designs={}, provenance=[])
+    maps["r2"] = np.full((3, len(brain)), np.nan)
+    designs, provenance = {}, []
     # Send only this block's selection to its worker, not the whole selection map.
     jobs = (
         (
@@ -381,15 +383,15 @@ for model_name in ("CanonicalGLM", "OptimizedGLM"):
     ):
         for key in ("effects", "variances", "t", "z", "r2"):
             maps[key][:, indices] = block_maps[key]
-        maps["designs"].update(block_maps["designs"])
-        maps["provenance"].append(
+        designs.update(block_maps["designs"])
+        provenance.append(
             dict(grayordinate_indices=indices.tolist(), record=block_maps["provenance"])
         )
         print(f"{model_name}: fitted grayordinates {indices[0]}–{indices[-1]}")
-    glms[model_name] = maps
+    glms[model_name] = GlmFit(**maps, designs=designs, provenance=tuple(provenance))
 
 # %%
-first_design = glms["CanonicalGLM"]["designs"][0, 0]
+first_design = glms["CanonicalGLM"].designs[0, 0]
 display(first_design.head())
 figures["Design"] = plots.design_figure(
     runs[0].frame_times, first_design, task_model.regressor_names
@@ -458,9 +460,9 @@ beta_models = {}
 for hrf, trial_fit in ols_fits.items():
     name = f"{hrf.capitalize()}TrialOLS"
     beta_models[name] = BetaModel(name=name, hrf=hrf, estimator="OLS", fit=trial_fit)
-    print(name, "first-run trials × grayordinates:", trial_fit["betas"][0].shape)
-display(ols_fits["optimized"]["trial_table"].head())
-display(ols_fits["canonical"]["designs"][0, 0].iloc[:5, :8])
+    print(name, "first-run trials × grayordinates:", trial_fit.betas[0].shape)
+display(ols_fits["optimized"].trial_table.head())
+display(ols_fits["canonical"].designs[0, 0].iloc[:5, :8])
 
 # %% [markdown]
 # ## 9. Tune regularization, evaluate independently, then refit
@@ -523,11 +525,11 @@ for hrf, candidates in (("canonical", None), ("optimized", library)):
             name=name,
             hrf=hrf,
             estimator=estimator,
-            fit=tuned["final"],
-            tuning=tuned["tuning"],
-            evaluation=tuned["evaluation"],
-            cv_provenance=tuned["provenance"],
-            predictors=tuple(tuned["predictors"]),
+            fit=tuned.final,
+            tuning=tuned.tuning,
+            evaluation=tuned.evaluation,
+            cv_provenance=tuned.provenance,
+            predictors=tuned.predictors,
         )
     elif settings.ridge_mode == "fixed":
         ridge_fit = analysis.fit_beta_series(
@@ -548,8 +550,8 @@ for hrf, candidates in (("canonical", None), ("optimized", library)):
 tuning = None
 if cv_results:
     # Rows of cv_r2 are candidate penalties; columns are grayordinates.
-    all_tuning = cv_results["optimized"]["tuning"]["all"]
-    scores = all_tuning["scores"]
+    all_tuning = cv_results["optimized"].tuning["all"]
+    scores = all_tuning.scores
     display(
         pd.DataFrame(
             {
@@ -560,7 +562,7 @@ if cv_results:
             }
         )
     )
-    display(all_tuning["selection"])
+    display(all_tuning.selection)
     tuning = tuning_table(beta_models)
     figures["RidgeTuning"] = tuning_figure(beta_models)
     display(tuning)
@@ -583,7 +585,7 @@ if cv_results:
 
 # %%
 activation = {
-    name: one_sample_t(model.fit["betas"]) for name, model in beta_models.items()
+    name: one_sample_t(model.fit.betas) for name, model in beta_models.items()
 }
 figures["BetaActivation"] = plots.activation_histogram(activation)
 display(figures["BetaActivation"])
@@ -614,10 +616,10 @@ if settings.surface_maps:
             )
 if meshes is not None:
     surface_panels = (
-        ("GLMR2Surface", {name: fit["r2"][0] for name, fit in glms.items()}, "r2"),
+        ("GLMR2Surface", {name: fit.r2[0] for name, fit in glms.items()}, "r2"),
         (
             "BetaR2Surface",
-            {name: model.fit["r2"][2] for name, model in beta_models.items()},
+            {name: model.fit.r2[2] for name, model in beta_models.items()},
             "delta_r2",
         ),
         (
@@ -628,9 +630,9 @@ if meshes is not None:
         (
             "RTSurface",
             {
-                name: model.fit["rt"]["all"]
+                name: model.fit.rt["all"]
                 for name, model in beta_models.items()
-                if model.fit["rt"] is not None
+                if model.fit.rt is not None
             },
             "rt",
         ),

@@ -1,6 +1,6 @@
 """Fraction or shared-alpha tuning with independent odd/even evaluation."""
 
-from boldtailor.workflow._records import (
+from boldtailor.workflow.records import (
     OuterEvaluation,
     OuterBlock,
     TuningResult,
@@ -12,7 +12,7 @@ from boldtailor.workflow._records import (
 
 from collections.abc import Mapping
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 import logging
 from numbers import Real
@@ -28,7 +28,7 @@ from boldtailor.provenance import (
     analysis_fingerprint,
     extend_provenance,
 )
-from boldtailor.ridge_results import CandidateScores, FractionSelection
+from boldtailor.ridge_results import CandidateScores
 from boldtailor.fractional_ridge import (
     NORM_BASIS,
     fraction_grid,
@@ -204,7 +204,7 @@ def _tune(ctx, train):
     return TuningResult(
         scores=scores,
         selection=selection,
-        run_labels=[r.label for r in scope_runs],
+        run_labels=tuple(r.label for r in scope_runs),
         provenance=tuning_provenance(
             scores, selection, encoding_mode=ctx.encoding_mode
         ),
@@ -287,12 +287,23 @@ def _outer_block(indices, ctx, alpha, train, test):
     )
 
 
-def _evaluate(ctx, alpha, train, test):
+_OUTER_MAPS = (
+    "encoding_r2",
+    "coefficients",
+    "run_sse",
+    "run_sst",
+    "hrf_indices",
+    "train_run_intercepts",
+    "scoring_offsets",
+)
+_OUTER_TRIALS = ("betas", "predictions", "targets")
+_OUTER_INVARIANTS = ("train_run_predictor_means", "predictor_means", "trial_masks")
+
+
+def _outer_buffers(ctx, train, test):
+    """NaN-filled session-wide arrays that the outer blocks fill in."""
     n = ctx.runs[0].image.shape[1]
-    result = OuterEvaluation(
-        encoding_mode=ctx.encoding_mode,
-        selection_task_model=ctx.selection_model.to_dict(),
-        coefficient_names=["task", *ctx.predictors[0].columns],
+    buffers = dict(
         train_run_intercepts=np.full((len(train), n), np.nan),
         scoring_offsets=np.full((len(test), n), np.nan),
         encoding_r2=np.full(n, np.nan),
@@ -300,60 +311,62 @@ def _evaluate(ctx, alpha, train, test):
         run_sse=np.full((len(test), n), np.nan),
         run_sst=np.full((len(test), n), np.nan),
         hrf_indices=np.full(n, -1, dtype=int),
-        ridge_alpha=None if ctx.fractional else alpha,
-        provenance=[],
-        train_run_labels=[ctx.runs[r].label for r in train],
-        test_run_labels=[ctx.runs[r].label for r in test],
-        betas=[],
-        predictions=[],
-        targets=[],
+        run_ridge_alphas=(
+            np.full((len(ctx.runs), n), np.nan) if ctx.fractional else None
+        ),
     )
-    if ctx.fractional:
-        result.update(
-            ridge_fraction=np.array(alpha),
-            run_ridge_alphas=np.full((len(ctx.runs), n), np.nan),
-        )
-    for key in ("betas", "predictions", "targets"):
-        result[key] = [
+    for key in _OUTER_TRIALS:
+        buffers[key] = tuple(
             np.full((len(ctx.runs[r].events), n), np.nan, dtype=np.float32)
             for r in test
-        ]
+        )
+    return buffers
+
+
+def _fill_outer_block(buffers, indices, block):
+    for key in _OUTER_MAPS:
+        buffers[key][..., indices] = block[key]
+    if buffers["run_ridge_alphas"] is not None:
+        buffers["run_ridge_alphas"][:, indices] = np.asarray(block["run_ridge_alphas"])
+    for key in _OUTER_TRIALS:
+        for target, values in zip(buffers[key], block[key], strict=True):
+            target[:, indices] = values
+
+
+def _outer_record(indices, block):
+    return dict(
+        grayordinate_indices=indices.tolist(),
+        record=block["provenance"],
+        selection_record=block["selection_provenance"],
+    )
+
+
+def _evaluate(ctx, alpha, train, test, tuning_fingerprint):
+    """Assemble one outer split; predictor statistics are the same in every block."""
+    buffers, invariants, provenance = _outer_buffers(ctx, train, test), {}, []
     for indices, block in map_blocks(
         _outer_block,
         ctx.blocks,
         args=(ctx, alpha, train, test),
         n_jobs=ctx.n_jobs,
     ):
-        for key in (
-            "encoding_r2",
-            "coefficients",
-            "run_sse",
-            "run_sst",
-            "hrf_indices",
-            "train_run_intercepts",
-            "scoring_offsets",
-        ):
-            result[key][..., indices] = block[key]
-        if "run_ridge_alphas" in result:
-            result["run_ridge_alphas"][:, indices] = np.asarray(
-                block["run_ridge_alphas"]
-            )
-        for key in ("betas", "predictions", "targets"):
-            for target, values in zip(result[key], block[key], strict=True):
-                target[:, indices] = values
-        result["train_run_predictor_means"] = block["train_run_predictor_means"]
-        result["predictor_means"], result["trial_masks"] = (
-            block["predictor_means"],
-            block["trial_masks"],
-        )
-        result["provenance"].append(
-            dict(
-                grayordinate_indices=indices.tolist(),
-                record=block["provenance"],
-                selection_record=block["selection_provenance"],
-            )
-        )
-    return result
+        _fill_outer_block(buffers, indices, block)
+        invariants = invariants or {key: block[key] for key in _OUTER_INVARIANTS}
+        provenance.append(_outer_record(indices, block))
+    return OuterEvaluation(
+        **buffers,
+        **invariants,
+        regularization="fractional_ridge" if ctx.fractional else "normalized_ridge",
+        encoding_mode=ctx.encoding_mode,
+        selection_task_model=ctx.selection_model.to_dict(),
+        coefficient_names=("task", *ctx.predictors[0].columns),
+        train_run_labels=tuple(ctx.runs[r].label for r in train),
+        test_run_labels=tuple(ctx.runs[r].label for r in test),
+        ridge_alpha=None if ctx.fractional else alpha,
+        ridge_fraction=np.array(alpha) if ctx.fractional else None,
+        provenance=tuple(provenance),
+        tuning_analysis_fingerprint=tuning_fingerprint,
+    )
 
 
 def _final_selection(indices, ctx):
@@ -382,7 +395,7 @@ def _final_fit(ctx, alpha):
             )
         }
     options = {"ridge_fraction": alpha} if ctx.fractional else {"ridge_alpha": alpha}
-    result = fit_beta_series(
+    return fit_beta_series(
         ctx.runs,
         ctx.root,
         ctx.blocks,
@@ -391,8 +404,6 @@ def _final_fit(ctx, alpha):
         **options,
         n_jobs=ctx.n_jobs,
     )
-    result["hrf_selections"] = selections
-    return result
 
 
 def _build_cv_context(
@@ -457,12 +468,9 @@ def _build_cv_context(
     return ctx, halves
 
 
-def _selected_penalty(selection):
-    return (
-        selection.ridge_fraction
-        if isinstance(selection, FractionSelection)
-        else selection.ridge_alpha
-    )
+def _selected_penalty(tuned):
+    selection = tuned.selection
+    return selection.ridge_fraction if tuned.fractional else selection.ridge_alpha
 
 
 def _cv_provenance(ctx, mode, final_penalty):
@@ -536,45 +544,47 @@ def fit_cv_beta_series(
         hrf_method=hrf_method,
         reml_options=reml_options,
     )
-    result = CvBetaResult(
-        tuning={},
-        evaluation={},
-        predictors=ctx.predictors,
-        selection_task_model=ctx.selection_model.to_dict(),
-    )
     mode = "canonical" if ctx.library is None else "optimized"
+    tuning, evaluation = {}, {}
     for scope, train in (*halves.items(), ("all", list(range(len(runs))))):
         log.info("Ridge CV (%s, %s): tuning %d runs", mode, scope, len(train))
-        selected = _tune(ctx, train)
-        result["tuning"][scope] = selected
-        alpha = _selected_penalty(selected["selection"])
+        tuning[scope] = _tune(ctx, train)
+        alpha = _selected_penalty(tuning[scope])
         if scope != "all":
             target = "even" if scope == "odd" else "odd"
-            evaluation = _evaluate(ctx, alpha, train, halves[target])
-            evaluation["tuning_analysis_fingerprint"] = selected[
-                "provenance"
-            ].analysis_fingerprint
-            result["evaluation"][f"{scope}_to_{target}"] = evaluation
-        description = (
-            f"selected fractions at {np.isfinite(alpha).sum()} grayordinates"
-            if ctx.fractional
-            else f"selected alpha={alpha:g}"
-        )
-        log.info("Ridge CV (%s, %s): %s", mode, scope, description)
-    final_penalty = _selected_penalty(result["tuning"]["all"]["selection"])
-    final_fit = _final_fit(ctx, final_penalty)
-    result["final"] = link_final_provenance(
-        final_fit,
-        result["tuning"]["all"]["provenance"],
-        encoding_mode=ctx.encoding_mode,
+            evaluation[f"{scope}_to_{target}"] = _evaluate(
+                ctx,
+                alpha,
+                train,
+                halves[target],
+                tuning[scope].provenance.analysis_fingerprint,
+            )
+        log.info("Ridge CV (%s, %s): %s", mode, scope, _describe(ctx, alpha))
+    final_penalty = _selected_penalty(tuning["all"])
+    return CvBetaResult(
+        tuning=tuning,
+        evaluation=evaluation,
+        predictors=tuple(ctx.predictors),
+        selection_task_model=ctx.selection_model.to_dict(),
+        final=link_final_provenance(
+            _final_fit(ctx, final_penalty),
+            tuning["all"].provenance,
+            encoding_mode=ctx.encoding_mode,
+        ),
+        provenance=_cv_provenance(ctx, mode, final_penalty),
     )
-    result["provenance"] = _cv_provenance(ctx, mode, final_penalty)
-    return result
+
+
+def _describe(ctx, alpha):
+    if ctx.fractional:
+        return f"selected fractions at {np.isfinite(alpha).sum()} grayordinates"
+    return f"selected alpha={alpha:g}"
 
 
 def tuning_provenance(scores, selection, *, encoding_mode):
     """Record a tuning decision with the explicitly supplied scoring mode."""
-    if isinstance(selection, FractionSelection):
+    fractional = scores.regularization == "fractional_ridge"
+    if fractional:
         activity: dict[str, object] = dict(
             name="voxelwise_encoding_fraction_selection",
             fractions=list(selection.fractions),
@@ -589,7 +599,7 @@ def tuning_provenance(scores, selection, *, encoding_mode):
     else:
         activity = _alpha_activity(selection)
     activity.update(encoding_metadata(encoding_mode))
-    if not isinstance(selection, FractionSelection):
+    if not fractional:
         activity["objective"] = (
             "percentile_of_" + encoding_metadata(encoding_mode)["score"]
         )
@@ -639,7 +649,7 @@ def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
     Provenance is copied; numerical arrays are shared and are not modified.
     Pass an unlinked fit: linking an already linked result raises ValueError.
     """
-    blocks = deepcopy(result["provenance"])
+    blocks = deepcopy(list(result.provenance))
     for block in blocks:
         record = ProvenanceRecord.from_dict(block["record"])
         if any(
@@ -655,11 +665,11 @@ def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
             name="encoding_guided_ridge_refit",
             **encoding_metadata(encoding_mode),
             tuning_scope="all",
-            selected_alpha=result["ridge_alpha"],
+            selected_alpha=result.ridge_alpha,
             tuning_execution_id=decision.execution_id,
             **identity,
         )
-        if "ridge_fraction" in result:
+        if result.fractional:
             activity.update(
                 regularization="fractional_ridge", fraction_norm_basis=NORM_BASIS
             )
@@ -671,9 +681,7 @@ def link_final_provenance(result, decision, *, encoding_mode) -> BetaFit:
             warnings=(),
             analysis_id=analysis_fingerprint(record.metadata_fingerprint, identity),
         ).to_dict()
-    linked: BetaFit = result.copy()
-    linked["provenance"] = blocks
-    return linked
+    return replace(result, provenance=tuple(blocks))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -683,15 +691,15 @@ class BetaModel:
     name: str
     hrf: str
     estimator: str
-    fit: Mapping[str, object]
-    tuning: Mapping[str, object] | None = None
-    evaluation: Mapping[str, object] | None = None
+    fit: BetaFit
+    tuning: Mapping[str, TuningResult] | None = None
+    evaluation: Mapping[str, OuterEvaluation] | None = None
     cv_provenance: Mapping[str, object] | None = None
     predictors: tuple | None = None
 
     @property
     def fractional(self):
-        return "ridge_fraction" in self.fit
+        return self.fit.fractional
 
 
 _ESTIMATOR = {"fixed": "Ridge", "cv": "RidgeCV", "fractional_cv": "FractionalCV"}
@@ -754,11 +762,11 @@ def _cv_model(runs, root, blocks, settings, library, task_model, hrf):
         name=f"{hrf.capitalize()}Trial{estimator}",
         hrf=hrf,
         estimator=estimator,
-        fit=result["final"],
-        tuning=result["tuning"],
-        evaluation=result["evaluation"],
-        cv_provenance=result["provenance"],
-        predictors=tuple(result["predictors"]),
+        fit=result.final,
+        tuning=result.tuning,
+        evaluation=result.evaluation,
+        cv_provenance=result.provenance,
+        predictors=result.predictors,
     )
 
 

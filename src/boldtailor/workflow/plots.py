@@ -65,7 +65,7 @@ def glm_comparison(glms):
     summary = []
     for name, result in glms.items():
         for statistic, values in zip(
-            ("full R²", "confounds R²", "task ΔR²"), result["r2"], strict=True
+            ("full R²", "confounds R²", "task ΔR²"), result.r2, strict=True
         ):
             finite = values[np.isfinite(values)]
             summary.append(
@@ -76,8 +76,8 @@ def glm_comparison(glms):
                     median=np.median(finite) if len(finite) else np.nan,
                 )
             )
-    canonical = glms["CanonicalGLM"]["r2"][0]
-    optimized = glms["OptimizedGLM"]["r2"][0]
+    canonical = glms["CanonicalGLM"].r2[0]
+    optimized = glms["OptimizedGLM"].r2[0]
     valid = np.isfinite(canonical) & np.isfinite(optimized)
     fig, axes = plt.subplots(1, 2, figsize=(11, 3), layout="constrained")
     axes[0].scatter(canonical[valid], optimized[valid], s=3, alpha=0.2)
@@ -185,7 +185,7 @@ def activation_histogram(activation):
 
 
 def _best_odd_vertex(model, brain):
-    odd_r = model.fit["rt"]["odd"]
+    odd_r = model.fit.rt["odd"]
     eligible = np.flatnonzero(np.isfinite(odd_r) & (brain.vertex >= 0))
     if not len(eligible):
         return None
@@ -194,7 +194,7 @@ def _best_odd_vertex(model, brain):
 
 def _plot_even_points(ax, model, runs, vertex):
     x, y = even_run_points(
-        model.fit["betas"], reaction_times(runs), [r.number for r in runs], vertex
+        model.fit.betas, reaction_times(runs), [r.number for r in runs], vertex
     )
     ax.scatter(x, y, s=10, alpha=0.4)
     ax.set(
@@ -210,7 +210,7 @@ def rt_check_figure(beta_models, runs, brain):
     Return None when the models have no response times.
     """
     models = [beta_models[n] for n in ("CanonicalTrialOLS", "OptimizedTrialOLS")]
-    if models[0].fit["rt"] is None:
+    if models[0].fit.rt is None:
         return None
     vertex = _best_odd_vertex(models[0], brain)
     fig, axes = plt.subplots(1, 2, figsize=(10, 3), layout="constrained")

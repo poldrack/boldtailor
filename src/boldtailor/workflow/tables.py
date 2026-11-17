@@ -3,8 +3,6 @@
 import numpy as np
 import pandas as pd
 
-from boldtailor.ridge_results import FractionSelection
-
 
 def predictor_table(runs, predictors):
     tables = []
@@ -26,8 +24,8 @@ def tuned_models(beta_models):
 
 
 def tuning_rows(mode, scope, tuned):
-    selected, scores = tuned["selection"], tuned["scores"]
-    percentile = tuned["summary_percentile"]
+    selected, scores = tuned.selection, tuned.scores
+    percentile = tuned.summary_percentile
     mask = selected.scoring_mask
     summaries = (
         np.percentile(scores.cv_r2[:, mask], percentile, axis=1)
@@ -49,7 +47,7 @@ def tuning_rows(mode, scope, tuned):
 
 
 def _alpha_rows(mode, scope, tuned):
-    selected = tuned["selection"]
+    selected = tuned.selection
     return [
         dict(
             mode=mode,
@@ -70,9 +68,8 @@ def tuning_table(beta_models):
     for model in tuned_models(beta_models):
         mode = model.hrf.capitalize()
         for scope, tuned in model.tuning.items():
-            fractional = isinstance(tuned["selection"], FractionSelection)
             rows.extend(
-                (tuning_rows if fractional else _alpha_rows)(mode, scope, tuned)
+                (tuning_rows if tuned.fractional else _alpha_rows)(mode, scope, tuned)
             )
     return pd.DataFrame(rows)
 
@@ -91,7 +88,7 @@ def ridge_boundary_summary(beta_models):
         dict(
             mode=model.hrf.capitalize(),
             scope=scope,
-            fraction=_boundary_fraction(tuned["selection"]),
+            fraction=_boundary_fraction(tuned.selection),
         )
         for model in tuned_models(beta_models)
         for scope, tuned in model.tuning.items()

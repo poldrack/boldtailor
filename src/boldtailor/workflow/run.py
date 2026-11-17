@@ -264,7 +264,7 @@ def _add_glm_figures(session, glms, figures):
     """Insert GLM figures into figures and return the comparison table."""
     figures["Design"] = plots.design_figure(
         session.runs[0].frame_times,
-        glms["CanonicalGLM"]["designs"][0, 0],
+        glms["CanonicalGLM"].designs[0, 0],
         session.task_model.regressor_names,
     )
     summary, figures["GLMComparison"] = plots.glm_comparison(glms)
@@ -312,9 +312,7 @@ def _add_tuning_figures(beta_models, figures):
 def _summarize_betas(*, beta_models):
     if not beta_models:
         raise ValueError("summaries require fitted beta models")
-    return {
-        name: one_sample_t(model.fit["betas"]) for name, model in beta_models.items()
-    }
+    return {name: one_sample_t(model.fit.betas) for name, model in beta_models.items()}
 
 
 def _add_summary_figures(session, beta_models, activation, figures):

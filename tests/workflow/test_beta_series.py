@@ -23,6 +23,7 @@ from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_pena
 from boldtailor.single_trial import fit_selected_hrfs, fit_single_trials
 from boldtailor.trial_encoding import evaluate_trial_encoding, trial_predictors
 from boldtailor.workflow import analysis, beta_series, inputs
+from boldtailor.workflow.records import BetaFit
 from tests.oracles import glm_run_sources
 
 ORDER = ["response_time", "trial_type[1]"]
@@ -62,13 +63,13 @@ def fit_fractions(session, library=None, **kwargs):
 
 
 def assert_candidate_equal(one, two):
-    assert one["selection"].ridge_alpha == two["selection"].ridge_alpha
+    assert one.selection.ridge_alpha == two.selection.ridge_alpha
     np.testing.assert_array_equal(
-        one["selection"].scoring_mask, two["selection"].scoring_mask
+        one.selection.scoring_mask, two.selection.scoring_mask
     )
-    np.testing.assert_allclose(one["scores"].cv_r2, two["scores"].cv_r2, atol=1e-10)
+    np.testing.assert_allclose(one.scores.cv_r2, two.scores.cv_r2, atol=1e-10)
     np.testing.assert_array_equal(
-        one["scores"].fold_hrf_indices, two["scores"].fold_hrf_indices
+        one.scores.fold_hrf_indices, two.scores.fold_hrf_indices
     )
 
 
@@ -93,8 +94,8 @@ def test_block_size_and_parallelism_preserve_global_choice(session, cv_library):
     serial = fit_alpha(session, cv_library)
     parallel = fit(session, cv_library, alphas=[0.0, 0.1, 1.0], block_size=3, n_jobs=2)
     for scope in ("odd", "even", "all"):
-        assert_candidate_equal(serial["tuning"][scope], parallel["tuning"][scope])
-    for a, b in zip(serial["final"]["betas"], parallel["final"]["betas"]):
+        assert_candidate_equal(serial.tuning[scope], parallel.tuning[scope])
+    for a, b in zip(serial.final.betas, parallel.final.betas):
         np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
 
 
@@ -109,16 +110,16 @@ def test_outer_data_cannot_change_training_choices(
     original = fit_alpha(session, cv_library)
     changed = altered_runs(runs, parity, 10.0)
     altered = fit_alpha((root, changed, model), cv_library)
-    assert_candidate_equal(original["tuning"][scope], altered["tuning"][scope])
+    assert_candidate_equal(original.tuning[scope], altered.tuning[scope])
     for key in ("coefficients", "predictor_means", "hrf_indices"):
         np.testing.assert_allclose(
-            original["evaluation"][evaluation][key],
-            altered["evaluation"][evaluation][key],
+            getattr(original.evaluation[evaluation], key),
+            getattr(altered.evaluation[evaluation], key),
             atol=1e-10,
         )
     assert not np.allclose(
-        original["evaluation"][evaluation]["encoding_r2"][:3],
-        altered["evaluation"][evaluation]["encoding_r2"][:3],
+        original.evaluation[evaluation].encoding_r2[:3],
+        altered.evaluation[evaluation].encoding_r2[:3],
     )
 
 
@@ -132,11 +133,11 @@ def test_missing_rt_keeps_beta_rows_and_requested_axis(session):
         e.loc[1, "response_time"] = -1.0
         altered.append(replace(run, events=e))
     result = fit_alpha((root, altered, model), None, max_grayordinates=2)
-    assert all(b.shape == (6, 4) for b in result["final"]["betas"])
-    assert all(np.isnan(b[:, 2:]).all() for b in result["final"]["betas"])
+    assert all(b.shape == (6, 4) for b in result.final.betas)
+    assert all(np.isnan(b[:, 2:]).all() for b in result.final.betas)
     assert all(
         mask.tolist() == [False, False, True, True, True, True]
-        for mask in result["tuning"]["all"]["scores"].trial_masks
+        for mask in result.tuning["all"].scores.trial_masks
     )
 
 
@@ -193,15 +194,15 @@ def test_final_provenance_identifies_the_tuning_decision(session):
     ]
     records = []
     for result in (original, repeated, *alternatives):
-        tuned = result["tuning"]["all"]
-        decision = tuned["provenance"]
+        tuned = result.tuning["all"]
+        decision = tuned.provenance
         assert decision.analysis_fingerprint
         activity = decision.to_dict()["activities"][-1]
-        assert activity["percentile"] == tuned["selection"].percentile
-        assert activity["selected_alpha"] == tuned["selection"].ridge_alpha
+        assert activity["percentile"] == tuned.selection.percentile
+        assert activity["selected_alpha"] == tuned.selection.ridge_alpha
         assert activity["scoring_mask_fingerprint"]
         assert activity["validation_target"] == "candidate_regularized_betas"
-        final_record = result["final"]["provenance"][0]["record"]
+        final_record = result.final.provenance[0]["record"]
         link = final_record["activities"][-1]
         assert link["name"] == "encoding_guided_ridge_refit"
         assert link["tuning_analysis_fingerprint"] == decision.analysis_fingerprint
@@ -211,9 +212,7 @@ def test_final_provenance_identifies_the_tuning_decision(session):
         )
     assert records[0] == records[1], "Execution UUIDs must not change analysis identity"
     assert all(record != records[0] for record in records[2:])
-    assert (
-        original["final"]["ridge_alpha"] == alternatives[0]["final"]["ridge_alpha"] == 1
-    )
+    assert original.final.ridge_alpha == alternatives[0].final.ridge_alpha == 1
 
 
 def test_rt_switch_reaches_every_ridge_selection(session, cv_library):
@@ -223,10 +222,10 @@ def test_rt_switch_reaches_every_ridge_selection(session, cv_library):
     result = beta_series.fit_cv_beta_series(
         runs, root, **options(cv_library), task_model=narrow
     )
-    finals = result["final"]["hrf_selections"]
+    finals = result.final.hrf_selections
     assert finals and all(b["all"].task_model == narrow for b in finals.values())
-    for evaluation in result["evaluation"].values():
-        assert evaluation["selection_task_model"] == narrow.to_dict()
+    for evaluation in result.evaluation.values():
+        assert evaluation.selection_task_model == narrow.to_dict()
 
 
 def test_selection_model_leaves_predictors_and_fits_on_the_full_model(
@@ -238,17 +237,17 @@ def test_selection_model_leaves_predictors_and_fits_on_the_full_model(
     result = beta_series.fit_cv_beta_series(
         runs, root, **options(cv_library), task_model=model, selection_model=narrow
     )
-    assert all(list(p.columns) == ORDER for p in result["predictors"])
-    assert result["final"]["rt"] is not None
-    finals = result["final"]["hrf_selections"]
+    assert all(list(p.columns) == ORDER for p in result.predictors)
+    assert result.final.rt is not None
+    finals = result.final.hrf_selections
     assert all(b["all"].task_model == narrow for b in finals.values())
 
 
 def test_coefficient_rows_are_named_after_the_predictors(session):
     """Verify coefficient rows are named after the predictors."""
-    outer = fit_alpha(session, None)["evaluation"]["odd_to_even"]
-    assert outer["coefficient_names"] == ["task", *ORDER]
-    assert outer["coefficients"].shape[0] == 3
+    outer = fit_alpha(session, None).evaluation["odd_to_even"]
+    assert outer.coefficient_names == ("task", *ORDER)
+    assert outer.coefficients.shape[0] == 3
 
 
 # --- fractional CV ----------------------------------------------------------
@@ -274,12 +273,12 @@ def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
             task_model=model,  # inner folds select HRFs with the selection model
         )
         expected = select_ridge_fractions(scores.cv_r2, scores.grid)
-        actual = result["tuning"][scope]["selection"]
+        actual = result.tuning[scope].selection
         np.testing.assert_allclose(actual.ridge_fraction, expected.ridge_fraction)
         np.testing.assert_allclose(actual.selected_r2, expected.selected_r2, atol=1e-10)
     data = inputs.load_block(runs, root, np.arange(4), model)
     train, test = [0, 2, 4], [1, 3, 5]
-    chosen = result["tuning"]["odd"]["selection"].ridge_fraction
+    chosen = result.tuning["odd"].selection.ridge_fraction
     outer_selection = (
         None
         if library is None
@@ -302,18 +301,18 @@ def test_fraction_workflow_matches_whole_array(session, cv_library, optimized):
         train_runs=train,
         test_runs=test,
     )
-    actual_outer = result["evaluation"]["odd_to_even"]
-    for target_beta, r in zip(actual_outer["targets"], test):
+    actual_outer = result.evaluation["odd_to_even"]
+    for target_beta, r in zip(actual_outer.targets, test):
         np.testing.assert_allclose(target_beta, ols.run_betas[r], atol=2e-6)
-    np.testing.assert_allclose(actual_outer["run_sse"], outer.run_sse, atol=1e-8)
-    np.testing.assert_allclose(actual_outer["run_sst"], outer.run_sst, atol=1e-8)
-    for actual_beta, r in zip(actual_outer["betas"], test):
+    np.testing.assert_allclose(actual_outer.run_sse, outer.run_sse, atol=1e-8)
+    np.testing.assert_allclose(actual_outer.run_sst, outer.run_sst, atol=1e-8)
+    for actual_beta, r in zip(actual_outer.betas, test):
         np.testing.assert_allclose(actual_beta, shrunk.run_betas[r], atol=1e-8)
     assert_fractional_final(result, runs, data, library, model)
 
 
 def assert_fractional_final(result, runs, data, library, model):
-    fractions = result["tuning"]["all"]["selection"].ridge_fraction
+    fractions = result.tuning["all"].selection.ridge_fraction
     if library is None:
         expected = fit_single_trials(data, ridge_fraction=fractions)
     else:
@@ -321,16 +320,16 @@ def assert_fractional_final(result, runs, data, library, model):
         expected = fit_selected_hrfs(
             data, hrf_selection=selection, ridge_fraction=fractions
         )
-    for beta, reference in zip(result["final"]["betas"], expected.run_betas):
+    for beta, reference in zip(result.final.betas, expected.run_betas):
         np.testing.assert_allclose(beta, reference, atol=2e-6)
     np.testing.assert_allclose(
-        result["final"]["run_ridge_alphas"], expected.run_ridge_alphas, atol=1e-9
+        result.final.run_ridge_alphas, expected.run_ridge_alphas, atol=1e-9
     )
-    assert result["final"]["ridge_alpha"] is None
+    assert result.final.ridge_alpha is None
     assert np.isnan(fractions[-1])
-    assert np.isnan(result["final"]["run_ridge_alphas"][:, -1]).all()
-    decision = result["tuning"]["all"]["provenance"].analysis_fingerprint
-    link = result["final"]["provenance"][0]["record"]["activities"][-1]
+    assert np.isnan(result.final.run_ridge_alphas[:, -1]).all()
+    decision = result.tuning["all"].provenance.analysis_fingerprint
+    link = result.final.provenance[0]["record"]["activities"][-1]
     assert decision and link["tuning_analysis_fingerprint"] == decision
 
 
@@ -351,13 +350,13 @@ def test_fraction_blocks_workers_and_missing_rt_preserve_results(session, cv_lib
     parallel = fit_fractions(pair, cv_library, block_size=3, n_jobs=2)
     for scope in ("odd", "even", "all"):
         np.testing.assert_allclose(
-            serial["tuning"][scope]["selection"].ridge_fraction,
-            parallel["tuning"][scope]["selection"].ridge_fraction,
+            serial.tuning[scope].selection.ridge_fraction,
+            parallel.tuning[scope].selection.ridge_fraction,
         )
-    for a, b in zip(serial["final"]["betas"], parallel["final"]["betas"]):
+    for a, b in zip(serial.final.betas, parallel.final.betas):
         assert a.shape == (6, 4)
         np.testing.assert_allclose(a, b, atol=1e-6)
-    assert all(not mask[0] for mask in serial["tuning"]["all"]["scores"].trial_masks)
+    assert all(not mask[0] for mask in serial.tuning["all"].scores.trial_masks)
 
 
 @pytest.mark.parametrize("parity,scope", [(0, "odd_to_even"), (1, "even_to_odd")])
@@ -372,13 +371,13 @@ def test_outer_fraction_choices_and_training_coefficients_are_isolated(
     )
     for key in ("ridge_fraction", "hrf_indices", "coefficients", "predictor_means"):
         np.testing.assert_allclose(
-            initial["evaluation"][scope][key],
-            altered["evaluation"][scope][key],
+            getattr(initial.evaluation[scope], key),
+            getattr(altered.evaluation[scope], key),
             atol=1e-10,
         )
     assert not np.allclose(
-        initial["evaluation"][scope]["encoding_r2"],
-        altered["evaluation"][scope]["encoding_r2"],
+        initial.evaluation[scope].encoding_r2,
+        altered.evaluation[scope].encoding_r2,
         equal_nan=True,
     )
 
@@ -400,10 +399,10 @@ def test_outer_oracle_and_blocks(session, mode, fractional):
     grid = dict(fractions=[1, 0.5]) if fractional else dict(alphas=[0, 0.1])
     result = fit(session, encoding_mode=mode, block_size=2, **grid)
     blocked = fit(session, encoding_mode=mode, block_size=3, **grid)
-    assert result["provenance"]["encoding_mode"] == mode
-    decision = result["tuning"]["all"]["provenance"].to_dict()["activities"][-1]
+    assert result.provenance["encoding_mode"] == mode
+    decision = result.tuning["all"].provenance.to_dict()["activities"][-1]
     assert decision["encoding_mode"] == mode
-    final = result["final"]["provenance"][0]["record"]["activities"][-1]
+    final = result.final.provenance[0]["record"]["activities"][-1]
     assert final["encoding_mode"] == mode
     data = inputs.load_block(runs, root, np.arange(4), model)
     predictors = trial_predictors([r.events for r in runs], model)
@@ -411,8 +410,8 @@ def test_outer_oracle_and_blocks(session, mode, fractional):
         ("odd_to_even", [0, 2, 4], [1, 3, 5]),
         ("even_to_odd", [1, 3, 5], [0, 2, 4]),
     ]:
-        outer = result["evaluation"][scope]
-        assert outer["encoding_mode"] == mode
+        outer = result.evaluation[scope]
+        assert outer.encoding_mode == mode
         for key in [
             "coefficients",
             "train_run_intercepts",
@@ -421,16 +420,18 @@ def test_outer_oracle_and_blocks(session, mode, fractional):
             "train_run_predictor_means",
         ]:
             np.testing.assert_allclose(
-                outer[key], blocked["evaluation"][scope][key], atol=1e-9
+                getattr(outer, key),
+                getattr(blocked.evaluation[scope], key),
+                atol=1e-9,
             )
         assert_outer_oracle(outer, data, predictors, train, test, mode, fractional)
 
 
 def assert_outer_oracle(outer, data, predictors, train, test, mode, fractional):
     fit_options = (
-        {"ridge_fraction": outer["ridge_fraction"]}
+        {"ridge_fraction": outer.ridge_fraction}
         if fractional
-        else {"ridge_alpha": outer["ridge_alpha"]}
+        else {"ridge_alpha": outer.ridge_alpha}
     )
     fitted = fit_single_trials(data, **fit_options)
     # Fractional CV scores fixed OLS targets; alpha CV keeps fitted targets.
@@ -444,28 +445,28 @@ def assert_outer_oracle(outer, data, predictors, train, test, mode, fractional):
     oracle = np.linalg.lstsq(
         np.column_stack([intercepts, np.vstack(xs)]), np.vstack(ys), rcond=None
     )[0]
-    np.testing.assert_allclose(outer["coefficients"][1:, :3], oracle[-2:], atol=1e-8)
+    np.testing.assert_allclose(outer.coefficients[1:, :3], oracle[-2:], atol=1e-8)
     expected_intercepts = (
         oracle[:-2]
         if mode == "within_run"
         else np.repeat(oracle[:1], len(train), axis=0)
     )
     np.testing.assert_allclose(
-        outer["train_run_intercepts"][:, :3], expected_intercepts, atol=1e-8
+        outer.train_run_intercepts[:, :3], expected_intercepts, atol=1e-8
     )
     for j, r in enumerate(test):
         raw = (
             np.vstack(ys).mean(0)
             + (predictors[r].to_numpy() - np.vstack(xs).mean(0)) @ oracle[-2:]
         )
-        np.testing.assert_allclose(outer["predictions"][j][:, :3], raw, atol=1e-6)
+        np.testing.assert_allclose(outer.predictions[j][:, :3], raw, atol=1e-6)
         target = target_fit.run_betas[r][:, :3]
-        np.testing.assert_allclose(outer["targets"][j][:, :3], target, atol=1e-6)
+        np.testing.assert_allclose(outer.targets[j][:, :3], target, atol=1e-6)
         residual = target - raw
         offset = residual.mean(0) if mode == "within_run" else np.zeros(3)
-        np.testing.assert_allclose(outer["scoring_offsets"][j, :3], offset, atol=1e-8)
+        np.testing.assert_allclose(outer.scoring_offsets[j, :3], offset, atol=1e-8)
         np.testing.assert_allclose(
-            outer["run_sse"][j, :3],
+            outer.run_sse[j, :3],
             np.sum((residual - offset) ** 2, axis=0),
             atol=1e-8,
         )
@@ -565,7 +566,7 @@ def test_fit_beta_models_yields_one_model_per_hrf_and_estimator(
     assert set(models) == expected
     for name, item in models.items():
         assert item.name == name and item.hrf in ("canonical", "optimized")
-        assert len(item.fit["betas"]) == 6
+        assert len(item.fit.betas) == 6
         tuned = item.estimator in ("RidgeCV", "FractionalCV")
         assert (item.tuning is not None) is tuned
         assert (item.evaluation is not None) is tuned
@@ -596,7 +597,7 @@ def test_cv_models_keep_rt_in_fits_and_predictors_when_selection_excludes_it(
     )
     item = models["OptimizedTrialRidgeCV"]
     assert all(list(p.columns) == ORDER for p in item.predictors)
-    assert item.fit["rt"] is not None
+    assert item.fit.rt is not None
 
 
 def test_fixed_ridge_model_uses_the_setting_alpha(
@@ -611,8 +612,8 @@ def test_fixed_ridge_model_uses_the_setting_alpha(
     models = beta_series.fit_beta_models(
         runs, root, blocks, settings, None, None, model
     )
-    assert models["CanonicalTrialRidge"].fit["ridge_alpha"] == 0.5
-    assert models["CanonicalTrialOLS"].fit["ridge_alpha"] == 0.0
+    assert models["CanonicalTrialRidge"].fit.ridge_alpha == 0.5
+    assert models["CanonicalTrialOLS"].fit.ridge_alpha == 0.0
 
 
 def test_ridge_cv_progress_goes_to_the_log_not_stdout(session, capsys, caplog):
@@ -627,17 +628,21 @@ def test_ridge_cv_progress_goes_to_the_log_not_stdout(session, capsys, caplog):
 def unlinked_fit():
     data, _ = _problem()
     fitted = fit_single_trials(data, ridge_alpha=1.0)
-    return dict(
-        ridge_alpha=1.0,
+    return BetaFit(
         betas=fitted.run_betas,
-        provenance=[dict(block=[0, 3], record=fitted.provenance.to_dict())],
+        r2=np.stack([fitted.full_r2, fitted.nuisance_r2, fitted.delta_r2]),
+        designs={},
+        provenance=(dict(block=[0, 3], record=fitted.provenance.to_dict()),),
+        trial_table=fitted.trial_table,
+        regularization="normalized_ridge",
+        ridge_alpha=1.0,
     )
 
 
 def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fit):
     """Verify final provenance returns new records without mutating input."""
     decision = _tuning(False)
-    before = deepcopy(unlinked_fit["provenance"])
+    before = deepcopy(unlinked_fit.provenance)
     decision_before = decision.to_dict()
     linked = beta_series.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
@@ -645,19 +650,19 @@ def test_final_provenance_returns_new_records_without_mutating_input(unlinked_fi
     repeated = beta_series.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
-    assert unlinked_fit["provenance"] == before
+    assert unlinked_fit.provenance == before
     assert decision.to_dict() == decision_before
     assert linked is not unlinked_fit
-    assert linked["betas"] is unlinked_fit["betas"]
-    record = linked["provenance"][0]["record"]
+    assert linked.betas is unlinked_fit.betas
+    record = linked.provenance[0]["record"]
     assert len(record["activities"]) == len(before[0]["record"]["activities"]) + 1
     assert (
         record["analysis_fingerprint"]
-        == repeated["provenance"][0]["record"]["analysis_fingerprint"]
+        == repeated.provenance[0]["record"]["analysis_fingerprint"]
     )
     assert record["activities"][-1]["tuning_execution_id"] == decision.execution_id
-    linked["provenance"][0]["block"].append(99)
-    assert unlinked_fit["provenance"] == before
+    linked.provenance[0]["block"].append(99)
+    assert unlinked_fit.provenance == before
 
 
 def test_final_provenance_rejects_already_linked_fit(unlinked_fit):
@@ -666,10 +671,10 @@ def test_final_provenance_rejects_already_linked_fit(unlinked_fit):
     linked = beta_series.link_final_provenance(
         unlinked_fit, decision, encoding_mode="within_run"
     )
-    before = deepcopy(linked["provenance"])
+    before = deepcopy(linked.provenance)
     with pytest.raises(ValueError, match="already linked"):
         beta_series.link_final_provenance(linked, decision, encoding_mode="within_run")
-    assert linked["provenance"] == before
+    assert linked.provenance == before
 
 
 def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
@@ -692,7 +697,7 @@ def test_encoding_mode_does_not_require_last_activity(unlinked_fit):
         unlinked_fit, decision, encoding_mode="within_run"
     )
     assert (
-        linked["provenance"][0]["record"]["activities"][-1]["encoding_mode"]
+        linked.provenance[0]["record"]["activities"][-1]["encoding_mode"]
         == "within_run"
     )
 
@@ -712,26 +717,26 @@ def test_reml_nested_workflow_preserves_method_and_outer_isolation(session, cv_l
     result = fit(reduced, cv_library, **options)
     altered = fit((root, altered_runs(runs[:4], 0, 0.0), model), cv_library, **options)
     np.testing.assert_allclose(
-        result["tuning"]["odd"]["scores"].cv_r2,
-        altered["tuning"]["odd"]["scores"].cv_r2,
+        result.tuning["odd"].scores.cv_r2,
+        altered.tuning["odd"].scores.cv_r2,
     )
     np.testing.assert_array_equal(
-        result["evaluation"]["odd_to_even"]["hrf_indices"],
-        altered["evaluation"]["odd_to_even"]["hrf_indices"],
+        result.evaluation["odd_to_even"].hrf_indices,
+        altered.evaluation["odd_to_even"].hrf_indices,
     )
     for scope in ("odd", "even", "all"):
-        blocks = result["tuning"][scope]["scores"].provenance.to_dict()["activities"][
-            -1
-        ]["block_records"]
+        blocks = result.tuning[scope].scores.provenance.to_dict()["activities"][-1][
+            "block_records"
+        ]
         for block in blocks:
             for fold in block["activities"][-1]["folds"]:
                 record = fold["hrf_selection"]
                 assert record["method"] == "reml"
                 assert record["task_model"] == model.to_dict()
-    for bundle in result["final"]["hrf_selections"].values():
+    for bundle in result.final.hrf_selections.values():
         assert bundle["all"].method == "reml"
-    for split in result["evaluation"].values():
-        for block in split["provenance"]:
+    for split in result.evaluation.values():
+        for block in split.provenance:
             assert block["selection_record"]["activities"][-1]["method"] == "reml"
 
 
@@ -741,8 +746,8 @@ def test_reml_nested_workflow_preserves_method_and_outer_isolation(session, cv_l
 def fold_selection_models(result):
     """Task models recorded by every inner-fold HRF selection of every scope."""
     models = []
-    for tuned in result["tuning"].values():
-        activity = tuned["scores"].provenance.to_dict()["activities"][-1]
+    for tuned in result.tuning.values():
+        activity = tuned.scores.provenance.to_dict()["activities"][-1]
         for block in activity["block_records"]:
             for fold in block["activities"][-1]["folds"]:
                 models.append(fold["hrf_selection"]["task_model"])
@@ -772,7 +777,7 @@ def test_cv_inner_folds_select_hrfs_with_the_selection_model(
     assert model.modulators and expected.to_dict() != TaskModel().to_dict()
     recorded = fold_selection_models(result)
     assert recorded and all(m == expected.to_dict() for m in recorded)
-    for bundle in result["final"]["hrf_selections"].values():
+    for bundle in result.final.hrf_selections.values():
         assert bundle["all"].task_model == expected
 
 
@@ -787,7 +792,7 @@ def constant_runs(runs, column):
 
 
 def tuned_indices(result, scope):
-    activity = result["tuning"][scope]["scores"].provenance.to_dict()["activities"][-1]
+    activity = result.tuning[scope].scores.provenance.to_dict()["activities"][-1]
     return sorted(
         i for b in activity["block_records"] for i in b["grayordinate_indices"]
     )
@@ -815,12 +820,12 @@ def test_cv_path_uses_the_session_blocks_without_constant_grayordinates(
     )
     for scope in ("odd", "even", "all"):
         assert tuned_indices(result, scope) == kept
-        assert np.isnan(result["tuning"][scope]["scores"].cv_r2[:, 1]).all()
-    for evaluation in result["evaluation"].values():
-        assert np.isnan(evaluation["encoding_r2"][1])
-        assert evaluation["hrf_indices"][1] == -1
+        assert np.isnan(result.tuning[scope].scores.cv_r2[:, 1]).all()
+    for evaluation in result.evaluation.values():
+        assert np.isnan(evaluation.encoding_r2[1])
+        assert evaluation.hrf_indices[1] == -1
     fixed = analysis.fit_beta_series(runs, root, blocks, task_model=model)
-    for tuned, plain in zip(result["final"]["betas"], fixed["betas"], strict=True):
+    for tuned, plain in zip(result.final.betas, fixed.betas, strict=True):
         np.testing.assert_array_equal(np.isnan(tuned), np.isnan(plain))
         assert np.isnan(tuned[:, 1]).all()
 
@@ -840,8 +845,6 @@ def test_cv_model_shares_the_blocks_of_the_fixed_models(six_run_dataset, setting
         runs, root, blocks, settings, None, None, model
     )
     tuned, plain = models["CanonicalTrialRidgeCV"], models["CanonicalTrialOLS"]
-    for a, b in zip(tuned.fit["betas"], plain.fit["betas"], strict=True):
+    for a, b in zip(tuned.fit.betas, plain.fit.betas, strict=True):
         np.testing.assert_array_equal(np.isnan(a), np.isnan(b))
-    assert tuned_indices(dict(tuning=tuned.tuning), "all") == sorted(
-        np.concatenate(blocks).tolist()
-    )
+    assert tuned_indices(tuned, "all") == sorted(np.concatenate(blocks).tolist())

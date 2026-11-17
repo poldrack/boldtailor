@@ -116,21 +116,17 @@ def test_activation_exports_preserve_map_names_axis_and_values(
 def _assert_tuning_scope(paths, selected, base):
     image = nib.load(_find(paths, f"{base}_stat-encodingcvr2."))
     np.testing.assert_allclose(
-        image.get_fdata(), selected["scores"].cv_r2, rtol=1e-6, atol=1e-6
+        image.get_fdata(), selected.scores.cv_r2, rtol=1e-6, atol=1e-6
     )
     scores = pd.read_csv(_find(paths, f"{base}_scores.tsv"), sep="\t")
-    np.testing.assert_allclose(scores.objective, selected["selection"].objective_scores)
-    assert (
-        scores.loc[scores.selected, "alpha"].item() == selected["selection"].ridge_alpha
-    )
+    np.testing.assert_allclose(scores.objective, selected.selection.objective_scores)
+    assert scores.loc[scores.selected, "alpha"].item() == selected.selection.ridge_alpha
     with np.load(_find(paths, f"{base}_folds.npz")) as arrays:
-        np.testing.assert_allclose(arrays["sse"], selected["scores"].fold_sse)
-        np.testing.assert_allclose(arrays["sst"], selected["scores"].fold_sst)
+        np.testing.assert_allclose(arrays["sse"], selected.scores.fold_sse)
+        np.testing.assert_allclose(arrays["sst"], selected.scores.fold_sst)
     record = json.loads(_find(paths, f"{base}_provenance.json").read_text())
-    assert record["analysis_fingerprint"] == selected["provenance"].analysis_fingerprint
-    assert (
-        record["activities"][-1]["selected_alpha"] == selected["selection"].ridge_alpha
-    )
+    assert record["analysis_fingerprint"] == selected.provenance.analysis_fingerprint
+    assert record["activities"][-1]["selected_alpha"] == selected.selection.ridge_alpha
 
 
 def test_ridge_artifacts_match_numeric_results(
@@ -205,13 +201,13 @@ def _assert_fraction_exports(paths, model, brain, runs):
         assert image.header.get_axis(1) == brain
         np.testing.assert_allclose(
             image.get_fdata()[0],
-            model.tuning[scope.lower()]["selection"].ridge_fraction,
+            model.tuning[scope.lower()].selection.ridge_fraction,
         )
     for scope, outer in model.evaluation.items():
         descriptor = (
             mode + "FractionalCV" + "".join(w.title() for w in scope.split("_"))
         )
-        for label, targets in zip(outer["test_run_labels"], outer["targets"]):
+        for label, targets in zip(outer.test_run_labels, outer.targets):
             run = next(r for r in runs if r.label == label)
             path = next(
                 p
@@ -222,7 +218,7 @@ def _assert_fraction_exports(paths, model, brain, runs):
             np.testing.assert_allclose(nib.load(path).get_fdata(), targets, atol=1e-6)
     alpha = _find(paths, f"{mode}TrialFractionalCV_stat-ridgealpha.")
     np.testing.assert_allclose(
-        nib.load(alpha).get_fdata(), model.fit["run_ridge_alphas"], atol=1e-7
+        nib.load(alpha).get_fdata(), model.fit.run_ridge_alphas, atol=1e-7
     )
 
 
@@ -307,7 +303,7 @@ def test_beta_model_writer_omits_rt_correlations_without_rt(
         root, ridge_mode="off", modulators=(Modulator("trial_type"),)
     )
     runs, _, brain, _, models = _beta_models(settings, small_library)
-    assert all(m.fit["rt"] is None for m in models.values())
+    assert all(m.fit.rt is None for m in models.values())
     names = {
         a.path
         for m in models.values()
