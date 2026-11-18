@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from boldtailor._hrf_design import _boxcar_sampling, _count_scales, frame_tr, OVERSAMPLING
+from boldtailor._constants import MIN_ONSET, OVERSAMPLING
+from boldtailor._hrf_design import _boxcar_sampling, _count_scales, frame_tr
 from boldtailor.hrf_library import HrfCandidate
 from experiments.hrf_estimation.design import partition_events, build_design
 from experiments.hrf_estimation.scoring import residuals
@@ -11,7 +12,8 @@ from experiments.hrf_estimation.scoring import residuals
 def _sampling(events, times):
     timing = np.asarray(events[["onset", "duration"]], dtype="<f8")
     starts, stops, lower, upper, fraction = _boxcar_sampling(
-        timing.tobytes(), np.asarray(times, dtype="<f8").tobytes())
+        timing.tobytes(), np.asarray(times, dtype="<f8").tobytes(),
+        int(OVERSAMPLING), float(MIN_ONSET))
     return dict(starts=starts, stops=stops, lower=lower, upper=upper, fraction=fraction)
 
 
