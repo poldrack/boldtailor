@@ -155,7 +155,9 @@ def test_pooled_rt_correlation_requires_at_least_two_residual_df():
 @settings(max_examples=25, deadline=None)
 @given(
     seed=st.integers(0, 10_000),
-    scale=st.floats(min_value=1e-3, max_value=1e3, allow_nan=False, allow_infinity=False),
+    scale=st.floats(
+        min_value=1e-3, max_value=1e3, allow_nan=False, allow_infinity=False
+    ),
 )
 def test_one_sample_t_is_invariant_to_positive_scaling_and_run_regrouping(seed, scale):
     """Verify one_sample_t t-values and p-values are invariant to positive scaling and run splitting."""
@@ -169,18 +171,30 @@ def test_one_sample_t_is_invariant_to_positive_scaling_and_run_regrouping(seed, 
     scaled = diagnostics.one_sample_t([b * scale for b in split])
 
     for key in ("mean_beta", "t", "p_uncorrected", "n_trials", "df"):
-        np.testing.assert_allclose(regrouped[key], base[key], rtol=1e-12, atol=1e-12, equal_nan=True)
-    np.testing.assert_allclose(scaled["t"], base["t"], rtol=1e-12, atol=1e-12, equal_nan=True)
+        np.testing.assert_allclose(
+            regrouped[key], base[key], rtol=1e-12, atol=1e-12, equal_nan=True
+        )
     np.testing.assert_allclose(
-        scaled["p_uncorrected"], base["p_uncorrected"], rtol=1e-12, atol=1e-12, equal_nan=True
+        scaled["t"], base["t"], rtol=1e-12, atol=1e-12, equal_nan=True
+    )
+    np.testing.assert_allclose(
+        scaled["p_uncorrected"],
+        base["p_uncorrected"],
+        rtol=1e-12,
+        atol=1e-12,
+        equal_nan=True,
     )
 
 
 @settings(max_examples=25, deadline=None)
 @given(
     seed=st.integers(0, 10_000),
-    beta_scale=st.floats(min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False),
-    rt_scale=st.floats(min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False),
+    beta_scale=st.floats(
+        min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False
+    ),
+    rt_scale=st.floats(
+        min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False
+    ),
 )
 def test_correlate_rt_is_invariant_to_run_shifts_and_positive_scaling(
     seed, beta_scale, rt_scale
@@ -201,4 +215,6 @@ def test_correlate_rt_is_invariant_to_run_shifts_and_positive_scaling(
     for key in ("per_run", "all", "odd", "even"):
         finite = np.isfinite(base[key])
         assert np.all(np.abs(base[key][finite]) <= 1.0)
-        np.testing.assert_allclose(scaled[key], base[key], rtol=1e-10, atol=1e-12, equal_nan=True)
+        np.testing.assert_allclose(
+            scaled[key], base[key], rtol=1e-10, atol=1e-12, equal_nan=True
+        )

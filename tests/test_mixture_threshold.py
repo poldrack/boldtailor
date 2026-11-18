@@ -290,8 +290,12 @@ def test_record_names_method_settings_and_fit():
 @settings(max_examples=20, deadline=None)
 @given(
     seed=st.integers(0, 10_000),
-    scale=st.floats(min_value=0.1, max_value=100.0, allow_nan=False, allow_infinity=False),
-    shift=st.floats(min_value=-50.0, max_value=50.0, allow_nan=False, allow_infinity=False),
+    scale=st.floats(
+        min_value=0.1, max_value=100.0, allow_nan=False, allow_infinity=False
+    ),
+    shift=st.floats(
+        min_value=-50.0, max_value=50.0, allow_nan=False, allow_infinity=False
+    ),
 )
 def test_mixture_threshold_is_affine_equivariant_and_permutation_invariant(
     seed, scale, shift
@@ -305,7 +309,9 @@ def test_mixture_threshold_is_affine_equivariant_and_permutation_invariant(
     np.testing.assert_allclose(permuted.means, base.means, rtol=1e-6, atol=1e-6)
 
     transformed = mixture_threshold(scale * values + shift)
-    grid_step = scale * (robust_range(values)[1] - robust_range(values)[0]) / (GRID_POINTS - 1)
+    grid_step = (
+        scale * (robust_range(values)[1] - robust_range(values)[0]) / (GRID_POINTS - 1)
+    )
     assert transformed.threshold == pytest.approx(
         scale * base.threshold + shift, abs=max(1e-5, 2.0 * grid_step)
     )
@@ -314,7 +320,9 @@ def test_mixture_threshold_is_affine_equivariant_and_permutation_invariant(
 @settings(max_examples=20, deadline=None)
 @given(
     seed=st.integers(0, 10_000),
-    outlier_scale=st.floats(min_value=100.0, max_value=1e6, allow_nan=False, allow_infinity=False),
+    outlier_scale=st.floats(
+        min_value=100.0, max_value=1e6, allow_nan=False, allow_infinity=False
+    ),
 )
 def test_robust_range_is_invariant_to_extreme_outliers(seed, outlier_scale):
     """Verify robust_range is invariant to the magnitude of extreme upper and lower outliers."""

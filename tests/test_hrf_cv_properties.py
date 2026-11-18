@@ -23,7 +23,9 @@ def _hrf_problem(seed, n_runs=3, n_features=4):
         events.append(ev)
         confounds.append(conf)
         frame_times.append(times)
-    library = HrfLibrary.from_parameters([[4, 12, 0.8, 1.0, 4, 0.5, 32], [6, 16, 1.2, 1.5, 6, 1.0, 32]])
+    library = HrfLibrary.from_parameters(
+        [[4, 12, 0.8, 1.0, 4, 0.5, 32], [6, 16, 1.2, 1.5, 6, 1.0, 32]]
+    )
     data = from_arrays(signals, events, frame_times=frame_times, confounds=confounds)
     return data, library
 
@@ -31,7 +33,9 @@ def _hrf_problem(seed, n_runs=3, n_features=4):
 @settings(max_examples=20, deadline=None)
 @given(
     seed=st.integers(0, 10_000),
-    scale=st.floats(min_value=1e-3, max_value=1e3, allow_nan=False, allow_infinity=False),
+    scale=st.floats(
+        min_value=1e-3, max_value=1e3, allow_nan=False, allow_infinity=False
+    ),
 )
 def test_loro_scores_are_invariant_to_signal_scale_and_run_order(seed, scale):
     """Verify LORO HRF scores are invariant to positive signal scaling and run-order permutation."""
@@ -40,7 +44,9 @@ def test_loro_scores_are_invariant_to_signal_scale_and_run_order(seed, scale):
     a, b, c, energy = signal_statistics(runs, data.signals, batch_size=2)
     base_scores = loro_scores(a, b, c, energy)
 
-    a_s, b_s, c_s, e_s = signal_statistics(runs, tuple(s * scale for s in data.signals), batch_size=2)
+    a_s, b_s, c_s, e_s = signal_statistics(
+        runs, tuple(s * scale for s in data.signals), batch_size=2
+    )
     scaled_scores = loro_scores(a_s, b_s, c_s, e_s)
     np.testing.assert_allclose(scaled_scores, base_scores, rtol=1e-10, atol=1e-12)
 
@@ -55,7 +61,9 @@ def test_loro_scores_are_invariant_to_signal_scale_and_run_order(seed, scale):
     n_candidates=st.integers(2, 6),
     n_features=st.integers(2, 8),
 )
-def test_choose_eligible_is_feature_permutation_equivariant(seed, n_candidates, n_features):
+def test_choose_eligible_is_feature_permutation_equivariant(
+    seed, n_candidates, n_features
+):
     """Verify choose_eligible selects each feature independently and breaks ties by lowest ID."""
     rng = np.random.default_rng(seed)
     scores = rng.uniform(-0.5, 0.9, size=(n_candidates, n_features))

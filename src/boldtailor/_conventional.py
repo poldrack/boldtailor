@@ -146,7 +146,12 @@ def _scaled_row_basis(design: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.nd
     norms = np.zeros(matrix.shape[1])
     norms[nonzero] = peak[nonzero] * unit_norms
     _, singular, vt = np.linalg.svd(unit / unit_norms, full_matrices=False)
-    rank = int(np.sum(singular > rank_tolerance((matrix.shape[0], int(nonzero.sum())), singular[0])))
+    rank = int(
+        np.sum(
+            singular
+            > rank_tolerance((matrix.shape[0], int(nonzero.sum())), singular[0])
+        )
+    )
     return norms, nonzero, vt[:rank]
 
 
