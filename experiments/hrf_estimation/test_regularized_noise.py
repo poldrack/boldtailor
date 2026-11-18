@@ -56,17 +56,9 @@ def test_corrected_noise_matches_existing_pooled_estimator(planted_runs):
     np.testing.assert_allclose(api().run_rhos(runs[:3]), matrix)
 
 
-def _dense_vertex(runs, kernel, vertex):
-    from experiments.hrf_estimation.reml_selection import random_design
-
-    signals = [r.signals[:, [vertex]] for r in runs]
-    fixed = [r.confounds.to_numpy(dtype=float) for r in runs]
-    return signals, fixed, [random_design(r, kernel) for r in runs]
-
-
 def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
-    """Verify grouped REML matches independent vertex likelihoods."""
-    from tests.reml_oracles import dense_criterion, dense_fit
+    """One fit with a rho per vertex equals fitting each vertex alone at its rho."""
+    from experiments.hrf_estimation.reml_selection import select_library_reml
 
     runs, library = planted_runs
     rng = np.random.default_rng(53)
@@ -76,22 +68,20 @@ def test_grouped_reml_matches_independent_vertex_likelihoods(planted_runs):
     )
     rho = np.array([0.2, 0.6])
     result = api().fit_grouped(runs, library, rho)
+    assert result.diagnostics["rho"] == rho.tolist()
     for v in range(2):
-        scores, fits = [], []
-        for kernel in library.candidates:
-            data = _dense_vertex(runs, kernel, v)
-            fits.append(dense_fit(*data, rho[v]))
-            scores.append(dense_criterion(*data, fits[-1][0][0], rho[v])[0])
-        winner = int(np.argmin(scores))
-        assert result.kernels[v].id == winner
-        ratio, sigma2 = fits[winner]
-        assert result.diagnostics["variance_ratio"][v] == pytest.approx(
-            ratio[0], rel=1e-5
+        alone = select_library_reml(
+            tuple(api().subset_run(r, [v]) for r in runs),
+            library,
+            "amplitude",
+            float(rho[v]),
         )
-        assert result.diagnostics["sigma2"][v] == pytest.approx(sigma2[0], rel=1e-5)
-        assert result.diagnostics["candidate_gap"][v] == pytest.approx(
-            sorted(scores)[1] - sorted(scores)[0], rel=1e-6
-        )
+        assert result.kernels[v] == alone.kernels[0]
+        assert result.status[v] == alone.status[0]
+        for name in ("variance_ratio", "sigma2", "criterion", "candidate_gap"):
+            np.testing.assert_allclose(
+                result.diagnostics[name][v], alone.diagnostics[name][0], rtol=1e-9
+            )
     assert result.training_run_ids == tuple(r.run_id for r in runs)
 
 

@@ -1,6 +1,7 @@
 """HRF selection must recover known shapes using training runs only."""
 
 import importlib
+from pathlib import Path
 from dataclasses import replace
 
 import numpy as np
@@ -51,8 +52,12 @@ def planted_runs():
     return tuple(runs), library
 
 
-def test_cv_recovers_distinct_hrfs_with_profiled_junk(planted_runs):
-    """Verify cross-validation recovers distinct HRFs with profiled junk."""
+def test_cv_recovers_distinct_hrfs_with_canonical_junk(planted_runs):
+    """Selection recovers both planted HRFs with junk trials in a fixed canonical basis.
+
+    The planted junk follows each feature's own HRF, so only the canonical
+    feature is predicted exactly.
+    """
     runs, library = planted_runs
     fit = importlib.import_module(
         "experiments.hrf_estimation.library_cv"
@@ -61,7 +66,8 @@ def test_cv_recovers_distinct_hrfs_with_profiled_junk(planted_runs):
     assert [k.id for k in estimate.kernels] == [0, 1]
     assert estimate.status == ("ok", "ok")
     assert estimate.training_run_ids == tuple(r.run_id for r in runs[:3])
-    assert np.allclose(estimate.diagnostics["selected_cv_r2"], 1)
+    scores = estimate.diagnostics["selected_cv_r2"]
+    assert np.isclose(scores[0], 1) and 0.9 < scores[1] < 1
 
 
 def test_outer_test_signals_cannot_change_selection(planted_runs):
@@ -92,48 +98,47 @@ def test_zero_signal_gets_no_hrf(planted_runs):
     assert estimate.status == ("no_signal", "no_signal")
 
 
-def test_cv_agrees_with_package_for_compatible_task_model(planted_runs):
-    """Verify cross-validation agrees with package for compatible task model."""
-    from boldtailor.data import from_arrays
-    from boldtailor.model import TaskModel, Modulator
+def test_cv_is_the_package_selection_on_the_mapped_inputs(planted_runs):
+    """Library CV adds no numerics of its own: it reports the package's result."""
     from boldtailor.hrf_selection import select_hrfs
+    from experiments.hrf_estimation import library_cv, package_selection
 
     runs, library = planted_runs
-    clean = tuple(
-        replace(
-            r,
-            events=r.events.assign(
-                is_correct=1,
-                missing_data=0,
-                response_time=r.events.response_time.fillna(0.9),
-            ),
-        )
-        for r in runs
-    )
-    fit = importlib.import_module(
-        "experiments.hrf_estimation.library_cv"
-    ).fit_library_cv
-    ours = fit(clean, library, {})
-    data = from_arrays(
-        signals=[r.signals for r in clean],
-        events=[r.events for r in clean],
-        confounds=[r.confounds for r in clean],
-        tr=4 / 3,
-    )
-    package = select_hrfs(
-        data,
-        library=library,
-        task_model=TaskModel((Modulator("response_time"), Modulator("trial_type"))),
-    )
+    ours = library_cv.fit_library_cv(runs, library, {})
+    data, model = package_selection.selection_data(runs, library, "amplitude")
+    package = select_hrfs(data, library=library, task_model=model)
     assert [k.id for k in ours.kernels] == package.hrf_indices.tolist()
-    np.testing.assert_allclose(
-        ours.diagnostics["selected_cv_r2"], package.cv_r2, atol=1e-8
+    np.testing.assert_array_equal(ours.diagnostics["selected_cv_r2"], package.cv_r2)
+    np.testing.assert_array_equal(
+        ours.diagnostics["canonical_cv_r2"], package.canonical_cv_r2
     )
+    assert ours.diagnostics["package_selection"]["name"] == "hrf_selection"
+    assert ours.diagnostics["rt_mode"] == "amplitude"
+    for module in (library_cv, package_selection):
+        assert "boldtailor._" not in Path(module.__file__).read_text()
+
+
+def test_mapped_inputs_keep_valid_trials_and_move_junk_to_the_nuisance(planted_runs):
+    """Valid trials form the task model; missing and incorrect trials are nuisance."""
+    from experiments.hrf_estimation import package_selection
+
+    runs, library = planted_runs
+    data, model = package_selection.selection_data(runs, library, "amplitude")
+    assert model.regressor_names == ("task", "trial_type[1]", "response_time")
+    assert [len(e) for e in data.events] == [22] * 4
+    assert list(data.confounds[0].columns) == list(package_selection.JUNK_COLUMNS)
+    timed, timed_model = package_selection.selection_data(runs, library, "duration")
+    assert timed_model.regressor_names == ("task", "trial_type[1]")
+    np.testing.assert_array_equal(
+        timed.events[0].duration, timed.events[0].response_time
+    )
+    with pytest.raises(ValueError, match="rt_mode"):
+        package_selection.selection_data(runs, library, "other")
 
 
 @pytest.mark.parametrize("problem", ["constant_rt", "missing_condition"])
-def test_rank_failure_is_not_reported_as_no_signal(planted_runs, problem):
-    """Verify rank failure is not reported as no signal."""
+def test_rank_failure_is_an_error_not_a_no_signal_status(planted_runs, problem):
+    """An unidentifiable task model is rejected by the package before any fit."""
     runs, library = planted_runs
     changed = []
     for run in runs:
@@ -146,8 +151,8 @@ def test_rank_failure_is_not_reported_as_no_signal(planted_runs, problem):
     fit = importlib.import_module(
         "experiments.hrf_estimation.library_cv"
     ).fit_library_cv
-    result = fit(tuple(changed), library, {})
-    assert result.status == ("rank_deficient", "rank_deficient")
+    with pytest.raises(ValueError, match="no eligible|no 'trial_type' trials"):
+        fit(tuple(changed), library, {})
 
 
 def test_training_rejects_mismatched_anatomy_at_same_columns(planted_runs):

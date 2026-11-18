@@ -109,8 +109,29 @@ into this checkout. Preserve that execution worktree while the queues run.
 The existing results notebook describes the earlier completed pilots; it does
 not yet include this running stage. The authorized REML extensions are
 documented in [reml_model.md](reml_model.md). Only `reml` and `remlar1` remain; the
-multi-component variants were removed. REML now comes from `boldtailor.reml`
-through `experiments/hrf_estimation/reml_selection.py`.
+multi-component variants were removed.
+
+**Library selection now runs through the package (2026-11-17).** `librarycv`,
+`reml` and `remlar1` call `boldtailor.hrf_selection.select_hrfs`;
+`package_selection.py` only maps the experiment's runs onto package inputs.
+This changes the models relative to the completed runs described below:
+
+- Valid trials form the package task model (two conditions, plus RT as an
+  amplitude modulator). Missing and incorrect trials are nuisance regressors
+  in a fixed canonical basis instead of being convolved with each candidate.
+- REML uses the package model: a fixed task mean under the canonical
+  reference HRF and independent valid-trial deviations as random effects.
+  [reml_model.md](reml_model.md) describes the earlier condition-level model
+  and is kept as a historical record.
+- A vertex with zero random-effect variance has no likelihood winner; it keeps
+  the canonical HRF and its status stays `variance_zero`.
+- `rt_mode="duration"` gives each valid trial its RT as the event duration,
+  with no separate RT regressor.
+- An unidentifiable task model is the package's error, not a
+  `rank_deficient` status.
+
+Scoring, continuous off-grid estimation and the AR(1) regularization remain
+experiment code; the package has no equivalent for off-grid kernels.
 Powell remains available for historical reproducibility but is excluded from
 both active queues at the user’s request.
 

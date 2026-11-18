@@ -4,12 +4,12 @@ from dataclasses import replace
 import numpy as np
 from scipy.signal import lfilter
 
-from boldtailor.hrf_library import HrfLibrary
+from boldtailor.hrf_library import HrfCandidate, HrfLibrary
 from experiments.hrf_estimation.design import build_design
 
 
 def parametric_library(library):
-    candidates = tuple(replace(c, id=i) for i, c in enumerate(
+    candidates = tuple(HrfCandidate(i, c.kind, c.parameters) for i, c in enumerate(
         c for c in library.candidates if c.kind != "glmsingle"))
     return HrfLibrary(candidates, origin={"parent": library.fingerprint, "subset": "parametric"})
 

@@ -2,6 +2,7 @@
 
 import importlib
 import json
+from dataclasses import replace
 
 import nibabel as nib
 import numpy as np
@@ -40,6 +41,12 @@ def test_pilot_records_refit_scores_and_preserves_unprocessed_vertices(
 def test_comparison_supports_experimental_estimators(planted_runs, tmp_path):
     """Verify comparison supports experimental estimators."""
     runs, library = planted_runs
+    # Noiseless canonical data leave the package REML no residual to identify from.
+    rng = np.random.default_rng(17)
+    runs = tuple(
+        replace(r, signals=r.signals + rng.normal(0, 0.2, r.signals.shape))
+        for r in runs
+    )
     brain = nib.cifti2.BrainModelAxis.from_surface(np.arange(10), 10, "CortexLeft")
     fn = importlib.import_module("experiments.hrf_estimation.pilot").run_comparison
     table = fn(

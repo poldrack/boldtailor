@@ -45,6 +45,7 @@ def implementation_fingerprint():
             "timing.py",
             "design.py",
             "reml_selection.py",
+            "package_selection.py",
             "regularized_noise.py",
             "scoring.py",
             "splits.py",
