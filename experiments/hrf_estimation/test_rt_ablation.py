@@ -27,24 +27,17 @@ def test_no_rt_omits_only_the_rt_regressor(event_run):
     np.testing.assert_array_equal(other.junk,reduced.junk)
 
 
-def test_no_rt_reml_matches_dense_four_effect_covariance(planted_runs):
-    """Verify no response-time REML matches dense four effect covariance."""
+def test_no_rt_reml_drops_rt_from_the_fixed_task_mean(planted_runs):
+    """Without RT the package task model has no RT regressor, so the criterion changes."""
     from experiments.hrf_estimation.reml_selection import fit_library_reml
     runs,library=planted_runs
     rng=np.random.default_rng(37)
     runs=tuple(replace(r,signals=r.signals+rng.normal(0,.2,r.signals.shape)) for r in runs[:2])
-    result=fit_library_reml(runs,library,{"rt_mode":"none"})
-    assert result.diagnostics["rt_mode"] == "none"
-    for feature,kernel in enumerate(result.kernels):
-        signals,fixed,random=[],[],[]
-        for run in runs:
-            full=build_design(run,kernel,"amplitude")
-            signals.append(run.signals[:,[feature]])
-            fixed.append(full.nuisance)
-            random.append(np.column_stack([full.task[:,:2],full.junk]))
-        ratio,sigma2=dense_fit(signals,fixed,random)
-        np.testing.assert_allclose(result.diagnostics["variance_ratio"][feature],ratio[0],rtol=1e-5)
-        np.testing.assert_allclose(result.diagnostics["sigma2"][feature],sigma2[0],rtol=1e-5)
+    fits={mode:fit_library_reml(runs,library,{"rt_mode":mode}) for mode in ["none","amplitude"]}
+    names={mode:fit.diagnostics["package_selection"]["task_regressors"] for mode,fit in fits.items()}
+    assert fits["none"].diagnostics["rt_mode"] == "none"
+    assert names == {"none":["task","trial_type[1]"],"amplitude":["task","trial_type[1]","response_time"]}
+    assert not np.allclose(fits["none"].diagnostics["criterion"],fits["amplitude"].diagnostics["criterion"])
 
 
 def test_crossed_evaluation_separates_selection_and_evaluation_rt(planted_runs):
@@ -52,6 +45,9 @@ def test_crossed_evaluation_separates_selection_and_evaluation_rt(planted_runs):
     from experiments.hrf_estimation.reml_selection import fit_library_reml
     api=importlib.import_module("experiments.hrf_estimation.rt_ablation")
     runs,library=planted_runs
+    # Noiseless canonical data leave the package REML no residual to identify from.
+    rng=np.random.default_rng(41)
+    runs=tuple(replace(r,signals=r.signals+rng.normal(0,.2,r.signals.shape)) for r in runs)
     fits={mode:fit_library_reml(runs[:2],library,{"rt_mode":mode}) for mode in ["amplitude","none"]}
     table=api.crossed_scores(runs[2:],fits,"transfer01")
     assert set(zip(table.selection_rt,table.evaluation_rt)) == {(a,b) for a in fits for b in fits}
