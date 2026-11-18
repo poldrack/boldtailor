@@ -10,7 +10,7 @@ import subprocess
 import numpy as np
 from joblib import Parallel, delayed, parallel_config
 
-from boldtailor.hrf_library import HrfLibrary, default_hrf_library
+from boldtailor.hrf_library import HrfCandidate, HrfLibrary, default_hrf_library
 from experiments.hrf_estimation.inputs import discover_runs, load_run
 from experiments.hrf_simulations.calibration import calibrate, draw_profile
 from experiments.hrf_simulations.cases import simulation_cases
@@ -237,7 +237,10 @@ def _smoke(args):
 
     full = default_hrf_library()
     library = HrfLibrary(
-        tuple(replace(k, id=i) for i, k in enumerate(full.candidates[:3]))
+        tuple(
+            HrfCandidate(i, k.kind, k.parameters)
+            for i, k in enumerate(full.candidates[:3])
+        )
     )
     runs = tuple(
         replace(r, run_id=f"sub-synthetic_ses-synthetic_run-{i}")
