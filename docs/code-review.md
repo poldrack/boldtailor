@@ -1,222 +1,174 @@
-# API guide for human code review
+# Code-review guide
 
-[Complete module/function inventory](api-review/README.md) · [API options and returns](api.md) · [User guide](user-guide.md) · [Developer guide](development.md)
+[API reference](api.md) · [User guide](user-guide.md) · [Developer guide](development.md) · [Testing guide](testing.md) · [Archived function inventory](archive/api-review/README.md)
 
-This guide follows the code from inputs to scientific estimates to saved outputs.
-Use it to choose a review route, run a small example, and locate the functions
-that implement each step. The linked inventory covers **all 76 Python modules
-and 1,193 explicit definitions** in `src/boldtailor`, including private helpers,
-methods, properties, and nested functions. Each module page lists signatures,
-source docstrings, class fields, source links, and available direct-call examples
-in package code and tests. This is a source snapshot dated **2026-11-15**, not a
-claim that the scientific methods have been independently validated.
+This guide maps Boldtailor's workflow from input arrays to statistical estimates
+and published files. Use it to trace each subsystem through `src/boldtailor/`
+and its test suite.
 
-Start here for the architecture; use [api.md](api.md) for parameter explanations
-and result schemas, then the inventory for individual functions. Research code
-in `experiments/` and notebook helpers in `examples/` are outside this package
-inventory. The top-level `boldtailor` initializer exports the primary public
-names; everything else is imported from its defining module, and the
-`boldtailor.workflow` initializer is empty.
+## Core objects across module boundaries
 
-## The objects that cross module boundaries
-
-| Object | What it represents | Shape / important contract |
+| Object | Module | Role and contract |
 | --- | --- | --- |
-| `AnalysisData` | Aligned runs, raw events, confounds, timing and source records | Signals are scans × features, with the same feature order in every run; event onsets/durations are seconds |
-| `ModelSpec` | Conventional contrasts, nuisance/drift settings, noise and HRF choices | Contrasts are expressions or named weight mappings; t contrasts only |
-| `TaskModel`, `Modulator` | Shared task regressor semantics for HRF selection and task-model GLMs | Separate from raw single-trial design columns; numeric/categorical modulator handling matters |
-| `PreparedDesignAnalysis` | Signals with caller-supplied labeled design matrices | Every column has a role; fitting does not add or transform regressors |
-| `HrfLibrary`, `HrfCandidate` | Ordered candidate kernels and their identities | Candidate zero is canonical SPM; candidate kernels have peak one |
-| `HrfSelectionResult` | An HRF choice per feature and its selection diagnostics | Preserve feature order/signature; selection scores are not independent evaluation |
-| `AnalysisResult`, `HrfAnalysisResult` | Conventional contrast statistics and R² | Contrast maps are feature vectors; selected-HRF designs are reconstructed by run/HRF group |
-| `SingleTrialResult` | One beta per original event row | `run_betas[run]` is trials × features; `design` owns or reconstructs the design |
-| `CandidateScores` | Encoding scores across candidate penalties | `cv_r2` is candidates × features; `regularization` distinguishes the objective |
-| `RemlGroup`, `RemlFit`, `RemlSelection` | Fixed/random-design variance estimation | One random design per group; variance/status maps are per feature |
-| `ProvenanceRecord`, `Artifact` | Analysis identity and in-memory output payloads | Computation and file publication have separate boundaries |
+| `AnalysisData` | `boldtailor.data` | Aligned runs (`scans × features`), event DataFrames (`onset`, `duration` in seconds), confounds, frame times, and provenance |
+| `ModelSpec` | `boldtailor.model` | Conventional GLM settings (contrasts, confounds, drift model, HRF model, noise model, optional `TaskModel`) |
+| `TaskModel`, `Modulator` | `boldtailor.model` | Shared task-regressor specification for HRF selection and task-model GLMs |
+| `PreparedDesignAnalysis` | `boldtailor.prepared` | Signals paired with caller-supplied design matrices and column roles (`task`, `nuisance`, `intercept`, `other`) |
+| `HrfLibrary`, `HrfCandidate` | `boldtailor.hrf_library` | Candidate HRF kernels (ID 0 is canonical SPM; all kernels peak at 1) |
+| `HrfSelectionResult`, `HrfEvaluationResult` | `boldtailor.hrf_results` | Per-feature HRF choices (`method` `"cv"` or `"reml"`), CV or REML diagnostics, and split-test evaluations |
+| `AnalysisResult`, `HrfAnalysisResult` | `boldtailor.results`, `boldtailor.hrf_glm_results` | Conventional contrast maps and $R^2$; selected-HRF designs rebuild via `rebuild_group_design(run, hrf_id)` |
+| `SingleTrialResult` | `boldtailor.single_trial_results` | Per-trial betas (`trials × features` per run), `trial_table`, and `SharedTrialDesign` or `SelectedTrialDesign` |
+| `CandidateScores`, `RidgeSelection`, `FractionSelection` | `boldtailor.ridge_results` | Cross-validated encoding scores (`candidates × features`) and chosen penalties |
+| `EncodingDesign`, `TrialEncodingResult` | `boldtailor.trial_encoding` | Within-run or absolute trial-encoding design and held-out prediction results |
+| `RemlGroup`, `RemlFit`, `RemlSelection` | `boldtailor.reml` | Per-group fixed/random designs and per-feature restricted-likelihood variance estimates |
+| `DenoisingResult`, `SignificanceGate`, `PoolMasks` | `boldtailor.denoising_results` | Noise-pool masks, run PCs, `pcstop` count, and F-test significance gate |
+| `ProvenanceRecord`, `Artifact` | `boldtailor.provenance`, `boldtailor.publication` | Content/analysis fingerprints and in-memory output payloads |
 
-Owned numerical result arrays are ordinary NumPy arrays marked read-only.
-Use `.copy()` before editing. Public table accessors generally return defensive
-copies; private fields are not an editing interface. Feature indices and run
-indices are zero-based; BIDS run numbers and display labels are distinct.
+All returned numeric arrays are read-only NumPy arrays; public table accessors
+return copies; and dataclasses holding arrays or tables compare by object
+identity (`eq=False`).
 
-## Choose a review route
-
-Read the public entry point first, then its numerical helpers, then its result
-container and tests. Names in the following tables link to complete module pages.
-The test links are starting points, not the full validation suite.
+## Review routes
 
 ### 1. Conventional GLMs and prepared designs
 
-| Read in order | Functions to follow and their usage |
+| Modules | Key functions and classes |
 | --- | --- |
-| [data](api-review/data.md), [model](api-review/model.md) | `from_arrays` validates and owns runs; `ModelSpec` describes contrasts and model settings; `run_labels_for` standardizes run labels |
-| [design](api-review/design.md), [_task_design](api-review/_task_design.md) | `compile_designs` and `compile_nuisance_designs` build labeled per-run matrices; `kernel_task_columns` handles a supplied peak-one kernel |
-| [fit](api-review/fit.md), [_conventional](api-review/_conventional.md) | `fit(data, model)` estimates each run and combines contrasts; a supplied `hrf_selection` dispatches to grouped fitting |
-| [_fit_diagnostics](api-review/_fit_diagnostics.md), [results](api-review/results.md) | `task_delta_r2` compares nested OLS full/nuisance fits; result builders own contrast and diagnostic arrays |
-| [prepared](api-review/prepared.md), [prepared_fit](api-review/prepared_fit.md) | `PreparedDesignAnalysis.from_arrays`, `fit_prepared`, and `task_delta_r2_prepared` are the route for externally constructed designs |
+| [`data.py`](../src/boldtailor/data.py), [`_run_inputs.py`](../src/boldtailor/_run_inputs.py), [`model.py`](../src/boldtailor/model.py) | `from_arrays`, `AnalysisData`, `ModelSpec`, `TaskModel`, `Modulator` |
+| [`design.py`](../src/boldtailor/design.py), [`_task_design.py`](../src/boldtailor/_task_design.py) | `compile_designs`, `compile_nuisance_designs`, `kernel_task_columns` |
+| [`fit.py`](../src/boldtailor/fit.py), [`_standard_glm.py`](../src/boldtailor/_standard_glm.py), [`_conventional.py`](../src/boldtailor/_conventional.py) | `fit`, `task_delta_r2`, `fit_designs`, `nested_ols_delta` |
+| [`_fit_diagnostics.py`](../src/boldtailor/_fit_diagnostics.py), [`results.py`](../src/boldtailor/results.py) | `AnalysisResult`, `TaskDeltaR2Result`, parent-analysis validation |
+| [`prepared.py`](../src/boldtailor/prepared.py), [`prepared_fit.py`](../src/boldtailor/prepared_fit.py) | `PreparedDesignAnalysis.from_arrays`, `fit_prepared`, `task_delta_r2_prepared` |
 
-**Review questions.** Are the intended event columns and confounds actually in
-the design? Are early events excluded as recorded? Conventional contrasts use
-equal-run fixed effects, not precision weighting. Diagnostic task ΔR² uses nested
-OLS even when contrast inference uses AR(1). Check constant-feature NaNs and the
-identity checks that connect a diagnostic to its parent fit. The prepared route
-must preserve the caller's matrix and enforce its column-role contract.
+**What to check:**
+- Multi-run contrasts use equal-weight fixed effects, not precision weighting.
+- Rank and estimability checks normalize nonzero design columns to unit L2 norm
+  before SVD thresholding (`_conventional._full_rank_basis`).
+- `task_delta_r2` refits nested OLS models even when the parent fit used AR(1),
+  and verifies parent `data_fingerprint` and `analysis_fingerprint`.
+- Tests: `tests/test_fit.py`, `tests/test_multirun.py`,
+  `tests/test_prepared_fit.py`, `tests/test_fit_diagnostics.py`,
+  `tests/test_conventional_properties.py`.
 
-Start with [test_fit.py](../tests/test_fit.py),
-[test_multirun.py](../tests/test_multirun.py),
-[test_prepared_fit.py](../tests/test_prepared_fit.py), and
-[test_fit_diagnostics.py](../tests/test_fit_diagnostics.py).
+### 2. HRF libraries, CV/REML selection, and selected-HRF GLMs
 
-### 2. HRF construction, selection and selected-HRF GLMs
-
-| Read in order | Functions to follow and their usage |
+| Modules | Key functions and classes |
 | --- | --- |
-| [hrf_library](api-review/hrf_library.md) | `default_hrf_library`, `timing_hrf_library`, `sobol_hrf_library`, `expanded_hrf_library`, and `glmsingle_hrf_library` construct candidate sets; parameter/timing conversion functions distinguish gamma parameters from realized curve timing |
-| [hrf_selection](api-review/hrf_selection.md), [_hrf_design](api-review/_hrf_design.md), [_hrf_cv](api-review/_hrf_cv.md) | `select_hrfs` selects by leave-one-run-out task prediction; `evaluate_hrf_split` selects on training runs and evaluates frozen choices on test runs |
-| [hrf_results](api-review/hrf_results.md), [_hrf_assignment](api-review/_hrf_assignment.md) | Inspect score schemas, feature identity, undefined choices and assignment validation |
-| [_hrf_glm_design](api-review/_hrf_glm_design.md), [_hrf_glm](api-review/_hrf_glm.md), [hrf_glm_results](api-review/hrf_glm_results.md) | Follow `fit(..., hrf_selection=selection)` into grouped conventional estimation and `group_design(run, hrf_id)` reconstruction |
-| [reliability](api-review/reliability.md) | `compare_hrfs` and `curve_correlations` describe agreement of selected curves on the stored time grid |
+| [`hrf_library.py`](../src/boldtailor/hrf_library.py) | `default_hrf_library`, `timing_hrf_library`, `sobol_hrf_library`, `expanded_hrf_library`, `glmsingle_hrf_library`, `spm_parameters_from_realized` |
+| [`hrf_selection.py`](../src/boldtailor/hrf_selection.py), [`hrf_options.py`](../src/boldtailor/hrf_options.py), [`_hrf_design.py`](../src/boldtailor/_hrf_design.py), [`_run_design.py`](../src/boldtailor/_run_design.py) | `select_hrfs`, `evaluate_hrf_split`, `RemlHrfOptions`, `RunDesign`, `prepare_runs` |
+| [`_hrf_cv.py`](../src/boldtailor/_hrf_cv.py), [`_hrf_reml.py`](../src/boldtailor/_hrf_reml.py), [`hrf_results.py`](../src/boldtailor/hrf_results.py) | `loro_scores`, `choose_eligible`, `select_hrfs_reml`, `HrfSelectionResult`, `HrfEvaluationResult` |
+| [`_hrf_glm_design.py`](../src/boldtailor/_hrf_glm_design.py), [`_hrf_glm.py`](../src/boldtailor/_hrf_glm.py), [`hrf_glm_results.py`](../src/boldtailor/hrf_glm_results.py) | `fit_selected_glm`, `selected_task_delta_r2`, `HrfAnalysisResult.rebuild_group_design` |
+| [`reliability.py`](../src/boldtailor/reliability.py) | `curve_correlations`, `compare_hrfs` |
 
-**Review questions.** Are task amplitudes learned only on the intended training
-runs? Are selection and evaluation distinguished? Are feature signatures, task
-model compatibility, and HRF normalization consistent when reusing a selection?
-Curve agreement is Pearson correlation without temporal shifting, not an ICC.
-Undefined choices must stay in their original spatial positions as NaNs.
-
-Start with [test_hrf_cv.py](../tests/test_hrf_cv.py),
-[test_hrf_selection.py](../tests/test_hrf_selection.py),
-[test_hrf_glm.py](../tests/test_hrf_glm.py), and
-[test_hrf_timing.py](../tests/test_hrf_timing.py).
+**What to check:**
+- Every event's predicted response on the oversampled grid is scaled to unit peak.
+- `evaluate_hrf_split` learns HRFs and task amplitudes strictly on `train_runs`.
+- Selected-HRF `fit()` validates `feature_signature`, `oversampling`,
+  `min_onset`, and `TaskModel.is_subset_of`.
+- Tests: `tests/test_hrf_cv.py`, `tests/test_hrf_cv_properties.py`,
+  `tests/test_hrf_selection.py`, `tests/test_hrf_reml*.py`,
+  `tests/test_hrf_glm.py`, `tests/test_hrf_timing.py`.
 
 ### 3. Single-trial estimation and encoding-guided regularization
 
-| Read in order | Functions to follow and their usage |
+| Modules | Key functions and classes |
 | --- | --- |
-| [single_trial](api-review/single_trial.md), [_single_trial_design](api-review/_single_trial_design.md) | `fit_single_trials` uses one fixed HRF; `fit_selected_hrfs` uses a prior spatial assignment; each raw event gets its own column |
-| [_single_trial_fit](api-review/_single_trial_fit.md), [_selected_hrf_fit](api-review/_selected_hrf_fit.md), [_fractional_ridge](api-review/_fractional_ridge.md) | Inspect nuisance projection, trial scaling, penalty application and restoration of feature order |
-| [single_trial_results](api-review/single_trial_results.md) | Follow beta arrays, trial metadata and shared versus reconstructed selected-HRF designs |
-| [trial_encoding](api-review/trial_encoding.md) | `trial_predictors` builds aligned trial covariates; `evaluate_trial_encoding` fits training slopes and scores held-out trials |
-| [ridge_selection](api-review/ridge_selection.md), [fractional_ridge](api-review/fractional_ridge.md), [_ridge_cv](api-review/_ridge_cv.md) | `score_ridge_candidates` / `select_ridge_penalty` choose one alpha across features; `score_fraction_candidates` / `select_ridge_fractions` choose a fraction at each feature |
-| [ridge_results](api-review/ridge_results.md), [diagnostics](api-review/diagnostics.md) | Inspect score shapes and selection masks; `one_sample_t` and `correlate_rt` summarize fitted betas |
+| [`single_trial.py`](../src/boldtailor/single_trial.py), [`_shared_hrf_fit.py`](../src/boldtailor/_shared_hrf_fit.py), [`_selected_hrf_fit.py`](../src/boldtailor/_selected_hrf_fit.py) | `fit_single_trials`, `fit_selected_hrfs`, `assemble_trial_result` |
+| [`_design_inputs.py`](../src/boldtailor/_design_inputs.py), [`_single_trial_design.py`](../src/boldtailor/_single_trial_design.py), [`_single_trial_fit.py`](../src/boldtailor/_single_trial_fit.py), [`_fractional_ridge.py`](../src/boldtailor/_fractional_ridge.py) | `ProjectedTrialDesign`, `PreparedTrialBetas`, `PreparedFractionBetas`, `fraction_alphas` |
+| [`single_trial_results.py`](../src/boldtailor/single_trial_results.py), [`ridge_results.py`](../src/boldtailor/ridge_results.py) | `SingleTrialResult`, `SharedTrialDesign`, `SelectedTrialDesign`, `CandidateScores` |
+| [`trial_encoding.py`](../src/boldtailor/trial_encoding.py) | `trial_predictors`, `EncodingDesign`, `evaluate_trial_encoding` |
+| [`ridge_selection.py`](../src/boldtailor/ridge_selection.py), [`fractional_ridge.py`](../src/boldtailor/fractional_ridge.py), [`_regularizers.py`](../src/boldtailor/_regularizers.py), [`_ridge_cv.py`](../src/boldtailor/_ridge_cv.py) | `score_ridge_candidates`, `select_ridge_penalty`, `score_fraction_candidates`, `select_ridge_fractions` |
+| [`diagnostics.py`](../src/boldtailor/diagnostics.py) | `one_sample_t`, `correlate_rt`, `even_run_points` |
 
-**Review questions.** Nuisance columns and the intercept are unpenalized. Fixed
-alpha acts on normalized projected trial columns; fractional ridge constrains
-coefficient norm in the raw projected basis. Fractional CV uses fixed OLS targets;
-normalized-alpha CV uses candidate-regularized targets. Default encoding removes
-within-run offsets for scoring, but predictions must not depend on test outcomes.
-A shared-alpha selection must reduce over the complete intended feature set, not
-separately over spatial blocks. Supplied HRF libraries require nested selection
-inside the training folds. Repeated stimuli are not required.
-
-Start with [test_single_trial.py](../tests/test_single_trial.py),
-[test_fractional_cv.py](../tests/test_fractional_cv.py),
-[test_ridge_cv.py](../tests/test_ridge_cv.py), and
-[test_within_run_cv_isolation.py](../tests/test_within_run_cv_isolation.py).
+**What to check:**
+- Nuisance columns and the intercept are unpenalized.
+- `ridge_alpha` acts on unit-norm projected trial columns; `ridge_fraction`
+  constrains coefficient norm in the raw projected trial basis and scores
+  against fixed OLS validation betas.
+- Within-run encoding centers test residuals for scoring only; test betas never
+  influence fitted slopes or predictions.
+- Tests: `tests/test_single_trial.py`, `tests/test_fractional_ridge.py`,
+  `tests/test_fractional_cv.py`, `tests/test_ridge_cv.py`,
+  `tests/test_ridge_properties.py`, `tests/test_trial_encoding*.py`,
+  `tests/test_within_run_cv_isolation.py`.
 
 ### 4. Scalar REML and AR(1)
 
-| Read in order | Functions to follow and their usage |
+| Modules | Key functions and classes |
 | --- | --- |
-| [ar1](api-review/ar1.md), [_ar1_moments](api-review/_ar1_moments.md) | `whiten` transforms rows; `prepare_reference` caches design work; `estimate_rho` estimates autocorrelation using a reference design |
-| [reml](archive/api-review/reml.md) | `fit_reml(groups, random_design, rho=...)` estimates one random-effect variance ratio; `select_random_effects_design` compares candidate random designs using the same groups; includes input validation, fixed-space projection, pooled restricted likelihood, and bounded variance-ratio search |
-| [_numerics](api-review/_numerics.md) | Review shared rank, projection and least-squares conventions used by numerical paths |
+| [`ar1.py`](../src/boldtailor/ar1.py), [`_ar1_moments.py`](../src/boldtailor/_ar1_moments.py) | `whiten`, `prepare_reference`, `estimate_rho` |
+| [`reml.py`](../src/boldtailor/reml.py) | `RemlGroup`, `fit_reml`, `select_random_effects_design`, `RemlFit`, `RemlSelection` |
+| [`_numerics.py`](../src/boldtailor/_numerics.py) | `conditioned_basis`, `residual_floors`, `rank_tolerance` |
 
-**Review questions.** `rho` is supplied to REML, not estimated inside it. Each
-group has scans × features signals, scans × fixed-columns `fixed_design`, and
-a scans × random-columns design (or `None`). Groups share the feature axis.
-`noise_variance` is marginal noise variance; `effect_variance` is `ratio *
-noise_variance`. Do not read `ratio` without `status`: zero variance, no signal,
-unidentifiable and numerically unresolved cases have distinct meanings.
-`at_upper` and `unrefined` mark search limitations. For candidate selection,
-`winner == -1` means no eligible winner; only `ok` candidates enter the race.
-`gap` is runner-up minus best criterion when available, not a probability.
-`any_at_upper` / `any_unrefined` include competing candidates, not just the winner.
-
-Start with [test_reml_oracle.py](../tests/test_reml_oracle.py),
-[test_reml_scientific_properties.py](../tests/test_reml_scientific_properties.py),
-[test_reml_scientific_regressions.py](../tests/test_reml_scientific_regressions.py),
-[test_reml_selection.py](../tests/test_reml_selection.py), and
-[test_ar1.py](../tests/test_ar1.py).
+**What to check:**
+- `rho` is supplied to `fit_reml` / `select_random_effects_design`, not
+  estimated inside REML.
+- Interpret `ratio`, `noise_variance`, and `effect_variance` together with
+  `status`, `at_upper`, `unrefined`, `any_at_upper`, and `any_unrefined`.
+- Tests: `tests/test_reml*.py`, `tests/test_ar1.py`, `tests/test_numerics*.py`.
 
 ### 5. Optional task-guided denoising
 
-Read [denoising](archive/api-review/denoising.md): `select_denoising` selects temporal
-noise PCs and `with_denoising` appends them to the baseline confounds of the same
-analysis (including the noise pool/PCA, PC-count selection, significance gate, and
-source-identity checks), using [_mixture_threshold](archive/api-review/_mixture_threshold.md)
-for the automatic tail threshold and
-[denoising_results](archive/api-review/denoising_results.md) for identity and outputs.
-
-**Review questions.** HRFs, the pool and its components use all supplied runs;
-count-selection scores are not independent performance estimates. The significance
-gate is a Boldtailor addition to GLMdenoise. This path is opt-in through the array
-API and is not part of `boldtailor run`. Check PC-count limits, empty/degenerate
-pools and source-identity enforcement before appending confounds.
-
-Start with [test_denoising.py](../tests/test_denoising.py),
-[test_denoising_cv.py](../tests/test_denoising_cv.py), and
-[test_denoising_gate.py](../tests/test_denoising_gate.py).
-
-### 6. Ownership, provenance, lifecycle and publication
-
-| Modules | Usage and review focus |
+| Modules | Key functions and classes |
 | --- | --- |
-| [_arrays](api-review/_arrays.md), [_scalars](api-review/_scalars.md) | Array ownership/copying, type validation and immutable result construction |
-| [provenance](api-review/provenance.md), [_software](api-review/_software.md), [bids_provenance](api-review/bids_provenance.md) | `SourceRef`, `RunSources`, fingerprints and `extend_provenance`; `project_bids_provenance` produces in-memory metadata bytes |
-| [logging](api-review/logging.md), [_fit_lifecycle](api-review/_fit_lifecycle.md) | Context binding and start/completion/failure events around computation |
-| [publication](api-review/publication.md) | `Artifact` holds an output; `publish_artifact_set` takes the writer lock, stages outputs, and rolls back failures |
-| [_constants](api-review/_constants.md) | Shared numerical defaults |
+| [`denoising.py`](../src/boldtailor/denoising.py), [`_mixture_threshold.py`](../src/boldtailor/_mixture_threshold.py) | `select_denoising`, `with_denoising`, `onoff_r2`, `pool_masks`, `apply_gate`, `mixture_threshold` |
+| [`denoising_results.py`](../src/boldtailor/denoising_results.py) | `DenoisingResult`, `SignificanceGate`, `PoolMasks`, `PcaDiagnostics`, `DenoisingFold` |
 
-**Review questions.** Do fingerprints change for scientifically meaningful
-changes? Does a table accessor expose mutable internal state? Does an exception
-leave understandable lifecycle records? Publication uses a sibling control
-directory and backups; inspect the [publication guarantees](publication-migration.md)
-before assuming crash durability or filesystem-wide transaction semantics.
+**What to check:**
+- Held-out targets are projected off baseline confounds (and indicators) only,
+  never off candidate PCs.
+- The significance gate (`gate_noise_model="ar1"` by default) prewhitens each
+  run and feature before computing nested F-tests across all runs.
+- `with_denoising` enforces exact run, timing, signal, confound, and event
+  identity before appending `denoise_pc_000`, ...
+- Tests: `tests/test_denoising*.py`, `tests/test_mixture_threshold.py`.
 
-Start with [test_arrays.py](../tests/test_arrays.py),
-[test_provenance.py](../tests/test_provenance.py),
-[test_fit_lifecycle.py](../tests/test_fit_lifecycle.py), and
-[test_publication.py](../tests/test_publication.py).
+### 6. Ownership, provenance, lifecycle, and publication
 
-### 7. BIDS workflow, CIFTI outputs and presentation
-
-| Read in order | Functions to follow and their usage |
+| Modules | Key functions and classes |
 | --- | --- |
-| [cli](api-review/cli.md), [workflow.settings](api-review/workflow-settings.md) | `main`, `build_parser`, `settings_from_args`, `WorkflowSettings` resolve a session's settings |
-| [workflow.run](api-review/workflow-run.md) | `describe_inputs` is the dry-run path; `run_workflow` orchestrates fitting and publication |
-| [workflow.files](api-review/workflow-files.md), [workflow.inputs](api-review/workflow-inputs.md), [task_detection](api-review/task_detection.md) | Discover matching inputs, load runs, choose confounds, preserve timing, detect task regressors and form feature blocks |
-| [workflow.analysis](api-review/workflow-analysis.md), [workflow.beta_series](api-review/workflow-beta_series.md), [parallel](api-review/parallel.md) | Blockwise public-API calls, penalty tuning and outer evaluation; `map_blocks` bounds dispatch and preserves order |
-| [cifti](api-review/cifti.md), [workflow.artifacts](api-review/workflow-artifacts.md), [workflow.outputs](api-review/workflow-outputs.md) | Preserve spatial axes, construct in-memory artifacts and publish all stages together |
-| [workflow.summaries](api-review/workflow-summaries.md), [workflow.plots](api-review/workflow-plots.md), [workflow.surfaces](api-review/workflow-surfaces.md), [workflow.report](api-review/workflow-report.md) | Summarize fitted results, render figures and embed them in an HTML report |
+| [`_arrays.py`](../src/boldtailor/_arrays.py), [`_scalars.py`](../src/boldtailor/_scalars.py) | `readonly_array`, `owned_table`, scalar validators |
+| [`provenance.py`](../src/boldtailor/provenance.py), [`bids_provenance.py`](../src/boldtailor/bids_provenance.py) | `SourceRef`, `RunSources`, `ProvenanceRecord`, `analysis_fingerprint`, `project_bids_provenance` |
+| [`logging.py`](../src/boldtailor/logging.py), [`_fit_lifecycle.py`](../src/boldtailor/_fit_lifecycle.py) | `bind_context`, `emit_event`, `normalization`, `fit_operation`, `build_fit_provenance`, `finish_fit` |
+| [`publication.py`](../src/boldtailor/publication.py) | `Artifact`, `publish_artifact_set`, `PublicationError` |
 
-**Review questions.** This workflow expects BIDS events and fMRIPrep fsLR-91k
-CIFTIs. Confirm acquisition times after removing non-steady-state scans, confound
-selection, odd/even BIDS run splits, and restoration of excluded features to NaN.
-The similarly named `workflow.analysis.select_hrfs` is a blockwise adapter to the
-core selection API. Settings construction resolves paths; `run_workflow` writes
-outputs. Plotting functions should consume results without refitting.
+**What to check:**
+- `data_fingerprint` and `analysis_fingerprint` are used consistently across
+  attributes, log records, and serialized JSON.
+- Failure events record `error_code` without leaking exception text.
+- Tests: `tests/test_arrays.py`, `tests/test_dataclass_equality.py`,
+  `tests/test_provenance.py`, `tests/test_identity_names.py`,
+  `tests/test_fit_lifecycle.py`, `tests/test_publication*.py`.
 
-Start with [workflow tests](../tests/workflow), especially
-[test_synthetic_bids.py](../tests/workflow/test_synthetic_bids.py),
-[test_analysis.py](../tests/workflow/test_analysis.py), and
-[test_outputs.py](../tests/workflow/test_outputs.py).
+### 7. BIDS workflow, CIFTI outputs, and CLI
 
-## Runnable examples for the numerical entry points
+| Modules | Key functions and classes |
+| --- | --- |
+| [`cli.py`](../src/boldtailor/cli.py), [`workflow/settings.py`](../src/boldtailor/workflow/settings.py), [`workflow/run.py`](../src/boldtailor/workflow/run.py) | `main`, `WorkflowSettings`, `describe_inputs`, `run_workflow` |
+| [`workflow/files.py`](../src/boldtailor/workflow/files.py), [`workflow/inputs.py`](../src/boldtailor/workflow/inputs.py), [`task_detection.py`](../src/boldtailor/task_detection.py) | `discover_runs`, `load_session`, `select_confounds`, `make_blocks`, `detect_task_model` |
+| [`workflow/analysis.py`](../src/boldtailor/workflow/analysis.py), [`workflow/beta_series.py`](../src/boldtailor/workflow/beta_series.py), [`workflow/records.py`](../src/boldtailor/workflow/records.py), [`workflow/ridge_provenance.py`](../src/boldtailor/workflow/ridge_provenance.py) | `select_hrfs`, `fit_glms`, `fit_beta_models`, `GlmFit`, `BetaFit`, `OuterEvaluation`, `TuningResult`, `CvBetaResult` |
+| [`cifti.py`](../src/boldtailor/cifti.py), [`workflow/hrf_maps.py`](../src/boldtailor/workflow/hrf_maps.py), [`workflow/artifacts.py`](../src/boldtailor/workflow/artifacts.py), [`workflow/export_cifti.py`](../src/boldtailor/workflow/export_cifti.py), [`workflow/outputs.py`](../src/boldtailor/workflow/outputs.py), [`workflow/manifest.py`](../src/boldtailor/workflow/manifest.py) | `scalar_artifact`, `selection_maps`, `workflow_artifacts`, `save_workflow`, `metadata` |
+| [`workflow/summaries.py`](../src/boldtailor/workflow/summaries.py), [`workflow/tables.py`](../src/boldtailor/workflow/tables.py), [`workflow/figures.py`](../src/boldtailor/workflow/figures.py), [`workflow/plots.py`](../src/boldtailor/workflow/plots.py), [`workflow/surfaces.py`](../src/boldtailor/workflow/surfaces.py), [`workflow/report.py`](../src/boldtailor/workflow/report.py) | Summary tables, cortical/diagnostic figures, and `render_report` |
 
-Run these snippets in order in a Python session (`uv run python`) or combine them
-into a script and run `uv run python your_script.py`. They use small synthetic
-arrays to demonstrate contracts, not to validate scientific recovery. No files
-are written and no external dataset is required.
+**What to check:**
+- Inner ridge-tuning folds, outer evaluations, and final fits share the session's
+  non-constant grayordinate blocks and HRF selection `TaskModel`.
+- Excluded constant grayordinates are restored as NaN in exported maps.
+- Tests: `tests/workflow/test_synthetic_bids.py`,
+  `tests/workflow/test_analysis.py`, `tests/workflow/test_beta_series.py`,
+  `tests/workflow/test_outputs.py`, `tests/workflow/test_reml_workflow.py`.
 
-### Construct runs and fit a conventional contrast
+## Runnable examples
+
+Run these snippets in a Python session (`uv run python`):
+
+### 1. Conventional GLM contrast
 
 ```python
 import numpy as np
 import pandas as pd
 
-from boldtailor.data import from_arrays
-from boldtailor.fit import fit
-from boldtailor.model import ModelSpec
+from boldtailor import ModelSpec, fit, from_arrays
 
 rng = np.random.default_rng(7)
 events = pd.DataFrame({
@@ -235,18 +187,13 @@ print(result.effect("face_gt_house").shape)  # (3,)
 print(result.design_matrices[0].columns)
 ```
 
-To use a prebuilt design, construct `PreparedDesignAnalysis.from_arrays` with
-`column_roles` and pass it to `fit_prepared`; see the
-[prepared-design API](api.md#prepared-designs) for role and diagnostic requirements.
-
-### Select HRFs and fit one beta per trial
+### 2. HRF selection and single-trial fitting
 
 ```python
 from boldtailor.hrf_library import HrfLibrary
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_selected_hrfs
 
-# One candidate keeps the demonstration quick; use a larger library in practice.
 library = HrfLibrary.from_parameters([], origin={"kind": "review_example"})
 selection = select_hrfs(data, library=library, feature_signature="example-order")
 trials = fit_selected_hrfs(
@@ -257,12 +204,7 @@ print(trials.run_betas[0].shape)  # (6, 3)
 print(trials.trial_table[["trial_id", "run_index", "event_index"]])
 ```
 
-The signature is a caller-supplied spatial identity, not a substitute for aligning
-the inputs. Use a signature derived from real spatial metadata for real data.
-For a conventional selected-HRF fit, pass the same selection and signature to
-`fit(data, model, hrf_selection=..., feature_signature=...)`.
-
-### Score and choose fractional regularization
+### 3. Fractional ridge selection
 
 ```python
 from boldtailor.fractional_ridge import (
@@ -273,16 +215,10 @@ predictors = [pd.DataFrame({"face": [1., 0.] * 3}) for _ in signals]
 scores = score_fraction_candidates(data, predictors, fractions=[1., 0.5])
 chosen = select_ridge_fractions(scores)
 print(scores.cv_r2.shape)  # (2, 3)
-print(chosen.ridge_fraction)  # one selected fraction per feature
+print(chosen.ridge_fraction)
 ```
 
-Here `library=None` uses canonical SPM. These scores choose a penalty; to estimate
-performance independently, keep outer test runs out of this scoring call. Refit
-with `fit_single_trials(..., ridge_fraction=chosen.ridge_fraction)` for the same
-canonical HRF. Do not silently combine a canonical-HRF tuning result with a
-different selected HRF and describe it as the same tuning procedure.
-
-### Estimate a random-effect variance with REML
+### 4. Scalar REML and AR(1) estimation
 
 ```python
 from boldtailor.ar1 import estimate_rho
@@ -296,32 +232,5 @@ variance_fit = fit_reml(groups, random, rho=rho.pooled)
 print(variance_fit.status)
 print(variance_fit.ratio.shape)  # (3,)
 comparison = select_random_effects_design(groups, [random], rho=rho.pooled)
-print(comparison.winner)  # candidate 0 or -1 if no eligible winner
+print(comparison.winner)
 ```
-
-This illustrates the call sequence with a reference intercept design. A real
-analysis must justify its reference and random designs. Inspect `status`,
-`at_upper`, `unrefined`, and the selection-wide flags before interpreting estimates.
-
-## How to use the inventory during review
-
-Open the [module index](api-review/README.md), choose a module, and jump to its
-function or class. Signatures include source defaults and annotations; class
-fields explain result storage. Properties are marked `@property` and are read
-as attributes, not called. Dataclass `field(...)` declarations are construction
-metadata, not literal user arguments. Deprecated aliases appear because they
-remain in source; prefer the current names used above.
-
-Docstrings are reproduced from source and may contain reStructuredText markup.
-Where a definition has no docstring, its page says so and links to its body and
-available call sites instead of inventing a contract. The handwritten routes and
-existing API guide supply the higher-level usage context. Direct-call links are
-static examples, not a complete runtime call graph. Nested definitions are shown
-under their enclosing function and cannot be imported as module-level APIs.
-
-For each reviewed path, record the intended estimand, input invariants, undefined
-cases, training/test boundaries, and evidence from the relevant tests. Run a
-focused suite with `uv run pytest tests/test_<area>.py`; use the
-[developer guide](development.md#environment-and-checks) for broader checks.
-When source changes, refresh signatures, definition counts and line links in
-this snapshot alongside the affected narrative.

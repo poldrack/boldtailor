@@ -1,33 +1,27 @@
 # Comparing Boldtailor and GLMsingle
 
-Both packages estimate a separate beta for each stimulus presentation and can
-use a different HRF at each brain location. The main differences are how they
-choose HRFs, handle nuisance variation, and set regularization.
+Both Boldtailor and GLMsingle estimate per-trial beta amplitudes and select a
+location-specific HRF from a library of candidates. They differ primarily in how
+they score candidate HRFs, construct nuisance regressors, and tune
+regularization.
 
-The table describes Boldtailor's current single-trial workflow alongside the
-published GLMsingle method. GLMsingle combines HRF-library selection,
-data-derived nuisance regressors, and voxelwise fractional ridge; its paper
-reports gains in beta reliability and downstream analyses on NSD, BOLD5000,
-and StudyForrest. Those results are evidence for GLMsingle, not a comparison
-against Boldtailor. [Prince et al. (2022)](https://elifesciences.org/articles/77599)
+The table below compares Boldtailor's workflow with the published GLMsingle
+method ([Prince et al., 2022](https://elifesciences.org/articles/77599)). Empirical
+benchmarks in the GLMsingle paper evaluate GLMsingle on NSD, BOLD5000, and
+StudyForrest; no matched head-to-head benchmark between the two packages is
+included in this repository.
 
 ## Methods at a glance
 
-| Choice | Boldtailor | Published GLMsingle workflow |
+| Aspect | Boldtailor | Published GLMsingle workflow |
 | --- | --- | --- |
-| HRF library | Default `default_hrf_library()`: canonical SPM, 512 timing-space Sobol double-gamma candidates, and GLMsingle's 20 empirical HRFs; parameter grids and custom libraries also supported | Default library of 20 empirically derived HRFs; custom libraries supported |
-| Command line | `boldtailor run --bids-dir ... --subject ... --session ... --task ...` runs the whole BIDS + fMRIPrep workflow and writes a BIDS derivative with an HTML report | A MATLAB or Python function call, `GLMestimatesingletrial`, with options passed as a struct or dict |
-| HRF selection | Predict each omitted run using task-model amplitudes learned from other runs; pool prediction errors to choose one HRF per location | Fit single-trial models with each HRF and choose the highest in-sample R² per voxel |
-| Confounds | Caller-supplied regressors; the NSD example uses 24 motion columns, six aCompCor components, cosines, and non-steady-state indicators. Optional `select_denoising()` follows GLMdenoise: run-wise PCs of an ON-OFF R² noise pool (Gaussian-mixture tail threshold), with the count chosen by held-out task prediction and the `pcstop` rule, then kept only if it passes an F-test significance gate (a Boldtailor addition) | Polynomial drift terms and GLMdenoise PCs derived from a noise pool; number of PCs selected by cross-validation |
-| Regularization | OLS, fixed ridge, or fractional ridge selected separately per grayordinate by trial-encoding prediction; shared-alpha CV also available | Fractional ridge selected separately per voxel by cross-validation |
-| Cross-validation target | HRFs: nuisance-adjusted task-model time-series prediction. Fractional ridge: fixed OLS trial betas. Shared-alpha ridge: candidate-regularized trial betas | Reproducibility of beta estimates for repeated conditions, to choose denoising and ridge settings |
-| Trial estimates | One coefficient per presentation, including repeats | One coefficient per presentation, including repeats |
-
-GLMsingle's HRF selection itself does **not** use the repeated-condition
-cross-validation criterion. This distinction is explicit in the
-[GLMsingle FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#why-isn-t-the-hrf-selection-cross-validated).
-Boldtailor's selection and final fitting procedures are described in the
-[user guide](user-guide.md#selecting-an-hrf-for-each-location).
+| HRF library | Default `default_hrf_library()`: canonical SPM, 512 timing-space Sobol double-gamma candidates, and GLMsingle's 20 empirical HRFs; parameter grids and custom libraries supported | Default library of 20 empirically derived HRFs; custom libraries supported |
+| Entry point | Python array API plus `boldtailor run` CLI for BIDS + fMRIPrep fsLR-91k CIFTI sessions | MATLAB or Python `GLMestimatesingletrial` (plus modular classes in recent checkouts) |
+| HRF selection | Leave-one-run-out task-model time-series prediction (`method="cv"`) or restricted maximum likelihood over random trial effects (`method="reml"`) | Highest in-sample single-trial $R^2$ per voxel (not cross-validated; see [GLMsingle FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#why-isn-t-the-hrf-selection-cross-validated)) |
+| Confounds | Caller-supplied confounds (e.g., fMRIPrep motion, aCompCor, cosines, spikes) plus optional `select_denoising()` (GLMdenoise-style noise-pool PCs with a `pcstop` rule and AR(1)-prewhitened F-test significance gate) | Polynomial drift terms plus GLMdenoise PCs from an ON-OFF $R^2$ noise pool, tuned by cross-validation |
+| Regularization | OLS, fixed normalized ridge (`ridge_alpha`), per-feature fractional ridge (`ridge_fraction`) tuned against fixed OLS targets, or shared-alpha CV | Per-voxel fractional ridge tuned by repeated-condition beta consistency |
+| Tuning objective | HRF CV: held-out task time-series prediction. Ridge CV: held-out trial-encoding prediction (e.g., trial type and RT) | Cross-validated reproducibility of trial betas across repeated conditions |
+| Trial estimates | One coefficient per event presentation, including repeats | One coefficient per event presentation, including repeats |
 
 ## Data-derived noise regressors
 
@@ -41,179 +35,82 @@ GLMsingle (Copyright (c) 2021, Kendrick Kay) is distributed under the BSD
 3-Clause License, reproduced in `src/boldtailor/_resources/GLMsingle-LICENSE.txt`.
 GLMsingle's authors have not reviewed or endorsed Boldtailor.
 
-Boldtailor has an optional stage, `select_denoising()`, that follows
-GLMsingle's GLMdenoise procedure as closely as Boldtailor's inputs allow. Like
-GLMsingle, it selects HRFs once on all runs and freezes them, defines the
-noise pool by ON-OFF R² (one canonical-HRF task regressor, a shared
-coefficient, in-sample on all runs) below the `findtailthreshold`
-Gaussian-mixture threshold, scores the features above that threshold (the
-best 100 when none passes), computes run-wise temporal PCs of that single
-pool, summarizes each count by the median over scored features, and stops
-with the `pcstop` rule of `select_noise_regressors` (default 1.05, counts
-0-10). The core is anatomy-agnostic: every input feature is a candidate and
-masking is left to the input step.
+`select_denoising()` is an opt-in array-level stage modeled on GLMsingle's
+GLMdenoise procedure ([GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
+[GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)). Like GLMsingle,
+it selects HRFs once on all runs and freezes them, defines the noise pool from
+in-sample canonical-HRF ON-OFF $R^2$ using a two-component Gaussian-mixture tail
+threshold (`findtailthreshold`), scores features above that threshold (or the top
+100 with a defined HRF if none pass), extracts per-run temporal PCs from the
+pool, summarizes each candidate PC count by the median score across scored
+features, and applies the `pcstop=1.05` stopping rule across counts 0–10.
 
-Deviations, each with its reason:
+Key deviations from GLMsingle:
 
-- **Nuisance.** Each run's baseline confounds plus an intercept replace
-  GLMsingle's polynomial drift terms, because Boldtailor analyses carry their
-  own confounds.
-- **Count scoring.** GLMsingle scores counts by cross-validated single-trial
-  beta consistency across repeated conditions and skips GLMdenoise when
-  conditions do not repeat. Boldtailor does not assume repeats, so it scores
-  counts by leave-one-run-out task-model time-series prediction (pooled
-  SSE/SST per feature across folds), close to the original GLMdenoise. Its
-  task-guided criterion uses the caller's task model, including modulators.
-- **Fixed target.** The held-out target never contains the candidate PCs, so
-  more PCs cannot win by shrinking it.
-- **No brightness criterion.** GLMsingle's pool also requires `bright`
-  features (mean intensity above 10% of the 99th percentile). Boldtailor drops
-  it because the core is anatomy-agnostic and never infers anatomy from
-  intensities.
-- **Scoring fallback.** The best-100 fallback considers only features with a
-  defined HRF.
-- **Mixture threshold details.** `robustrange` runs on all finite ON-OFF R²
-  values, while GLMsingle runs it on the mixture-fit subsample (this matters
-  only above 1e6 values). If the tail component's posterior never crosses 0.5
-  on the grid, Boldtailor raises an error; GLMsingle warns and continues.
-- **R² units.** ON-OFF R² is a fraction in [0, 1]; GLMsingle reports it in
-  percent, so a fixed `pool_r2_threshold` copied from GLMsingle's `brainR2`
-  must be divided by 100.
-- **Stopping rule.** The walk matches GLMsingle's `select_noise_regressors`
-  except for a 64-eps roundoff slack that keeps numerically equal values
-  equal.
-- **Significance gate.** This gate is not part of GLMsingle. By default
-  (`significance_gate=True`) the pcstop count `k*` is kept only if adding
-  each run's first `k*` PCs passes per-feature F-tests: in-sample fits on
-  all runs, nested models with and without the PCs, frozen HRFs. By default
-  (`gate_noise_model="ar1"`, also a Boldtailor addition) the fits are AR(1)
-  prewhitened per run and feature, following Nilearn's first-level
-  `noise_model="ar1"` (Yule-Walker lag-1 coefficient from the full model's
-  OLS residuals, 1/100 bins, `ARModel` whitening of each run's BOLD and all
-  design columns); `gate_noise_model="ols"` skips it. More
-  scoring features must have `p < gate_alpha` (0.05) than chance allows,
-  by a one-sided binomial test at `gate_binomial_alpha` (0.05); otherwise
-  zero PCs are chosen. The reason: pcstop is relative and has no absolute
-  floor, so with time-series scoring it chose 6 PCs on independent noise in
-  the predeclared validation. The F-test measures variance explained by the
-  PCs in the scoring features, not task-prediction benefit, and the leading
-  PCs of independent autocorrelated noise span its low-frequency directions.
-  Unwhitened OLS F-tests are anti-conservative under autocorrelated noise:
-  in an illustrative probe (20k features, 12 runs, no shared noise; not a
-  calibration) the OLS gate rejected white noise (4.6-4.9% of features at
-  `p < 0.05`) but kept independent AR(1) noise with coefficient 0.5
-  (97.5-100% of features at `p < 0.05`, binomial p near 0); hence the
-  prewhitening. Remaining caveats: the tests are in-sample; AR(1) may
-  under-whiten higher-order autocorrelation (and short-run lag-1 estimates
-  are biased toward zero); the binomial test treats features as independent,
-  which is optimistic for correlated features; and with few tested features
-  the decision is coarse: with n = 6, one feature can flip it.
-  `significance_gate=False` gives GLMsingle's pcstop-only choice.
+- **Baseline nuisance**: Uses each run's supplied confounds plus an intercept
+  rather than polynomial drifts.
+- **Count-scoring objective**: Scores candidate PC counts by leave-one-run-out
+  task-model time-series prediction against a baseline-projected target fixed
+  across counts, rather than repeated-stimulus beta consistency, so repeated
+  conditions are not required.
+- **Anatomy-agnostic pool**: Omits GLMsingle's mean-intensity `bright` threshold;
+  callers mask non-brain features before constructing `AnalysisData`.
+- **Mixture threshold details**: Evaluates `robustrange` on all finite ON-OFF
+  $R^2$ values (in $[0, 1]$ rather than percent), uses a fixed `random_state=0`,
+  emits a `RuntimeWarning` when the mixture fit does not converge, and raises
+  `ValueError` if the tail posterior never crosses 0.5.
+- **Significance gate**: By default (`significance_gate=True`,
+  `gate_noise_model="ar1"`), a positive `pcstop` count $k^* > 0$ is retained only
+  if adding the first $k^*$ PCs per run yields $p < 0.05$ on in-sample
+  AR(1)-prewhitened nested F-tests in significantly more scoring features than
+  expected by chance (one-sided binomial test at $\alpha = 0.05$); otherwise 0
+  PCs are selected. Because `pcstop` is a relative rule with no minimum
+  improvement floor, it can select positive PC counts from tiny random gains on
+  pure noise; the gate prevents this on synthetic white-noise and independent
+  AR(1) checks. Pass `significance_gate=False` for GLMsingle's `pcstop`-only
+  rule. See the [user guide](user-guide.md#task-guided-denoising) for details and
+  caveats.
 
-Boldtailor's stage is not run by default or in the NSD example, and it is
-tuned sequentially: HRFs and the pool are frozen while counts are compared.
-Pool refinement and per-feature counts are not implemented. No matched
-comparison with GLMsingle's denoising has been run. Synthetic checks in this
-repository establish implementation behavior only: with shared noise one PC
-was chosen, the gate kept it, and coefficient and outer-run recovery improved;
-with independent noise only, pcstop chose 6 PCs on chance gains of about 2e-4
-in median R², and the gate rejected them (1 of 10 features with `p < 0.05`),
-so zero PCs were chosen. Without the gate this check failed. On a further
-predeclared dataset with independent AR(0.5) noise and no shared component,
-pcstop chose 4 PCs; the prewhitened gate rejected them (1 of 12 features),
-whereas the OLS gate would have kept them (8 of 12). See the
-[user guide](user-guide.md#task-guided-denoising).
-[GLMsingle source](https://github.com/cvnlab/GLMsingle/blob/main/glmsingle/glmsingle.py) ·
-[GLMdenoise](https://pmc.ncbi.nlm.nih.gov/articles/PMC3865440/)
+## Repeated conditions vs. task-model transfer
 
-## What repeated conditions mean
+GLMsingle's automated GLMdenoise and fractional-ridge tuning require repeated
+presentations of the same experimental condition across runs, favoring settings
+that maximize consistency across repeats (see the
+[GLMsingle FAQ on repeated conditions](https://glmsingle.readthedocs.io/en/latest/wiki.html#in-glmsingle-the-glmdenoise-and-ridge-regression-rr-components-of-the-method-require-experimental-conditions-to-repeat-across-runs-how-should-i-think-about-whether-this-is-appropriate-for-my-experiment)).
+Fixed-setting GLMsingle fits and in-sample HRF selection can still be used
+without repeats.
 
-GLMsingle uses repeated conditions to choose denoising and ridge settings; it
-does not force their final trial betas to be equal. Its tuning objective favors
-the component of a response that reproduces across presentations. The authors
-discuss the potential to remove trial-varying effects in the
-[FAQ on repeated conditions](https://glmsingle.readthedocs.io/en/latest/wiki.html#in-glmsingle-the-glmdenoise-and-ridge-regression-rr-components-of-the-method-require-experimental-conditions-to-repeat-across-runs-how-should-i-think-about-whether-this-is-appropriate-for-my-experiment).
+Boldtailor does not require repeated stimuli:
+- **HRF selection** assumes either that task-model amplitudes transfer across
+  runs (`method="cv"`) or that trial-to-trial amplitude variations follow a
+  zero-mean random-effects covariance (`method="reml"`).
+- **Ridge selection** tunes shrinkage by predicting held-out trial betas from
+  observed trial covariates (such as condition and response time) using
+  within-run centered OLS encoding. Fractional ridge scores against fixed OLS
+  validation betas at each location; shared-alpha ridge scores against
+  candidate-regularized validation betas at a spatial percentile.
 
-Boldtailor does not use image identity or repeated-condition beta agreement to
-select an HRF. It assumes that each location's task-model response transfers
-across runs. Final fits then estimate individual trial amplitudes, optionally
-with fixed or CV-selected ridge. A changing mean response across runs, or a weak mean response,
-can make this HRF-selection objective less informative. Avoiding repeat-based
-tuning does not guarantee preservation of every trial-level effect: nuisance
-regression and ridge still affect the estimates.
+## Beta scaling and outputs
 
-For ridge selection, Boldtailor fits a trial-level encoding model on training
-runs and predicts omitted-run betas. The NSD model uses trial type and RT, with
-run-specific training intercepts and within-run centered scoring by default.
-It selects each grayordinate's fraction using its highest pooled held-out R²
-against fixed OLS beta targets. The shared-alpha workflow uses the 90th percentile
-across grayordinates and scores candidate-regularized targets. Neither objective
-establishes which penalty
-recovers the most accurate unobserved trial amplitudes. Image repeats are not
-needed, but the encoding relationship is assumed to transfer across runs.
+Both packages scale each event's predicted HRF response to unit peak (and store
+library kernels at unit peak), so single-trial betas represent peak BOLD
+response amplitude in native signal units regardless of TR, oversampling, or
+selected HRF ([GLMsingle normalization FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#if-the-hrf-changes-from-voxel-to-voxel-doesn-t-that-pose-some-interpretation-difficulties-or-confounding-issues)).
+In Boldtailor, Nilearn derivative and FIR bases keep Nilearn's scaling, and
+user-supplied callable kernels are used as given.
 
-The repeated-condition requirement belongs to GLMsingle's automatic tuning
-steps. HRF selection and fixed-setting fits can be used without that tuning;
-it would be misleading to say GLMsingle cannot be used without repeats.
+Boldtailor's `ridge_fraction` constrains the L2 norm ratio of nuisance-projected
+trial coefficients in the raw trial basis without post-fit affine scaling or
+offset; `ridge_alpha` penalizes unit-norm nuisance-projected trial columns. See
+the archived [fractional ridge ablation](archive/validation/fractional-ridge-ablation-2026-09-28.md)
+for the tradeoffs behind the raw-basis, fixed-target defaults.
 
-## Outputs and interpretation
+## Notes on the modular GLMsingle repository
 
-Boldtailor's NSD example writes CIFTI beta series, trial tables, full and
-confound-only R², optimized-minus-canonical R², HRF parameter/peak-time maps,
-and separate odd/even selections. Fixed-penalty workflows use RT only for a
-descriptive check. In the notebook's CV mode, RT and trial type tune ridge;
-separate odd-to-even and even-to-odd evaluations assess encoding prediction
-after tuning on the training half. HRF selection remains based on the
-task-model response (the mean response under the default `TaskModel()`). Its general API also fits condition
-contrasts with OLS or AR(1), can apply selected voxelwise HRFs to those
-conventional GLMs, and accepts externally prepared designs.
-
-GLMsingle exposes beta estimates and diagnostics for its component stages,
-including HRF choice, noise PCs, and ridge fractions.
-[GLMsingle output reference](https://glmsingle.readthedocs.io/en/latest/python.html#returns)
-Both packages can analyze surface data supplied as arrays; Boldtailor's NSD
-example additionally handles CIFTI loading and spatially matched exports.
-
-Raw beta magnitudes need care when comparing packages. Every event's predicted response is scaled to a peak of one (kernels are
-also stored at unit peak). A beta is therefore the peak BOLD response to that
-presentation in signal units, independent of TR, oversampling, and event
-duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given. Remaining
-scale differences come from signal units and nuisance handling.
-[GLMsingle normalization FAQ](https://glmsingle.readthedocs.io/en/latest/wiki.html#if-the-hrf-changes-from-voxel-to-voxel-doesn-t-that-pose-some-interpretation-difficulties-or-confounding-issues).
-
-Boldtailor's `ridge_alpha` is a numerical penalty;
-`ridge_fraction` uses a norm ratio in its nuisance-projected, raw trial
-coefficient basis. It does not apply GLMsingle's optional post-fit scaling and offset.
-Match signal scaling, timing, nuisance regressors,
-kernel normalization, and score definitions before comparing results.
-
-Boldtailor's winning selection-CV score is used for model selection. Its
-separate odd-to-even prediction maps provide an independent evaluation of
-mean-response prediction. Neither those scores nor RT correlations establish
-that its single-trial betas outperform GLMsingle. No matched comparison of
-the two packages has been run in this repository.
-
-## The local GLMsingle checkout
-
-A local GLMsingle checkout has a
-modular Python API that goes beyond the interface described in the 2022 paper
-and online documentation. This description is pinned to revision
-`1de98a92e80754ff549c87b5c5b815b1aab8148c` for this comparison.
-
-Its `HRFLibrarySelector` accepts an arbitrary sampled library and selects by
-in-sample R². `GLMDenoiser` and `FractionalRidgeEstimator` expose the other
-stages independently. `AnalysisDataset.from_events` supports fractional
-onsets and event-specific durations, and typed HDF5 results can be saved and
-loaded. Thus, neither custom HRFs nor precise event timing is unique to
-Boldtailor. The expanded parameter grid was inspired by that checkout's
+Recent revisions of the GLMsingle repository (checked at commit
+`1de98a92e80754ff549c87b5c5b815b1aab8148c`) provide modular Python classes
+(`HRFLibrarySelector`, `GLMDenoiser`, `FractionalRidgeEstimator`, and
+`AnalysisDataset.from_events`) supporting custom HRF libraries, sub-TR event
+onsets, event-specific durations, and HDF5 persistence. Boldtailor's
+`expanded_hrf_library()` parameter grid was adapted from that repository's
 `notebooks/component_generation.ipynb`.
-
-For implementation details in that checkout, see its `README.md`,
-`src/glmsingle/hrf/estimators.py`, `src/glmsingle/denoise/glmdenoise.py`,
-`src/glmsingle/ridge/estimator.py`, and `src/glmsingle/persistence.py`.
-Boldtailor's corresponding entry points are listed in the
-[API reference](api.md#single-trial-fits).
-
-See the [fractional ablation](validation/fractional-ridge-ablation-2026-09-28.md)
-for the evidence and tradeoffs behind the current raw-basis, fixed-target defaults.

@@ -1,55 +1,39 @@
 # Documentation
 
-The guides below describe the current code on this branch. Import functions
-from their named modules. The top-level `boldtailor` initializer also exports
-the primary public names; the `boldtailor.workflow` initializer is empty.
+Functions and classes can be imported from their defining modules, and the
+top-level `boldtailor` package also re-exports the primary entry points. The
+`boldtailor.workflow` initializer is empty.
 
 | Document | Purpose |
 | --- | --- |
 | [Project README](../README.md) | Installation and a runnable first model |
-| [Practical guide](practical-guide.md) | A plain-language introduction to each analysis component, with examples |
-| [User guide](user-guide.md) | Scientific methods, examples, interpretation, and [`boldtailor run`](user-guide.md#running-the-full-workflow) |
-| [API reference](api.md) | Signatures, defaults, result fields, and source records |
-| [Human code-review guide](code-review.md) | Reading routes, runnable examples, review questions and a complete module/function inventory |
-| [Developer guide](development.md) | Implementation, testing, ownership, logging, and publication |
-| [Pyright remediation](pyright-remediation.md) | Type-checking baseline, likely causes, and proposed cleanup sequence |
-| [Publication migration](publication-migration.md) | Local writer guarantees and retained rollback backups |
-| [Lifecycle migration](lifecycle-migration.md) | Shared fit events and categorical errors |
-| [Result migration](result-migration.md) | Unified candidate scores and composed trial results |
-| [Ownership migration](ownership-migration.md) | Ordinary read-only NumPy arrays and editable copies |
+| [Practical guide](practical-guide.md) | Introduction to each analysis component, with runnable examples |
+| [User guide](user-guide.md) | Scientific methods, interpretation, and [`boldtailor run`](user-guide.md#running-the-full-workflow) |
+| [API reference](api.md) | Signatures, defaults, result fields, and provenance records |
+| [Code-review guide](code-review.md) | Module organization, review routes, and runnable examples |
+| [Developer guide](development.md) | Architecture, numerical conventions, logging, and file publication |
+| [Testing guide](testing.md) | Module-to-test mappings, integration checks, and opt-in suites |
 | [GLMsingle comparison](glmsingle-comparison.md) | Method differences and assumptions |
-| [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md) | Dataset-specific commands, notebooks, and saved artifacts |
+| [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md) | Dataset commands, notebooks, and saved outputs |
 
-## Current methods
+## Overview of methods
 
-Conventional GLMs support OLS or AR(1) inference and equal-run contrast
-combination. Task-versus-nuisance diagnostics refit nested OLS models.
-Single-trial normalized ridge uses a fixed alpha on unit-norm projected
-columns. Fractional ridge uses raw projected coefficient norms and fixed OLS
-validation targets. Both encoding scorers default to within-run slopes and
-centered held-out scoring; shared-alpha CV retains candidate-regularized
-targets. The [user guide](user-guide.md) explains the assumptions and NaNs.
+- **Conventional GLMs**: OLS or AR(1) contrast inference with equal-weight
+  fixed-effects combination across runs, plus nested-OLS task-versus-nuisance
+  $\Delta R^2$ diagnostics.
+- **HRF selection**: Per-location selection from a candidate library by
+  leave-one-run-out task prediction (`method="cv"`) or restricted maximum
+  likelihood (`method="reml"`).
+- **Single-trial estimation**: Per-trial beta estimation with OLS, normalized
+  ridge (`ridge_alpha`), or per-location fractional ridge (`ridge_fraction`)
+  tuned against fixed OLS validation targets using within-run centered trial
+  encoding.
+- **Task-guided denoising**: Optional GLMdenoise-style noise-pool PCA and
+  held-out count selection with an AR(1)-prewhitened F-test significance gate.
 
-## Development and validation records
+## Historical records
 
-Files under `superpowers/plans`, `superpowers/specs`, and the validation
-directories are dated records, not a substitute for the current API reference.
-They may show proposed interfaces, old defaults, earlier working trees, and
-test counts from other revisions. Reproduction commands describe those recorded
-experiments; rerunning them with current defaults may produce different results.
-Keep historical measurements and decisions intact when updating guidance.
-
-The active [refactor roadmap](superpowers/plans/2026-09-28-scientific-readability-roadmap.md)
-records the implemented stages, including the revised decision to keep imaging
-and dataset adapters in examples, and the final architecture review. The original
-[project review](review-2026-09-28-full-project.md) examined a broader working
-tree that included separately preserved uncommitted work. It does not describe
-the current branch verbatim.
-
-- [Current refactor verification and final architecture review](validation/scientific-readability-notebooks-2026-09-28.md)
-- [Publication verification](validation/scientific-readability-publication-2026-09-28.md)
-- [Documentation audit](validation/documentation-audit-2026-09-28.md)
-- [Fractional-default adoption record](validation/fractional-defaults-2026-09-28.md)
-- [Historical fractional ablation](validation/fractional-ridge-ablation-2026-09-28.md)
-- [Historical NSD measurements](validation/nsd-session.md)
-- [Method recovery validation, 2026-10](validation/recovery-2026-10.md)
+Dated design specs, implementation plans, migration notes, code-review
+inventories, and validation reports are archived under [`docs/archive/`](archive/).
+They record historical decisions and experiments and may reference superseded
+interfaces or defaults.

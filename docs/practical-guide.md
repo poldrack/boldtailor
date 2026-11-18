@@ -1,55 +1,47 @@
 # A practical guide to Boldtailor
 
-Boldtailor estimates task responses from preprocessed fMRI time series. It can
-fit condition effects, estimate a response for each trial, and choose a
-hemodynamic response function (HRF) for each voxel or grayordinate. It also
-provides tools for regularization, denoising, and evaluation across runs.
+Boldtailor estimates task responses from preprocessed fMRI time series. It fits
+condition contrasts, estimates single-trial betas, selects location-specific
+hemodynamic response functions (HRFs), and supports encoding-guided
+regularization and task-guided denoising.
 
-This guide introduces the main components and shows how to use them. The
-[detailed guide](user-guide.md) explains the methods and options; the
-[API reference](api.md) lists function arguments and result fields.
-The package is under active development, and its interface may change.
+This guide introduces the main components with runnable examples. See the
+[user guide](user-guide.md) for methodological details and the
+[API reference](api.md) for complete signatures and result schemas.
 
 ## 1. Choose an analysis
 
-Start with the quantity you want to estimate.
-
 | Question | Component | Main function |
 | --- | --- | --- |
-| What is the average response to a condition? | Conventional general linear model (GLM) | `fit` |
+| What is the average response to a condition? | Conventional GLM | `fit` |
 | Can I fit a design matrix I already have? | Prepared designs | `fit_prepared` |
 | How much variance does the task explain beyond nuisance regressors? | Task variance comparison | `task_delta_r2` |
 | What is the response to each trial? | Single-trial GLM | `fit_single_trials` |
-| Which HRF best describes a location's response? | HRF selection by cross-validation or REML | `select_hrfs` |
+| Which HRF best describes a location's response? | HRF selection (CV or REML) | `select_hrfs` |
 | Does the selected HRF predict new runs? | Independent HRF evaluation | `evaluate_hrf_split` |
 | How much should trial estimates be regularized? | Fractional ridge selection | `score_fraction_candidates`, `select_ridge_fractions` |
 | Can trial variables predict trial responses? | Trial encoding | `evaluate_trial_encoding` |
-| Can additional nuisance regressors improve the analysis? | Task-guided denoising | `select_denoising`, `with_denoising` |
-| Can I run the CIFTI analysis from the shell? | BIDS session workflow | `boldtailor run` |
+| Can data-derived noise PCs improve the fit? | Task-guided denoising | `select_denoising`, `with_denoising` |
+| Can I run the BIDS CIFTI workflow from the shell? | Session workflow CLI | `boldtailor run` |
 
-These components can be used separately. HRF selection and ridge selection
-are optional. A conventional GLM is a useful starting point for checking
-events, timing, confounds, and contrasts.
+Each component can be used on its own; HRF selection, ridge tuning, and
+denoising are optional.
 
 ## 2. Install and run a first model
 
-From a checkout of the repository, using Python 3.12 or later:
+From a checkout of the repository (Python 3.12+):
 
 ```bash
 uv sync --group dev
 ```
 
-Save the following as `first_model.py`, then run
-`uv run python first_model.py`. It uses random signals to demonstrate the
-interface; the resulting statistics have no scientific interpretation.
+Save the following as `first_model.py` and run `uv run python first_model.py`:
 
 ```python
 import numpy as np
 import pandas as pd
 
-from boldtailor.data import from_arrays
-from boldtailor.fit import fit
-from boldtailor.model import ModelSpec
+from boldtailor import ModelSpec, fit, from_arrays
 
 signals = 100 + np.random.default_rng(7).normal(size=(100, 3))
 events = pd.DataFrame({
@@ -68,25 +60,26 @@ result = fit(data, model)
 print(result.effect("face_gt_house"))
 ```
 
-Import functions from their named modules, as above. Later examples use this
-`data`, or explicitly identify the additional inputs they need.
+Primary entry points (`from_arrays`, `ModelSpec`, `TaskModel`, `fit`,
+`task_delta_r2`, `fit_single_trials`, `HrfLibrary`, `HrfCandidate`, `fit_reml`,
+`select_random_effects_design`, `select_denoising`, `with_denoising`) are
+exported at the top level of `boldtailor` and from their defining submodules.
 
 ## 3. Prepare the data
 
-The array interface uses one matrix per run, with **time points in rows and
-brain locations in columns**. A location may be a voxel, vertex, or CIFTI
-grayordinate. Locations must have the same order in every run. Keep the mask
-or CIFTI axis used to extract them so that you can reconstruct images later.
+The array API takes one matrix per run, shaped **time points × features**
+(voxels, vertices, or grayordinates), with identical feature ordering across
+runs. Keep the mask or CIFTI brain-model axis used during extraction so you can
+map results back to image space.
 
-Each run also needs an event table. `onset` and `duration` are in seconds.
-`trial_type` identifies conditions. Other columns can hold response times,
-stimulus identities, or other trial variables. Single-trial models use one
-event row per presentation, including repeated presentations of the same image.
+Each run requires an event DataFrame with `onset` and `duration` in seconds.
+Include `trial_type` for condition models, and any trial covariates (such as
+`response_time`) needed for modulators or encoding. Single-trial models fit one
+regressor per event row.
 
-For several runs, supply matching lists:
+For multiple runs, pass matching lists:
 
 ```python
-# Replace these lists with your own arrays and pandas tables.
 multi_run_data = from_arrays(
     signals_by_run,
     events_by_run,
@@ -95,35 +88,29 @@ multi_run_data = from_arrays(
 )
 ```
 
-Use `frame_times=frame_times_by_run` instead of `tr` when the acquisition
-times need to be specified explicitly. Events and frame times must use the
-same time origin. Runs may differ in length and number of events.
-Signals and confounds must be finite, and confounds need one row per time point.
+Pass either `tr` (for uniform sampling starting at 0 s) or explicit
+`frame_times` per run. Signals and confounds must be finite, with one confound
+row per time point. Preprocessing, alignment, smoothing, and signal scaling must
+be done beforehand; betas are returned in the input signal units.
 
-The array interface does not preprocess, align, smooth, or scale images.
-Choose the signal units before fitting. Betas are returned in those units;
-they are not automatically percent signal change.
+Nuisance handling depends on the API:
 
-Nuisance handling differs between components:
-
-| Component | Nuisance regressors |
+| Component | Nuisance regressors included |
 | --- | --- |
-| Conventional GLM | Confounds named in `ModelSpec.confounds`, the requested drift terms, and an intercept |
-| Prepared design | Only the columns you supply |
-| Single-trial fitting and HRF selection | All supplied confound columns and an added intercept |
+| Conventional GLM (`fit`) | Columns named in `ModelSpec.confounds`, requested drift terms, and a run intercept |
+| Prepared design (`fit_prepared`) | Exactly the columns in your design matrix |
+| Single-trial fitting and HRF selection | All supplied confound columns plus an added run intercept |
 
-For the last row, supply high-pass regressors yourself and omit a column named
-`constant`. For a conventional model using existing cosine confounds, set
-`drift_model=None` to avoid adding a second set of cosine regressors.
+For single-trial fitting and HRF selection, include high-pass regressors in
+`confounds` and omit any constant column. For conventional GLMs that already
+include fMRIPrep cosine regressors in `ModelSpec.confounds`, set
+`drift_model=None`.
 
 ## 4. Fit condition effects and contrasts
 
-`ModelSpec` describes a conventional GLM. It specifies the HRF, nuisance
-regressors, drift model, noise model, and contrasts. The defaults are a Glover
-HRF, cosine drifts with a 0.01 Hz cutoff, and AR(1) noise. The first example
-explicitly chooses the SPM HRF.
-
-Inspect the design before interpreting the fit:
+`ModelSpec` configures the HRF (`"glover"` by default), nuisance columns, drift
+model (cosine high-pass at 0.01 Hz by default), noise model (`"ar1"` or
+`"ols"`), and t contrasts.
 
 ```python
 from boldtailor.design import compile_designs
@@ -138,25 +125,15 @@ z_value = result.z_score("face_gt_house")
 p_value = result.one_sided_p_value("face_gt_house")
 ```
 
-Each output contains one value per location. A contrast refers to column
-names, so it remains valid if column order changes between runs. The package
-currently supports t contrasts. P-values are one-sided and uncorrected for
-multiple comparisons.
-
-With several runs, each run is fitted separately and contrasts are combined
-using equal-weight fixed effects. This estimates a within-subject effect;
-it is not a group analysis. Runs contribute equally even if their lengths
-or noise levels differ.
-
-`result.run_r2` contains the fit R² for each run. `result.r2` pools residual
-and total sums of squares across runs. Neither is a measure of performance
-on new data.
+Contrasts reference column names (via expressions or weight dicts), so column
+order differences across runs do not affect them. P-values are one-sided and
+uncorrected. Across multiple runs, runs are fitted independently and combined
+via equal-weight fixed effects. `result.run_r2` gives per-run $R^2$, and
+`result.r2` pools residual and total sums of squares across runs.
 
 ### Trial variables in a shared task model
 
-`TaskModel` describes an overall task response and changes associated with
-trial variables. For example, this model includes response time and a
-face-versus-house difference:
+`TaskModel` models a baseline task response alongside trial-level modulators:
 
 ```python
 from boldtailor.model import Modulator, TaskModel
@@ -170,28 +147,24 @@ task_model = TaskModel((
 ))
 ```
 
-Use it as `ModelSpec(task_model=task_model, ...)` or pass it to HRF selection.
-The input events must contain both columns. Each categorical level must occur
-in each run. Numeric modulators are not centered: `task` is the face response
-at response time zero, and `trial_type[house]` is the house-minus-face effect.
-The missing-value option keeps trials with missing RT and adds an indicator
-regressor. It does not estimate their missing response times.
+Pass `task_model` to `ModelSpec(task_model=task_model, ...)` or `select_hrfs`.
+Every categorical level must appear in every run. Modulators are uncentered:
+`task` is the reference-level response at modulator value zero, and
+`trial_type[house]` is the house-minus-face difference. `missing="indicator"`
+assigns zero modulation to missing trials and adds a per-run `missing_<column>`
+regressor when needed.
 
-`detect_task_model` in `boldtailor.task_detection` can construct a model from
-event tables. Inspect its result before fitting; automatic detection is a
-convenience, not a scientific model specification.
+`detect_task_model` in `boldtailor.task_detection` can infer modulators from
+event tables; inspect its output before fitting.
 
 ## 5. Use an existing design matrix
 
-Use a prepared design when another tool has already constructed your
-regressors. Supply a pandas DataFrame with one row per scan and a name for
-each column. Include every intercept, drift, and confound you need.
+Use `PreparedDesignAnalysis` when your design matrix is already built:
 
 ```python
 from boldtailor.prepared import PreparedDesignAnalysis
 from boldtailor.prepared_fit import fit_prepared
 
-# design has columns stimulus, motion, and constant.
 prepared = PreparedDesignAnalysis.from_arrays(
     signals, design, tr=2.0,
     column_roles={
@@ -207,30 +180,24 @@ prepared_result = fit_prepared(
 )
 ```
 
-Column roles describe the supplied matrix; they do not change it. This
-interface is useful for custom designs but does not automatically import a
-BIDS Stats Model or a FitLins analysis.
+Every column requires a role (`task`, `nuisance`, `intercept`, or `other`).
+Boldtailor fits the matrix as supplied without adding or rescaling columns.
 
-## 6. Measure the variance added by the task
+## 6. Measure variance added by the task
 
-`task_delta_r2`, from `boldtailor.fit`, compares a full model with a model
-containing only nuisance regressors. Its `delta_r2` is full-model R² minus
-nuisance-only R². This is additional explained variance, not partial R².
-`task_delta_r2_prepared`, from `boldtailor.prepared_fit`, provides the same
-comparison for prepared designs.
+`task_delta_r2` (in `boldtailor.fit`) and `task_delta_r2_prepared` (in
+`boldtailor.prepared_fit`) refit full and nuisance-only models with OLS and
+report `full_r2`, `nuisance_r2`, `raw_delta_r2`, and zero-clipped `delta_r2`
+(additional explained variance, not partial $R^2$). Both require complete
+`RunSources` metadata on the input object to verify that the result matches the
+parent analysis; see [source records](api.md#source-records-and-saving).
 
-Both functions refit the models using ordinary least squares (OLS), even if
-contrast inference used AR(1). They require complete source records to check
-that the result belongs to the supplied analysis; the small synthetic example
-above does not provide those records. See [source records](api.md#source-records-and-saving).
-
-Single-trial results already contain `full_r2`, `nuisance_r2`, and `delta_r2`.
-For ridge fits, the difference uses the regularized fit and can be negative.
+Single-trial results directly include `full_r2`, `nuisance_r2`, and `delta_r2`
+computed from the fitted OLS or ridge model.
 
 ## 7. Estimate a response for each trial
 
-A single-trial model assigns one coefficient to each event rather than one
-to each condition:
+`fit_single_trials` fits one regressor per event row:
 
 ```python
 from boldtailor.single_trial import fit_single_trials
@@ -240,37 +207,22 @@ betas = trials.run_betas[0]
 trial_table = trials.trial_table
 ```
 
-`betas` has **trials in rows and brain locations in columns**. The trial table
-preserves event metadata and adds run and trial identifiers. Use these
-identifiers when joining betas to behavioral data.
+Each `run_betas` entry has shape **trials × features**, and `trial_table`
+records run and trial identifiers alongside the original event columns.
 
-The default uses the SPM HRF and OLS. Set `ridge_alpha=0.1`, for example, to
-apply a fixed ridge penalty. This shrinks coefficients and may reduce noise
-when trial responses overlap. The value is a penalty, not a fraction.
-Trial columns are adjusted for nuisance regressors and normalized before
-this penalty is applied; returned betas are restored to the original scale.
-Nuisance coefficients are not penalized. Single-trial fitting does not use AR(1).
-
-For the built-in SPM, Glover, and library HRFs, each event response is scaled
-to peak at one. Its beta represents peak response amplitude in signal units.
-Derivative bases, FIR designs, and user-supplied kernels have different
-scaling conventions; see [HRF normalization](api.md#hrf-libraries-selection-and-evaluation).
+By default, `fit_single_trials` uses the canonical SPM HRF and OLS
+(`ridge_alpha=0.0`). Passing `ridge_alpha > 0` applies L2 shrinkage to
+nuisance-projected, unit-norm trial columns and restores betas to native signal
+units; nuisance regressors are unpenalized. For built-in SPM, Glover, and
+library HRFs, each event's predicted response is scaled to unit peak, so betas
+represent peak response amplitude in signal units; see
+[HRF normalization](api.md#hrf-libraries-selection-and-evaluation).
 
 ## 8. Select an HRF at each location
 
-HRF selection chooses a response shape at each brain location. Two methods
-are cross-validation and restricted maximum likelihood (REML). Cross-validation
-compares prediction across runs; REML compares how well candidate HRFs account
-for the data under a model of trial-to-trial variation.
-
-The `select_hrfs` interface defaults to cross-validation. The
-[REML section](#11-select-hrfs-with-reml) describes the alternative and its
-current interface.
-
-Cross-validation needs at least two runs. For each candidate, task amplitudes estimated
-from training runs predict the held-out run. The candidate with the best
-pooled score is selected at each location. Repeated stimuli are not required,
-but task amplitudes must be sufficiently stable across runs.
+`select_hrfs` chooses a candidate HRF per location using leave-one-run-out
+cross-validation (`method="cv"`, the default, requiring at least two runs) or
+restricted maximum likelihood (`method="reml"`, see [Section 11](#11-select-hrfs-with-reml)):
 
 ```python
 from boldtailor.hrf_library import default_hrf_library
@@ -284,19 +236,13 @@ optimized_trials = fit_selected_hrfs(
 )
 ```
 
-The default library contains canonical SPM, 512 sampled HRFs, and 20 empirical
-HRFs from GLMsingle. Other factories provide a parameter grid, parameter-space
-Sobol samples, timing-space samples, or the empirical library alone. Inspect
-`library.curves` and `library.parameter_table`; save them with the results.
+`default_hrf_library()` includes canonical SPM (ID 0), 512 timing-space Sobol
+candidates, and 20 empirical HRFs from GLMsingle. `selection.hrf_indices` stores
+the winning candidate ID per feature (`-1` where undefined), and
+`selection.delta_cv_r2` gives the CV $R^2$ gain over canonical SPM.
 
-By default, selection models one mean task response. Pass
-`task_model=task_model` to include the trial variables described above.
-`selection.hrf_indices` identifies the selected curves;
-`selection.delta_cv_r2` gives their score improvement over canonical SPM.
-Undefined selections have ID `-1`. IDs are labels, so correlations between
-ID maps do not measure HRF similarity.
-
-The same selection can be used in a conventional GLM:
+Pass `hrf_selection=selection` to `fit()` to use selected HRFs in a conventional
+GLM:
 
 ```python
 selected_model = ModelSpec(
@@ -312,18 +258,13 @@ selected_result = fit(
 )
 ```
 
-This example assumes the confound names are the same in every run. Use a
-compatible task model for selection and fitting. If you add modulators to
-selection, revise the fitted model accordingly.
-
-Contrast statistics treat selected HRFs as fixed. Selecting and testing on
-the same BOLD data does not account for selection uncertainty. For independent
-evaluation, reserve test runs before selecting an HRF:
+Because contrast inference treats selected HRFs as fixed, selecting and testing
+on the same runs does not account for selection uncertainty. To evaluate HRF
+generalization on held-out runs, use `evaluate_hrf_split`:
 
 ```python
 from boldtailor.hrf_selection import evaluate_hrf_split
 
-# Requires at least three runs; indices are zero-based.
 evaluation = evaluate_hrf_split(
     multi_run_data, library=library,
     train_runs=[0, 1], test_runs=[2],
@@ -331,19 +272,12 @@ evaluation = evaluate_hrf_split(
 test_r2 = evaluation.test_r2
 ```
 
-`test_r2` evaluates the training-selected HRF and amplitudes. A negative score
-is possible and should be retained. A selection score used to choose an HRF
-is not an independent estimate of its predictive performance.
-
 ## 9. Choose regularization using trial prediction
 
-Fractional ridge expresses shrinkage as the coefficient length retained
-relative to OLS. A fraction of 1 gives OLS; smaller fractions give stronger
-shrinkage. Boldtailor can choose a separate fraction at each location by
-asking how well trial variables predict betas in held-out runs.
-
-The following example requires multiple runs with the response-time and
-condition columns used in `task_model`:
+Fractional ridge specifies the retained norm ratio of nuisance-projected trial
+coefficients relative to OLS (`1.0` is OLS; smaller fractions shrink more).
+`score_fraction_candidates` and `select_ridge_fractions` pick a fraction at each
+location by held-out trial-encoding $R^2$ against fixed OLS beta targets:
 
 ```python
 from boldtailor.fractional_ridge import (
@@ -361,41 +295,20 @@ regularized_trials = fit_single_trials(
 )
 ```
 
-`trial_predictors` converts the task variables to numeric encoding predictors,
-including categorical indicators. It retains event-row alignment. Missing
-predictors can exclude a trial from encoding without deleting its event from
-the BOLD model.
-
-The example uses canonical HRFs and needs at least two runs. Supplying
-`library=library` to the scorer selects HRFs inside each training fold and
-needs at least three runs. For the final fit in that case, select HRFs on the
-training data and use `fit_selected_hrfs` with the selected fraction map.
-
-Fractional selection uses fixed OLS validation betas for all candidate
-fractions. The objective measures prediction of noisy trial estimates; it
-does not directly measure recovery of the true neural response. The fraction
-is shared across runs, but the corresponding penalty can differ by run and
-location. Fractional ridge uses raw projected coefficient norms, whereas
-fixed `ridge_alpha` uses normalized trial columns.
-
-The older `score_ridge_candidates` and `select_ridge_penalty` functions in
-`boldtailor.ridge_selection` choose one alpha for all locations using a
-spatial percentile. Their validation betas change with the candidate penalty,
-so their selection objective differs from fractional ridge.
-
-Use `evaluate_trial_encoding` in `boldtailor.trial_encoding` to evaluate
-predictors against beta series with explicit training and test run indices.
-The default score measures variation within runs; `encoding_mode="absolute"`
-also evaluates absolute levels. Keep outer test runs out of HRF and ridge
-tuning. An RT association used for tuning is not an independent validation
-on those same data.
+Pass `library=library` to re-select HRFs inside each inner training fold
+(requiring at least three runs for CV HRF selection, or two for REML). Alternatively,
+`score_ridge_candidates` and `select_ridge_penalty` in
+`boldtailor.ridge_selection` choose a single shared `ridge_alpha` across
+features using a spatial percentile. Use `evaluate_trial_encoding` (or a
+reusable `EncodingDesign`) in `boldtailor.trial_encoding` to evaluate trial
+prediction on held-out outer test runs.
 
 ## 10. Add task-guided denoising
 
-Denoising is optional and available through the array interface. It requires
-at least three runs. It identifies poorly task-predicted locations, extracts
-temporal principal components from their signals, and selects a component
-count using task prediction and a significance gate.
+`select_denoising` (requiring at least three runs) identifies a noise pool of
+features with low canonical ON-OFF $R^2$, extracts per-run temporal principal
+components, and chooses a PC count using held-out task prediction (`pcstop`)
+followed by an AR(1)-prewhitened F-test significance gate:
 
 ```python
 from boldtailor.denoising import select_denoising, with_denoising
@@ -406,27 +319,16 @@ denoising = select_denoising(
 augmented_data = with_denoising(multi_run_data, denoising)
 ```
 
-`augmented_data` contains additional confound columns. Rerun HRF selection and
-fitting on it. Single-trial fits use those columns automatically; conventional
-models must include them in `ModelSpec.confounds`.
-
-This procedure follows GLMdenoise ideas but differs from GLMsingle's
-implementation. Pool definition and initial HRF selection use all supplied
-runs, so its internal prediction scores are not a fully independent test of
-the entire denoising procedure. Inspect the selected count and diagnostics;
-zero components is a valid result. See the
-[denoising method description](user-guide.md#task-guided-denoising).
+`with_denoising` appends the selected PC columns (`denoise_pc_000`, ...) to each
+run's confounds. Rerun HRF selection and fitting on `augmented_data`; for
+conventional GLMs, include the added column names in `ModelSpec.confounds`. See
+[task-guided denoising](user-guide.md#task-guided-denoising) for details.
 
 ## 11. Select HRFs with REML
 
-REML is an alternative to cross-validation for HRF selection. Each candidate
-HRF defines a set of trial-response regressors. Their coefficients are modeled
-as random effects, allowing response amplitudes to vary across trials. REML
-estimates the trial-effect variance and noise variance for each candidate,
-then selects the HRF with the best restricted likelihood at each location.
-Variance estimation is part of this selection procedure.
-
-Use the same selection and fitting interfaces as for cross-validation:
+With `method="reml"`, `select_hrfs` models trial-to-trial amplitude variations
+as zero-mean random effects and selects the candidate HRF with the best
+restricted likelihood at each location:
 
 ```python
 from boldtailor.hrf_options import RemlHrfOptions
@@ -441,140 +343,58 @@ trial_fit = fit_selected_hrfs(data, hrf_selection=selection)
 diagnostics = selection.reml
 ```
 
-One run is sufficient if the restricted model is estimable. The fixed mean
-contains the run's confounds, an intercept, and the requested `TaskModel`
-convolved with one reference HRF. Missing-value indicators use that same
-reference. The default reference is canonical SPM (ID 0). This fixed design
-stays unchanged across candidates. A wrong reference mean can affect selection
-by leaving mean structure that is then modeled as trial variance.
-
-Each trial contributes one response column, using the candidate's unit-peak
-HRF and the event duration. Trial effects are independent, zero-mean deviations.
-Their variance and the noise variance are estimated per location and shared
-across runs. Repeated stimulus IDs do not imply shared random effects.
-
-`rho` supplies AR(1) noise correlation. Zero means independent noise. The
-array API accepts a scalar or one value per feature; the command line accepts
-a scalar. Correlation is not estimated automatically. For independent
-evaluation, estimate any supplied correlation using training data only.
-
-`selection.hrf_indices` holds library IDs, with -1 where no supported
-candidate won. The CV score fields are `None`. Inspect
-`diagnostics.selection.fit` for variance estimates and status,
-`diagnostics.delta_criterion` for canonical minus selected criterion, and
-`diagnostics.selection.gap` for the runner-up difference. Smaller criteria
-are better. These are likelihood comparisons, not R² or significance tests.
-
-Check `any_unrefined` and `any_at_upper` on `diagnostics.selection`, as well
-as `unrefined` and `at_upper` on the winning fit. An unresolved losing
-candidate makes the comparison provisional. Zero variance and unidentifiable
-fits do not win. No canonical fallback is inserted for unsupported features.
-The [REML reference](api.md#scalar-reml) describes the statuses.
-
-`evaluate_hrf_split(..., method="reml", reml_options=...)` selects using
-training runs only. It evaluates the existing mean-response prediction model,
-not predictions of unobserved trial deviations. It needs one training and one
-disjoint test run. REML can select an HRF even when a wide trial design cannot
-support an OLS trial fit; downstream fitting retains its estimability checks.
-
-Both ridge scorers accept `hrf_method="reml"` and `reml_options` when a
-library is supplied. They repeat HRF selection within each training fold and
-need at least two runs, compared with three for CV HRF selection.
-Task-guided denoising retains its internal CV procedure. REML can be used for
-HRF selection after denoising.
-
-The lower-level `boldtailor.reml` interface remains available for models
-specified directly by fixed and random design matrices.
+REML can run on a single estimable run. The fixed design (confounds, intercept,
+and `TaskModel` convolved with `reference_hrf_id`) and the supplied AR(1)
+parameter `rho` are held fixed across candidates. Inspect
+`diagnostics.selection.fit` (`status`, `ratio`, `noise_variance`,
+`effect_variance`, `at_upper`, `unrefined`), `diagnostics.delta_criterion`
+(canonical minus selected criterion; lower criteria are better), and
+`diagnostics.selection.any_at_upper` / `any_unrefined`. Features without an
+`"ok"` candidate receive HRF ID `-1`. See the [REML API reference](api.md#scalar-reml)
+for direct fixed/random design fitting with `boldtailor.reml`.
 
 ## 12. Examine reliability and save results
 
-Compare HRFs selected from disjoint run sets using
-`curve_correlations` in `boldtailor.reliability`. `compare_hrfs` summarizes
-agreement across sessions. Both require a common library and matching spatial
-order. Similar curves can have different parameter values, so examine curve
-agreement as well as parameter agreement.
-
-`boldtailor.diagnostics` provides trial-beta summaries and within-run beta/RT
-correlations. Its `one_sample_t` assumes independent trials. Overlapping
-responses and regularization can induce dependence between trial estimates,
-so that summary is not a substitute for a justified inferential model.
-
-Core result objects contain arrays, tables, and analysis records. Most numeric
-results are read-only; use `.copy()` before editing them. Save trial metadata
-alongside beta arrays and preserve feature order. For HRF analyses, save the
-library and selection information as well.
-
-`SourceRef` and `RunSources` in `boldtailor.provenance` describe input files.
-Supply these when constructing an analysis if you need traceable source
-identities. `project_bids_provenance` prepares metadata, and
-`publish_artifact_set` writes a collection of results with overwrite protection.
-The [saving example](api.md#source-records-and-saving) shows these together.
-
-For CIFTI data, `boldtailor.cifti.scalar_artifact` creates scalar-map artifacts
-using the original brain-model axis. `read_scalar` checks that axis when
-reading saved maps. For NIfTI data, reconstruct maps with the original mask
-using your imaging tools.
-
-`boldtailor.parallel.map_blocks` distributes feature blocks across workers.
-Reduce block size or worker count if memory is limited. Configure the standard
-Python logger named `boldtailor` to record progress in a custom script.
+- **HRF agreement**: `curve_correlations` and `compare_hrfs` in
+  `boldtailor.reliability` measure waveform and parameter agreement across splits
+  or sessions.
+- **Trial summaries**: `one_sample_t` and `correlate_rt` in
+  `boldtailor.diagnostics` summarize trial betas and within-run RT correlations.
+- **Provenance and atomic saving**: Supply `SourceRef` and `RunSources` from
+  `boldtailor.provenance` when building inputs, project BIDS metadata with
+  `project_bids_provenance`, and write artifacts transactionally with
+  `publish_artifact_set` in `boldtailor.publication`.
+- **CIFTI and parallel helpers**: Use `scalar_artifact` and `read_scalar` in
+  `boldtailor.cifti` for dense scalar maps, and `map_blocks` in
+  `boldtailor.parallel` to process feature blocks across worker processes.
 
 ## 13. Run the BIDS CIFTI workflow
 
-The command-line workflow reads BIDS events and fMRIPrep fsLR-91k CIFTI
-time series, confounds, and sidecars. It is specific to those inputs; use the
-array interface for other image formats or preprocessing pipelines.
-
-First inspect the resolved inputs and settings:
+`boldtailor run` executes the end-to-end BIDS + fMRIPrep fsLR-91k CIFTI
+workflow and generates a BIDS derivative dataset with an HTML report. Inspect
+the resolved plan first with `--dry-run`:
 
 ```bash
 uv run boldtailor run --bids-dir /data/study --subject sub-01 \
     --session ses-01 --task example --dry-run
 ```
 
-Replace the paths and labels with those of your dataset. Remove `--dry-run`
-to fit the models. Use `uv run boldtailor run --help` for all options.
+Remove `--dry-run` to run the analysis, or pass `--help` to see all options.
+The workflow fits canonical and selected-HRF GLMs, evaluates odd/even HRF
+reliability, estimates single-trial betas, and writes summary maps and tables.
+Use `--hrf-method reml --reml-rho 0.0` for REML HRF selection, or
+`--ridge-mode off` / `--ridge-mode fixed` when fewer runs are available. The
+same workflow is callable from Python via `WorkflowSettings`
+(`boldtailor.workflow.settings`) and `run_workflow` (`boldtailor.workflow.run`).
 
-The workflow fits canonical and selected-HRF GLMs, evaluates HRF reliability,
-estimates trial betas, and writes summaries and an HTML report. It detects
-response time and categorical trial type from the event tables; explicit
-`--modulator` options replace that detection. Check the dry-run task model
-before fitting.
+## 14. Pre-analysis checklist
 
-The default fractional ridge workflow needs at least three odd and three
-even runs and at least one modulator. With fewer runs, use `--ridge-mode off`
-for OLS, `--ridge-mode fixed` for a fixed penalty, or `--skip-stage betas`.
-Choose REML with `--hrf-method reml --reml-rho 0.0`; optionally set
-`--reml-reference-hrf-id`. REML needs two odd and two even runs for nested
-ridge tuning, or one per half for HRF reliability. An HRF-only REML analysis
-can use a single run. Denoising remains an array-level component.
-
-REML maps contain criteria, variance estimates, rho, status codes, and search
-flags. The JSON metadata explains the status codes; the report counts
-unsupported and provisional selections. Independent prediction maps still
-contain R². Automatic output paths distinguish CV and REML settings.
-
-Results are written under the BIDS derivatives directory unless
-`--output-dir` is supplied. Outputs include CIFTI maps, trial beta series,
-design matrices, trial tables, settings, provenance, and the report. Existing
-outputs are protected by default. See the
-[workflow reference](user-guide.md#running-the-full-workflow) for filenames,
-stage controls, overwrite behavior, and exit codes.
-
-The same workflow is available from Python through `WorkflowSettings` in
-`boldtailor.workflow.settings` and `run_workflow` in `boldtailor.workflow.run`.
-The [example notebooks](../examples/bids_workflow/README.md) show analyses of
-NSD data. Code under `experiments/` records research analyses and is not part
-of the installed package interface.
-
-## 14. Checks before interpreting an analysis
-
-- Check event timing against the retained scans, especially after removing
-  initial volumes or applying acquisition-time offsets.
-- Inspect design matrices for redundant columns and poorly separated trials.
-- Confirm signal units, confound choices, and spatial order across runs.
-- Keep fit R², selection scores, and independent test scores distinct.
-- Inspect undefined results and selection boundaries. NaN is not a zero
-  response; an endpoint winner may indicate that the candidate range is too small.
-- Record the package version, source files, model settings, HRF library,
-  regularization grid, and training/test split with the outputs.
+- Verify event onsets and durations against retained scans and acquisition-time
+  offsets.
+- Check design matrices for collinearity or unidentifiable trial columns.
+- Confirm signal units, confound selection, and identical spatial ordering
+  across runs.
+- Distinguish in-sample fit $R^2$, cross-validated selection scores, and
+  held-out outer-test $R^2$.
+- Check NaN masks and grid-boundary flags (`at_boundary`, `at_parameter_bound`,
+  `any_at_upper`).

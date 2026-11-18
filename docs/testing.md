@@ -1,125 +1,96 @@
 # Choosing tests during development
 
-Use module-focused tests while editing, then run the integration suite before
-committing. Run the full default suite before merging; CI also runs it on every
-push and pull request. Changes to test selection itself require a full run.
-A successful targeted run is not evidence that the full suite passed.
+Run module-focused tests while editing, then run the integration suite before
+committing. Run the full default suite before merging and whenever changing test
+selection rules.
 
 ## Everyday commands
 
 ```bash
-# Example: REML and its numerical helpers (shell expands the filename glob).
+# Example: REML and its numerical helpers.
 uv run pytest tests/test_reml*.py -q -W error
 
-# Representative cross-module checks, including a complete synthetic BIDS run.
+# Representative cross-module checks, including a synthetic BIDS workflow run.
 uv run pytest -m integration -q -W error
 
-# Preview exactly which integration cases will run.
+# Preview which integration cases will run.
 uv run pytest -m integration --collect-only -q
 
-# Full default suite before merging; slowest setup/call/teardown phases reported.
+# Full default suite before merging; reports the 20 slowest phases.
 uv run pytest -q -W error --durations=20
 ```
 
-Run the module command and the integration command separately. Adding
-`-m integration` to the module command would select only the marked tests in
-those files, not the repository-wide integration suite. Module runs intentionally
-include their integration cases; rerunning a few cases is simpler than excluding
-relevant checks during editing.
-
-The `integration` marker identifies a maintained representative suite, not an
-exhaustive classification of every test. Unmarked tests include unit tests,
-scientific regressions, property tests, and additional integration scenarios.
-There is no automatic changed-file or dependency inference. When editing shared
-code, include its consumers using the table below; use the full suite when the
-impact is unclear.
+Run module tests and `-m integration` as separate commands; passing both filters
+to only the integration tests inside the named files. The `integration` marker
+selects a representative cross-module subset, while unmarked tests cover unit
+behavior, scientific regressions, and property-based invariants. When editing
+shared code, include its consumers from the table below or run the full suite.
 
 ## Module-to-test mapping
 
-Paths below are relative to the repository root. Pass the listed paths to
-`uv run pytest`, followed by `-q -W error`. Globs are expanded by the shell.
-The integration suite is additional to every row.
+Paths are relative to the repository root. Pass them to `uv run pytest -q -W error`,
+then run `uv run pytest -m integration -q -W error`.
 
-| Changed area | Focused test paths | Additional consumers to consider |
+| Changed area | Focused test paths | Additional consumers |
 | --- | --- | --- |
-| `reml` | `tests/test_reml*.py` | `tests/test_hrf_reml*.py tests/workflow/test_reml_workflow.py`; optional experiment checks below |
-| `_numerics`, AR(1), `_ar1_moments` | `tests/test_numerics*.py tests/test_ar1.py tests/test_reml*.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_hrf_glm.py tests/test_single_trial.py` |
-| `model`, `design`, `_task_design`, task detection | `tests/test_model.py tests/test_design.py tests/test_task_model.py tests/test_task_design.py tests/test_task_detection.py` | Conventional, selected-HRF and single-trial fitting tests |
-| `fit`, `_standard_glm`, `_conventional`, results | `tests/test_fit.py tests/test_multirun.py tests/test_fit_diagnostics.py tests/test_result_schemas.py` | `tests/test_prepared_fit.py tests/test_hrf_glm.py` |
-| `prepared`, `prepared_fit` | `tests/test_prepared_fit.py` | `tests/test_fit_diagnostics.py tests/test_hrf_glm.py` |
-| HRF libraries, designs, selection, CV, `_run_design`, `_design_inputs` | `tests/test_hrf*.py tests/test_design_inputs.py tests/test_glmsingle_hrf.py tests/test_sobol_hrf_library.py` | `tests/test_selected_hrf_fit.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
-| `_hrf_glm*`, `_hrf_assignment` | `tests/test_hrf_glm.py tests/test_fit.py` | `tests/workflow/test_analysis.py` |
-| Single-trial fitting, `_selected_hrf_fit`, `_shared_hrf_fit` | `tests/test_single_trial*.py tests/test_selected_hrf_fit.py` | `tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
-| Ridge selection, fractional ridge, `_regularizers`, encoding | `tests/test_ridge*.py tests/test_fractional*.py tests/test_regularizers.py tests/test_trial_encoding.py tests/test_encoding_design.py` | `tests/workflow/test_beta_series.py` |
-| Denoising and mixture thresholds | `tests/test_denoising*.py tests/test_mixture_threshold.py tests/test_within_run_cv_isolation.py` | `tests/test_hrf_selection.py tests/test_fit.py` |
-| Data ownership, `_run_inputs`, `_arrays`, `_scalars`, result dataclasses | `tests/test_data.py tests/test_arrays.py tests/test_mutation_helpers.py tests/test_result_schemas.py` | Broad fan-out: run full suite for shared helper changes |
-| Provenance, logging, fit lifecycle | `tests/test_provenance.py tests/test_bids_provenance.py tests/test_logging.py tests/test_lifecycle.py tests/test_fit_lifecycle.py tests/test_software.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_denoising.py` |
-| Publication and CIFTI | `tests/test_publication*.py tests/test_cifti.py` | `tests/workflow/test_outputs.py tests/workflow/test_files.py` |
-| Reliability and diagnostics | `tests/test_reliability.py tests/test_diagnostics.py tests/test_fit_diagnostics.py` | `tests/workflow/test_analysis.py tests/workflow/test_plots.py` |
-| Workflow, CLI, reports | `tests/workflow/` | Select a matching file during edits; run the directory for cross-stage changes |
-| Parallel execution | `tests/test_parallel.py` | `tests/workflow/test_analysis.py tests/workflow/test_beta_series.py` |
-| Packaging, public names, import structure, dependencies | `tests/test_import_structure.py tests/test_package_build.py tests/test_distribution.py tests/test_public_names.py tests/workflow/test_package_layout.py` | Full suite and installed-wheel check in the developer guide |
-| Test markers or selection rules | `tests/test_test_selection.py` | Integration selection and full suite |
+| `reml` | `tests/test_reml*.py` | `tests/test_hrf_reml*.py tests/workflow/test_reml_workflow.py` |
+| `_numerics`, `ar1`, `_ar1_moments` | `tests/test_numerics*.py tests/test_ar1.py tests/test_reml*.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_hrf_glm.py tests/test_single_trial.py` |
+| `model`, `design`, `_task_design`, `task_detection` | `tests/test_model.py tests/test_design.py tests/test_task_model.py tests/test_task_design.py tests/test_task_detection.py` | Conventional, selected-HRF, and single-trial fitting tests |
+| `fit`, `_standard_glm`, `_conventional`, `_fit_diagnostics`, `results` | `tests/test_fit.py tests/test_multirun.py tests/test_fit_diagnostics.py tests/test_conventional_properties.py tests/test_result_schemas.py` | `tests/test_prepared_fit.py tests/test_hrf_glm.py` |
+| `prepared`, `prepared_fit` | `tests/test_prepared.py tests/test_prepared_fit.py` | `tests/test_fit_diagnostics.py tests/test_hrf_glm.py` |
+| `hrf_library`, `hrf_options`, `hrf_selection`, `hrf_results`, `_hrf_design`, `_run_design`, `_design_inputs`, `_hrf_cv`, `_hrf_reml` | `tests/test_hrf*.py tests/test_choose_eligible.py tests/test_design_inputs.py tests/test_glmsingle_hrf.py tests/test_sobol_hrf_library.py` | `tests/test_selected_hrf_fit.py tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
+| `_hrf_glm`, `_hrf_glm_design`, `hrf_glm_results` | `tests/test_hrf_glm.py tests/test_fit.py` | `tests/workflow/test_analysis.py` |
+| `single_trial`, `_shared_hrf_fit`, `_selected_hrf_fit`, `_single_trial_design`, `_single_trial_fit`, `single_trial_results` | `tests/test_single_trial*.py tests/test_selected_hrf_fit.py tests/test_shared_assembly.py` | `tests/test_ridge_cv.py tests/test_fractional_cv.py tests/test_denoising.py` |
+| `ridge_selection`, `fractional_ridge`, `_regularizers`, `_ridge_cv`, `_fractional_ridge`, `ridge_results`, `trial_encoding` | `tests/test_ridge*.py tests/test_fractional*.py tests/test_regularizers.py tests/test_trial_encoding*.py tests/test_encoding_design.py` | `tests/workflow/test_beta_series.py` |
+| `denoising`, `denoising_results`, `_mixture_threshold` | `tests/test_denoising*.py tests/test_mixture_threshold.py tests/test_within_run_cv_isolation.py` | `tests/test_hrf_selection.py tests/test_fit.py` |
+| `data`, `_run_inputs`, `_arrays`, `_scalars`, result dataclasses | `tests/test_data.py tests/test_arrays.py tests/test_mutation_helpers.py tests/test_dataclass_equality.py tests/test_result_schemas.py` | Broad fan-out: run the full suite for shared helper changes |
+| `provenance`, `bids_provenance`, `logging`, `_fit_lifecycle` | `tests/test_provenance.py tests/test_bids_provenance.py tests/test_logging.py tests/test_lifecycle.py tests/test_fit_lifecycle.py tests/test_identity_names.py tests/test_software.py` | `tests/test_fit.py tests/test_prepared_fit.py tests/test_denoising.py` |
+| `publication`, `cifti` | `tests/test_publication*.py tests/test_cifti.py` | `tests/workflow/test_outputs.py tests/workflow/test_files.py` |
+| `reliability`, `diagnostics` | `tests/test_reliability.py tests/test_diagnostics.py tests/test_fit_diagnostics.py` | `tests/workflow/test_analysis.py tests/workflow/test_plots.py` |
+| `workflow`, `cli` | `tests/workflow/` | Select a matching file during edits; run `tests/workflow/` for cross-stage changes |
+| `parallel` | `tests/test_parallel.py` | `tests/workflow/test_analysis.py tests/workflow/test_beta_series.py` |
+| Packaging, import structure, retired shims | `tests/test_import_structure.py tests/test_package_build.py tests/test_distribution.py tests/test_removed_shims.py tests/workflow/test_package_layout.py` | Full suite and installed-wheel check in the [developer guide](development.md#environment-and-checks) |
 
-The full default suite uses `testpaths = ["tests"]`. It does not automatically
-include experiment or example directories. For REML adapter changes, also run:
+The default suite uses `testpaths = ["tests"]` and excludes `examples/` and
+`experiments/`. When changing HRF selection or REML adapters used by the
+experiments, also run:
 
 ```bash
 uv run python -m pytest -q -W error experiments/hrf_estimation/test_reml_selection.py experiments/hrf_simulations/test_fitting.py
 ```
 
-Using `python -m pytest` here makes the repository root available for experiment
-imports. Other experiment changes need their corresponding tests explicitly.
-
 ## Integration coverage
 
-The marked suite checks conventional OLS and AR(1) against an external oracle,
-prepared and selected-HRF fitting, REML design selection, ridge CV and encoding,
-fitting with denoising components, CIFTI serialization, transactional publication
-and rollback, BIDS provenance, process execution, and a synthetic workflow from
-BIDS loading through maps and an HTML report. It uses generated data, not the
-external NSD volume.
+The `@pytest.mark.integration` suite covers conventional OLS and AR(1) fits
+against an external oracle, prepared and selected-HRF fitting, REML design
+selection, ridge CV and encoding, fitting with denoising components, CIFTI
+serialization, transactional publication and rollback, BIDS provenance, parallel
+execution, and an end-to-end synthetic BIDS workflow run.
 
-Mark a representative test with `@pytest.mark.integration` when adding a new
-public workflow or module boundary. Retain focused validation and edge-case
-checks in the module suite. Do not mark entire files simply because some tests
-cross module boundaries. Review `--durations=20` when expanding this suite.
+Mark one representative test with `@pytest.mark.integration` when adding a new
+public workflow or module boundary, and keep detailed edge cases in the module
+suite.
 
 ## Slow scientific checks and notebooks
 
-These existing opt-in checks remain separate:
+Opt-in suites run separately from the default test run:
 
 ```bash
-# Includes the slow statistical cases normally skipped by default.
+# Slow Monte Carlo REML calibration checks.
 uv run pytest tests/test_reml_statistics.py --run-slow -q -W error
 
-# Executes example notebooks; requires development dependencies.
+# Example and validation suites, including notebook execution.
 uv run pytest examples/bids_workflow examples/validation --run-notebooks -q -W error
 ```
 
-Run the relevant scientific checks when changing the statistical method or
-numerical tolerances. Run notebook checks when their workflow or dependencies
-change. GitHub Actions runs only the default package test suite and reports the 20
-slowest phases. Run example and experiment notebook tests locally when needed.
-The package suite is not reduced by the integration marker.
+Run `--run-slow` when changing statistical estimators or numerical tolerances,
+and `--run-notebooks` when changing notebook workflows or their dependencies.
 
 ## Test purpose and maintenance
 
-Every test function has a short purpose docstring. The documentation check scans
-package, experiment and example tests without executing the optional suites:
-
-```bash
-uv run pytest tests/test_test_documentation.py -q
-```
-
-Describe the behavior or failure being checked; include the oracle or boundary
-when it matters. Keep one or two sentences, and retain detailed setup rationale
-in comments. Shared bodies with different parameter grids are not redundant.
-Prefer executing documented examples over asserting that prose contains specific
-words. Keep license, distribution and explicit architecture requirements tested.
-See the [test-suite review](test-suite-review-2026-11-16.md) for this review's
-removals, retained cases and timing findings.
-
-Public REML HRF adapter checks are in `tests/test_hrf_reml*.py`, including
-generated invariants, a dense likelihood oracle, and seeded model recovery.
-Workflow coverage includes `tests/workflow/test_reml_workflow.py`.
+Give every test function a one- or two-sentence docstring stating the behavior,
+invariant, or failure mode it checks. Keep setup rationale in comments.
+Parameterized or shared-helper tests covering distinct regimes are not
+redundant. Prefer executing documented code examples over matching prose
+substrings. See the archived
+[test-suite review](archive/test-suite-review-2026-11-16.md) for background.

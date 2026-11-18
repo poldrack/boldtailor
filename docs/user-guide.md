@@ -1,30 +1,29 @@
 # User guide
 
-[README](../README.md) · [API reference](api.md) · [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md)
+[README](../README.md) · [Practical guide](practical-guide.md) · [API reference](api.md) · [BIDS workflow examples (NSD data)](../examples/bids_workflow/README.md)
 
-For an introduction to the components and their use, start with the
-[practical guide](practical-guide.md). This page gives the method details and
-full workflow options.
+For a quick introduction to each component, start with the
+[practical guide](practical-guide.md). This guide covers the statistical
+methods, modeling assumptions, and command-line workflow options.
 
 ## Preparing your data
 
-The Python API takes one signal array per run, shaped **time points × features**.
-Features must have the same meaning and order in every run. For images, keep
-the mask or CIFTI brain-model axis you used to extract the signals so you can
-put the results back into the correct locations.
+The array API takes one signal matrix per run, shaped **time points × features**.
+Features must have the same order in every run. Keep the mask or CIFTI
+brain-model axis used to extract the signals so you can map results back to
+image space.
 
-Each run also needs an event table with `onset` and `duration` in seconds.
-Add `trial_type` for condition-based models. A `modulation` column supplies
-event amplitudes for conventional designs. Trial-level metadata such as image
-identity and response time can stay in the event table for single-trial models.
+Each run requires an event DataFrame with `onset` and `duration` in seconds.
+Include `trial_type` for condition models, a `modulation` column if using
+conventional Nilearn event modulation, or trial covariates (such as
+`response_time` and `trial_type`) for `TaskModel` and single-trial analyses.
 
-For one run, pass an array and a DataFrame. For multiple runs, pass matching
-lists. Runs can have different lengths and event counts:
+Pass a single array and DataFrame for one run, or matching lists for multiple
+runs:
 
 ```python
 from boldtailor.data import from_arrays
 
-# signals_by_run, events_by_run, and confounds_by_run are matching lists.
 data = from_arrays(
     signals_by_run,
     events_by_run,
@@ -33,29 +32,26 @@ data = from_arrays(
 )
 ```
 
-Use `tr=2.0` for uniformly sampled data beginning at zero, or provide explicit
-frame times for acquisition offsets or nonuniform sampling. Supply one of
-these timing options, not both. Frame times must increase strictly.
-Signals and confounds must be finite; confounds need one row per time point.
-Preprocessing, smoothing, scaling, and spatial alignment happen before this API.
+Supply either `tr=2.0` (for uniform sampling starting at 0 s) or strictly
+increasing `frame_times` per run. Signals and confounds must be finite, with one
+confound row per scan. Preprocessing, smoothing, scaling, and spatial alignment
+happen before calling Boldtailor.
 
-Confound handling depends on the model:
+Confound handling depends on the fitting function:
 
-| Model | Which nuisance regressors are used? |
+| Model | Nuisance regressors included |
 | --- | --- |
-| `fit()` | Columns named in `ModelSpec.confounds`, plus the requested drift terms and an intercept |
+| `fit()` | Columns named in `ModelSpec.confounds`, requested drift terms, and a run intercept |
 | `fit_prepared()` | Exactly the columns in your design matrix |
-| Single-trial and HRF-selection APIs | Every supplied confound column, plus a run intercept; supply high-pass regressors yourself |
+| Single-trial and HRF-selection APIs | Every supplied confound column plus a run intercept (supply high-pass columns in `confounds`) |
 
-If you already use fMRIPrep cosine regressors, avoid also adding a second set
-of cosine drifts. For conventional models, set `drift_model=None` when passing
-the existing cosine columns as selected confounds.
+When passing fMRIPrep cosine columns in `ModelSpec.confounds`, set
+`drift_model=None` to avoid adding a second set of cosine drifts.
 
 ## Condition effects and contrasts
 
 Use `fit()` when each condition has a shared response amplitude within a run.
-The [README example](../README.md#a-first-model) defines `data`, `model`, and
-`result`; the following operations continue that example:
+Continuing the [README example](../README.md#a-first-model):
 
 ```python
 from boldtailor.design import compile_designs, compile_nuisance_designs
@@ -71,34 +67,32 @@ z_score = result.z_score("face_gt_house")
 p_value = result.one_sided_p_value("face_gt_house")
 ```
 
-Contrasts can be expressions such as `"face - house"` or mappings such as
-`{"face": 1, "house": -1}`. They refer to column names, so a different column
-order between runs does not change the contrast. Every run must support the
-requested contrast. The current interface supports t contrasts.
+Contrasts can be string expressions (`"face - house"`) or weight mappings
+(`{"face": 1, "house": -1}`). Because they reference column names, differing
+column orders across runs do not affect the contrast. Only t contrasts are
+supported, and every run must estimably support each contrast.
 
-`ModelSpec` defaults to a Glover HRF, cosine drifts with a 0.01 Hz cutoff, and
-AR(1) noise. Set `hrf_model="spm"` for the SPM HRF or `noise_model="ols"` for
-ordinary least squares. Designs are constructed with Nilearn; supported HRF
-bases can include temporal/dispersion derivatives or a callable kernel. A
-fixed custom design gives you control over any additional regressors.
+`ModelSpec` defaults to a Glover HRF (`hrf_model="glover"`), cosine drifts with
+a 0.01 Hz cutoff, and AR(1) noise (`noise_model="ar1"`). Set `hrf_model="spm"`
+for the canonical SPM HRF or `noise_model="ols"` for ordinary least squares.
+Nilearn derivative bases and custom callable kernels are also supported.
 
-For several runs, Boldtailor fits each run independently and combines
-contrasts as equal-weight fixed effects. This is not precision-weighted: each run contributes equally regardless of its length or noise level, and degrees of freedom are summed. For runs with very different noise, compare against nilearn's `compute_fixed_effects` with precision weighting. P-values are directional, one-sided,
-and uncorrected for multiple comparisons. `result.run_r2` contains one R²
-array per run; `result.r2` pools residual and total sums of squares across runs.
-A feature whose signal is constant in a run has NaN for every contrast statistic and for that run's `run_r2`. Pooled `r2` is NaN only when the feature is constant in every run. Constant features cannot support inference.
+Across multiple runs, each run is fitted independently and contrasts are
+combined as equal-weight fixed effects (unweighted across run lengths and noise
+levels, with summed degrees of freedom). P-values are one-sided and uncorrected.
+`result.run_r2` stores per-run $R^2$, while `result.r2` pools residual and total
+sums of squares across runs. If a feature's signal is constant in any run, its
+contrast statistics and that run's `run_r2` are NaN; pooled `r2` is NaN only if
+the feature is constant in every run.
 
-Rank-deficient designs are fitted in a full-rank basis of their column space, so variances use `n - rank` degrees of freedom; a warning names the run and its rank.
+Rank-deficient designs are fitted in an orthonormal basis of their column space
+with `n - rank` residual degrees of freedom, and emit a warning naming the run
+and rank. Rank and estimability checks normalize nonzero columns to unit norm so
+arbitrary column scaling does not alter the detected rank.
 
 ## Using your own design matrix
 
-Use `PreparedDesignAnalysis` when you already have a labeled design matrix.
-This is useful for custom parametric regressors or designs built by another
-package. Boldtailor fits the supplied columns as they are; include the
-intercept, drift terms, and confounds you want in the model.
-
-For a single run, suppose `signals` has time points in rows and `design` is a
-DataFrame with columns `stimulus`, `motion`, and `constant`:
+Use `PreparedDesignAnalysis` when your design matrices are already built:
 
 ```python
 from boldtailor.prepared import PreparedDesignAnalysis
@@ -121,65 +115,47 @@ prepared_result = fit_prepared(
 )
 ```
 
-For multiple runs, pass lists of arrays, DataFrames, and role mappings. Every
-column needs a role: `task`, `nuisance`, `intercept`, or `other`. Roles describe
-the existing columns; they do not create or transform them. A task-versus-
-confounds R² comparison requires a complete partition without `other` columns.
-
-This API can consume a design prepared for FitLins or another workflow, but
-there is no automatic FitLins integration or BIDS Stats Models parser.
+Every column requires a role: `task`, `nuisance`, `intercept`, or `other`.
+Boldtailor fits the supplied columns without adding or transforming regressors.
+Computing task-versus-nuisance $\Delta R^2$ requires a complete partition with
+no `other` columns.
 
 ## Measuring task-related variance
 
-Pooled R² is calculated as:
+Pooled $R^2$ is computed from sums of squares across runs:
 
 ```text
 R² = 1 - sum_run(residual sum of squares)
          / sum_run(sum_time((signal - run mean)²))
 ```
 
-Runs with different means or variances are handled through these sums; the
-result is not an average of run-wise R² values. Constant signals have undefined
-R², represented by NaN. A higher in-sample R² alone does not demonstrate better
-prediction or more reliable trial estimates.
+Boldtailor distinguishes three $R^2$ comparisons:
 
-There are three distinct comparisons:
-
-| Question | Result |
+| Question | Quantity |
 | --- | --- |
-| How much variance do task regressors add beyond confounds? | Full R² minus nuisance-only R² |
-| Does a selected HRF improve the single-trial fit over the canonical HRF? | Optimized full R² minus canonical full R², using the same estimator |
-| Does a task-model response predict a separate run? | HRF prediction R² after nuisance adjustment |
+| How much variance do task regressors add beyond confounds? | Full-model $R^2$ minus nuisance-only $R^2$ (`delta_r2`) |
+| Does a selected HRF improve the fit over canonical SPM? | Selected-HRF full $R^2$ minus canonical full $R^2$ |
+| Does a task model predict a held-out run? | Out-of-fold or split-test prediction $R^2$ after nuisance adjustment |
 
-For conventional models, `task_delta_r2(data, model, result)` and
-`task_delta_r2_prepared(prepared, prepared_result)` compute
-the first comparison. Both refit full and nuisance models with OLS, even if
-the original contrast inference used AR(1). Their result includes `full_r2`,
-`nuisance_r2`, `raw_delta_r2`, and `delta_r2`; the latter clips only tiny negative
-roundoff values. This is additional explained variance, not partial R².
+For conventional and prepared GLMs, `task_delta_r2(data, model, result)` and
+`task_delta_r2_prepared(prepared, prepared_result)` refit full and nuisance-only
+models with OLS (even when contrast inference used AR(1)). They return
+`full_r2`, `nuisance_r2`, `raw_delta_r2`, and `delta_r2` (which clips tiny
+negative floating-point roundoff to zero). Both functions require complete
+`RunSources` metadata to verify that `result` matches the supplied inputs and
+model; see [source records](api.md#source-records-and-saving). Common-HRF and
+prepared comparisons require finite pooled $R^2$ at all supplied features, while
+selected-HRF `task_delta_r2` preserves NaNs at undefined or constant features.
 
-These comparison functions require complete source metadata so they can check
-that the supplied result belongs to the same input and model. `task_delta_r2`
-takes the same `ModelSpec`; `task_delta_r2_prepared` reads the contrasts, noise
-setting, and model metadata from the prepared result's provenance. See
-[source records](api.md#source-records-and-saving) for the required fields.
-For common-HRF and prepared-design fits, both comparison functions currently
-require finite pooled R² for every supplied feature. Exclude constant features
-before those comparisons, then restore NaNs when reconstructing an image.
-The selected-HRF GLM comparison handles undefined locations directly.
-
-Single-trial results already contain `full_r2`, `nuisance_r2`, and `delta_r2`.
-Their difference uses the actual OLS or ridge estimator and retains negative
-values. The [NSD output reference](../examples/bids_workflow/README.md#finding-your-results)
-distinguishes these images from HRF-selection and independent prediction scores.
+Single-trial results directly expose `full_r2`, `nuisance_r2`, and `delta_r2`
+from the fitted OLS or ridge estimator (which can be negative under shrinkage).
 
 ## Estimating a beta for every trial
 
-`fit_single_trials(data, ridge_alpha=0.0)` creates a separate regressor for each
-event row. It preserves event order, recorded durations, and sub-TR timing.
-Repeated image IDs receive separate coefficients. The default HRF is SPM;
-pass an `HrfCandidate` through `hrf_model=` to use one specified library HRF
-everywhere.
+`fit_single_trials(data, ridge_alpha=0.0)` fits one regressor per event row,
+preserving event order, durations, and sub-TR onsets. By default it uses the
+canonical SPM HRF (`hrf_model="spm"`); pass an `HrfCandidate` to use a specific
+library kernel across all features.
 
 ```python
 from boldtailor.single_trial import fit_single_trials
@@ -190,34 +166,28 @@ first_run_betas = ridge.run_betas[0]
 trials = ridge.trial_table
 ```
 
-Both trial entry points return `SingleTrialResult`. Access fitted matrices
-through `result.design.matrices` (shared HRF) or
-`result.design.rebuild_matrix(run_index, hrf_id)` (selected HRFs); selected-HRF assignments and selection
-provenance are also on `result.design`. See [result migration](result-migration.md).
+Both `fit_single_trials` and `fit_selected_hrfs` return a `SingleTrialResult`:
+- `run_betas`: tuple of `(trials, features)` arrays, one per run.
+- `trial_table`: DataFrame with `trial_index`, `trial_id`, `run_label`,
+  `event_index`, original event columns, and `run_index`.
+- `design`: `SharedTrialDesign` (`result.design.matrices`) for a fixed HRF, or
+  `SelectedTrialDesign` (`result.design.rebuild_matrix(run_index, hrf_id)`) for
+  location-specific HRFs.
 
-Each beta array is **trials × features**. The trial table retains your event
-metadata and adds run labels, within-run event indices, session-wide trial
-indices, and unique trial IDs. Missing RT does not remove a trial from the fit.
-
-The `ridge_alpha` option accepts a nonnegative normalized-column penalty.
-Trial regressors are
-adjusted for nuisances and scaled to unit length before regularization; returned
-betas are restored to the original signal scale. Nuisance coefficients are
-unpenalized. The value is an ordinary ridge penalty, not a fractional-ridge
-fraction. Use the cross-validation workflow below to choose the penalty;
-single-trial fitting itself does not use AR(1).
-
-Supply your intended high-pass and other nuisance columns in `data.confounds`.
-Do not include a `constant` column: the single-trial API adds it. Designs with
-unidentifiable trial coefficients or no residual degrees of freedom are rejected.
+With `ridge_alpha > 0`, trial columns are projected off the run's nuisance space
+(all supplied confounds plus an added intercept), scaled to unit L2 norm,
+penalized by `ridge_alpha`, and rescaled back to native signal units. Nuisance
+coefficients are unpenalized, and single-trial fits do not use AR(1) whitening.
+Designs with unidentifiable trial columns or nonpositive residual degrees of
+freedom are rejected.
 
 ## Fractional ridge at each grayordinate
 
-Fractional ridge specifies how much coefficient length to retain relative to
-OLS. A fraction of 1 gives OLS; smaller fractions give stronger shrinkage.
-Boldtailor defines this ratio using raw trial coefficients after nuisance
-projection; trial-design columns are not rescaled for fractional ridge. Exported betas remain in native signal units. Confounds and the run
-intercept remain unpenalized, and no post-fit scaling or offset is applied.
+Fractional ridge specifies the L2 norm ratio of nuisance-projected trial
+coefficients relative to OLS (`1.0` gives OLS; smaller fractions apply stronger
+shrinkage). Unlike `ridge_alpha`, fractional ridge operates on raw
+nuisance-projected trial columns without column-length normalization or post-fit
+affine rescaling.
 
 ```python
 from boldtailor.fractional_ridge import (
@@ -225,7 +195,7 @@ from boldtailor.fractional_ridge import (
 )
 from boldtailor.single_trial import fit_single_trials
 
-# data must contain multiple runs; encode categorical predictors numerically.
+# data requires at least two runs; predictors must be numeric.
 predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_fraction_candidates(
     data, predictors, fractions=[.1, .2, .3, .4, .5, .6, .7, .8, .9, 1.]
@@ -234,65 +204,31 @@ choice = select_ridge_fractions(scores)
 betas = fit_single_trials(data, ridge_fraction=choice.ridge_fraction)
 ```
 
-Each grayordinate chooses its own fraction by maximizing pooled held-out
-encoding R². Ties within `1e-12` favor the largest fraction. `at_boundary`
-marks features whose winner sits at an end of the candidate grid. An endpoint
-winner at the shrinkage end (smallest fraction / largest alpha) means the grid
-should be extended; a winner at fraction 1.0 or alpha 0 means no
-regularization was preferred. Fractions must
-have finite scores across all candidates at that location; undefined locations
-receive NaN. A zero OLS task-coefficient norm has undefined fractional
-shrinkage and is excluded. Negative scores remain valid.
+Each feature independently selects the candidate fraction that maximizes pooled
+held-out trial-encoding $R^2$ against fixed OLS validation betas. Ties within
+`1e-12` favor the largest fraction (least shrinkage). `choice.at_boundary` flags
+winners at either end of the grid; a winner at the smallest fraction indicates
+that stronger shrinkage may be needed, whereas `1.0` indicates no shrinkage was
+preferred. Features with nonfinite candidate scores or zero OLS trial-beta norm
+receive NaN.
 
-The selected fraction is fixed across runs, while its corresponding alpha is
-computed separately for each run and grayordinate. Results expose
-`ridge_fraction` and `run_ridge_alphas`; `ridge_alpha` is `None` for fractional
-fits. You may also supply a fixed scalar fraction or a feature map directly
-to `fit_single_trials` or `fit_selected_hrfs`. Map NaNs mark excluded features.
-Do not combine a fraction with a positive `ridge_alpha`.
+The chosen fraction is shared across runs while the implied ridge penalty is
+solved per run and feature (`result.run_ridge_alphas`; `result.ridge_alpha` is
+`None`). Pass `library=library` to `score_fraction_candidates` to re-select HRFs
+inside each inner training fold (requiring at least three runs with CV HRF
+selection, or two with REML). Validation targets remain OLS betas under that
+fold's training-selected HRFs.
 
-To optimize HRFs, pass `library=library` to the scorer. Each inner fold then
-selects HRFs using only its training runs. For final fitting, select HRFs on
-the complete training set and pass that selection and the fraction map to
-`fit_selected_hrfs`. Reserve outer test runs before calling either selector.
+## Choosing a shared ridge penalty by trial-level prediction
 
-Training betas use each candidate fraction. Validation targets are fixed OLS
-betas, computed using the fold’s training-selected HRFs, even when fraction 1
-is absent from the candidate grid. OLS defines both the norm reference and the
-validation target. The encoding model is
-OLS with run-specific training intercepts and shared slopes for the supplied trial variables. Trial-level
-predictor exclusions never delete stimuli from the beta-series model. This objective measures prediction of noisy OLS trial estimates,
-not recovery of an unobserved ground-truth beta series. The shared-alpha CV
-API continues to use normalized columns and candidate-regularized targets.
-
-Both scorers require numeric predictor columns: encode category labels first.
-Use at least two runs with canonical HRFs, or three with an HRF library.
-
-The NSD notebook defaults to this approach, with separate odd/even outer
-evaluations and an all-run final refit. Its percentile curves summarize the
-candidate scores; they do not select a brain-wide fraction. Conventional
-GLMs and the across-session HRF reliability analysis are unchanged.
-
-## Choosing ridge by trial-level prediction
-
-This earlier option selects **one shared alpha** using a spatial percentile.
-It remains available through `ridge_mode="cv"` in the NSD notebook. The
-fractional workflow above selects independently at each location.
-
-When trial variables should explain response variation, choose a penalty by
-how well those variables predict beta estimates in new runs. For NSD the
-encoding model is `beta ~ run + trial_type + response_time`, with a separate
-training-run intercept and shared trial-type/RT slopes. Do not supply another
-all-ones column; the encoder handles intercepts.
-The encoding model uses OLS. Ridge applies to beta estimation.
+`score_ridge_candidates` and `select_ridge_penalty` select a single normalized
+`ridge_alpha` across all features using a spatial percentile (90th percentile
+by default):
 
 ```python
 from boldtailor.ridge_selection import score_ridge_candidates, select_ridge_penalty
 from boldtailor.single_trial import fit_single_trials
 
-# Supply only training runs here if reserving separate outer test runs.
-# Numeric tables have one row per original event, in exactly the same order.
-# data must contain multiple runs; encode categorical predictors numerically.
 predictors = [e[["trial_type", "response_time"]] for e in data.events]
 scores = score_ridge_candidates(
     data, predictors, alphas=[0., .001, .01, .1, 1., 10., 100.]
@@ -301,147 +237,91 @@ choice = select_ridge_penalty(scores, percentile=90)
 betas = fit_single_trials(data, ridge_alpha=choice.ridge_alpha)
 ```
 
-The default HRF is canonical SPM. Pass `library=library` to select per-feature
-HRFs afresh within each inner-training set. For final optimized betas, select
-HRFs on the complete training set and pass that assignment and
-`choice.ridge_alpha` to `fit_selected_hrfs`. The scorer needs two runs for
-canonical HRFs or three for optimized HRFs.
+In this shared-alpha workflow, both training and validation betas use the
+candidate `ridge_alpha` (rather than fixed OLS validation targets). Ties within
+`1e-12` favor the smallest alpha. When scoring across parallel feature blocks,
+concatenate the block score maps before calling `select_ridge_penalty`.
 
-For each penalty, both training and validation beta series use that penalty.
-Predictors and betas are centered separately within each training run before
-fitting shared slopes. The score is `1 - sum(SSE) / sum(within-run SST)` over
-validation trials and runs, where SSE uses residuals centered within each
-validation run and feature. Negative values are retained. Validation outcomes
-supply only the scoring offset; they never train slopes or change predictions. The 90th percentile is taken across a
-common finite grayordinate mask. One penalty applies to the whole mask. With
-parallel blocks, combine candidate score maps before choosing the penalty;
-averaging block percentiles gives a different objective.
+### Trial-encoding model details
 
-Nonfinite predictor rows are omitted from encoding, while their stimuli stay
-in beta estimation. The NSD adapter also excludes nonpositive RT from encoding.
-Training predictors must have full rank after within-run centering, with at
-least one complete row per training run and more complete rows than the number
-of run intercepts plus slopes. Predictors varying only between runs are
-unidentifiable. A one-row run supplies no slope information. Incomplete features
-and constant targets have undefined scores. Ties within `1e-12` favor the smallest penalty.
-Zero is a valid winner. The candidate grid and percentile are configurable.
+Both ridge scorers use `boldtailor.trial_encoding` (`encoding_mode="within_run"`
+by default):
+- Predictors and betas are centered within each training run over complete
+  predictor rows to fit shared OLS slopes.
+- Validation residuals are centered within each test run and feature for scoring
+  only (`1 - sum(SSE) / sum(within-run SST)`). Validation betas never influence
+  fitted slopes or predictions.
+- Nonfinite predictor rows (and nonpositive RTs when built with
+  `trial_predictors`) are omitted from encoding while their events remain in the
+  BOLD beta-series design.
+- Training predictors must have full rank after within-run centering, at least
+  one complete row per training run, and positive residual degrees of freedom.
+  Each test run needs at least two complete trials.
 
-These are selection scores for predictability of the **regularized** responses.
-Different penalties produce different targets. This criterion can favor removing
-variation unrelated to the supplied predictors, including real trial variation.
-Evaluate the chosen pipeline on separate outer runs before interpreting its
-predictive performance. RT used for tuning is no longer an independent check
-on the same training data.
-
-The [NSD notebook](../examples/bids_workflow/nsd_workflow.py) performs odd-to-even and
-even-to-odd outer evaluations, then tunes again on all runs for the final beta
-images. Canonical and optimized HRFs receive separate penalties. Conventional
-GLMs remain OLS, and the HRF reliability analysis is unchanged.
+Because tuning optimizes predictability from the supplied covariates, evaluate
+generalization on held-out outer runs not used during HRF or ridge selection.
 
 ## Selecting an HRF for each location
 
-REML is also available through `select_hrfs(..., method="reml")`.
-See [the REML guide](practical-guide.md#11-select-hrfs-with-reml) for the
-fixed reference mean, supplied AR(1) correlation, and numerical diagnostics.
-It needs one estimable run and returns the same assignment interface, with
-likelihood diagnostics instead of CV scores. The examples below use default CV.
-
-Default CV HRF selection requires at least two runs with matching feature order. In the
-following example, `multi_run_data` is an `AnalysisData` object created from
-lists of runs as described above:
+`select_hrfs` chooses a candidate HRF per feature by leave-one-run-out
+cross-validation (`method="cv"`, default, requiring at least two runs) or by
+restricted maximum likelihood (`method="reml"`, requiring at least one estimable
+run; see [Selecting HRFs with REML](practical-guide.md#11-select-hrfs-with-reml)):
 
 ```python
 from boldtailor.hrf_selection import select_hrfs
 from boldtailor.single_trial import fit_selected_hrfs
 
-selection = select_hrfs(multi_run_data)  # default_hrf_library()
+selection = select_hrfs(multi_run_data)  # uses default_hrf_library()
 optimized = fit_selected_hrfs(multi_run_data, hrf_selection=selection)
 optimized_ridge = fit_selected_hrfs(
     multi_run_data, hrf_selection=selection, ridge_alpha=0.1
 )
 ```
 
-The default library, `default_hrf_library()`, is described later in this
-section. The earlier default, `sobol_hrf_library()`, contains exact canonical
-SPM plus 512 double-gamma curves sampled continuously with a scrambled Sobol
-sequence. It covers the same parameter ranges as the
-original grid: response delay 3–6 s, undershoot delay 10–16 s,
-response dispersion 0.5–1.5, undershoot dispersion 0.5–2.5,
-response/undershoot ratio 2–8, and onset delay 0–2 s. Custom curves span 36 s.
-The sample count must be a power of two; the seed controls reproducibility.
-`parameter_bound_flags` records, per feature, which of the six sampled
-parameters of the selected custom kernel lie within 2 % of the library box
-width of their low or high edge (shape `(n_features, 6, 2)`), and
-`parameter_bound_table()` summarizes the fraction of custom picks flagged at
-each edge. `at_parameter_bound` is True when any *informative* parameter is
-flagged: one with at least three distinct library values and nonzero width
-(`library.informative_parameters`). Two-level grid parameters such as the
-expanded grid's undershoot delay (10 or 16 s) put every pick at an edge and are
-therefore reported in the table but excluded from the scalar; every Sobol
-parameter is informative. The Sobol and expanded-grid box implies peak times of
-roughly 1.5–7.5 s, so late-peaking responses will saturate at the
-response-delay or onset edge; the default library's timing bounds
-(`TIMING_BOUNDS`) span peak times of 2.5–8.5 s.
-This balances coverage in parameter space, though similar waveforms can still
-arise from different parameter combinations.
+### HRF libraries and parameter bounds
 
-Those collisions are systematic: peak time is `onset + response_delay -
-response_dispersion`, so onset and delay trade off into the same waveform.
-`timing_hrf_library()` samples realized timing instead: the peak time, the
-response width at half maximum, the trough time, the undershoot width at half
-the trough depth, and the trough depth, all measured on the combined curve,
-with onset fixed. Each sample is converted to SPM parameters by
-`spm_parameters_from_realized()`, which refines the closed-form lobe conversion
-until the measured curve matches within 0.01 s (times), 0.02 s (widths) and
-0.1 % (depth). The default box (`TIMING_BOUNDS`) spans peak times of 2.5-8.5 s,
-response widths of 2-6.5 s, trough times of 8-19 s, undershoot widths of
-4-10 s, and depths of 0.01-0.4 of the peak. Depth is sampled log-uniformly
-(`LOG_SCALED_TIMING`), so shallow undershoots like those of most empirical HRFs
-are as common as deep ones; the other four are uniform. The five quantities are not
-independent for a double gamma, so roughly 40 % of points in that box are
-unrealizable (for example a wide response cannot be followed by an early
-trough). The sampler keeps drawing Sobol points in power-of-two batches until
-`n_samples` are realizable, records the number skipped in
-`library.origin["rejected"]`, and the accepted set stays uniform over the
-feasible part of the box, so a sparse box costs time rather than coverage.
-Downstream fitting is unchanged because candidates carry SPM parameters. `realized_timing()` measures any candidate;
-`timing_parameters()` and `spm_parameters()` convert exactly between SPM
-parameters and the gamma-lobe description.
-`library.timing_table` lists both parameterizations. See
-`examples/validation/hrf_library_similarity.py` for how the two samplers
-compare in waveform similarity.
+`default_hrf_library()` (533 candidates, cached) combines:
+1. Canonical SPM at ID 0 (`CANONICAL_PARAMETERS = (6, 16, 1, 1, 6, 0, 32)`).
+2. 512 double-gamma candidates from `timing_hrf_library(n_samples=512, seed=0)`.
+3. The 20 empirical HRFs from GLMsingle (`glmsingle_hrf_curves()`, kind
+   `"glmsingle"`).
 
-When `select_hrfs()` or `evaluate_hrf_split()` is called without a library it
-uses `default_hrf_library()`: canonical SPM (ID 0), 512 timing-space Sobol
-candidates (seed 0), and then the 20 empirical HRFs of the GLMsingle library
-used for the Natural Scenes Dataset (`glmsingle_hrf_curves()`, kind
-`glmsingle`, identified by their one-based column index). The default is built
-once and cached. GLMsingle kernels carry no gamma parameters, so their rows in
-`parameter_table` and `timing_table` have NaN parameter columns and a
-`source_index`; the realized timing columns are measured from the curve. The
-parameter-bound diagnostics consider only double-gamma candidates.
-`HrfLibrary.from_table()` rebuilds any library from its saved
-`parameter_table`, and `glmsingle_hrf_library()` gives canonical plus the 20
-empirical kernels alone.
+Other library constructors in `boldtailor.hrf_library`:
+- `timing_hrf_library()`: Samples realized waveform timing via scrambled Sobol
+  sequences over `TIMING_BOUNDS` (peak time 2.5–8.5 s, response FWHM 2.0–6.5 s,
+  trough time 8.0–19.0 s, undershoot FWHM 4.0–10.0 s, and log-uniform trough
+  depth 0.01–0.4 of peak) and converts realizable draws to SPM double-gamma
+  parameters with `spm_parameters_from_realized()`. This avoids the
+  onset-versus-delay waveform redundancy of raw parameter sampling. Rejected
+  infeasible draws are counted in `library.origin["rejected"]`.
+- `sobol_hrf_library()`: Samples raw double-gamma parameters directly over
+  response delay 3–6 s, undershoot delay 10–16 s, response dispersion 0.5–1.5,
+  undershoot dispersion 0.5–2.5, response/undershoot ratio 2–8, and onset delay
+  0–2 s (36 s duration; implied peak times ~1.5–7.5 s).
+- `expanded_hrf_library()`: The 649-candidate discrete parameter grid over the
+  same ranges.
+- `glmsingle_hrf_library()`: Canonical SPM plus the 20 empirical GLMsingle
+  curves alone.
+- `HrfLibrary.from_parameters()` and `HrfLibrary.from_table()`: Build custom
+  libraries or reconstruct a library from its saved `parameter_table`.
 
-Inspect `library.parameter_table`, `library.times`, and `library.curves`.
-Use `expanded_hrf_library()` for the original 649-candidate grid, or
-`HrfLibrary.from_parameters()` for explicit custom rows. All three factories
-include canonical SPM at ID zero. Save the exact table and curves alongside
-the library fingerprint when you need to reuse fitted HRFs.
+`selection.parameter_bound_flags` (shape `(n_features, 6, 2)`) marks double-gamma
+picks whose parameters fall within 2% of the library's low or high box edge.
+`selection.at_parameter_bound` is `True` when any informative parameter (at
+least three distinct library values and nonzero width,
+`library.informative_parameters`) is flagged, and `selection.parameter_bound_table()`
+summarizes edge rates across custom picks.
 
-At each feature, selection evaluates every candidate HRF in turn. The
-candidate's task-model regressors are convolved with Nilearn and projected off
-the run's confounds. For each held-out run, selection learns one amplitude per
-task regressor from the remaining runs and predicts that run. Prediction
-errors are pooled across folds and divided by the pooled confound-adjusted
-signal energy, so the denominator is the same for every candidate. **The
-session map contains that winner's parameters; it does not average parameters
-selected for individual runs.**
+### Task models, normalization, and split evaluation
 
-By default the task model has one regressor, `task`, so selection scores the
-mean stimulus response and RT never enters. Pass `task_model=` to score the
-same task model the GLM will fit:
+Under `method="cv"`, each candidate HRF convolves the `TaskModel` regressors,
+projects them and the signals off each run's confounds, fits shared task
+amplitudes on the training runs, and predicts the held-out run. Errors are
+pooled across folds and divided by the pooled confound-adjusted signal energy.
+
+By default, `TaskModel()` has a single `task` regressor (mean stimulus
+response). Pass `task_model=` to include trial modulators during selection:
 
 ```python
 from boldtailor.model import Modulator, TaskModel
@@ -453,47 +333,24 @@ task_model = TaskModel((
 selection = select_hrfs(multi_run_data, library=library, task_model=task_model)
 ```
 
-Each modulator names a column of the raw per-trial events: numeric by default,
-or discrete with `kind="categorical"` and explicit `levels=` (the command line
-and workflow detect levels from the events; see Modulators under the command
-line).
-Modulators are not centered; the `task` contrast is the response at modulator
-value zero, and R², ΔR², and HRF selection are unchanged by this choice.
-`missing="indicator"` gives
-missing (non-finite) trials zero modulation and adds a `missing_<column>`
-regressor in runs that need it; its coefficient is fit freely within each run,
-like a confound, but with the candidate HRF. `missing="error"` rejects
-non-finite values. A candidate is eligible when its task, indicator, and
-confound columns are full rank with residual degrees of freedom in every run
-and the pooled training design is invertible in every fold.
+With `missing="indicator"`, missing trials receive zero modulation and runs with
+missing values include a `missing_<column>` regressor whose amplitude is
+profiled per run.
 
-Because the indicator column is convolved with each candidate kernel and fitted
-within the held-out run, a small part of each candidate's score is in-sample.
-With few missing trials this is negligible; with many, compare
-`at_parameter_bound` and `delta_cv_r2` against a `missing="error"` run on
-complete trials.
+For all built-in SPM, Glover, and library HRFs, each event's predicted response
+on the oversampled grid is scaled to a peak of one (and library kernels are
+stored at unit peak). Betas therefore measure peak BOLD response in signal units
+independently of TR, oversampling, event duration, or selected HRF. Because
+longer event durations do not increase regressor peak height under unit-peak
+scaling, include duration as a modulator if you want duration-scaled amplitudes.
+Keep at least one HRF duration of scans after the final event so responses are
+not truncated at the end of a run.
 
-This method assumes that task-model amplitudes transfer across runs. It does
-not require repeated images. The response of each event, as sampled on
-Nilearn's oversampled grid, is scaled to a peak of one (kernels are also
-stored at unit peak). A beta is therefore the peak BOLD response to that
-presentation in signal units, independent of TR, oversampling, and event
-duration, and comparable across grayordinates with different selected HRFs.
-This matches GLMsingle's convention. Nilearn derivative and FIR bases are passed to Nilearn unchanged (sum-to-one for the canonical bases); user-supplied kernels are used exactly as given.
-Because each event's response is scaled to unit peak, a longer event no longer
-produces a larger regressor; variable-epoch models (for example duration = RT)
-therefore no longer encode duration-driven amplitude growth — put duration in
-a modulator if that is the intended effect. An event whose response is cut off
-by the end of the run is scaled by its realized sample count, so its column
-can exceed one; keep at least one HRF length of scans after the last event.
-
-The winning selection-CV score was used to choose the HRF. For independent
-evaluation, select within a training set and predict a separate test set:
+To evaluate selected HRFs on held-out runs, use `evaluate_hrf_split`:
 
 ```python
 from boldtailor.hrf_selection import evaluate_hrf_split
 
-# Four runs in order; indices are zero-based.
 evaluation = evaluate_hrf_split(
     multi_run_data,
     library=library,
@@ -504,112 +361,57 @@ held_out_r2 = evaluation.test_r2
 improvement_over_spm = evaluation.delta_test_r2
 ```
 
-Training needs at least two runs; testing needs at least one. HRFs and mean
-amplitudes are fixed before scoring test signals. Candidate eligibility may
-use test-run timing and confounds, but not test BOLD. Prediction R² uses
-nuisance-adjusted signals, so it has a different denominator from full-model R².
-Negative scores are retained.
+`evaluate_hrf_split` selects HRFs and estimates task amplitudes on `train_runs`
+only, then scores predictions on nuisance-adjusted `test_runs` signals.
 
 ## Voxelwise HRFs in conventional GLMs
 
-Pass an existing HRF selection to `fit()` to use a different HRF at each voxel
-or grayordinate. The model can contain conditions, amplitude modulators, and
-contrasts just as in a fixed-HRF fit. Confound selection, drift terms, timing,
-and the OLS/AR(1) noise option still come from `ModelSpec`.
+Pass `hrf_selection=selection` to `fit()` to use location-specific HRFs in a
+conventional GLM:
 
 ```python
 from boldtailor.fit import fit, task_delta_r2
 
-# selection is the select_hrfs() result from the previous section; data holds
-# the target runs (multi_run_data, or separate runs with the same feature
-# ordering), and model names their conditions and contrasts.
 result = fit(data, model, hrf_selection=selection)
 effects = result.effect("face_gt_house")
 z_scores = result.z_score("face_gt_house")
 r_squared = result.r2
 
-# As with fixed-HRF comparisons, data needs complete source descriptors.
 comparison = task_delta_r2(data, model, result)
 task_added_r2 = comparison.delta_r2
 ```
 
-The selection replaces `ModelSpec.hrf_model` entirely, including any derivative
-basis specified there. Each location uses one selected HRF for all its task
-regressors. The final GLM estimates amplitudes independently within each run;
-it does not reuse the amplitudes from HRF selection.
+`hrf_selection` replaces `ModelSpec.hrf_model`. When `ModelSpec.task_model` is
+set, the selection's `task_model` must equal it or be a subset with identical
+modulator settings (`TaskModel.is_subset_of`), and `oversampling` and
+`min_onset` must match. Without `ModelSpec.task_model`, the selection must have
+used the default `TaskModel()`.
 
-Set `ModelSpec(task_model=...)` to the task model used for selection. The
-GLM then builds its task columns from the same raw events with the same
-Nilearn call, so the fitted task design is the scored task design. `fit()`
-requires the selection's task model to equal the GLM's or to be a subset of
-it with identical modulator settings, so a selection scored without RT can
-still feed a GLM that fits RT; the shared columns are built identically
-either way. `fit()` rejects `oversampling` or `min_onset` values that differ
-from the selection's. Drifts and the `confounds` subset still come from `ModelSpec`;
-to match selection's nuisance exactly, pass every confound column and set
-`drift_model=None`. Without a task model, events are Nilearn-format
-conditions as before, and the selection must have used the default task-only
-model, which scored only the mean stimulus response.
-
-Voxels sharing an HRF share a design. The returned `HrfAnalysisResult` has the
-usual contrast methods, `run_r2`, `r2`, and `provenance`, plus
-`rebuild_group_design(run_index, hrf_id)`, `group_design_provenance`, `hrf_indices`,
-`hrf_selection`, and `selection_provenance`. It uses `rebuild_group_design` in place of
-`design_matrices`, since one matrix no longer describes a whole run; designs are
-recompiled on request rather than retained. Run indices
-are zero-based and result arrays preserve the input feature order.
-
-This option is available through the array API and `boldtailor run`; the full
-NSD workflow notebook includes both canonical and selected-HRF conventional
-GLMs. Adapting an image workflow
-also requires saving each grouped design.
-
-The selection can come from separate training runs. If you supplied a
-`feature_signature` when selecting HRFs, also pass the target data's spatial
-signature to `fit()`. Matching feature counts alone do not prove that voxels
-are ordered correctly. The NSD helpers derive this signature from the CIFTI axis.
-Selection follows the task-model prediction method (the [mean-response method](#selecting-an-hrf-for-each-location) when the task model is the default);
-for selection input, supply raw per-trial events; the task model expands them for both selection and fitting.
-
-Locations with undefined HRFs have NaN contrasts and R². The selected-HRF
-`task_delta_r2()` also preserves undefined/constant features as NaNs, and compares
-nested OLS fits even if the contrast fit uses AR(1).
-
-Contrast statistics treat the selected HRFs as fixed. If selection used the
-same BOLD data as the contrast fit, those statistics do not account for HRF
-selection uncertainty. Use separate training runs when you need selection to
-be independent of the contrast data.
+`fit(..., hrf_selection=selection)` returns an `HrfAnalysisResult`, which
+exposes the standard contrast methods, `run_r2`, `r2`, `hrf_indices`,
+`hrf_selection`, `selection_provenance`, `group_design_provenance`,
+`rebuild_group_design(run_index, hrf_id)`, and `materialize_group_designs()`.
+Pass `feature_signature` to both selection and fitting when applying a selection
+across datasets to verify spatial alignment. Locations with undefined HRFs
+(`-1`) produce NaN contrast statistics and $R^2$. Contrast p-values treat the
+selected HRFs as fixed.
 
 ## Comparing HRFs between sets of runs
 
-Use `evaluate_hrf_split()` twice, reversing the train and test indices, and
-compare the two `training_selection` results. Each set needs at least two runs
-to perform its own internal cross-validation. Both calls enforce candidate
-eligibility against the same set of timing/confound designs.
-
-The NSD example does this automatically for odd and even runs. It saves matched
-parameter images, including the peak time of each full HRF. HRF IDs are labels;
-compare parameter values or reconstructed curves rather than correlating IDs.
-Undefined selections use `-1` in Python and NaN in CIFTI maps.
-
-You can apply an in-memory selection to other runs with the same feature
-ordering using `fit_selected_hrfs()`. Supplying `feature_signature` to selection
-and fitting lets Boldtailor check an identifier for that ordering; the NSD
-example derives it from the CIFTI spatial axis. The installed core has no
-general image-to-`HrfSelectionResult` loader.
-The NSD session-reliability notebook can reuse compatible saved maps and
-provenance through its dedicated cache/import helpers.
+Call `evaluate_hrf_split()` twice with swapped `train_runs` and `test_runs` to
+compare `training_selection` across disjoint run splits, or use
+`curve_correlations` and `compare_hrfs` in `boldtailor.reliability`. Because
+candidate IDs are arbitrary labels, compare HRF curves or timing parameters
+rather than correlating integer IDs.
 
 ## Task-guided denoising
 
-`select_denoising()` is an optional, opt-in stage that follows GLMsingle's
-GLMdenoise stage. It finds a noise pool of features that a canonical task
-regressor predicts poorly (ON-OFF R²), computes temporal principal components
-(PCs) of that pool in each run, and chooses one PC count by held-out task
-prediction with GLMsingle's `pcstop` rule, followed by a significance gate
-that Boldtailor adds. `with_denoising()` appends the chosen
-PCs to each run's confounds, so ordinary HRF selection and fitting can use
-them. Nothing else in the package calls it, and no defaults change.
+`select_denoising()` is an opt-in stage modeled on GLMsingle's GLMdenoise
+procedure. It defines a noise pool of features with low canonical ON-OFF $R^2$,
+extracts per-run temporal principal components (PCs) from that pool, selects a
+PC count by leave-one-run-out task prediction (`pcstop`) followed by an F-test
+significance gate, and appends the chosen PCs to each run's confounds via
+`with_denoising()`.
 
 **Attribution.** The denoising procedure follows GLMsingle's GLMdenoise
 stage (Prince, J.S., Charest, I., Kurzawski, J.W., Pyles, J.A., Tarr, M.J.,
@@ -633,583 +435,236 @@ fitted_model = model.replace(confounds=tuple(augmented.confounds[0].columns))
 result = fit(augmented, fitted_model, hrf_selection=selection)
 ```
 
-The example assumes every run has the same baseline confound names, so the
-first run's columns (baseline names followed by `denoise_pc_000`, ...) name
-every run's nuisance set. It also assumes `model.task_model` is compatible
-with `task_model`, the model used for selection. The selection functions
-themselves do not require matching run-specific nuisance columns. The same
-augmented data can be passed to `fit_selected_hrfs()` or the other single-trial
-fits.
+**Requirements.** `data` needs at least three runs. Every input feature is a
+candidate (restrict to brain voxels or cortical grayordinates before building
+`AnalysisData`). `library=None` uses `default_hrf_library()`. If you pass
+`feature_signature`, pass the same signature to `with_denoising()`.
 
-**Requirements.** `data` needs at least three runs, so every
-leave-one-run-out fold keeps two training runs. The core is anatomy-agnostic:
-it works on a features × time matrix, every input feature is a candidate,
-and there is no mask parameter. Restrict features (for example to a brain
-mask or to cortical grayordinates) before building the `AnalysisData`.
-Boldtailor never infers anatomy from signal intensities and never falls back
-to gray-matter, white-matter, or aCompCor masks. `library=None` uses
-`default_hrf_library()`, which is slow on small examples; pass a small library
-when testing. `run_labels=` names runs in messages and tables, and
-`feature_signature=` must match the one later passed to
-`with_denoising(..., feature_signature=...)`.
+**Procedure.**
+1. **Freeze initial HRFs**: Select HRFs once on all runs with baseline confounds
+   (`initial_selection`).
+2. **Compute ON-OFF $R^2$**: Fit one shared canonical-HRF task regressor (all
+   events with unit amplitude) plus per-run baseline confounds and intercepts
+   in-sample across all runs (`onoff_r2`).
+3. **Define noise pool and scoring set**: With `pool_r2_threshold="auto"` (or a
+   fixed float in $[0, 1]$), fit a two-component Gaussian mixture
+   (`findtailthreshold`) to finite ON-OFF $R^2$ values. Features below the
+   threshold form the noise pool; features above it with a defined HRF form the
+   scoring set (falling back to the top 100 features with a defined HRF if none
+   exceed the threshold, flagged by `scoring_fallback`).
+4. **Extract run PCs**: In each run, project noise-pool time series off baseline
+   confounds and the intercept, drop numerically zero columns, normalize
+   remaining columns to unit L2 norm, and compute temporal PCs by SVD (for
+   candidate counts `0..10` by default).
+5. **Cross-validate candidate counts**: For each held-out run and candidate PC
+   count, fit shared task amplitudes on the training runs (with per-run baseline
+   confounds, missing-value indicators, and candidate PCs) using the frozen
+   HRFs, and predict the held-out run.
+6. **Score against a fixed target**: Project the held-out run's signal off its
+   baseline confounds (and any missing-value indicators) only—never off
+   candidate PCs—pool SSE and SST across folds for each scored feature, and take
+   the median $R^2$ across scored features (`perf`).
+7. **Apply `pcstop`**: With `curve = perf - perf[0]`, walk available counts in
+   increasing order, tracking the running maximum `best`, stop at the first
+   count where `best * pcstop >= max(curve)` (`pcstop=1.05` by default), and
+   record the count achieving `best` as `pcstop_count`.
+8. **Significance gate** (`significance_gate=True`, `gate_noise_model="ar1"` by
+   default): If `pcstop_count > 0`, compare reduced (no PCs) and full (adding
+   each run's first `pcstop_count` PCs) in-sample nested models across all runs
+   at each scored feature. Under `"ar1"`, each run and feature is prewhitened
+   using Nilearn's Yule-Walker lag-1 estimate from the full model's OLS
+   residuals (binned to 0.01 steps via `ARModel`). If $m$ of $n$ testable
+   features have $F$-test $p < \text{gate\_alpha}$ (0.05), keep `pcstop_count`
+   only when the one-sided binomial test of $m/n$ against `gate_alpha` has
+   $p < \text{gate\_binomial\_alpha}$ (0.05); otherwise set `n_components = 0`.
+   Set `significance_gate=False` for GLMsingle's `pcstop`-only rule.
 
-**Procedure.** The stages follow GLMsingle's GLMdenoise stage and run in a
-fixed order: this is sequential tuning, not joint optimization.
+**Deviations from GLMsingle and caveats.**
+- Run nuisance uses the analysis's supplied confounds plus an intercept instead
+  of polynomial drifts, and count scoring uses held-out task time-series
+  prediction against a PC-free target instead of repeated-condition beta
+  consistency.
+- No mean-intensity `bright` filter is applied, ON-OFF $R^2$ is in $[0, 1]$
+  rather than percent, `robustrange` uses all finite values, and a mixture fit
+  whose tail posterior never crosses 0.5 raises `ValueError`. A mixture fit that
+  does not converge emits a `RuntimeWarning` and records `converged=False` in
+  `noise_pool_mixture`.
+- The significance gate prevents `pcstop` from selecting positive PC counts on
+  pure noise (where relative gains of $\sim 10^{-4}$ can trigger `pcstop`), and
+  AR(1) prewhitening prevents unwhitened OLS F-tests from firing on independent
+  autocorrelated noise. However, the gate tests in-sample variance explained by
+  the PCs rather than out-of-sample task-prediction gain, single-lag AR(1) can
+  under-whiten higher-order autocorrelation, and the binomial test assumes
+  independence across scored features.
 
-1. HRFs are selected once with `select_hrfs` on all runs (baseline confounds,
-   the caller's task model and library), as GLMsingle selects HRFs before
-   GLMdenoise. They stay frozen for every fold and count.
-2. The pool statistic is GLMsingle's ON-OFF R²: one task regressor (every
-   trial with amplitude 1, whatever the task model's modulators) convolved
-   with the library's canonical HRF, one coefficient shared by all runs, and
-   each run's baseline confounds plus intercept as run-specific nuisance,
-   fit in-sample on all runs. Features with zero residual energy get NaN.
-3. By default (`pool_r2_threshold="auto"`) the threshold is GLMsingle's
-   two-component Gaussian-mixture tail threshold (`findtailthreshold`) of the
-   finite ON-OFF R² values; a number fixes it. The noise pool is the features
-   below the threshold; the scoring features are those above it with a
-   defined HRF. If none is above it, the best 100 features by ON-OFF R² are
-   scored (GLMsingle's fallback; `scoring_fallback` records it, and those
-   features may also be in the pool). Pool and scoring features are built
-   once, on all runs.
-4. In each run, the pool's time series are projected off the baseline
-   confounds and intercept. Numerically zero columns are dropped, the rest
-   are scaled to unit norm, and temporal PCs are taken by SVD. Rank uses a
-   tolerance that accounts for this normalization. Each PC's sign makes its
-   largest absolute entry positive. The default `counts` are 0 through 10
-   (GLMsingle's `n_pcs=10`).
-5. For each held-out run and count, shared task coefficients are fit on the
-   other runs, each with its own baseline, missing-value-indicator, and PC
-   coefficients, using the frozen HRFs. Those coefficients predict the
-   held-out run. The held-out run's BOLD never enters its fold's fit, and its
-   PCs never enter the fit or the target.
-6. The held-out target, its denominator, and the scored features are the same
-   for every count. The target is projected off the baseline confounds (and
-   indicators) only, never off candidate PCs, so more PCs cannot win by
-   shrinking the target. Each scored feature's errors are pooled across
-   folds, `r2 = 1 - sum(SSE) / sum(SST)`, and a count's performance is the
-   median of that R² over scored features (GLMsingle uses the median).
-7. The count follows GLMsingle's `select_noise_regressors` rule with
-   `pcstop=1.05`: with `curve = perf - perf[0 PCs]`, walk the available
-   counts in increasing order, track the best curve value so far, stop at the
-   first count where `best * pcstop >= max(curve)`, and choose the count that
-   holds that best. Zero is always a candidate and is chosen when no count
-   improves on it. Unavailable counts are skipped.
-8. Significance gate (`significance_gate=True` by default; a Boldtailor
-   addition, not part of GLMsingle). If pcstop chose `k* > 0`, every feature
-   pcstop scored is fit in-sample on all runs, with its frozen HRF, under
-   two nested models: reduced (the task regressors, shared across runs, plus
-   each run's baseline confounds, intercept, and missing-value indicators)
-   and full (reduced plus each run's first `k*` PCs as run-specific columns).
-   Each feature gets an F-test,
-   `F = ((SSE_r - SSE_f) / df1) / (SSE_f / df2)` with
-   `df1 = rank(full) - rank(reduced)` and `df2 = scans - rank(full)`. If `m`
-   of the `n` tested features have `p < gate_alpha` (default 0.05), `k*` is
-   kept only if a one-sided binomial test of `m` out of `n` against
-   `gate_alpha` gives `p < gate_binomial_alpha` (default 0.05); otherwise
-   zero PCs are chosen.
-   By default (`gate_noise_model="ar1"`) both fits are AR(1) prewhitened, a
-   Boldtailor addition that follows Nilearn's first-level
-   `noise_model="ar1"` as far as the pooled multi-run design allows: per run
-   and feature, the lag-1 coefficient is estimated by Nilearn's Yule-Walker
-   estimator from the full model's OLS residuals in that run and truncated
-   to Nilearn's 1/100 bins; that run's BOLD and all of its design columns
-   (task, baseline confounds, intercept, indicators, PCs) are whitened by
-   Nilearn's `ARModel` (`x[t] - rho * x[t-1]`, first scan unscaled); and
-   both models are refit on the stacked whitened runs. Whitening is
-   invertible, so `df1` and `df2` are unchanged. `gate_noise_model="ols"`
-   skips the whitening.
-   Features whose stacked design is rank deficient, has
-   no residual degrees of freedom, or gains no PC columns (`df1 = 0`), and
-   scoring features with a numerically zero target in any run (which pcstop
-   does not score), are excluded from `n` and listed in the diagnostics. With
-   `significance_gate=False` the pcstop count is returned unchanged, as in
-   GLMsingle.
-9. The returned pool and PCs are the single full-data ones; the selected
-   prefix is returned per run. The pool is not refined after PCs are added.
-   After augmentation, rerun `select_hrfs` and fit as in the example.
+**Reading `DenoisingResult`.**
+- `n_components` (count after the gate), `pcstop_count` (count before the gate),
+  and `run_components` (tuple of `(scans, n_components)` arrays).
+- `significance_gate`: `SignificanceGate` holding settings, `decision`
+  (`"kept"`, `"rejected"`, `"skipped_zero_count"`, `"disabled"`), per-feature
+  `f_statistic`, `p_value`, `df1`, `df2`, `ar_coefficients`, `tested` and
+  `excluded` masks, `exclusions`, `m`, `n`, and `binomial_p`.
+- `pool_masks` (`PoolMasks`) and convenience properties `noise_pool`,
+  `scoring_mask`, `noise_pool_threshold`, `noise_pool_mixture`, and
+  `scoring_fallback`, plus `onoff_r2` and `scored`.
+- `initial_selection`, `selection_cv_r2`, and `initial_hrf_indices`.
+- `pca_diagnostics` (`PcaDiagnostics`): call `pca_diagnostics.table()` for
+  per-run pool size, retained columns, rank, and tolerance, and inspect
+  `pca_diagnostics.singular_values`.
+- `candidate_scores`, `perf`, `curve`, `fold_scores`, `folds`, `component_names`,
+  `source_identity`, and `provenance`.
 
-**Deviations from GLMsingle.** (a) Run nuisance is the analysis's baseline
-confounds plus an intercept, not GLMsingle's polynomial drift terms, because
-Boldtailor analyses carry their own confounds. (b) GLMsingle scores counts by
-cross-validated single-trial beta consistency across repeated conditions and
-skips GLMdenoise when conditions do not repeat. Most Boldtailor tasks have no
-repeats, so counts are scored by held-out time-series prediction, close to
-the original GLMdenoise. (c) The held-out target is fixed across counts: it
-never contains the candidate PCs. (d) The count walk matches GLMsingle's
-`select_noise_regressors` except for a 64-eps roundoff slack that keeps
-numerically equal values equal.
-(e) The mixture fit uses a fixed `random_state` and records convergence
-instead of warning (see below). (f) The significance gate is not part of
-GLMsingle. It was added because the pcstop rule is relative and has no
-absolute floor: in the predeclared validation it chose 6 PCs on independent
-noise from median R² gains of about 2e-4. GLMsingle's beta-consistency
-criterion, which needs repeats, may behave differently. Prewhitening the
-gate's F-tests is a further Boldtailor addition: without it the gate kept
-PCs of independent autocorrelated noise (see the caveats below).
-(g) GLMsingle's pool also requires `bright` features (mean intensity above
-10% of the 99th percentile); that criterion is dropped because the core is
-anatomy-agnostic and never infers anatomy from intensities.
-(h) The best-100 fallback considers only features with a defined HRF.
-(i) `robustrange` runs on all finite ON-OFF R² values, while GLMsingle runs it
-on the mixture-fit subsample; this matters only above 1e6 values.
-(j) If the tail component's posterior never crosses 0.5 on the grid, an error
-is raised; GLMsingle warns and continues.
-(k) ON-OFF R² is a fraction in [0, 1]; GLMsingle reports it in percent, so a
-fixed `pool_r2_threshold` copied from GLMsingle's `brainR2` must be
-divided by 100.
-
-**Significance gate caveats.** The F-tests measure the variance explained
-by the PCs in the scoring features, not whether removing them improves task
-prediction. The two differ: the leading PCs of independent, autocorrelated
-noise span its low-frequency directions, which also carry much of each
-feature's own autocorrelated noise. Unwhitened OLS F-tests
-(`gate_noise_model="ols"`) are anti-conservative under autocorrelated noise:
-in an illustrative probe (20k features, 12 runs, no shared noise; not a
-calibration), the OLS gate rejected white noise (4.6-4.9% of features at
-`p < 0.05`) but kept independent AR(1) noise with coefficient 0.5
-(97.5-100% of features at `p < 0.05`, binomial p near 0). That is why the
-default gate prewhitens (`gate_noise_model="ar1"`); on the predeclared
-independent AR(0.5) dataset it rejected PCs that the OLS gate kept (see
-the validation outcome). Caveats that remain with prewhitening:
-
-- The tests are in-sample, on the same runs that chose the count.
-- AR(1) may under-whiten: fMRI noise often has higher-order
-  autocorrelation that a single lag-1 coefficient does not remove. The
-  lag-1 estimate from short runs, after a fit with many regressors, is also
-  biased toward zero, and the 1/100 binning truncates toward zero. On the
-  AR(0.5) dataset the per-run median estimates were 0.27-0.38. Some
-  anti-conservatism can therefore remain.
-- The binomial test treats features as independent, which is optimistic for
-  spatially correlated features.
-- With few tested features the decision is coarse: with n = 6 and the
-  default levels, one feature with `p < 0.05` gives binomial p = 0.26
-  (rejected) and two give 0.033 (kept).
-
-So a kept count does not show that the PCs are shared noise. The gate is
-meant to stop PCs that help no more than chance, not to certify a benefit.
-
-**Missing values.** A task model with `Modulator(..., missing="indicator")`
-adds a `missing_<column>` regressor in runs that need one. When counts are
-scored, the indicator coefficients are fit on the held-out BOLD, as in HRF
-selection, so the count score is conditional task prediction. Because HRFs
-are frozen, this part does not depend on the PC count. Categorical
-modulators work the same way. The ON-OFF R² ignores modulators.
-
-**Empty and rank-deficient pools.** An empty pool, or a pool with no signal
-outside the baseline nuisance span, makes every positive count unavailable.
-Zero is kept and the reason is reported. A positive count is also unavailable
-if any training run in any fold has fewer PCs than it needs, if it would split
-a block of numerically tied singular values, or if it would leave a task
-design rank deficient. A count is never silently capped per run. Counts are
-compared on the same features in every fold, so a count that fails in one fold
-is excluded everywhere; a feature whose held-out target is numerically zero
-in any run is dropped from scoring for every fold. An empty scoring set, or
-held-out targets that are all zero, raises an error: there is no task signal
-to select on.
-
-**Reading the result.** `DenoisingResult` exposes:
-
-- `n_components` and `run_components`, one read-only `(scans, n_components)`
-  array per run. `n_components` is the count after the gate; `pcstop_count`
-  is the count pcstop chose.
-- `significance_gate`, a `SignificanceGate` with the settings (`enabled`,
-  `alpha`, `binomial_alpha`, `noise_model`), `pcstop_count`, `n_components`,
-  `decision`
-  (`"kept"`, `"rejected"`, `"skipped_zero_count"`, or `"disabled"`),
-  per-feature `f_statistic`, `p_value`, `df1`, and `df2` (NaN where not
-  tested), `ar_coefficients` (runs x features: the binned lag-1
-  coefficients used for prewhitening; NaN where not tested or with
-  `"ols"`), the `tested` and `excluded` masks, `exclusions` (HRF index,
-  number of features, reason), `m`, `n`, and `binomial_p`.
-- `onoff_r2`, `noise_pool`, `scoring_mask`, `scoring_fallback`, and `scored`
-  (the scoring mask minus zero-target features).
-- `noise_pool_threshold` and `noise_pool_mixture` (the fitted threshold and
-  mixture, or `None` for a fixed threshold).
-- `initial_selection` (the frozen HRFs) and `selection_cv_r2`.
-- `components.table()`, with per-run pool size, retained columns, rank, and
-  rank tolerance. Singular values are in `components.singular_values`.
-- `candidate_scores`, with `count`, `eligible`, `perf`, `curve`, and
-  `reason`; `perf` and `curve` are also arrays on the result.
-- `fold_scores`, with per-fold `median_r2`, `n_scored`, `n_zero_target`, and
-  each fold's reason.
-- `folds`, with each fold's runs, zero targets, and target energies.
-
-The count scores and the ON-OFF R² are selection statistics. They chose the
-pool and the count, so they are not independent performance estimates. A low
-ON-OFF R² means a single canonical-HRF task regressor predicts the feature
-poorly, not that the feature has no neural activity.
-
-**Pool threshold.** The default `pool_r2_threshold="auto"` follows
-GLMsingle's `findtailthreshold` (raw values, `reg_covar=0`, a 500-point
-`robustrange` grid, the right-end tail component). It differs in a fixed
-`random_state` and seeded subsample, in recording convergence (`converged`,
-`n_iter` in the mixture record) instead of warning, and in deviations (i) to
-(k) above. A degenerate
-or failed fit raises an error naming the runs and suggesting a fixed
-`pool_r2_threshold`. Inspect `noise_pool.sum()`, `scoring_mask.sum()`, and
-`candidate_scores` before relying on the choice.
-
-**Validation outcome.** The predeclared synthetic checks in
-`tests/test_denoising_validation.py` were rerun unchanged for this procedure
-(same seeds and effect sizes). With two shared noise series on every feature,
-the pool held the 30 noise features plus the 4 weakest task features, one PC
-was chosen, and training coefficients, outer-run task prediction, and
-outer-run betas all improved. Without shared noise (independent white noise
-only), the check that zero PCs are chosen **fails**: the median held-out R²
-gains of the positive counts are at most about 2e-4, but the pcstop rule has
-no absolute floor, so it chose 6 PCs, with the test library and with the
-default library. Those checks were recorded as expected failures, not tuned
-away. The significance gate was then added, with its validation criteria
-declared before it was run: the no-benefit data must choose zero PCs with
-both libraries, and the recovery data must still choose a positive count and
-pass all four recovery checks. Rerun once with the same seeds and the
-default gate settings, all of them pass. On the no-benefit data pcstop still
-chose 6 PCs, but only 1 of 10 scoring features had `p < 0.05` (binomial
-p = 0.40), so the gate chose 0 with both libraries. On the recovery data
-pcstop chose 1 PC and all 6 scoring features had `p < 0.05` (binomial
-p = 1.6e-8), so the gate kept it. These are two synthetic datasets, not a
-calibration of the gate.
-
-The gate was then made AR(1) prewhitened by default, with criteria declared
-before the run: a new no-benefit dataset (seed 20261006, the layout of the
-white-noise one, but each feature's noise an independent AR(0.5) process with
-no shared component) must choose zero PCs, the white-noise no-benefit data
-must still choose zero with both libraries, and the recovery data must still
-choose a positive count and pass all four checks. Rerun once, all of them
-pass. On the AR(0.5) data pcstop chose 4 PCs; with prewhitening 1 of 12
-scoring features had `p < 0.05` (binomial p = 0.46), so the gate chose 0,
-while the OLS gate (`gate_noise_model="ols"`, reported for information) had
-8 of 12 (binomial p = 1.6e-8) and would have kept 4. On the white-noise data
-the prewhitened gate again found 1 of 10 (binomial p = 0.40) with both
-libraries, and on the recovery data 6 of 6 (binomial p = 1.6e-8), keeping
-1 PC. These are three synthetic datasets, not a calibration.
-
-**Provenance.** The selection records the task model, library, ON-OFF R²,
-threshold rule, pool and scoring masks, fallback, HRF assignments, per-count
-`perf` and `curve`, `pcstop`, the significance gate (settings, the noise
-model and its AR(1) estimation and bins, per-run minimum, median, and maximum
-lag-1 coefficients over tested features, `pcstop_count`, decision, `m`, `n`,
-binomial p-value, exclusions, and fingerprints of the F and p values and the
-coefficients), PC fingerprints, baseline confounds, and folds.
-`with_denoising()` checks that `data` is the analysis the result was selected
-on: same runs in the same order, time grids, signals in feature order,
-baseline confounds, and events. It rejects applying a result twice and
-confound-name collisions. Signals, events, and timing are preserved. Each
-run's confounds source record (the signal record when there are no confounds)
-gains a `denoising_augmentation` annotation, and file identity fields are
-unchanged. As a result, downstream analysis ids differ between augmentations
-of the same files. A zero-count result adds no columns but is still recorded.
-
-**Independent evaluation.** HRFs, the pool, and the count use every run they
-are given, so to evaluate denoising, call `select_denoising()` on
-outer-training runs only, then freeze its count and noise pool before
-touching any outer test run. Evaluating training-run task estimates against
-held-out runs needs no PCs from the test runs. To evaluate denoised betas in a
-test run, compute that run's PCs from the frozen pool: project it off the run's
-baseline confounds, normalize, and take the SVD. Never reselect the pool or
-count from test-run outcomes. Results on synthetic data establish how the
-implementation behaves; they are not evidence that it beats GLMsingle or any
-other denoising method.
+`with_denoising()` verifies that `data` matches the exact runs, timing, signals,
+baseline confounds, and events used in `select_denoising()`, rejects duplicate
+application or column-name collisions, appends `denoise_pc_000`, ..., and
+records a `denoising_augmentation` annotation on each run's confound
+`SourceRef`. For independent evaluation of denoising, run `select_denoising()`
+on outer-training runs only and freeze the pool mask and PC count before
+evaluating outer test runs.
 
 ## Reaction-time checks
 
-The NSD single-trial example correlates betas with RT after centering both
-within runs. Missing or nonpositive RT values are excluded from this diagnostic,
-not from beta estimation. It exports all-run, odd-run, even-run, and per-run
-correlations and valid-trial counts.
-
-Scatterplots show even-run trials at the cortical vertex with the largest
-canonical-OLS odd-run RT correlation. The optimized-HRF panel uses HRFs
-selected from all runs, so it is descriptive. The production RT maps use all-run HRFs and
-are descriptive. The correlation helper itself provides no significance tests
-or tuning. The notebook's separate encoding CV workflow uses RT and trial type
-to tune ridge, so correlations from its final all-run fits are not independent
-checks. Use its outer-test prediction scores for held-out evaluation. The helper
-functions are listed in the [API reference](api.md#example-workflows).
+`correlate_rt` in `boldtailor.diagnostics` computes within-run centered Pearson
+correlations between trial betas and positive RTs for each run and pooled across
+`all`, `odd`, and `even` runs (requiring at least 3 valid trials and at least 2
+pooled residual degrees of freedom after within-run centering). Missing or
+nonpositive RTs are excluded from the correlation check without removing trials
+from the beta-series fit. When RT was used to tune ridge regularization on the
+same runs, RT correlations are descriptive rather than an independent test.
 
 ## Saving results and analysis records
 
-Fits return arrays and tables. Save them using your preferred tools, or use
-the image-writing examples to preserve NIfTI geometry or CIFTI axes. Each
-result also carries a provenance record:
+Every result object carries a `ProvenanceRecord`:
 
 ```python
 record = result.provenance.to_dict()
 record_json = result.provenance.canonical_json()
 ```
 
-For file-backed analyses, provide `RunSources` descriptors when creating the
-input object. These record relative filenames and file metadata; they do not
-read or hash input contents. Arrays without source descriptors can still be
-fitted, but cannot establish a stable source identity. Supply `sha256` on each
-`SourceRef` to make identity content-based; without it, identity rests on path,
-size, and modification time. The library never opens the files, so the digest
-is whatever you compute and supply.
-
-`project_bids_provenance()` prepares metadata files, and
-`publish_artifact_set()` saves a collection of files together with overwrite
-protection and rollback if writing fails. The examples use this to keep images
-and metadata together. See the [API reference](api.md#source-records-and-saving)
-for an example and the [developer guide](development.md) for storage details.
-
-## Running the full workflow
-
-`boldtailor run` applies the CIFTI analysis to one subject, session,
-and task of a BIDS dataset with fMRIPrep outputs (fsLR 91k dtseries, confounds,
-and BOLD sidecars), then publishes a BIDS derivative and an HTML report:
-
-```bash
-uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
-```
-
-To analyze several sessions, list them after `--session`. Each session is run
-separately, in sorted order, with its own outputs and its own report, exactly
-as if it had been run alone:
-
-```bash
-uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 ses-nsd02 --task nsdcore
-```
-
-Every listed session is checked for input problems and existing outputs before
-any is fitted, so a problem in a later session stops the command before any
-work is done; each problem names its session. A session listed twice is a
-settings error. After each session the command prints
-`<session>: wrote N files under <output-dir>; report: <path>`, and at the end
-`ran 2 sessions of sub-01 task-nsdcore: ses-nsd01, ses-nsd02`.
-
-Add `--dry-run` to print the resolved plan (session, runs, detected task model,
-notes, output directory, stages, and any `problems`) as JSON without fitting;
-with several sessions it prints a list of plans, one per session. Each problem
-is also printed on stderr, prefixed with its session, and the dry run exits
-with the code the real run would (see below).
-Progress is logged to stderr with timestamps; `--quiet` keeps only warnings. The same analysis is available from
-Python as `WorkflowSettings` and `run_workflow` (see the
-[API reference](api.md#session-workflow-and-command-line)).
-
-### Flags
-
-Flags are grouped as in `boldtailor run --help`.
-
-| Group | Flag | Meaning (default) |
-| --- | --- | --- |
-| inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject and session labels such as `sub-01`, `ses-nsd01`; `--session` takes one or more sessions, each run separately |
-| inputs | `--fmriprep-dir` | fMRIPrep derivatives (found under `<bids-dir>/derivatives/fmriprep*`) |
-| inputs | `--output-dir` | Output root (`<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>`); may not be the BIDS root or overlap the fMRIPrep directory |
-| inputs | `--space` | Only `fsLR-91k` |
-| inputs | `--modulator COLUMN[:OPTION[,OPTION...]]` | Task modulator with OPTION `indicator`, `categorical`, or `reference=LEVEL`; repeat to list several (detected, see below) |
-| inputs | `--no-modulators` | Fit the task regressor alone; excludes `--modulator` |
-| HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
-| HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sobol candidates and seed (512, 0) |
-| HRF selection | `--no-rt-in-hrf-selection` | Select HRFs without the `response_time` modulator (other modulators are kept) |
-| beta series | `--ridge-mode` | `fractional_cv`, `cv`, `fixed`, or `off` (`fractional_cv`) |
-| beta series | `--ridge-alpha` | Penalty for `fixed` (0.1) |
-| beta series | `--ridge-fractions`, `--ridge-alphas` | Candidate grids for `fractional_cv` and `cv` |
-| beta series | `--ridge-percentile` | Spatial percentile for the shared-alpha (`cv`) selection (90) |
-| beta series | `--encoding-mode` | `within_run` or `absolute` encoding scores (`within_run`) |
-| stages and figures | `--skip-stage` | `reliability`, `betas`, or `summaries`; repeatable |
-| stages and figures | `--no-surface-maps`, `--surface-mesh left=PATH` / `right=PATH` | Skip cortical figures, or give the fsLR meshes explicitly |
-| execution | `--n-jobs`, `--block-size`, `--max-grayordinates` | Workers (4), grayordinates per block (4096), and an optional cap for quick tests |
-| execution | `--existing-results` | `error` or `overwrite` (`error`) |
-| execution | `--dry-run` | Print the plan and exit |
-| execution | `--quiet` | Log warnings only, not progress |
-
-The default output directory name records the analysis as
-`boldtailor_hrf-<library>_ridge-<mode>`. For `default` and `sobol` the library
-part is `<library><n>s<seed>` (candidates and seed, for example
-`default512s0`); `expanded` and `canonical` appear as is. The ridge part is
-`fractionalcv`, `cv`, `off`, or `fixed<alpha>` (for example `fixed0.1`). For
-example `derivatives/boldtailor_hrf-default512s0_ridge-fractionalcv`. Different
-libraries, seeds, or ridge modes therefore never collide.
-
-### Modulators
-
-If every run's events file has a `response_time` column, the task model is
-`Modulator("response_time", missing="indicator")`. A `trial_type` column with
-two or more distinct values across runs becomes a categorical modulator (see
-below), whether its values are strings (`face`/`house`) or numbers. A
-`trial_type` with fewer than two levels is left out, and the dry run, settings
-file (`notes`), and report say "trial_type has fewer than two levels; not used
-as a modulator". With neither column, the model is task-only. `--no-modulators`
-always fits the task regressor alone. Modulators are never centered.
-
-Passing `--modulator` replaces detection. The syntax is
-`--modulator COLUMN[:OPTION[,OPTION...]]`, where `OPTION` is `indicator` (code
-missing values with a `missing_<column>` regressor), `categorical` (expand the
-column into level indicators), or `reference=LEVEL` (choose the reference
-level; requires `categorical`). Examples:
-
-```
---modulator response_time:indicator
---modulator trial_type:categorical,reference=face
---modulator condition:categorical,indicator
-```
-
-Unknown or repeated options, `reference` without `categorical`, a reference
-containing `,` or `:`, and a column name containing `:` are settings errors
-(exit 1). A named column missing from any run is an input error.
-
-#### Categorical modulators
-
-A categorical column with k levels adds k - 1 indicator regressors and the
-`task` regressor is kept (reference coding). `task` is the response to the
-reference level; each indicator, named `<column>[<level>]`, is that level's
-response minus the reference. Binary 0/1 columns follow the same rule: a
-`trial_type` of 0 and 1 gives the regressor `trial_type[1]`. This is a
-behaviour change from earlier releases, which used a binary 0/1 `trial_type`
-as a numeric modulator named `trial_type`. An explicit `--modulator trial_type`
-is still numeric (regressor `trial_type`); `--modulator trial_type:categorical`
-gives the `trial_type[...]` indicators.
-
-- Levels are canonicalised as text: `1`, `"1"`, and `1.0` are one level `"1"`.
-  `n/a`, empty, and NaN are missing values; infinite values and booleans are
-  rejected.
-- Levels are sorted numerically when every level is numeric, otherwise
-  lexically. The default reference is the first sorted level; override it with
-  `reference=LEVEL`.
-- Every level, including the reference, must occur in every run. A run that
-  lacks one is rejected before fitting with an input error (exit 2) naming the
-  run, for example `run-02`. A value outside the declared levels is also an
-  error.
-- Missing values are an error by default. With the `indicator` option, a
-  single `missing_<column>` regressor is added and those trials are 0 on every
-  level indicator.
-- The run summary has one `n_<column>_<level>` trial-count column per level
-  (for example `n_trial_type_face`), and the output metadata lists each
-  categorical modulator (levels, reference) under `categorical_modulators`.
-
-In Python, use `Modulator("trial_type", kind="categorical", reference="face")`;
-see the [API reference](api.md).
-
-Ridge cross-validation (`--ridge-mode fractional_cv` or `cv`, with the `betas`
-stage) needs at least three odd and three even runs and at least one
-modulator, because it scores how well trial modulators predict held-out betas.
-Otherwise the command stops before fitting; use `--ridge-mode off` or `fixed`,
-or `--skip-stage betas`.
-
-### Stages
-
-1. `glms` (always): canonical-HRF and optimized-HRF GLMs with the task model.
-2. `reliability`: HRF selection from odd and from even runs, with their
-   cross-prediction. It is skipped, with the reason recorded in the report, when
-   either parity has fewer than two runs, and the `HRFOdd`, `HRFEven`, ... files
-   are then not written.
-3. `betas`: one beta per trial for the canonical and selected HRFs with OLS and
-   the chosen ridge mode. It requires `glms`.
-4. `summaries`: beta activation and RT-correlation summaries. It requires `betas`.
-
-Skip stages with `--skip-stage reliability`, `--skip-stage betas`, or
-`--skip-stage summaries`. Skipping `betas` also removes `summaries`.
-
-### Output layout
-
-Files follow BIDS derivative naming under
-`<output_dir>/<sub>/<ses>/func/<sub>_<ses>_task-<task>_...`, with a
-`dataset_description.json` at the root. The `desc-` entity names the result:
-
-| Descriptor | Contents |
-| --- | --- |
-| `CanonicalGLM`, `OptimizedGLM` | Effects, variances, t, z, and R² maps; designs; provenance |
-| `GLMComparison` | Optimized-minus-canonical full-model R² |
-| `HRF`, `HRFOdd`, `HRFEven` | Selection maps, HRF parameter maps, library tables, provenance |
-| `HRFReliability`, `HRFOddToEven`, `HRFEvenToOdd` | Odd/even curve correlation and cross-prediction scores |
-| `CanonicalTrial...`, `OptimizedTrial...` (`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`) | Per-run beta series, trial tables, R², RT maps, ridge fraction or alpha maps, tuning and outer-split metadata |
-| `boldtailor` | `<stem>_desc-boldtailor_metadata.json`: the settings that produced the run |
-
-### Report
-
-`<output_dir>/<sub>_<ses>_task-<task>_report.html` is a single self-contained
-file: the equivalent command line, settings, the run summary table, confound
-names, task model and notes, the first rows of the HRF library, GLM summaries,
-the most often selected HRFs with their peak times, HRF reliability (parameter
-agreement and full-curve correlations), ridge tuning, outer encoding scores and
-the share of ridge choices at a grid endpoint, activation and RT summaries,
-embedded figures (including cortical maps when fsLR meshes are found), skipped
-stages with reasons, and a list of every output file with its provenance.
-Missing or ambiguous automatically found meshes skip the cortical figures with
-a note; an explicit `--surface-mesh` path that does not exist is an input
-error before fitting.
-
-### Existing results and exit codes
-
-By default (`--existing-results error`) the command stops before fitting
-anything if any `<sub>_<ses>_task-<task>_*` file already exists in a listed
-session's `func` directory, or that session's root report exists. With `overwrite`, it replaces the
-files it writes and removes stale files only if the earlier run listed them in
-the `artifacts` field of its `desc-boldtailor_metadata.json`; files boldtailor
-did not write, run inputs, and other sessions are never touched. Sessions
-publishing into one output directory share its `dataset_description.json`;
-the first writes it, later ones keep it.
-
-All results are held in memory until the single publication at the end, so
-memory grows with the number of runs, grayordinates, and trials.
-
-| Exit code | Meaning |
-| --- | --- |
-| 0 | Success |
-| 1 | Usage or settings error, including invalid choices such as `--ridge-mode lasso`; one line on stderr |
-| 1 | Existing outputs under `--existing-results error` |
-| 2 | Input discovery, loading, or validation error: missing events, CIFTI files, or an explicit surface mesh; malformed confounds or nonsteady flags; a modulator column absent from a run; or ridge cross-validation with fewer than three odd and three even runs or without a modulator |
-
-Errors raised while fitting are not input errors; they propagate with a
-traceback.
-
-## Common problems
-
-| Symptom | What to check |
-| --- | --- |
-| Confound or contrast column is missing | Column names in each run, and the names selected in `ModelSpec` |
-| A design is rank deficient | Duplicate/overlapping trial regressors, redundant task columns, or too many regressors for the run length |
-| Timing or trial support is rejected | Onset units, acquisition offset, run boundaries, and whether each event has a sampled response |
-| R² or HRF parameters are NaN | A constant signal, no variance after nuisance adjustment, or unavailable split evaluation; inspect metadata |
-| An output file already exists | Choose a new output directory, or pass `--existing-results overwrite` to replace this subject/session/task's earlier boldtailor results |
-| A run lacks a level of a categorical modulator (exit 2) | Every level, including the reference, must occur in every run; fix the events or choose another column. When `trial_type` was detected automatically, the error lists remedies: `--modulator trial_type:categorical,indicator` codes missing values (add `--modulator response_time:indicator` to keep RT), listing modulators without `trial_type` drops it, and `--no-modulators` fits a task-only model |
-| Parallel fitting uses too much RAM | Reduce `--n-jobs` or `--block-size`; final beta arrays also occupy memory |
-
-### Fractional-ridge default migration (2026-09-28)
-
-Fractional fits now use raw coefficient norms and fixed OLS validation targets.
-Per-run alpha conversion, within-run scoring, run-specific training intercepts,
-and no affine calibration remain the defaults. The
-[ablation report](validation/fractional-ridge-ablation-2026-09-28.md) supports
-these choices for within-run recovery, with an absolute-amplitude tradeoff when
-run baselines differ. Recompute fraction selection and fits: existing fraction
-maps and implied alphas are not equivalent under the new coefficient basis.
-Provenance identifies `raw_trial_coefficients_after_nuisance_projection` and
-`fixed_ols_betas`. `encoding_mode="absolute"` changes the encoding objective;
-it does not restore the old fractional norm basis or validation targets.
-
+Pass `RunSources` (containing `SourceRef` descriptors for `signal`, `events`,
+and optional `confounds`) to `from_arrays` or `PreparedDesignAnalysis.from_arrays`
+to establish a `data_fingerprint` and `analysis_fingerprint`. Supplying `sha256`
+on each `SourceRef` makes the fingerprint content-based. Use
+`project_bids_provenance()` and `publish_artifact_set()` to write results and
+BIDS derivative metadata with lock-based overwrite protection and rollback; see
+[source records and saving](api.md#source-records-and-saving).
 
 ## Editing returned arrays
 
-Numeric outputs are ordinary NumPy arrays with their writeable flag disabled.
-To edit values for a subsequent analysis, make a copy:
+Returned NumPy arrays are marked read-only (`writeable=False`). Copy an array
+before modifying it in place:
 
 ```python
 editable_betas = result.run_betas[0].copy()
 editable_betas[:, 0] = 0
 ```
 
-Construction owns input arrays, and table/dictionary accessors return copies.
-Array access itself does not make another copy. Deliberately enabling writes
-on an exposed array can invalidate its owning result or analysis and the
-assumptions behind its provenance. The supported editing pattern is `.copy()`.
+## Running the full workflow
 
-### REML in the command-line workflow
+`boldtailor run` runs the BIDS + fMRIPrep fsLR-91k CIFTI workflow for one or
+more sessions of a subject and task, publishing BIDS derivatives and a
+self-contained HTML report:
 
-Add `--hrf-method reml` to use restricted likelihood for HRF selection.
-`--reml-rho` supplies scalar AR(1) correlation (default 0);
-`--reml-reference-hrf-id` selects the fixed mean HRF (default 0, canonical SPM).
-These flags are recorded in settings and the report's equivalent command.
-They are rejected with CV.
+```bash
+uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 --task nsdcore
+```
 
-REML requires one run per odd/even half for reliability, or two per half for
-nested optimized ridge. HRF-only selection can use one run. CV retains the
-run requirements described above. Every inner, outer, and final optimized-HRF
-selection uses the chosen method. Denoising's internal selection remains CV.
+Pass multiple session labels after `--session` to run each session in sorted
+order after preflighting all listed sessions:
 
-REML selection maps contain criterion, canonical criterion, their difference,
-runner-up gap, variance ratio, noise and effect variance, rho, numerical flags,
-and status codes. Their metadata supplies the code and candidate-ID mappings.
-Unsupported HRFs are undefined in maps. Reports include unsupported and
-provisional counts; independent evaluation retains its prediction R² maps.
+```bash
+uv run boldtailor run --bids-dir /data/nsd --subject sub-01 --session ses-nsd01 ses-nsd02 --task nsdcore
+```
+
+Add `--dry-run` to print the resolved plan and any input/output problems as JSON
+without fitting. The same workflow is callable from Python via `WorkflowSettings`
+(`boldtailor.workflow.settings`) and `run_workflow` (`boldtailor.workflow.run`).
+
+### Flags
+
+| Group | Flag | Meaning (default) |
+| --- | --- | --- |
+| inputs | `--bids-dir`, `--subject`, `--session`, `--task` | Required. Subject (`sub-01`), one or more sessions (`ses-nsd01`), and task label |
+| inputs | `--fmriprep-dir` | fMRIPrep directory (auto-detected under `<bids-dir>/derivatives/fmriprep*`) |
+| inputs | `--output-dir` | Derivative root (defaults to `<bids-dir>/derivatives/boldtailor_hrf-<library>_ridge-<mode>[_method-reml_...]`) |
+| inputs | `--space` | `fsLR-91k` |
+| inputs | `--modulator COLUMN[:OPTION[,OPTION...]]` | Explicit modulator with options `indicator`, `categorical`, or `reference=LEVEL` (repeatable; overrides auto-detection) |
+| inputs | `--no-modulators` | Fit the `task` regressor alone |
+| HRF selection | `--hrf-method` | `cv` or `reml` (`cv`) |
+| HRF selection | `--reml-rho`, `--reml-reference-hrf-id` | Scalar AR(1) correlation (`0.0`) and fixed-mean reference HRF ID (`0`) when `--hrf-method reml` |
+| HRF selection | `--hrf-library` | `default`, `sobol`, `expanded`, or `canonical` (`default`) |
+| HRF selection | `--hrf-n-samples`, `--hrf-seed` | Sample count and seed for `default` or `sobol` (`512`, `0`) |
+| HRF selection | `--no-rt-in-hrf-selection` | Exclude `response_time` from HRF selection while keeping other modulators |
+| beta series | `--ridge-mode` | `fractional_cv`, `cv`, `fixed`, or `off` (`fractional_cv`) |
+| beta series | `--ridge-alpha` | Penalty for `--ridge-mode fixed` (`0.1`) |
+| beta series | `--ridge-fractions`, `--ridge-alphas` | Candidate grids for `fractional_cv` and `cv` |
+| beta series | `--ridge-percentile` | Spatial percentile for shared-alpha `cv` (`90`) |
+| beta series | `--encoding-mode` | `within_run` or `absolute` (`within_run`) |
+| stages and figures | `--skip-stage` | `reliability`, `betas`, or `summaries` (repeatable) |
+| stages and figures | `--no-surface-maps`, `--surface-mesh left=PATH` / `right=PATH` | Skip cortical surface figures or provide explicit fsLR 32k meshes |
+| execution | `--n-jobs`, `--block-size`, `--max-grayordinates` | Worker count (`4`), block size (`4096`), and optional grayordinate cap |
+| execution | `--existing-results` | `error` or `overwrite` (`error`) |
+| execution | `--dry-run`, `--quiet` | Print JSON plan and exit; log warnings only |
+
+### Modulators
+
+By default, `boldtailor run` inspects the event tables across runs:
+- If `response_time` is present in every run, it adds
+  `Modulator("response_time", missing="indicator")`.
+- If `trial_type` has at least two distinct non-missing levels across runs, it
+  adds a reference-coded categorical modulator. Levels are canonicalized as text
+  (`1`, `"1"`, and `1.0` map to `"1"`), sorted numerically or lexically, and use
+  the first level as reference (`task`), adding `<column>[<level>]` indicator
+  regressors for the remaining levels. Every level must occur in every run.
+
+Passing `--modulator` replaces automatic detection, and `--no-modulators` fits a
+task-only model.
+
+### Stages and run requirements
+
+1. `glms` (always run): Canonical-HRF and selected-HRF conventional GLMs.
+2. `reliability`: Odd-run and even-run HRF selections and cross-prediction
+   (skipped automatically when a split has too few runs).
+3. `betas`: Single-trial OLS and ridge beta series for canonical and selected
+   HRFs.
+4. `summaries`: Trial beta one-sample t maps and RT correlation summaries.
+
+Run-count requirements depend on `--hrf-method`:
+- With `--hrf-method cv`, `reliability` needs at least 2 odd and 2 even runs, and
+  tuned ridge (`fractional_cv` or `cv`) needs at least 3 odd and 3 even runs plus
+  at least one modulator.
+- With `--hrf-method reml`, `reliability` needs at least 1 odd and 1 even run,
+  tuned ridge needs at least 2 odd and 2 even runs, and `glms` alone can run on
+  1 run.
+
+### Outputs and exit codes
+
+Outputs are written under `<output_dir>/<sub>/<ses>/func/<sub>_<ses>_task-<task>_*`
+alongside `<output_dir>/dataset_description.json` and
+`<output_dir>/<sub>_<ses>_task-<task>_report.html`:
+
+| Descriptor (`desc-`) | Contents |
+| --- | --- |
+| `CanonicalGLM`, `OptimizedGLM` | Contrast effects, variances, t, z, $R^2$ maps, designs, and provenance |
+| `GLMComparison` | Optimized-minus-canonical full-model $R^2$ |
+| `HRF`, `HRFOdd`, `HRFEven` | Selected HRF IDs, CV $R^2$ or REML criteria/variances/flags, parameter maps, library tables, and provenance |
+| `HRFReliability`, `HRFOddToEven`, `HRFEvenToOdd` | Odd/even curve correlations and split-test prediction $R^2$ |
+| `CanonicalTrial...`, `OptimizedTrial...` (`OLS`, `Ridge`, `RidgeCV`, `FractionalCV`) | Per-run beta series, trial tables, $R^2$, RT maps, selected fractions/alphas, and tuning/outer-evaluation metadata |
+| `boldtailor` | `<stem>_desc-boldtailor_metadata.json` recording settings and written artifacts |
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | CLI usage/settings error or existing outputs under `--existing-results error` |
+| `2` | Input discovery, loading, or validation error (missing files, missing modulator levels, or insufficient runs for CV) |
+
+## Common problems
+
+| Symptom | What to check |
+| --- | --- |
+| Missing confound or contrast column | Column names in each run's events/confounds and in `ModelSpec` |
+| Rank-deficient design | Duplicate or overlapping trial regressors, collinear modulators, or too many columns for the run length |
+| Rejected event timing | Onset/duration units, acquisition offsets, or events lacking sampled support inside the run |
+| NaN $R^2$ or HRF selection | Constant signal, zero variance after nuisance projection, or no `"ok"` REML candidate |
+| Categorical level missing in a run (exit 2) | Ensure every level occurs in every run, pass `--modulator <col>:categorical,indicator`, or omit the column |
+| High memory usage | Reduce `--n-jobs` or `--block-size` |
