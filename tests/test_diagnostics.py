@@ -1,5 +1,6 @@
 """Descriptive beta-versus-zero and RT diagnostics on trial-by-feature arrays."""
 
+from hypothesis import given, settings, strategies as st
 import numpy as np
 import pytest
 from scipy.stats import ttest_1samp
@@ -140,3 +141,64 @@ def test_pearson_correlation_needs_three_observations_and_variance():
         np.array([3, 2, 5, 3]),
     )
     np.testing.assert_allclose(r, [1.0, np.nan, np.nan, 1.0], equal_nan=True)
+
+
+def test_pooled_rt_correlation_requires_at_least_two_residual_df():
+    """Verify pooled within-run correlation is NaN when residual df is below two."""
+    beta_runs = [np.array([[1.0], [2.0]]), np.array([[5.0]])]
+    rt_runs = [np.array([0.5, 1.0]), np.array([0.8])]
+    result = diagnostics.correlate_rt(beta_runs, rt_runs, run_numbers=[1, 2])
+    assert result["counts"]["all"][0] == 3
+    assert np.isnan(result["all"][0])
+
+
+@settings(max_examples=25, deadline=None)
+@given(
+    seed=st.integers(0, 10_000),
+    scale=st.floats(min_value=1e-3, max_value=1e3, allow_nan=False, allow_infinity=False),
+)
+def test_one_sample_t_is_invariant_to_positive_scaling_and_run_regrouping(seed, scale):
+    """Verify one_sample_t t-values and p-values are invariant to positive scaling and run splitting."""
+    rng = np.random.default_rng(seed)
+    all_betas = rng.normal(loc=0.5, scale=1.0, size=(18, 4))
+    all_betas[0, 1] = np.nan
+    split = [all_betas[:7], all_betas[7:]]
+
+    base = diagnostics.one_sample_t([all_betas])
+    regrouped = diagnostics.one_sample_t(split)
+    scaled = diagnostics.one_sample_t([b * scale for b in split])
+
+    for key in ("mean_beta", "t", "p_uncorrected", "n_trials", "df"):
+        np.testing.assert_allclose(regrouped[key], base[key], rtol=1e-12, atol=1e-12, equal_nan=True)
+    np.testing.assert_allclose(scaled["t"], base["t"], rtol=1e-12, atol=1e-12, equal_nan=True)
+    np.testing.assert_allclose(
+        scaled["p_uncorrected"], base["p_uncorrected"], rtol=1e-12, atol=1e-12, equal_nan=True
+    )
+
+
+@settings(max_examples=25, deadline=None)
+@given(
+    seed=st.integers(0, 10_000),
+    beta_scale=st.floats(min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False),
+    rt_scale=st.floats(min_value=1e-2, max_value=1e2, allow_nan=False, allow_infinity=False),
+)
+def test_correlate_rt_is_invariant_to_run_shifts_and_positive_scaling(
+    seed, beta_scale, rt_scale
+):
+    """Verify correlate_rt respects [-1, 1] and is invariant to per-run shifts and positive scaling."""
+    rng = np.random.default_rng(seed)
+    beta_runs = [rng.normal(size=(8, 3)) for _ in range(3)]
+    rt_runs = [rng.uniform(0.3, 2.0, size=8) for _ in range(3)]
+    run_numbers = [1, 2, 3]
+
+    base = diagnostics.correlate_rt(beta_runs, rt_runs, run_numbers=run_numbers)
+    shifted_betas = [b + rng.uniform(-50.0, 50.0, size=(1, 3)) for b in beta_runs]
+    scaled = diagnostics.correlate_rt(
+        [b * beta_scale for b in shifted_betas],
+        [r * rt_scale for r in rt_runs],
+        run_numbers=run_numbers,
+    )
+    for key in ("per_run", "all", "odd", "even"):
+        finite = np.isfinite(base[key])
+        assert np.all(np.abs(base[key][finite]) <= 1.0)
+        np.testing.assert_allclose(scaled[key], base[key], rtol=1e-10, atol=1e-12, equal_nan=True)

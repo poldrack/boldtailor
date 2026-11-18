@@ -157,7 +157,9 @@ def correlate_rt(beta_runs, rt_runs, *, run_numbers):
         ("even", numbers % 2 == 0),
     ):
         count = counts[mask].sum(axis=0)
-        result[name] = pearson_correlation(*moments[mask].sum(axis=0), count)
+        residual_df = np.maximum(counts[mask] - 1, 0).sum(axis=0)
+        pooled = pearson_correlation(*moments[mask].sum(axis=0), count)
+        result[name] = np.where(residual_df >= 2, pooled, np.nan)
         result["counts"][name] = count
     return result
 

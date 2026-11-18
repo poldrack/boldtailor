@@ -7,7 +7,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from boldtailor._conventional import ConventionalFit, fit_designs
+from boldtailor._conventional import ConventionalFit, design_rank, fit_designs
 from boldtailor._fit_diagnostics import (
     rank_warnings,
     delta_r2_activity,
@@ -192,7 +192,7 @@ def _run_diagnostic(
     run: int,
 ) -> dict[str, object]:
     matrix = compiled.matrix.to_numpy()
-    rank = int(np.linalg.matrix_rank(matrix))
+    rank = design_rank(matrix)
     warnings = rank_warnings(rank, matrix.shape[1], run)
     return {
         "timing_source": data.timing_source,

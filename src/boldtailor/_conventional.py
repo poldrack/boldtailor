@@ -14,6 +14,7 @@ from boldtailor._fit_diagnostics import (
     DIAGNOSTIC_NOISE_MODEL,
     validate_nested_ols_delta,
 )
+from boldtailor._numerics import rank_tolerance
 from boldtailor.model import ContrastValue
 from boldtailor.results import contrast_result, mask_contrast
 
@@ -133,6 +134,27 @@ def _fit_glm(
     return _GLMFit(labels, regression_results, residual_sum, total_sum, basis)
 
 
+def _scaled_row_basis(design: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Column norms, nonzero mask, and orthonormal row basis of unit-scaled design."""
+    matrix = np.asarray(design, dtype=float)
+    peak = np.abs(matrix).max(axis=0)
+    nonzero = peak > 0
+    if not np.any(nonzero):
+        return np.zeros(matrix.shape[1]), nonzero, np.empty((0, 0))
+    unit = matrix[:, nonzero] / peak[nonzero]
+    unit_norms = np.linalg.norm(unit, axis=0)
+    norms = np.zeros(matrix.shape[1])
+    norms[nonzero] = peak[nonzero] * unit_norms
+    _, singular, vt = np.linalg.svd(unit / unit_norms, full_matrices=False)
+    rank = int(np.sum(singular > rank_tolerance((matrix.shape[0], int(nonzero.sum())), singular[0])))
+    return norms, nonzero, vt[:rank]
+
+
+def design_rank(design: np.ndarray) -> int:
+    """Scale-invariant numerical rank of a design matrix."""
+    return _scaled_row_basis(design)[2].shape[0]
+
+
 def _full_rank_basis(design: np.ndarray) -> np.ndarray | None:
     """Orthonormal row-space basis when the design is rank deficient, else None.
 
@@ -140,12 +162,14 @@ def _full_rank_basis(design: np.ndarray) -> np.ndarray | None:
     ``n - rank`` degrees of freedom, so rank-deficient designs are fitted as
     ``design @ basis`` instead.
     """
-    _, singular, vt = np.linalg.svd(design, full_matrices=False)
-    tolerance = singular[0] * max(design.shape) * np.finfo(float).eps
-    rank = int(np.sum(singular > tolerance))
+    norms, nonzero, vt_nz = _scaled_row_basis(design)
+    rank = vt_nz.shape[0]
     if rank == design.shape[1]:
         return None
-    return vt[:rank].T
+    basis = np.zeros((design.shape[1], rank))
+    if rank > 0:
+        basis[nonzero], _ = np.linalg.qr(norms[nonzero, None] * vt_nz.T)
+    return basis
 
 
 def _in_fitted_basis(vector: np.ndarray, basis: np.ndarray | None) -> np.ndarray:
@@ -273,13 +297,20 @@ def _validate_estimable(
     name: str,
     run: int,
 ) -> None:
-    projection = vector @ np.linalg.pinv(design) @ design
-    if not np.allclose(vector, projection, rtol=1e-7, atol=1e-9):
+    norms, nonzero, vt_nz = _scaled_row_basis(design)
+    if np.any(vector[~nonzero] != 0) or vt_nz.shape[0] == 0:
+        raise ValueError(f"run {run} contrast {name!r} is not estimable")
+    scaled = vector[nonzero] / norms[nonzero]
+    scaled_norm = np.linalg.norm(scaled)
+    if scaled_norm > 0:
+        scaled = scaled / scaled_norm
+    projection = (scaled @ vt_nz.T) @ vt_nz
+    if not np.allclose(scaled, projection, rtol=1e-7, atol=1e-9):
         raise ValueError(f"run {run} contrast {name!r} is not estimable")
 
 
 def _warn_if_rank_deficient(design: np.ndarray, run: int) -> None:
-    rank = np.linalg.matrix_rank(design)
+    rank = design_rank(design)
     if rank < design.shape[1]:
         warnings.warn(
             f"run {run} design rank is {rank} for {design.shape[1]} columns",
@@ -296,7 +327,7 @@ def validate_designs(designs: Sequence[pd.DataFrame]) -> None:
 
 
 def _validate_residual_dof(design: np.ndarray, run: int) -> None:
-    residual_dof = design.shape[0] - np.linalg.matrix_rank(design)
+    residual_dof = design.shape[0] - design_rank(design)
     if residual_dof <= 0:
         raise ValueError(
             f"run {run} has residual degrees of freedom {residual_dof}; "

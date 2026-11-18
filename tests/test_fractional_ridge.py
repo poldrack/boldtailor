@@ -258,3 +258,12 @@ def test_prepare_fraction_betas_factorizes_once(regression, monkeypatch):
     fractional().prepare_fraction_betas(x, n, y)
     assert len(calls) == 2  # the nuisance span and the raw residualized design
     assert sorted(calls) == sorted([n.shape, x.shape])
+
+
+def test_fraction_alphas_returns_zero_for_zero_ols_column():
+    """Verify fraction_alphas returns 0.0 without NaN division for a zero-norm OLS column."""
+    s = np.array([3.0, 1.0])
+    ols = np.array([[0.0, 1.0], [0.0, 2.0]])
+    alphas = fractional().fraction_alphas(s, ols, np.array([0.5, 0.5]))
+    assert alphas[0] == 0.0
+    assert alphas[1] > 0.0

@@ -452,6 +452,48 @@ def test_independent_noise_components_are_rejected(fixture, base):
     assert result.binomial_p >= ALPHA
 
 
+def _ar1_series(rng, shape, rho):
+    series = rng.normal(size=shape)
+    for t in range(1, shape[0]):
+        series[t] += rho * series[t - 1]
+    return series
+
+
+def test_ar1_gate_controls_false_positives_under_independent_ar1_noise(fixture, base):
+    """Verify AR(1) prewhitening controls false positives under independent AR(1) noise."""
+    inputs, _ = base
+    selection, masks, _ = inputs
+    rng = np.random.default_rng(77)
+    rho = 0.6
+    data = fixture.data
+    ar1_signals = tuple(_ar1_series(rng, s.shape, rho) for s in data.signals)
+    from boldtailor.data import from_arrays
+
+    null_data = from_arrays(
+        ar1_signals,
+        data.events,
+        frame_times=data.frame_times,
+        confounds=data.confounds,
+    )
+    ar1_pcs = tuple(
+        run_components(_ar1_series(rng, (len(t), 40), rho), frame, np.ones(40, bool))
+        for t, frame in zip(data.frame_times, data.confounds)
+    )
+    setup = prepare_scoring(
+        null_data,
+        hrf_indices=selection.hrf_indices,
+        components=ar1_pcs,
+        scoring=masks.scoring,
+        task_model=fixture.task_model,
+        library=fixture.library,
+    )
+    ar1_result = gate(setup, 2, noise_model="ar1")
+    ols_result = gate(setup, 2, noise_model="ols")
+    assert ar1_result.decision == "rejected"
+    assert ar1_result.m / ar1_result.n < 0.15
+    assert ar1_result.m <= ols_result.m
+
+
 def test_zero_count_skips_the_gate(base):
     """Verify zero count skips the gate."""
     _, setup = base

@@ -136,11 +136,12 @@ def _normalized_singular_values(s, vt, scale):
 def fraction_alphas(s, ols, fractions):
     """Bracket using singular-value extrema, then bisect in log-alpha space."""
     alphas = np.zeros(len(fractions))
-    shrink = fractions < 1
+    norms = np.linalg.norm(ols, axis=0)
+    shrink = (fractions < 1) & (norms > 0)
     if not shrink.any():
         return alphas
     f = fractions[shrink]
-    weights = ols[:, shrink] / np.linalg.norm(ols[:, shrink], axis=0)
+    weights = ols[:, shrink] / norms[shrink]
     squared = s * s
     factor = np.log1p(-f) - np.log(f)
     lo, hi = np.log(squared.min()) + factor, np.log(squared.max()) + factor
