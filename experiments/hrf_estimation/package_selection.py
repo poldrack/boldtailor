@@ -71,9 +71,12 @@ def select(runs, library, rt_mode, method, rho=None):
     )
 
 
-def estimate(runs, library, result, status, diagnostics):
-    """Wrap a package selection in the experiment's common result contract."""
-    ids = np.asarray(result.hrf_indices)
+def estimate(runs, library, result, status, diagnostics, hrf_indices=None):
+    """Wrap a package selection in the experiment's common result contract.
+
+    ``hrf_indices`` overrides the package's winners, for a documented fallback.
+    """
+    ids = np.asarray(result.hrf_indices if hrf_indices is None else hrf_indices)
     kernels = tuple(library.candidates[i] if i >= 0 else None for i in ids)
     return HrfEstimate(
         runs[0].feature_ids.copy(),

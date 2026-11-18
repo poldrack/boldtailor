@@ -8,7 +8,7 @@ from scipy.sparse.csgraph import dijkstra
 from boldtailor.ar1 import estimate_rho, whiten
 from experiments.hrf_estimation.estimators import validate_features
 from experiments.hrf_estimation.scoring import residuals
-from experiments.hrf_estimation.reml_selection import random_design, reference_design, select_hrf
+from experiments.hrf_estimation.reml_selection import reference_design, select_library_reml
 
 
 def run_rhos(runs):
@@ -70,7 +70,7 @@ def fit_grouped(runs, library, rho, verbose=False):
         raise ValueError("one finite stationary rho per vertex required")
     if verbose:
         print(f"REML: {len(library.candidates)} candidates, {len(np.unique(rho))} rho groups", flush=True)
-    return select_hrf(runs, library, random_design, rho)
+    return select_library_reml(runs, library, "amplitude", rho)
 
 
 def _acf(error):

@@ -1,4 +1,9 @@
 > Superseded by docs/superpowers/specs/2026-11-14-reml-module-design.md
+>
+> Historical record. Since 2026-11-17 the experiment selects HRFs with the
+> package's REML model (fixed reference-HRF task mean, trial-level random
+> effects); see the README. The condition-level model below is no longer
+> what the code fits.
 
 # Direct REML HRF-library selection
 
