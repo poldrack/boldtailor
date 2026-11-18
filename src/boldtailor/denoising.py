@@ -54,7 +54,7 @@ from boldtailor._arrays import (
 from boldtailor._fit_lifecycle import finish_fit, fit_operation
 from boldtailor._hrf_cv import pooled_amplitude
 from boldtailor._run_design import check_task_rank, column_basis, prepare_runs
-from boldtailor._mixture_threshold import MixtureThreshold, mixture_threshold
+from boldtailor._mixture_threshold import mixture_threshold
 from boldtailor._scalars import is_integer, is_real
 from boldtailor._design_inputs import nuisance_matrix
 from boldtailor._single_trial_fit import nuisance_span
@@ -64,6 +64,7 @@ from boldtailor.denoising_results import (
     DenoisingFold,
     DenoisingResult,
     PcaDiagnostics,
+    PoolMasks,
     RunIdentity,
     SignificanceGate,
 )
@@ -216,37 +217,6 @@ def onoff_r2(data, library, *, run_labels=None) -> np.ndarray:
     ratio = np.full(data.n_features, np.nan)
     np.divide(sse, sst, out=ratio, where=sst > 0)
     return readonly_array(1 - ratio)
-
-
-@dataclass(frozen=True, kw_only=True, eq=False)
-class PoolMasks:
-    """Pool and scoring feature masks fixed for every candidate PC count.
-
-    ``mixture`` is the fitted mixture when the threshold was automatic.
-    ``fallback`` marks GLMsingle's best-100 scoring set, which may overlap
-    the pool; otherwise the masks are disjoint.
-    """
-
-    pool: np.ndarray
-    scoring: np.ndarray
-    threshold: float
-    mixture: MixtureThreshold | None = None
-    fallback: bool = False
-
-    def __post_init__(self):
-        copy_array_fields_in_place(self, ("pool", "scoring"), dtype=bool)
-        if self.pool.shape != self.scoring.shape:
-            raise ValueError("pool and scoring masks must be aligned")
-        if not self.fallback and (self.pool & self.scoring).any():
-            raise ValueError("pool and scoring masks must be disjoint")
-
-    @property
-    def pool_size(self) -> int:
-        return int(self.pool.sum())
-
-    @property
-    def scoring_size(self) -> int:
-        return int(self.scoring.sum())
 
 
 def validate_threshold(value, name="pool_r2_threshold") -> float | str:
@@ -1522,22 +1492,16 @@ def _assemble(labels, settings, pool, selected, *, prefixes, identities, provena
     count, gate = selected
     scores, fold_scores = _public_tables(count)
     return DenoisingResult(
-        n_components=gate.n_components,
-        pcstop_count=count.n_components,
         significance_gate=gate,
         counts=count.counts,
         pool_r2_threshold=settings.threshold,
         pcstop=settings.pcstop,
-        noise_pool_threshold=masks.threshold,
-        noise_pool_mixture=masks.mixture,
-        noise_pool=masks.pool,
-        scoring_mask=masks.scoring,
-        scoring_fallback=masks.fallback,
+        pool_masks=masks,
         scored=count.setup.scored,
         onoff_r2=statistic,
         initial_selection=selection,
         run_components=prefixes,
-        components=_diagnostics(pool.components, labels, masks.pool_size),
+        pca_diagnostics=_diagnostics(pool.components, labels, masks.pool_size),
         folds=_folds(count.setup),
         _candidate_scores=scores,
         _fold_scores=fold_scores,

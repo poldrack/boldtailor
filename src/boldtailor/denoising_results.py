@@ -152,6 +152,37 @@ class DenoisingFold:
 
 
 @dataclass(frozen=True, kw_only=True, eq=False)
+class PoolMasks:
+    """Pool and scoring feature masks fixed for every candidate PC count.
+
+    ``mixture`` is the fitted mixture when the threshold was automatic.
+    ``fallback`` marks GLMsingle's best-100 scoring set, which may overlap
+    the pool; otherwise the masks are disjoint.
+    """
+
+    pool: np.ndarray
+    scoring: np.ndarray
+    threshold: float
+    mixture: MixtureThreshold | None = None
+    fallback: bool = False
+
+    def __post_init__(self):
+        copy_array_fields_in_place(self, ("pool", "scoring"), dtype=bool)
+        if self.pool.shape != self.scoring.shape:
+            raise ValueError("pool and scoring masks must be aligned")
+        if not self.fallback and (self.pool & self.scoring).any():
+            raise ValueError("pool and scoring masks must be disjoint")
+
+    @property
+    def pool_size(self) -> int:
+        return int(self.pool.sum())
+
+    @property
+    def scoring_size(self) -> int:
+        return int(self.scoring.sum())
+
+
+@dataclass(frozen=True, kw_only=True, eq=False)
 class DenoisingResult:
     """Chosen PC count, full-data pool and run PCs, and diagnostics.
 
@@ -165,24 +196,22 @@ class DenoisingResult:
     gain over zero PCs (NaN when unavailable). ``pcstop_count`` is the
     count GLMsingle's pcstop rule chose and ``n_components`` the count kept
     by Boldtailor's ``significance_gate`` (equal when the gate is disabled).
+    Both counts are read from the gate, and the pool, scoring mask and
+    threshold from ``pool_masks``; each is stored once. ``run_components``
+    are the chosen PC time series per run, ``pca_diagnostics`` their ranks
+    and singular values.
     """
 
-    n_components: int
-    pcstop_count: int
     significance_gate: SignificanceGate
     counts: tuple[int, ...]
     pool_r2_threshold: float | str
     pcstop: float
-    noise_pool_threshold: float
-    noise_pool_mixture: MixtureThreshold | None
-    noise_pool: np.ndarray
-    scoring_mask: np.ndarray
-    scoring_fallback: bool
+    pool_masks: PoolMasks
     scored: np.ndarray
     onoff_r2: np.ndarray
     initial_selection: HrfSelectionResult
     run_components: tuple[np.ndarray, ...]
-    components: PcaDiagnostics
+    pca_diagnostics: PcaDiagnostics
     folds: tuple[DenoisingFold, ...]
     _candidate_scores: pd.DataFrame
     _fold_scores: pd.DataFrame
@@ -192,9 +221,7 @@ class DenoisingResult:
     provenance: ProvenanceRecord
 
     def __post_init__(self):
-        copy_array_fields_in_place(
-            self, ("noise_pool", "scoring_mask", "scored"), dtype=bool
-        )
+        copy_array_fields_in_place(self, ("scored",), dtype=bool)
         copy_array_fields_in_place(self, ("onoff_r2",))
         copy_array_tuple_fields_in_place(self, ("run_components",))
         freeze_sequence_fields_in_place(
@@ -210,6 +237,7 @@ class DenoisingResult:
     def _validate(self):
         if not isinstance(self.initial_selection, HrfSelectionResult):
             raise ValueError("initial_selection must be an HrfSelectionResult")
+        self._validate_gate()
         if (
             not len(self.run_components)
             == len(self.run_labels)
@@ -223,7 +251,6 @@ class DenoisingResult:
                 "n_components must be a candidate count and match every "
                 "run_components array"
             )
-        self._validate_gate()
         for label, comps, run in zip(
             self.run_labels, self.run_components, self.source_identity
         ):
@@ -237,14 +264,44 @@ class DenoisingResult:
         gate = self.significance_gate
         if (
             not isinstance(gate, SignificanceGate)
-            or gate.n_components != self.n_components
-            or gate.pcstop_count != self.pcstop_count
-            or self.pcstop_count not in self.counts
+            or gate.pcstop_count not in self.counts
         ):
             raise ValueError(
                 "significance_gate must record pcstop_count (a candidate count) "
                 "and the gated n_components"
             )
+        if not isinstance(self.pool_masks, PoolMasks):
+            raise ValueError("pool_masks must be a PoolMasks")
+
+    @property
+    def n_components(self) -> int:
+        """The PC count kept by the significance gate."""
+        return self.significance_gate.n_components
+
+    @property
+    def pcstop_count(self) -> int:
+        """The PC count GLMsingle's pcstop rule chose, before the gate."""
+        return self.significance_gate.pcstop_count
+
+    @property
+    def noise_pool(self) -> np.ndarray:
+        return self.pool_masks.pool
+
+    @property
+    def scoring_mask(self) -> np.ndarray:
+        return self.pool_masks.scoring
+
+    @property
+    def noise_pool_threshold(self) -> float:
+        return self.pool_masks.threshold
+
+    @property
+    def noise_pool_mixture(self) -> MixtureThreshold | None:
+        return self.pool_masks.mixture
+
+    @property
+    def scoring_fallback(self) -> bool:
+        return self.pool_masks.fallback
 
     @property
     def candidate_scores(self) -> pd.DataFrame:

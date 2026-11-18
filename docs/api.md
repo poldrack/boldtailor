@@ -769,18 +769,20 @@ augmentations. Provenance gains a `denoising_augmentation` activity.
 From `boldtailor.denoising_results`:
 
 - `DenoisingResult` holds:
-  - the choice: `n_components` (after the gate), `pcstop_count` (pcstop's
-    choice), `counts`, `pool_r2_threshold` (the setting), `pcstop`
-  - `significance_gate` (`SignificanceGate`)
-  - the threshold: `noise_pool_threshold` and `noise_pool_mixture`
+  - the settings: `counts`, `pool_r2_threshold`, `pcstop`
+  - `significance_gate` (`SignificanceGate`), which owns the choice; the
+    properties `n_components` (after the gate) and `pcstop_count` (pcstop's
+    choice) read it
+  - `pool_masks` (`PoolMasks` with `pool`, `scoring`, `threshold`, `mixture`,
+    `fallback`, `pool_size`, `scoring_size`); the properties `noise_pool`,
+    `scoring_mask`, `noise_pool_threshold`, `noise_pool_mixture`
     (`MixtureThreshold` with `threshold`, `means`, `sds`, `weights`, `tail`,
     `n_values`, `n_fitted`, `converged`, `n_iter`, `to_dict()`; `None` for a
-    fixed threshold)
-  - the full-data statistic and masks: `onoff_r2`, `noise_pool`,
-    `scoring_mask`, `scoring_fallback`, and `scored`
+    fixed threshold) and `scoring_fallback` read it
+  - the full-data statistic `onoff_r2` and the `scored` mask
   - `initial_selection` (`HrfSelectionResult`, the frozen HRFs)
   - `run_components`, one `(scans, n_components)` array per run
-  - `components` (`PcaDiagnostics`)
+  - `pca_diagnostics` (`PcaDiagnostics`: ranks and singular values per run)
   - `folds` (`DenoisingFold` per held-out run)
   - `run_labels`, `feature_signature`, `source_identity`, and `provenance`
   - the properties `candidate_scores` (`count`, `eligible`, `perf`, `curve`,

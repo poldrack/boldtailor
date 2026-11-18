@@ -98,25 +98,32 @@ provenance records, `WorkflowSettings`).
     two URI validators are named for what they accept.
   - Item 11: `choose_eligible` split into best-candidate, eligibility and
     table helpers, with direct tests.
-  Deliberately not done, with reasons:
-  - Item 1 (per-group design digests): would change `design_fingerprint`
-    values and so every downstream analysis ID.
+  Added later at the user's direction (compatibility with earlier results
+  and names was waived):
+  - Item 5: `data_fingerprint` and `analysis_fingerprint` are the only names
+    for the two content identities, in attributes, parameters, log fields and
+    serialized keys; `analysis_fingerprint` is a real `ProvenanceRecord` field.
+  - Item 13: removed the one-release aliases (`select_hrf`, `hrf=`,
+    `selection=`, the prepared delta-R² model keywords, `design.matrix`,
+    `group_design`), `_deprecation.py`, and helpers only tests called; the
+    reference convolution and REML slope helpers now live in the test oracles.
+  - Item 1: each run's selected-HRF designs are digested on their own and
+    combined at the end (this changes `design_fingerprint` values).
+  - Item 12: `DenoisingResult` reads `n_components` and `pcstop_count` from
+    its gate, holds one `pool_masks`, and names its diagnostics
+    `pca_diagnostics`. `PoolMasks` moved to `denoising_results`.
+  Still not done, with reasons:
   - Item 3 (single training statistics pass in `evaluate_hrf_split`): saves
-    compute but raises peak memory, because sliced training statistics would
-    coexist with the all-run arrays.
+    compute but raises peak memory.
   - Item 4 (two completion-event protocols): the fit protocol is documented
     and tested as deliberate.
-  - Item 5 (unifying `metadata_fingerprint` / `data_id` / `analysis_id`
-    names): API-visible renames.
   - Item 6 (uncopied table reads inside the package): a mutation in any
     internal reader would corrupt shared inputs; the copies are cheap.
   - Item 7 (design rank once, reuse parent designs): the matrices are small,
     and reusing a parent's designs is unsafe when identities are anonymous.
-  - Item 8 (one parent-validation policy): a behaviour choice for the owner.
+  - Item 8 (one parent-validation policy): left as is at the user's direction.
   - Item 9 (`residualise` everywhere): cosmetic; the inline form is clear.
-  - Item 10 (one canonical JSON dump): each form feeds a fingerprint.
-  - Items 12 and 13: API-visible changes and removals, left for a release
-    decision; the removal candidates are listed under item 13.
+  - Item 10 (one canonical JSON dump): not requested.
 - Phase 5: not started.
 
 ## Decisions already made
