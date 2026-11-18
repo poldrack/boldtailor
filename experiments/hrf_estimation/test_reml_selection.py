@@ -1,11 +1,15 @@
-"""The experiment REML adapters must delegate HRF selection to boldtailor.reml."""
+"""The experiment REML adapters delegate HRF selection to the package."""
 
 from dataclasses import replace
 
 import numpy as np
 import pytest
 
-from boldtailor.reml import RemlGroup, fit_reml, select_random_effects_design
+from pathlib import Path
+
+from boldtailor.hrf_options import RemlHrfOptions
+from boldtailor.hrf_selection import select_hrfs
+from experiments.hrf_estimation import package_selection
 from experiments.hrf_estimation import pilot
 from experiments.hrf_estimation import reml_selection as api
 from experiments.hrf_estimation.sensitivity import ar1_noise
@@ -41,17 +45,24 @@ def _with_ar1_noise(runs, rho, scale, seed):
 
 
 def test_planted_hrf_is_selected_iid(planted_runs):
-    """Verify planted HRF is selected independent-noise."""
+    """A non-canonical HRF is selected; a canonical one falls back to the reference.
+
+    The package fits the task mean with the reference HRF and identifies shape
+    from trial deviations, so a feature the canonical HRF already explains has
+    zero random-effect variance and no likelihood winner.
+    """
     runs, library = planted_runs
     result = api.fit_library_reml(_with_white_noise(runs, 0.1, 99), library, {})
     assert [k.id for k in result.kernels] == [0, 1]
-    assert result.status == ("ok", "ok")
-    assert np.all(np.asarray(result.diagnostics["variance_ratio"]) > 0)
+    assert result.status == ("variance_zero", "ok")
+    assert result.diagnostics["canonical_fallback"] == [True, False]
+    assert result.diagnostics["variance_ratio"][1] > 0
     assert result.training_run_ids == tuple(r.run_id for r in runs)
     flat = tuple(replace(r, signals=np.ones_like(r.signals)) for r in runs)
     empty = api.fit_library_reml(flat, library, {})
     assert empty.kernels == (None, None)
     assert empty.status == ("no_residual_signal", "no_residual_signal")
+    assert empty.diagnostics["canonical_fallback"] == [False, False]
 
 
 def test_planted_hrf_is_selected_ar1(planted_runs):
@@ -60,79 +71,81 @@ def test_planted_hrf_is_selected_ar1(planted_runs):
     noisy = _with_ar1_noise(runs, 0.5, 0.1, 31)
     result = api.fit_ar1_reml(noisy, library, {})
     assert [k.id for k in result.kernels] == [0, 1]
-    assert result.status == ("ok", "ok")
+    assert result.status[1] == "ok"
     noise = result.diagnostics["noise"]
     assert noise == api.estimate_noise(noisy, "amplitude")
     assert noise["rho"] > 0.2
     assert result.diagnostics["rho"] == [noise["rho"]] * 2
 
 
-def _package_selection(runs, library, rho):
-    groups = [RemlGroup(r.signals, r.confounds.to_numpy(dtype=float)) for r in runs]
-    candidates = (
-        [api.random_design(run, k) for run in runs] for k in library.candidates
+def _package_result(runs, library, mode, rho):
+    data, model = package_selection.selection_data(runs, library, mode)
+    return select_hrfs(
+        data,
+        library=library,
+        task_model=model,
+        method="reml",
+        reml_options=RemlHrfOptions(rho=rho),
+        run_labels=[r.run_id for r in runs],
     )
-    return select_random_effects_design(groups, candidates, rho=rho)
 
 
-def test_estimate_matches_package_selection(planted_runs):
-    """Verify estimate matches package selection."""
+def test_estimate_is_the_package_selection_on_the_mapped_inputs(planted_runs):
+    """REML selection adds no numerics of its own: it reports the package's result."""
     runs, library = planted_runs
     runs = _with_white_noise(runs, 0.5, 12)
     rho = np.array([0.1, 0.4])
-    expected = _package_selection(runs, library, rho)
-    result = api.select_hrf(runs, library, api.random_design, rho)
-    kernels = [None if i < 0 else library.candidates[i] for i in expected.winner]
-    assert result.kernels == tuple(kernels)
-    assert result.status == expected.fit.status
+    expected = _package_result(runs, library, "amplitude", rho).reml
+    selection, fit = expected.selection, expected.selection.fit
+    result = api.select_library_reml(runs, library, "amplitude", rho)
+    assert result.status == fit.status
+    for kernel, winner, state in zip(
+        result.kernels, selection.winner, fit.status, strict=True
+    ):
+        fallback = winner < 0 and state == "variance_zero"
+        wanted = expected.reference_hrf_id if fallback else int(winner)
+        assert (kernel.id if kernel is not None else -1) == wanted
     d = result.diagnostics
-    np.testing.assert_array_equal(d["variance_ratio"], expected.fit.ratio)
-    np.testing.assert_array_equal(d["sigma2"], expected.fit.noise_variance)
-    np.testing.assert_array_equal(d["criterion"], expected.fit.criterion)
-    np.testing.assert_array_equal(d["at_upper"], expected.fit.at_upper)
-    np.testing.assert_array_equal(d["unrefined"], expected.fit.unrefined)
-    np.testing.assert_array_equal(d["any_at_upper"], expected.any_at_upper)
-    np.testing.assert_array_equal(d["any_unrefined"], expected.any_unrefined)
-    np.testing.assert_array_equal(d["provisional"], expected.any_unrefined)
-    np.testing.assert_array_equal(d["candidate_gap"], expected.gap)
-    zero = [s == "variance_zero" for s in expected.fit.status]
-    assert d["at_zero"] == zero
+    np.testing.assert_array_equal(d["variance_ratio"], fit.ratio)
+    np.testing.assert_array_equal(d["sigma2"], fit.noise_variance)
+    np.testing.assert_array_equal(d["criterion"], fit.criterion)
+    np.testing.assert_array_equal(d["at_upper"], fit.at_upper)
+    np.testing.assert_array_equal(d["unrefined"], fit.unrefined)
+    np.testing.assert_array_equal(d["any_at_upper"], selection.any_at_upper)
+    np.testing.assert_array_equal(d["any_unrefined"], selection.any_unrefined)
+    np.testing.assert_array_equal(d["provisional"], selection.any_unrefined)
+    np.testing.assert_array_equal(d["candidate_gap"], selection.gap)
+    np.testing.assert_array_equal(d["delta_criterion"], expected.delta_criterion)
+    assert d["at_zero"] == [s == "variance_zero" for s in fit.status]
     assert d["rho"] == rho.tolist()
+    assert d["reference_hrf_id"] == expected.reference_hrf_id
     assert d["library_fingerprint"] == library.fingerprint
+    assert d["package_selection"]["method"] == "reml"
+    source = Path(api.__file__).read_text()
+    assert "select_random_effects_design" not in source and "RemlGroup" not in source
 
 
-def _argmin_kernels(runs, library, mode):
-    """Per-feature best ok candidate and its criterion, one package fit each."""
-    groups = [RemlGroup(r.signals, r.confounds.to_numpy(dtype=float)) for r in runs]
-    fits = [
-        fit_reml(groups, [api.random_design(r, k, mode) for r in runs])
-        for k in library.candidates
-    ]
-    ok = np.array([[s == "ok" for s in f.status] for f in fits])
-    scores = np.where(ok, np.array([f.criterion for f in fits]), np.inf)
-    best = np.argmin(scores, axis=0)
-    kernels = tuple(
-        library.candidates[i] if ok[i, v] else None for v, i in enumerate(best)
-    )
-    return kernels, scores.min(axis=0)
-
-
-def test_no_rt_mode_has_four_random_effects(planted_runs):
-    """Verify no response-time mode has four random effects."""
+@pytest.mark.parametrize(
+    "mode,regressors",
+    [
+        ("none", ["task", "trial_type[1]"]),
+        ("amplitude", ["task", "trial_type[1]", "response_time"]),
+    ],
+)
+def test_random_effects_are_valid_trial_deviations_in_every_rt_mode(
+    planted_runs, mode, regressors
+):
+    """The RT mode changes the fixed task mean, not the trial-level random effects."""
     runs, library = planted_runs
-    runs = runs[:2]
-    for mode, count in [("none", 4), ("amplitude", 5)]:
-        result = api.fit_library_reml(runs, library, {"rt_mode": mode})
-        assert result.diagnostics["rt_mode"] == mode
-        assert result.diagnostics["n_random_effects_per_run"] == count
-        assert str(count) in result.diagnostics["random_effects"]
-        kernels, criterion = _argmin_kernels(runs, library, mode)
-        assert result.kernels == kernels
-        won = np.isfinite(criterion)
-        assert won.any()
-        np.testing.assert_array_equal(
-            np.asarray(result.diagnostics["criterion"])[won], criterion[won]
-        )
+    runs = _with_white_noise(runs[:2], 0.5, 3)
+    result = api.fit_library_reml(runs, library, {"rt_mode": mode})
+    d = result.diagnostics
+    assert d["rt_mode"] == mode
+    assert d["n_random_effects_per_run"] == [22, 22]
+    assert "valid-trial deviations" in d["random_effects"]
+    assert d["package_selection"]["task_regressors"] == regressors
+    expected = _package_result(runs, library, mode, 0.0).reml.selection
+    np.testing.assert_array_equal(d["criterion"], expected.fit.criterion)
 
 
 def test_noise_estimate_keys_and_bounds(planted_runs):
